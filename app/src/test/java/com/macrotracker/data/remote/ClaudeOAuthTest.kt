@@ -15,8 +15,8 @@ class ClaudeOAuthTest {
     @Test
     fun pkceVerifierAndChallengeAreUrlSafeAndMatchS256() {
         val pkce = ClaudeOAuth.generatePkce(SecureRandom.getInstance("SHA1PRNG").apply { setSeed(7) })
-        assertTrue(pkce.verifier.length >= 32)
-        assertTrue(pkce.state.length >= 16)
+        assertEquals(43, pkce.verifier.length)
+        assertEquals(43, pkce.state.length)
         assertFalse(pkce.verifier.contains("+") || pkce.verifier.contains("/") || pkce.verifier.contains("="))
         val expected = Base64.getUrlEncoder().withoutPadding().encodeToString(
             MessageDigest.getInstance("SHA-256").digest(pkce.verifier.toByteArray(Charsets.US_ASCII)),
@@ -43,7 +43,24 @@ class ClaudeOAuthTest {
         assertTrue(url.contains("state=s"))
         assertTrue(url.contains("code=true"))
         assertTrue(url.contains("redirect_uri="))
+        assertTrue(url.contains("platform.claude.com"))
         assertTrue(url.contains("oauth%2Fcode%2Fcallback"))
+        assertTrue(url.contains("org%3Acreate_api_key"))
+        assertTrue(url.contains("user%3Asessions%3Aclaude_code"))
+        assertTrue(url.contains("user%3Amcp_servers"))
+        assertTrue(url.contains("user%3Afile_upload"))
+    }
+
+    @Test
+    fun generatedStateIsClaudeCodeLength() {
+        repeat(8) {
+            val pkce = ClaudeOAuth.generatePkce()
+            assertEquals(
+                "Anthropic rejects state shorter than Claude Code's 43-char nonce",
+                43,
+                pkce.state.length,
+            )
+        }
     }
 
     @Test
@@ -63,7 +80,7 @@ class ClaudeOAuthTest {
     @Test
     fun parseAuthorizationInputReadsRedirectUrl() {
         val parsed = ClaudeOAuth.parseAuthorizationInput(
-            "https://console.anthropic.com/oauth/code/callback?code=tokA&state=stB",
+            "https://platform.claude.com/oauth/code/callback?code=tokA&state=stB",
             fallbackState = "fallback",
         )
         assertEquals("tokA", parsed.code)
