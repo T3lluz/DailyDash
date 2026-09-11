@@ -1,5 +1,11 @@
 package com.macrotracker.data.remote
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.json.JSONObject
 import java.net.URI
 import java.security.MessageDigest
@@ -104,40 +110,33 @@ object ClaudeOAuth {
     }
 
     fun parseTokenResponse(body: String): TokenBundle {
-        val json = JSONObject(body)
-        val error = json.optString("error").takeIf { it.isNotBlank() }
+        val json = parseObject(body)
+        val error = json.string("error")
         if (error != null) {
-            val description = json.optString("error_description").takeIf { it.isNotBlank() }
-            throw IllegalStateException(description ?: error)
+            throw IllegalStateException(json.string("error_description") ?: error)
         }
-        val access = json.optString("access_token").trim()
-        require(access.isNotBlank()) { "Claude login did not return an access token" }
-        val refresh = json.optString("refresh_token").trim().takeIf { it.isNotBlank() }
-        val expiresIn = json.optInt("expires_in", 3600).coerceAtLeast(0)
-        val account = json.optJSONObject("account")
+        val access = json.string("access_token")
+            ?: throw IllegalStateException("Claude login did not return an access token")
+        val refresh = json.string("refresh_token")
+        val expiresIn = json.int("expires_in") ?: 3600
+        val account = json.obj("account")
         return TokenBundle(
             accessToken = access,
             refreshToken = refresh,
             expiresInSec = if (expiresIn > 0) expiresIn else 3600,
-            email = account?.optString("email")?.trim()?.takeIf { it.isNotBlank() },
-            subscriptionType = account
-                ?.optString("subscription_type")
-                ?.trim()
-                ?.ifBlank { account.optString("subscriptionType").trim() }
-                ?.takeIf { it.isNotBlank() },
+            email = account?.string("email"),
+            subscriptionType = account?.string("subscription_type")
+                ?: account?.string("subscriptionType"),
         )
     }
 
     fun parseProfile(body: String): Pair<String?, String?> {
-        val json = JSONObject(body)
-        val email = json.optString("email").trim().ifBlank {
-            json.optJSONObject("account")?.optString("email").orEmpty().trim()
-        }.takeIf { it.isNotBlank() }
-        val subscription = json.optString("subscription_type").trim().ifBlank {
-            json.optString("subscriptionType").trim()
-        }.ifBlank {
-            json.optJSONObject("account")?.optString("subscription_type").orEmpty().trim()
-        }.takeIf { it.isNotBlank() }
+        val json = parseObject(body)
+        val account = json.obj("account")
+        val email = json.string("email") ?: account?.string("email")
+        val subscription = json.string("subscription_type")
+            ?: json.string("subscriptionType")
+            ?: account?.string("subscription_type")
         return email to subscription
     }
 
@@ -152,7 +151,7 @@ object ClaudeOAuth {
             "claudeteamsubscription", "team" -> "Team"
             "claudeprosubscription", "pro" -> "Pro"
             "claudefreesubscription", "free" -> "Free"
-            else -> raw.trim().replaceFirstChar { it.uppercase() }
+            else -> raw.orEmpty().trim().replaceFirstChar { it.uppercase() }
         }
     }
 
@@ -179,6 +178,20 @@ object ClaudeOAuth {
         extra.forEach { (k, v) -> body.put(k, v) }
         return body
     }
+
+    private val json = Json { ignoreUnknownKeys = true }
+
+    private fun parseObject(body: String): JsonObject =
+        json.parseToJsonElement(body).jsonObject
+
+    private fun JsonObject.string(key: String): String? =
+        this[key]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf { it.isNotBlank() }
+
+    private fun JsonObject.int(key: String): Int? =
+        this[key]?.jsonPrimitive?.intOrNull
+
+    private fun JsonObject.obj(key: String): JsonObject? =
+        this[key]?.let { runCatching { it.jsonObject }.getOrNull() }
 
     private fun parseFromRedirectUrl(raw: String): AuthorizationCode? {
         if (!raw.startsWith("http://") && !raw.startsWith("https://")) return null

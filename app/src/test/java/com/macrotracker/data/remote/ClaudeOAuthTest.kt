@@ -97,6 +97,15 @@ class ClaudeOAuthTest {
     }
 
     @Test
+    fun parseProfileReadsEmailAndPlan() {
+        val (email, plan) = ClaudeOAuth.parseProfile(
+            """{"email":"ada@example.com","subscription_type":"claude_pro_subscription"}""",
+        )
+        assertEquals("ada@example.com", email)
+        assertEquals("claude_pro_subscription", plan)
+    }
+
+    @Test
     fun subscriptionLabelNormalizesClaudeCodeTypes() {
         assertEquals("Pro", ClaudeOAuth.subscriptionLabel("claude_pro_subscription"))
         assertEquals("Max 20x", ClaudeOAuth.subscriptionLabel("claudeMax20xSubscription"))
