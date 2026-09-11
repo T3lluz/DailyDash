@@ -25,7 +25,7 @@ GITHUB_TOKEN=...           # optional PAT fallback if OAuth Client ID is not set
 ```
 **GitHub Releases:** `.github/workflows/build-apk.yml` writes the same keys from repo Actions secrets into `local.properties` before `assembleRelease`. Required for Twitch in published APKs: `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`. Required for GitHub Connect in published APKs: Actions secret `GH_OAUTH_CLIENT_ID` (OAuth App Client ID — **not** a PAT and **not** the automatic Actions `GITHUB_TOKEN`; GitHub forbids secrets named `GITHUB_*`). CI writes it as `GITHUB_CLIENT_ID` in `local.properties`. Optional mirrors of local keys: `GEMINI_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `YOUTUBE_API_KEY`. YouTube **Connect Google** does not use BuildConfig keys — it needs Google Cloud Console (YouTube Data API v3 + Android OAuth client for package `com.macrotracker` + `tester.jks` SHA-1); CI already signs releases with `app/tester.jks`.
 
-At runtime, Settings lets the user pick **Gemini**, **OpenAI**, or **OpenRouter** and enter the matching API key. For OpenRouter, Settings also shows a curated cheap-model picker with list prices. Stored keys take priority over build-time keys. `NutritionAiRepository` / `WeatherAiRepository` / widget insights all route through `AiApiClient` based on `SettingsRepository.aiProvider`.
+At runtime, Settings lets the user pick **Gemini**, **OpenAI**, **OpenRouter**, or **Claude**. Gemini / OpenAI / OpenRouter need a pasted API key. Claude can **Connect** with Claude Code's public OAuth (Pro / Max / Team / Enterprise — same login T3 Code uses via `claude auth login`) so usage comes from the Claude.ai subscription; an `sk-ant-…` key remains an optional fallback. For OpenRouter, Settings also shows a curated cheap-model picker with list prices. Stored keys take priority over build-time keys; a Claude OAuth session wins over a stored Anthropic key. `NutritionAiRepository` / `WeatherAiRepository` / widget insights / chat all route through `AiApiClient` based on `SettingsRepository.aiProvider` (`AiCredentialResolver` + `ClaudeAuthClient`).
 
 ## Architecture Overview
 ```
@@ -210,7 +210,7 @@ Briefly tell the user:
 ### External APIs
 | Service | Client | Notes |
 |---|---|---|
-| Gemini / OpenAI / OpenRouter | OkHttp (`AiApiClient`) | Provider + key from Settings; OpenRouter model picker; BuildConfig fallback |
+| Gemini / OpenAI / OpenRouter / Claude | OkHttp (`AiApiClient`) | Provider + key from Settings; Claude can Connect via Claude Code OAuth (`ClaudeAuthClient`) to use a subscription; OpenRouter model picker; BuildConfig fallback |
 | OpenF1 | Ktor (`HttpClient`) | Base URL `https://api.openf1.org/v1/`; browser User-Agent set in `AppModule` |
 | YouTube | RSS feed (OkHttp) + Data API v3 OAuth | Manual channels via RSS; Connect Google imports `subscriptions.list` into Watching |
 | Twitch | Helix (OkHttp) + Device Code (Custom Tabs) | `twitch.tv/activate` (no runtime redirect); imports follows; live board (60s cache) |

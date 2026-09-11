@@ -42,6 +42,8 @@ object AiApiClient {
         val openRouterModelId: String? = null,
         /** Claude model id when [AiProvider.ANTHROPIC] is selected. */
         val anthropicModelId: String? = null,
+        /** True when [apiKey] is a Claude subscription OAuth access token. */
+        val anthropicOAuth: Boolean = false,
     )
 
     suspend fun generate(
@@ -403,10 +405,15 @@ object AiApiClient {
         return body
     }
 
-    fun anthropicHeaders(apiKey: String): Map<String, String> = mapOf(
-        "x-api-key" to apiKey,
-        "anthropic-version" to ANTHROPIC_VERSION,
-    )
+    fun anthropicHeaders(apiKey: String, oauth: Boolean = false): Map<String, String> =
+        if (oauth) {
+            ClaudeOAuth.authorizationHeaders(apiKey)
+        } else {
+            mapOf(
+                "x-api-key" to apiKey,
+                "anthropic-version" to ANTHROPIC_VERSION,
+            )
+        }
 
     private suspend fun generateAnthropic(
         httpClient: OkHttpClient,
@@ -419,10 +426,12 @@ object AiApiClient {
         // the callers here already run a lenient parser over the reply (the Gemini
         // unstructured retry relies on it), so an explicit instruction is both
         // sufficient and one less request shape to get wrong.
-        val systemBlocks = if (params.jsonMode) {
-            listOf("Reply with a single raw JSON object and nothing else. No prose, no markdown fences.")
-        } else {
-            emptyList()
+        val systemBlocks = buildList {
+            if (params.jsonMode) {
+                add("Reply with a single raw JSON object and nothing else. No prose, no markdown fences.")
+            }
+        }.let { blocks ->
+            if (params.anthropicOAuth) ClaudeOAuth.prependRequiredSystem(blocks) else blocks
         }
 
         val messages = JSONArray().put(
@@ -454,7 +463,7 @@ object AiApiClient {
                     httpClient,
                     ANTHROPIC_URL,
                     body.toString(),
-                    extraHeaders = anthropicHeaders(apiKey),
+                    extraHeaders = anthropicHeaders(apiKey, oauth = params.anthropicOAuth),
                 )
                 Log.d(TAG, "← Claude $model | $code | ${responseBody.take(200)}")
 
@@ -467,7 +476,13 @@ object AiApiClient {
                 lastError = responseBody
 
                 if (isApiKeyError(code, responseBody)) {
-                    throw Exception("Claude API key is invalid or unauthorized. Check Settings → AI.")
+                    throw Exception(
+                        if (params.anthropicOAuth) {
+                            "Claude login expired or was rejected. Reconnect in Settings → AI."
+                        } else {
+                            "Claude API key is invalid or unauthorized. Check Settings → AI."
+                        },
+                    )
                 }
                 if (code == 429 || isRateLimitError(responseBody)) {
                     if (attempt == 0) continue
@@ -596,14 +611,15 @@ object AiApiClient {
         AiProvider.OPENROUTER ->
             "Get a key at openrouter.ai/keys. Pick a cheap model below — costs are per 1M tokens."
         AiProvider.ANTHROPIC ->
-            "Get a key at console.anthropic.com. Powers the AI tab's chat bots; pick a model below."
+            "Connect a Claude Pro, Max, Team, or Enterprise account to use your subscription. " +
+                "An API key from console.anthropic.com still works if you prefer to pay per token."
     }
 
     fun keyPlaceholder(provider: AiProvider): String = when (provider) {
         AiProvider.GEMINI -> "Paste your Gemini API key here"
         AiProvider.OPENAI -> "Paste your OpenAI API key here"
         AiProvider.OPENROUTER -> "Paste your OpenRouter API key here"
-        AiProvider.ANTHROPIC -> "Paste your Anthropic API key here"
+        AiProvider.ANTHROPIC -> "Optional — paste an Anthropic API key (sk-ant-…)"
     }
 
     /** Soft format check for the settings field (warning only). */

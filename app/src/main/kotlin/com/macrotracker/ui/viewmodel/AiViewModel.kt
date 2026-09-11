@@ -82,7 +82,7 @@ class AiViewModel @Inject constructor(
                 current.filterNot { it is NutritionChatMessage.Typing } +
                     NutritionChatMessage.User(text = query) +
                     NutritionChatMessage.Doctor(
-                        text = "No API key set. Add one in Settings → AI, then try again.",
+                        text = "No AI login set. Connect Claude or add a key in Settings → AI, then try again.",
                         isError = true,
                         retryQuery = query,
                         showSettingsCta = true,
@@ -111,7 +111,7 @@ class AiViewModel @Inject constructor(
                 current.filterNot { it is NutritionChatMessage.Typing } +
                     NutritionChatMessage.User(text = "Meal photo") +
                     NutritionChatMessage.Doctor(
-                        text = "No API key set. Add one in Settings → AI, then try again.",
+                        text = "No AI login set. Connect Claude or add a key in Settings → AI, then try again.",
                         isError = true,
                         retryQuery = MEAL_PHOTO_RETRY,
                         showSettingsCta = true,

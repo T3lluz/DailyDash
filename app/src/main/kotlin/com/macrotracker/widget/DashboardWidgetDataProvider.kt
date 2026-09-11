@@ -16,12 +16,12 @@ import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.room.Room
-import com.macrotracker.BuildConfig
 import com.macrotracker.data.local.GoalsEntity
 import com.macrotracker.data.local.MacroDatabase
 import com.macrotracker.data.local.SettingsRepository
 import com.macrotracker.data.remote.AiApiClient
 import com.macrotracker.data.remote.AiProvider
+import com.macrotracker.data.remote.ResolvedAiAuth
 import com.macrotracker.data.remote.WeatherInfo
 import com.macrotracker.data.remote.WeatherRepository
 import kotlinx.coroutines.Dispatchers
@@ -718,32 +718,23 @@ object DashboardWidgetDataProvider {
         val ts = prefs.getLong(cacheTsKey, 0L)
         if (cached != null && System.currentTimeMillis() - ts < AI_INSIGHT_TTL) return cached
 
-        // Get provider + API key from settings prefs (same store the app uses)
         val settingsPrefs = context.getSharedPreferences("macro_tracker_settings", Context.MODE_PRIVATE)
         val provider = AiProvider.fromStorage(
             settingsPrefs.getString(SettingsRepository.KEY_AI_PROVIDER, null),
         )
-        val storedKey = when (provider) {
-            AiProvider.GEMINI -> settingsPrefs.getString(SettingsRepository.KEY_GEMINI_API_KEY, null)
-            AiProvider.OPENAI -> settingsPrefs.getString(SettingsRepository.KEY_OPENAI_API_KEY, null)
-            AiProvider.OPENROUTER -> settingsPrefs.getString(SettingsRepository.KEY_OPENROUTER_API_KEY, null)
-            AiProvider.ANTHROPIC -> settingsPrefs.getString(SettingsRepository.KEY_ANTHROPIC_API_KEY, null)
-        }?.trim().orEmpty()
-        val apiKey = storedKey.ifBlank {
-            when (provider) {
-                AiProvider.GEMINI -> BuildConfig.GEMINI_API_KEY.trim()
-                AiProvider.OPENAI -> BuildConfig.OPENAI_API_KEY.trim()
-                AiProvider.OPENROUTER -> BuildConfig.OPENROUTER_API_KEY.trim()
-                AiProvider.ANTHROPIC -> BuildConfig.ANTHROPIC_API_KEY.trim()
-            }
-        }
-        if (apiKey.isBlank()) return cached  // no key → keep stale or null
-
         val openRouterModelId = settingsPrefs.getString(SettingsRepository.KEY_OPENROUTER_MODEL, null)
         val anthropicModelId = settingsPrefs.getString(SettingsRepository.KEY_ANTHROPIC_MODEL, null)
 
         return withContext(Dispatchers.IO) {
             try {
+                val auth = try {
+                    context.widgetEntryPoint().aiCredentialResolver().resolve(provider)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Could not resolve AI credentials from Hilt", e)
+                    ResolvedAiAuth("")
+                }
+                if (auth.isBlank) return@withContext cached
+
                 val client = OkHttpClient.Builder()
                     .connectTimeout(10, TimeUnit.SECONDS)
                     .readTimeout(10, TimeUnit.SECONDS)
@@ -752,7 +743,7 @@ object DashboardWidgetDataProvider {
                 val rawText = AiApiClient.generate(
                     httpClient = client,
                     provider = provider,
-                    apiKey = apiKey,
+                    apiKey = auth.secret,
                     params = AiApiClient.GenerateParams(
                         prompt = prompt,
                         temperature = 0.7,
@@ -760,6 +751,7 @@ object DashboardWidgetDataProvider {
                         jsonMode = false,
                         openRouterModelId = openRouterModelId,
                         anthropicModelId = anthropicModelId,
+                        anthropicOAuth = auth.anthropicOAuth,
                     ),
                 ).trim()
 

@@ -92,15 +92,15 @@ private data class FaqItem(val question: String, val answer: String)
 private val FAQ = listOf(
     FaqItem(
         question = "Where is my data stored?",
-        answer = "All data is stored locally on your device using a local database. Nothing is uploaded to a server. AI requests are sent to your selected provider (Google Gemini, OpenAI, or OpenRouter) but your food logs are never included.",
+        answer = "All data is stored locally on your device using a local database. Nothing is uploaded to a server. AI requests are sent to your selected provider (Gemini, OpenAI, OpenRouter, or Claude) but your food logs are never included.",
     ),
     FaqItem(
         question = "Why is my progress bar red?",
         answer = "The calorie progress bar turns red when your total calories for the day exceed your calorie goal. Set or adjust your goal in Settings → Nutrition.",
     ),
     FaqItem(
-        question = "How do I set up an AI API key?",
-        answer = "Go to Settings → AI, choose Gemini, OpenAI, or OpenRouter, paste your key, and tap \"Save Key\". Gemini keys start with \"AIza\" (aistudio.google.com). OpenAI keys start with \"sk-\" (platform.openai.com). OpenRouter keys start with \"sk-or-\" (openrouter.ai/keys) — then pick a cheap model and see its cost.",
+        question = "How do I connect AI?",
+        answer = "Go to Settings → AI and pick a provider. For Claude, tap Connect Claude and sign in with a Pro, Max, Team, or Enterprise account — that uses your subscription instead of buying console API credits. Gemini, OpenAI, and OpenRouter still need a pasted key: Gemini starts with \"AIza\" (aistudio.google.com), OpenAI with \"sk-\" (platform.openai.com), OpenRouter with \"sk-or-\" (openrouter.ai/keys). A Claude API key (sk-ant-…) is optional if you prefer to pay per token.",
     ),
     FaqItem(
         question = "How do I connect Health Connect?",

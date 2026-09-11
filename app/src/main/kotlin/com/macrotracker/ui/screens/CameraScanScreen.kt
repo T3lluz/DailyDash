@@ -301,12 +301,12 @@ private fun ApiKeyGate(onOpenSettings: () -> Unit, onGoBack: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         ClankerCoachCard(
-            message = "Add an AI API key first — then I can read nutrition labels for you.",
+            message = "Connect Claude or add an AI key first — then I can read nutrition labels for you.",
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(modifier = Modifier.height(20.dp))
         Text(
-            "API key needed",
+            "AI login needed",
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
             color = TextPrimary,

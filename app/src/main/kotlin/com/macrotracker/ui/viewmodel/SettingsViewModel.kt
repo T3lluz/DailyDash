@@ -10,6 +10,8 @@ import androidx.lifecycle.viewModelScope
 import com.macrotracker.data.health.HealthConnectRepository
 import com.macrotracker.data.local.SettingsRepository
 import com.macrotracker.data.remote.AiProvider
+import com.macrotracker.data.remote.ClaudeAuthClient
+import com.macrotracker.data.remote.ClaudeAuthOutcome
 import com.macrotracker.data.remote.TempUnit
 import com.macrotracker.data.remote.WindUnit
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -23,6 +25,7 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     private val settings: SettingsRepository,
     private val healthConnectRepository: HealthConnectRepository,
+    private val claudeAuth: ClaudeAuthClient,
     @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
 
@@ -33,6 +36,16 @@ class SettingsViewModel @Inject constructor(
     val openRouterModelId: StateFlow<String> = settings.openRouterModelId
     val anthropicApiKey: StateFlow<String> = settings.anthropicApiKey
     val anthropicModelId: StateFlow<String> = settings.anthropicModelId
+    val claudeConnected: StateFlow<Boolean> = claudeAuth.isConnected
+    val claudeAccountEmail: StateFlow<String?> = claudeAuth.accountEmail
+    val claudeSubscriptionLabel: StateFlow<String?> = claudeAuth.subscriptionLabel
+    val claudeAwaitingCode: StateFlow<Boolean> = claudeAuth.isAwaitingCode
+
+    private val _claudeBusy = MutableStateFlow(false)
+    val claudeBusy: StateFlow<Boolean> = _claudeBusy
+
+    private val _claudeMessage = MutableStateFlow<String?>(null)
+    val claudeMessage: StateFlow<String?> = _claudeMessage
     val tempUnit: StateFlow<TempUnit> = settings.tempUnit
     val windUnit: StateFlow<WindUnit> = settings.windUnit
 
@@ -116,6 +129,43 @@ class SettingsViewModel @Inject constructor(
 
     fun saveApiKey(provider: AiProvider, key: String) {
         settings.saveApiKeyForProvider(provider, key)
+    }
+
+    fun startClaudeLogin() {
+        _claudeMessage.value = null
+        if (!claudeAuth.startLogin()) {
+            _claudeMessage.value = "Could not open the Claude sign-in page"
+        }
+    }
+
+    fun cancelClaudeLogin() {
+        claudeAuth.cancelLogin()
+        _claudeMessage.value = null
+    }
+
+    fun finishClaudeLogin(code: String) {
+        if (_claudeBusy.value) return
+        viewModelScope.launch {
+            _claudeBusy.value = true
+            _claudeMessage.value = null
+            when (val outcome = claudeAuth.finishLogin(code)) {
+                is ClaudeAuthOutcome.Success -> {
+                    settings.setAiProvider(AiProvider.ANTHROPIC)
+                    _claudeMessage.value = if (outcome.email.isNullOrBlank()) {
+                        "Claude connected"
+                    } else {
+                        "Connected as ${outcome.email}"
+                    }
+                }
+                is ClaudeAuthOutcome.Failed -> _claudeMessage.value = outcome.message
+            }
+            _claudeBusy.value = false
+        }
+    }
+
+    fun disconnectClaude() {
+        claudeAuth.disconnect()
+        _claudeMessage.value = "Claude disconnected"
     }
 
     fun refreshConnectionStatus() {
