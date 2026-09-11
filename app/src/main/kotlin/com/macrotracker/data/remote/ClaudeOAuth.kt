@@ -23,11 +23,21 @@ import java.util.Base64
 object ClaudeOAuth {
     const val CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
     const val AUTHORIZE_URL = "https://claude.ai/oauth/authorize"
-    const val REDIRECT_URI = "https://console.anthropic.com/oauth/code/callback"
-    const val SCOPE = "user:profile user:inference"
+    const val REDIRECT_URI = "https://platform.claude.com/oauth/code/callback"
+    /**
+     * Same union Claude Code `/login` sends (`ALL_OAUTH_SCOPES`). A shorter list
+     * is rejected on the authorize page as "Invalid request format".
+     */
+    const val SCOPE =
+        "org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload"
     const val PROFILE_URL = "https://api.anthropic.com/api/oauth/profile"
 
+    /** Claude Code generates `base64url(32 bytes)` = 43 chars; shorter `state` is rejected. */
+    const val STATE_BYTES = 32
+    const val PKCE_VERIFIER_BYTES = 32
+
     val TOKEN_URLS = listOf(
+        "https://platform.claude.com/v1/oauth/token",
         "https://console.anthropic.com/v1/oauth/token",
         "https://api.anthropic.com/v1/oauth/token",
     )
@@ -61,9 +71,9 @@ object ClaudeOAuth {
     )
 
     fun generatePkce(random: SecureRandom = SecureRandom()): Pkce {
-        val verifier = b64url(randomBytes(random, 32))
+        val verifier = b64url(randomBytes(random, PKCE_VERIFIER_BYTES))
         val challenge = b64url(sha256(verifier.toByteArray(Charsets.US_ASCII)))
-        val state = b64url(randomBytes(random, 16))
+        val state = b64url(randomBytes(random, STATE_BYTES))
         return Pkce(verifier = verifier, challenge = challenge, state = state)
     }
 
