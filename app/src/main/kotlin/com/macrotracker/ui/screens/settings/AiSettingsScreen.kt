@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.DropdownMenuItem
@@ -80,6 +81,13 @@ fun AiSettingsScreen(
     val savedAnthropicKey by viewModel.anthropicApiKey.collectAsState()
     val anthropicModelId by viewModel.anthropicModelId.collectAsState()
     val aiProvider by viewModel.aiProvider.collectAsState()
+    val claudeConnected by viewModel.claudeConnected.collectAsState()
+    val claudeEmail by viewModel.claudeAccountEmail.collectAsState()
+    val claudePlan by viewModel.claudeSubscriptionLabel.collectAsState()
+    val claudeAwaitingCode by viewModel.claudeAwaitingCode.collectAsState()
+    val claudeBusy by viewModel.claudeBusy.collectAsState()
+    val claudeMessage by viewModel.claudeMessage.collectAsState()
+    var claudeCode by remember { mutableStateOf("") }
 
     val activeSavedKey = when (aiProvider) {
         AiProvider.GEMINI -> savedKey
@@ -93,7 +101,8 @@ fun AiSettingsScreen(
     val haptics = rememberHaptics()
 
     val isDirty = draftKey.trim() != activeSavedKey
-    val hasKey = activeSavedKey.isNotBlank()
+    val hasKey = activeSavedKey.isNotBlank() ||
+        (aiProvider == AiProvider.ANTHROPIC && claudeConnected)
     val keyFormatOk = AiApiClient.looksLikeValidKey(aiProvider, draftKey)
     val keyFeedback: String? = when {
         draftKey.isNotBlank() && !keyFormatOk -> when (aiProvider) {
@@ -115,7 +124,7 @@ fun AiSettingsScreen(
     ) {
         SettingsSubScreenHeader(
             title = "AI",
-            subtitle = "Provider, API keys, and models",
+            subtitle = "Provider, Claude login, API keys, and models",
             onNavigateBack = onNavigateBack,
         )
         Spacer(modifier = Modifier.height(12.dp))
@@ -147,7 +156,7 @@ fun AiSettingsScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Choose Gemini, OpenAI, or OpenRouter for food estimates, label scanning, and weather tips.",
+                text = "Choose Gemini, OpenAI, OpenRouter, or Claude for food estimates, label scanning, chat, and weather tips.",
                 fontSize = 13.sp,
                 color = TextSecondary,
                 lineHeight = 18.sp,
@@ -163,13 +172,52 @@ fun AiSettingsScreen(
                 },
             )
 
-            Spacer(modifier = Modifier.height(14.dp))
-            Text(
-                text = "${aiProvider.displayName} API Key",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = TextPrimary,
-            )
+            if (aiProvider == AiProvider.ANTHROPIC) {
+                Spacer(modifier = Modifier.height(16.dp))
+                ClaudeSubscriptionBlock(
+                    connected = claudeConnected,
+                    email = claudeEmail,
+                    plan = claudePlan,
+                    awaitingCode = claudeAwaitingCode,
+                    busy = claudeBusy,
+                    message = claudeMessage,
+                    code = claudeCode,
+                    onCodeChange = { claudeCode = it },
+                    onConnect = {
+                        haptics.tick()
+                        viewModel.startClaudeLogin()
+                    },
+                    onFinish = {
+                        haptics.confirm()
+                        viewModel.finishClaudeLogin(claudeCode)
+                        claudeCode = ""
+                    },
+                    onCancel = {
+                        haptics.reject()
+                        viewModel.cancelClaudeLogin()
+                        claudeCode = ""
+                    },
+                    onDisconnect = {
+                        haptics.reject()
+                        viewModel.disconnectClaude()
+                    },
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "Optional API key",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextPrimary,
+                )
+            } else {
+                Spacer(modifier = Modifier.height(14.dp))
+                Text(
+                    text = "${aiProvider.displayName} API Key",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextPrimary,
+                )
+            }
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = AiApiClient.keyHint(aiProvider),
@@ -303,9 +351,14 @@ fun AiSettingsScreen(
                 )
             } else if (aiProvider == AiProvider.ANTHROPIC) {
                 Text(
-                    text = "Chat turns carry the whole conversation plus any server context, " +
-                        "so they cost more than the one-shot macro estimates. Opus is the one " +
-                        "worth paying for when a server is actually broken.",
+                    text = if (claudeConnected) {
+                        "Connected Claude uses your plan's usage, not console API credits. " +
+                            "Opus is still the one to pick when a server is actually broken."
+                    } else {
+                        "Chat turns carry the whole conversation plus any server context, " +
+                            "so they cost more than the one-shot macro estimates if you use an " +
+                            "API key. Connect Claude above to bill the subscription instead."
+                    },
                     fontSize = 12.sp,
                     color = TextSecondary,
                     lineHeight = 16.sp,
@@ -353,6 +406,139 @@ fun AiSettingsScreen(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ClaudeSubscriptionBlock(
+    connected: Boolean,
+    email: String?,
+    plan: String?,
+    awaitingCode: Boolean,
+    busy: Boolean,
+    message: String?,
+    code: String,
+    onCodeChange: (String) -> Unit,
+    onConnect: () -> Unit,
+    onFinish: () -> Unit,
+    onCancel: () -> Unit,
+    onDisconnect: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Background, RoundedCornerShape(10.dp))
+            .border(1.dp, Border.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
+            .padding(12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Outlined.AccountCircle,
+                contentDescription = null,
+                tint = if (connected) Success else Primary,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = if (connected) "Claude connected" else "Claude subscription",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimary,
+            )
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = when {
+                connected && !email.isNullOrBlank() && !plan.isNullOrBlank() ->
+                    "$email · $plan plan"
+                connected && !email.isNullOrBlank() -> email
+                connected -> "Signed in — usage comes from your Claude plan"
+                else ->
+                    "Sign in with Claude Pro, Max, Team, or Enterprise. Same login T3 Code uses — no console API key."
+            },
+            fontSize = 12.sp,
+            color = TextSecondary,
+            lineHeight = 16.sp,
+        )
+
+        if (awaitingCode && !connected) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = "Approve DailyDash in the browser, then paste the code from the callback page.",
+                fontSize = 12.sp,
+                color = TextSecondary,
+                lineHeight = 16.sp,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = code,
+                onValueChange = onCodeChange,
+                placeholder = {
+                    Text("Paste code#state here", color = TextSecondary, fontSize = 13.sp)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                shape = RoundedCornerShape(10.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = Background,
+                    unfocusedContainerColor = Background,
+                    focusedBorderColor = Primary,
+                    unfocusedBorderColor = Border,
+                    focusedTextColor = TextPrimary,
+                    unfocusedTextColor = TextPrimary,
+                    cursorColor = Primary,
+                ),
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                MacroButton(
+                    text = if (busy) "Connecting…" else "Finish login",
+                    onClick = onFinish,
+                    modifier = Modifier.weight(1f),
+                    enabled = code.isNotBlank() && !busy,
+                )
+                MacroButton(
+                    text = "Cancel",
+                    onClick = onCancel,
+                    modifier = Modifier.weight(1f),
+                    variant = ButtonVariant.SECONDARY,
+                    enabled = !busy,
+                )
+            }
+        } else {
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                if (connected) {
+                    MacroButton(
+                        text = "Disconnect",
+                        onClick = onDisconnect,
+                        modifier = Modifier.weight(1f),
+                        variant = ButtonVariant.SECONDARY,
+                    )
+                } else {
+                    MacroButton(
+                        text = "Connect Claude",
+                        onClick = onConnect,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+
+        if (!message.isNullOrBlank()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = message,
+                fontSize = 12.sp,
+                color = if (connected && message.startsWith("Connected")) Success else TextSecondary,
+            )
         }
     }
 }

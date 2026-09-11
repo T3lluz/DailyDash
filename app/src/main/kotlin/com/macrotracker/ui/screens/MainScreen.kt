@@ -62,7 +62,8 @@ fun MainScreen(
     val openAiApiKey by settingsViewModel.openAiApiKey.collectAsState()
     val openRouterApiKey by settingsViewModel.openRouterApiKey.collectAsState()
     val anthropicApiKey by settingsViewModel.anthropicApiKey.collectAsState()
-    // Align with NutritionAiRepository: Settings key wins, BuildConfig is fallback.
+    val claudeConnected by settingsViewModel.claudeConnected.collectAsState()
+    // Align with AiCredentialResolver: Claude subscription, then Settings key, then BuildConfig.
     val hasAiApiKey = when (aiProvider) {
         AiProvider.GEMINI ->
             geminiApiKey.isNotBlank() || BuildConfig.GEMINI_API_KEY.isNotBlank()
@@ -71,7 +72,9 @@ fun MainScreen(
         AiProvider.OPENROUTER ->
             openRouterApiKey.isNotBlank() || BuildConfig.OPENROUTER_API_KEY.isNotBlank()
         AiProvider.ANTHROPIC ->
-            anthropicApiKey.isNotBlank() || BuildConfig.ANTHROPIC_API_KEY.isNotBlank()
+            claudeConnected ||
+                anthropicApiKey.isNotBlank() ||
+                BuildConfig.ANTHROPIC_API_KEY.isNotBlank()
     }
 
     val updateState by appUpdateViewModel.state.collectAsState()

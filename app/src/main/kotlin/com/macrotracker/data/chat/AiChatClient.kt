@@ -1,22 +1,26 @@
 package com.macrotracker.data.chat
 
 import android.util.Log
-import com.macrotracker.BuildConfig
 import com.macrotracker.data.local.SettingsRepository
 import com.macrotracker.data.remote.AiApiClient
+import com.macrotracker.data.remote.AiCredentialResolver
 import com.macrotracker.data.remote.AiProvider
 import com.macrotracker.data.remote.AnthropicModels
+import com.macrotracker.data.remote.ClaudeOAuth
 import com.macrotracker.data.remote.OpenRouterModels
+import com.macrotracker.data.remote.ResolvedAiAuth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.launch
+import okhttp3.Call
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.logging.HttpLoggingInterceptor
+import java.util.concurrent.atomic.AtomicReference
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
@@ -38,6 +42,7 @@ import javax.inject.Singleton
 class AiChatClient @Inject constructor(
     private val httpClient: OkHttpClient,
     private val settings: SettingsRepository,
+    private val credentials: AiCredentialResolver,
 ) {
     private val jsonMedia = "application/json; charset=utf-8".toMediaType()
 
@@ -59,20 +64,7 @@ class AiChatClient @Inject constructor(
 
     val provider: AiProvider get() = settings.getAiProvider()
 
-    val apiKey: String
-        get() {
-            val selected = provider
-            val stored = settings.getApiKeyForProvider(selected).trim()
-            if (stored.isNotBlank()) return stored
-            return when (selected) {
-                AiProvider.GEMINI -> BuildConfig.GEMINI_API_KEY.trim()
-                AiProvider.OPENAI -> BuildConfig.OPENAI_API_KEY.trim()
-                AiProvider.OPENROUTER -> BuildConfig.OPENROUTER_API_KEY.trim()
-                AiProvider.ANTHROPIC -> BuildConfig.ANTHROPIC_API_KEY.trim()
-            }
-        }
-
-    val hasApiKey: Boolean get() = apiKey.isNotBlank()
+    val hasApiKey: Boolean get() = credentials.hasCredentials()
 
     /** "Claude Opus 5" / "gpt-4o-mini" — shown under the bot name in the chat header. */
     fun modelLabel(): String = AiApiClient.modelLabel(
@@ -95,18 +87,6 @@ class AiChatClient @Inject constructor(
         systemBlocks: List<String>,
         history: List<ChatTurn>,
     ): Flow<ChatDelta> = callbackFlow {
-        val key = apiKey
-        if (key.isBlank()) {
-            trySend(
-                ChatDelta.Failed(
-                    "No API key set. Add one in Settings → AI, then try again.",
-                    showSettingsCta = true,
-                ),
-            )
-            close()
-            return@callbackFlow
-        }
-
         val selected = provider
         val trimmed = trimHistory(history)
 
@@ -114,11 +94,17 @@ class AiChatClient @Inject constructor(
             // No SSE path here on purpose: Gemini is not the chat provider we tune
             // for, and one late chunk is better than a second request shape to own.
             val job = launch(Dispatchers.IO) {
+                val auth = resolveAuth()
+                if (auth == null) {
+                    trySend(missingCredentials())
+                    close()
+                    return@launch
+                }
                 try {
                     val text = AiApiClient.generate(
                         httpClient = httpClient,
                         provider = AiProvider.GEMINI,
-                        apiKey = key,
+                        apiKey = auth.secret,
                         params = AiApiClient.GenerateParams(
                             prompt = flattenForSingleShot(systemBlocks, trimmed),
                             base64Jpeg = trimmed.lastOrNull()?.imageBase64,
@@ -137,25 +123,32 @@ class AiChatClient @Inject constructor(
             return@callbackFlow
         }
 
-        val request = when (selected) {
-            AiProvider.ANTHROPIC -> anthropicRequest(key, systemBlocks, trimmed)
-            AiProvider.OPENAI -> openAiRequest(key, OPENAI_URL, OPENAI_CHAT_MODEL, systemBlocks, trimmed)
-            AiProvider.OPENROUTER -> openAiRequest(
-                apiKey = key,
-                url = OPENROUTER_URL,
-                model = OpenRouterModels.resolveId(settings.getOpenRouterModelId()),
-                systemBlocks = systemBlocks,
-                history = trimmed,
-                extraHeaders = mapOf(
-                    "HTTP-Referer" to "https://github.com/T3lluz/DailyDash",
-                    "X-Title" to "DailyDash",
-                ),
-            )
-            AiProvider.GEMINI -> error("handled above")
-        }
-
-        val call = streamingClient.newCall(request)
+        val callRef = AtomicReference<Call?>(null)
         val job = launch(Dispatchers.IO) {
+            val auth = resolveAuth()
+            if (auth == null) {
+                trySend(missingCredentials())
+                close()
+                return@launch
+            }
+            val request = when (selected) {
+                AiProvider.ANTHROPIC -> anthropicRequest(auth, systemBlocks, trimmed)
+                AiProvider.OPENAI -> openAiRequest(auth.secret, OPENAI_URL, OPENAI_CHAT_MODEL, systemBlocks, trimmed)
+                AiProvider.OPENROUTER -> openAiRequest(
+                    apiKey = auth.secret,
+                    url = OPENROUTER_URL,
+                    model = OpenRouterModels.resolveId(settings.getOpenRouterModelId()),
+                    systemBlocks = systemBlocks,
+                    history = trimmed,
+                    extraHeaders = mapOf(
+                        "HTTP-Referer" to "https://github.com/T3lluz/DailyDash",
+                        "X-Title" to "DailyDash",
+                    ),
+                )
+                AiProvider.GEMINI -> error("handled above")
+            }
+            val call = streamingClient.newCall(request)
+            callRef.set(call)
             try {
                 call.execute().use { response ->
                     val body = response.body
@@ -214,7 +207,7 @@ class AiChatClient @Inject constructor(
         }
 
         awaitClose {
-            call.cancel()
+            callRef.get()?.cancel()
             job.cancel()
         }
     }
@@ -222,7 +215,7 @@ class AiChatClient @Inject constructor(
     // ── Request builders ────────────────────────────────────────────────────
 
     private fun anthropicRequest(
-        apiKey: String,
+        auth: ResolvedAiAuth,
         systemBlocks: List<String>,
         history: List<ChatTurn>,
     ): Request {
@@ -243,9 +236,15 @@ class AiChatClient @Inject constructor(
             )
         }
 
+        val blocks = if (auth.anthropicOAuth) {
+            ClaudeOAuth.prependRequiredSystem(systemBlocks)
+        } else {
+            systemBlocks
+        }
+
         val body = AiApiClient.buildAnthropicBody(
             model = model,
-            systemBlocks = systemBlocks,
+            systemBlocks = blocks,
             messages = messages,
             maxTokens = CHAT_MAX_TOKENS,
             // Deliberately no temperature: it is a 400 on Opus 5 / Sonnet 5.
@@ -259,7 +258,8 @@ class AiChatClient @Inject constructor(
             .post(body.toString().toRequestBody(jsonMedia))
             .header("Content-Type", "application/json")
             .header("Accept", "text/event-stream")
-        AiApiClient.anthropicHeaders(apiKey).forEach { (k, v) -> builder.header(k, v) }
+        AiApiClient.anthropicHeaders(auth.secret, oauth = auth.anthropicOAuth)
+            .forEach { (k, v) -> builder.header(k, v) }
         return builder.build()
     }
 
@@ -339,7 +339,11 @@ class AiChatClient @Inject constructor(
         val detail = AiApiClient.anthropicErrorMessage(raw)
         return when {
             AiApiClient.isApiKeyError(code, raw) -> ChatDelta.Failed(
-                "${provider.displayName} rejected that API key. Check Settings → AI.",
+                if (provider == AiProvider.ANTHROPIC) {
+                    "Claude rejected that login. Reconnect in Settings → AI."
+                } else {
+                    "${provider.displayName} rejected that API key. Check Settings → AI."
+                },
                 showSettingsCta = true,
             )
             code == 429 || AiApiClient.isRateLimitError(raw) -> ChatDelta.Failed(
@@ -354,9 +358,24 @@ class AiChatClient @Inject constructor(
     private fun failureFor(message: String?): ChatDelta.Failed {
         val text = message?.takeIf { it.isNotBlank() } ?: "Couldn't reach the AI. Check your connection."
         val lower = text.lowercase()
-        val keyish = lower.contains("api key") || lower.contains("unauthorized")
+        val keyish = lower.contains("api key") ||
+            lower.contains("unauthorized") ||
+            lower.contains("reconnect") ||
+            lower.contains("not connected")
         return ChatDelta.Failed(text, showSettingsCta = keyish)
     }
+
+    private suspend fun resolveAuth(): ResolvedAiAuth? =
+        credentials.resolve().takeUnless { it.isBlank }
+
+    private fun missingCredentials(): ChatDelta.Failed = ChatDelta.Failed(
+        if (provider == AiProvider.ANTHROPIC) {
+            "Claude is not connected. Connect your account in Settings → AI, then try again."
+        } else {
+            "No API key set. Add one in Settings → AI, then try again."
+        },
+        showSettingsCta = true,
+    )
 
     // ── History ─────────────────────────────────────────────────────────────
 

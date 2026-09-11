@@ -1,7 +1,5 @@
 package com.macrotracker.data.remote
 
-import android.util.Log
-import com.macrotracker.BuildConfig
 import com.macrotracker.data.local.SettingsRepository
 import okhttp3.OkHttpClient
 import org.json.JSONObject
@@ -32,61 +30,17 @@ data class ScanResult(
 class NutritionAiRepository @Inject constructor(
     private val httpClient: OkHttpClient,
     private val settings: SettingsRepository,
+    private val credentials: AiCredentialResolver,
 ) {
     private val provider: AiProvider
         get() = settings.getAiProvider()
 
-    private val apiKey: String
-        get() {
-            val selected = provider
-            val stored = settings.getApiKeyForProvider(selected).trim()
-            if (stored.isNotBlank()) {
-                Log.d(TAG, "Using ${selected.displayName} key from Settings (${stored.take(8)}…)")
-                return stored
-            }
-            // Build-time fallback from local.properties
-            if (selected == AiProvider.GEMINI) {
-                val buildKey = BuildConfig.GEMINI_API_KEY.trim()
-                if (buildKey.isNotBlank()) {
-                    Log.d(TAG, "Using Gemini key from BuildConfig (${buildKey.take(8)}…)")
-                    return buildKey
-                }
-            }
-            if (selected == AiProvider.OPENAI) {
-                val buildKey = BuildConfig.OPENAI_API_KEY.trim()
-                if (buildKey.isNotBlank()) {
-                    Log.d(TAG, "Using OpenAI key from BuildConfig (${buildKey.take(8)}…)")
-                    return buildKey
-                }
-            }
-            if (selected == AiProvider.OPENROUTER) {
-                val buildKey = BuildConfig.OPENROUTER_API_KEY.trim()
-                if (buildKey.isNotBlank()) {
-                    Log.d(TAG, "Using OpenRouter key from BuildConfig (${buildKey.take(8)}…)")
-                    return buildKey
-                }
-            }
-            if (selected == AiProvider.ANTHROPIC) {
-                val buildKey = BuildConfig.ANTHROPIC_API_KEY.trim()
-                if (buildKey.isNotBlank()) {
-                    Log.d(TAG, "Using Claude key from BuildConfig (${buildKey.take(8)}…)")
-                    return buildKey
-                }
-            }
-            Log.w(TAG, "No ${selected.displayName} API key configured")
-            return ""
-        }
-
-    val hasApiKey: Boolean get() = apiKey.isNotBlank()
-
-    companion object {
-        private const val TAG = "NutritionAI"
-    }
+    val hasApiKey: Boolean get() = credentials.hasCredentials()
 
     // ─── Estimate nutrition from text ─────────────────────────────────────────
     suspend fun estimateNutritionWithAI(foodQuery: String): NutritionEstimate {
         if (foodQuery.isBlank()) throw Exception("Enter a food to estimate first.")
-        requireApiKey()
+        val auth = requireAuth()
 
         val prompt = """
             Estimate nutrition values for this food query: "$foodQuery".
@@ -109,7 +63,7 @@ class NutritionAiRepository @Inject constructor(
         val responseText = AiApiClient.generate(
             httpClient = httpClient,
             provider = provider,
-            apiKey = apiKey,
+            apiKey = auth.secret,
             params = AiApiClient.GenerateParams(
                 prompt = prompt,
                 temperature = 0.2,
@@ -117,6 +71,7 @@ class NutritionAiRepository @Inject constructor(
                 jsonMode = true,
                 openRouterModelId = settings.getOpenRouterModelId(),
                 anthropicModelId = settings.getAnthropicModelId(),
+                anthropicOAuth = auth.anthropicOAuth,
             ),
         )
         return parseNutritionEstimate(responseText, foodQuery)
@@ -124,7 +79,7 @@ class NutritionAiRepository @Inject constructor(
 
     // ─── Estimate nutrition from a meal photo (not a label) ───────────────────
     suspend fun estimateNutritionFromMealImage(base64Image: String): NutritionEstimate {
-        requireApiKey()
+        val auth = requireAuth()
 
         val prompt = """
             Look at this photo of a prepared meal or food on a plate/bowl.
@@ -149,7 +104,7 @@ class NutritionAiRepository @Inject constructor(
         val responseText = AiApiClient.generate(
             httpClient = httpClient,
             provider = provider,
-            apiKey = apiKey,
+            apiKey = auth.secret,
             params = AiApiClient.GenerateParams(
                 prompt = prompt,
                 base64Jpeg = base64Image,
@@ -158,6 +113,7 @@ class NutritionAiRepository @Inject constructor(
                 jsonMode = true,
                 openRouterModelId = settings.getOpenRouterModelId(),
                 anthropicModelId = settings.getAnthropicModelId(),
+                anthropicOAuth = auth.anthropicOAuth,
             ),
         )
         return parseNutritionEstimate(responseText, "Meal photo")
@@ -168,7 +124,7 @@ class NutritionAiRepository @Inject constructor(
         analyzeNutritionLabelImage(base64Image)
 
     suspend fun analyzeNutritionLabelImage(base64Image: String): ScanResult {
-        requireApiKey()
+        val auth = requireAuth()
 
         val prompt = """
             Read the nutrition facts label in this image.
@@ -187,7 +143,7 @@ class NutritionAiRepository @Inject constructor(
         val responseText = AiApiClient.generate(
             httpClient = httpClient,
             provider = provider,
-            apiKey = apiKey,
+            apiKey = auth.secret,
             params = AiApiClient.GenerateParams(
                 prompt = prompt,
                 base64Jpeg = base64Image,
@@ -196,26 +152,27 @@ class NutritionAiRepository @Inject constructor(
                 jsonMode = true,
                 openRouterModelId = settings.getOpenRouterModelId(),
                 anthropicModelId = settings.getAnthropicModelId(),
+                anthropicOAuth = auth.anthropicOAuth,
             ),
         )
         return parseScanResult(responseText)
     }
 
-    private fun requireApiKey() {
-        if (!hasApiKey) {
-            val selected = provider
-            val hint = when (selected) {
-                AiProvider.GEMINI ->
-                    "No Gemini API key set. Go to Settings, choose Gemini, and paste your free key from aistudio.google.com."
-                AiProvider.OPENAI ->
-                    "No OpenAI API key set. Go to Settings, choose OpenAI, and paste your key from platform.openai.com."
-                AiProvider.OPENROUTER ->
-                    "No OpenRouter API key set. Go to Settings, choose OpenRouter, and paste your key from openrouter.ai/keys."
-                AiProvider.ANTHROPIC ->
-                    "No Claude API key set. Go to Settings, choose Claude, and paste your key from console.anthropic.com."
-            }
-            throw Exception(hint)
+    private suspend fun requireAuth(): ResolvedAiAuth {
+        val auth = credentials.resolve()
+        if (!auth.isBlank) return auth
+        val selected = provider
+        val hint = when (selected) {
+            AiProvider.GEMINI ->
+                "No Gemini API key set. Go to Settings, choose Gemini, and paste your free key from aistudio.google.com."
+            AiProvider.OPENAI ->
+                "No OpenAI API key set. Go to Settings, choose OpenAI, and paste your key from platform.openai.com."
+            AiProvider.OPENROUTER ->
+                "No OpenRouter API key set. Go to Settings, choose OpenRouter, and paste your key from openrouter.ai/keys."
+            AiProvider.ANTHROPIC ->
+                "Claude is not connected. Go to Settings → AI, choose Claude, and tap Connect Claude (or paste an API key)."
         }
+        throw Exception(hint)
     }
 
     // ─── JSON Parsing helpers ────────────────────────────────────────────────
