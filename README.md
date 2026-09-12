@@ -3,7 +3,7 @@
   <h1>DailyDash</h1>
   <p><b>Your whole day on one screen.</b><br/>Nutrition, health, weather, calendar, F1, GitHub, YouTube, Twitch, and your servers in one Android app.</p>
   <p>
-    <a href="https://github.com/T3lluz/MacroTracker/releases/latest"><img alt="Download the latest APK" src="https://img.shields.io/github/v/release/T3lluz/MacroTracker?label=Download%20APK&logo=android&logoColor=white&color=4F7CFF&style=for-the-badge" /></a>
+    <a href="https://github.com/T3lluz/DailyDash/releases/latest"><img alt="Download the latest APK" src="https://img.shields.io/github/v/release/T3lluz/DailyDash?label=Download%20APK&logo=android&logoColor=white&color=4F7CFF&style=for-the-badge" /></a>
   </p>
   <p>
     <img alt="Android 8.0+" src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white" />
@@ -15,7 +15,7 @@
 
 ## Get started
 
-1. Download the APK from [**Releases**](https://github.com/T3lluz/MacroTracker/releases/latest) and install it. Allow installs from unknown sources if Android asks.
+1. Download the APK from [**Releases**](https://github.com/T3lluz/DailyDash/releases/latest) and install it. Allow installs from unknown sources if Android asks.
 2. Open DailyDash and turn on the services you want in **Settings → Connections**.
 3. Press and hold a card on **Home** or **Health** to reorder or hide it.
 
@@ -71,8 +71,8 @@ Choose a provider in **Settings → AI**. Meal estimates show a confidence level
 **Requirements:** Android Studio or JDK 17, Android SDK 36, and a device or emulator running Android 8.0+ (API 26).
 
 ```bash
-git clone https://github.com/T3lluz/MacroTracker.git
-cd MacroTracker
+git clone https://github.com/T3lluz/DailyDash.git
+cd DailyDash
 cp local.properties.example local.properties   # set sdk.dir
 ./gradlew installDebug                          # build and install on a connected device
 ```
