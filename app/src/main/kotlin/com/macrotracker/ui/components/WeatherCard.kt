@@ -91,7 +91,7 @@ private fun weatherGradient(symbolCode: String): Brush {
                 colors = listOf(Color(0xFF1565C0), Color(0xFF42A5F5), Color(0xFF81D4FA)),
             )
             TimeOfDay.NIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF0D1B2A), Color(0xFF1B2838), Color(0xFF1A237E)),
+                colors = listOf(Color(0xFF141414), Color(0xFF181818), Color(0xFF1F2433)),
             )
             TimeOfDay.TWILIGHT -> Brush.linearGradient(
                 colors = listOf(Color(0xFF1A237E), Color(0xFF4A148C), Color(0xFFE65100)),
@@ -102,7 +102,7 @@ private fun weatherGradient(symbolCode: String): Brush {
                 colors = listOf(Color(0xFF1976D2), Color(0xFF42A5F5), Color(0xFF90CAF9)),
             )
             TimeOfDay.NIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF0D1B2A), Color(0xFF1B3A5C), Color(0xFF263238)),
+                colors = listOf(Color(0xFF141414), Color(0xFF181818), Color(0xFF222830)),
             )
             TimeOfDay.TWILIGHT -> Brush.linearGradient(
                 colors = listOf(Color(0xFF283593), Color(0xFF5C3D8F), Color(0xFFBF360C)),
@@ -113,7 +113,7 @@ private fun weatherGradient(symbolCode: String): Brush {
                 colors = listOf(Color(0xFF37474F), Color(0xFF546E7A), Color(0xFF78909C)),
             )
             TimeOfDay.NIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF0D1520), Color(0xFF1A2733), Color(0xFF263238)),
+                colors = listOf(Color(0xFF141414), Color(0xFF181818), Color(0xFF23282E)),
             )
             TimeOfDay.TWILIGHT -> Brush.linearGradient(
                 colors = listOf(Color(0xFF1A2040), Color(0xFF37474F), Color(0xFF5D4037)),
@@ -124,7 +124,7 @@ private fun weatherGradient(symbolCode: String): Brush {
                 colors = listOf(Color(0xFF37474F), Color(0xFF455A64), Color(0xFF607D8B)),
             )
             TimeOfDay.NIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF0A1015), Color(0xFF1A2333), Color(0xFF263040)),
+                colors = listOf(Color(0xFF141414), Color(0xFF181818), Color(0xFF1F1F1F)),
             )
             TimeOfDay.TWILIGHT -> Brush.linearGradient(
                 colors = listOf(Color(0xFF1A1A2E), Color(0xFF37474F), Color(0xFF4E342E)),
@@ -135,7 +135,7 @@ private fun weatherGradient(symbolCode: String): Brush {
                 colors = listOf(Color(0xFF455A64), Color(0xFF607D8B), Color(0xFF78909C)),
             )
             TimeOfDay.NIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF1C2530), Color(0xFF2A3540), Color(0xFF384550)),
+                colors = listOf(Color(0xFF181818), Color(0xFF1A1A1A), Color(0xFF2A2A2A)),
             )
             TimeOfDay.TWILIGHT -> Brush.linearGradient(
                 colors = listOf(Color(0xFF2E2E3A), Color(0xFF455A64), Color(0xFF5D4037)),
@@ -146,7 +146,7 @@ private fun weatherGradient(symbolCode: String): Brush {
                 colors = listOf(Color(0xFF1A1530), Color(0xFF311B92), Color(0xFF4A148C)),
             )
             TimeOfDay.NIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF0D0A1A), Color(0xFF1A1530), Color(0xFF2D1F4A)),
+                colors = listOf(Color(0xFF141414), Color(0xFF181818), Color(0xFF221C28)),
             )
             TimeOfDay.TWILIGHT -> Brush.linearGradient(
                 colors = listOf(Color(0xFF1A1530), Color(0xFF2D1F4A), Color(0xFF4E342E)),
@@ -157,7 +157,7 @@ private fun weatherGradient(symbolCode: String): Brush {
                 colors = listOf(Color(0xFF263238), Color(0xFF37474F), Color(0xFF455A64)),
             )
             TimeOfDay.NIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF0A1520), Color(0xFF15202D), Color(0xFF1E3040)),
+                colors = listOf(Color(0xFF141414), Color(0xFF181818), Color(0xFF1C2228)),
             )
             TimeOfDay.TWILIGHT -> Brush.linearGradient(
                 colors = listOf(Color(0xFF1A2030), Color(0xFF2E3545), Color(0xFF3E2723)),
@@ -168,7 +168,7 @@ private fun weatherGradient(symbolCode: String): Brush {
                 colors = listOf(Color(0xFF37474F), Color(0xFF455A64), Color(0xFF546E7A)),
             )
             TimeOfDay.NIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF0D1820), Color(0xFF1A2530), Color(0xFF304558)),
+                colors = listOf(Color(0xFF141414), Color(0xFF181818), Color(0xFF22262C)),
             )
             TimeOfDay.TWILIGHT -> Brush.linearGradient(
                 colors = listOf(Color(0xFF1A2530), Color(0xFF37474F), Color(0xFF4E342E)),
@@ -179,7 +179,7 @@ private fun weatherGradient(symbolCode: String): Brush {
                 colors = listOf(Color(0xFF37474F), Color(0xFF546E7A), Color(0xFF78909C)),
             )
             TimeOfDay.NIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF0D1520), Color(0xFF1E2838), Color(0xFF2A3B50)),
+                colors = listOf(Color(0xFF141414), Color(0xFF1A1A1A), Color(0xFF242830)),
             )
             TimeOfDay.TWILIGHT -> Brush.linearGradient(
                 colors = listOf(Color(0xFF1A2030), Color(0xFF37474F), Color(0xFF4E342E)),

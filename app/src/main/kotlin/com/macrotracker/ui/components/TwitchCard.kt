@@ -120,9 +120,9 @@ import java.util.Locale
 
 private val TwPurple = Color(0xFF9146FF)
 private val TwPurpleDeep = Color(0xFF5C16C5)
-private val TwSurface = Color(0xFF18181F)
+private val TwSurface = Surface
 private val TwCardBg = Color(0xFF0E0E10)
-private val TwHairline = Color(0xFF2F2F35)
+private val TwHairline = Border
 private val TwLive = Color(0xFFEB0400)
 private val TwSharp = RoundedCornerShape(8.dp)
 

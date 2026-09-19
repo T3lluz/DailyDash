@@ -158,8 +158,8 @@ private enum class F1Tab(val label: String) {
     RACE("Race"),
 }
 
-private val GainGreen = Color(0xFF22C55E)
-private val GainRed = Color(0xFFEF4444)
+private val GainGreen = Success
+private val GainRed = Error
 
 // ── Derived research / form metrics ───────────────────────────────────────────
 private data class DriverFormLab(

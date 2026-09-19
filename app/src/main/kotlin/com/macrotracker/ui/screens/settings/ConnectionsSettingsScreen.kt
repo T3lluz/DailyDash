@@ -37,6 +37,7 @@ import com.macrotracker.ui.screens.health.HealthMetric
 import com.macrotracker.ui.screens.health.iconRes
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
+import com.macrotracker.ui.theme.ServerBrand
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.rememberHaptics
@@ -298,7 +299,7 @@ fun ConnectionsSettingsScreen(
                         "${serverProfiles.size} configured · $online online"
                     }
                 },
-                iconTint = Color(0xFF7DD3FC),
+                iconTint = ServerBrand,
                 onClick = {
                     haptics.click()
                     onNavigateToServers()

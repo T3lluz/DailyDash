@@ -99,7 +99,7 @@ private val PAGES = listOf(
     ),
     TutorialPage(
         icon = Icons.Outlined.Restaurant,
-        accentColor = androidx.compose.ui.graphics.Color(0xFF22C55E),
+        accentColor = Secondary,
         badge = "Nutrition",
         title = "Macro Tracking Made Easy",
         body = "Log food by typing, scanning a nutrition label with your camera, or describing your meal to Clanker in plain English. DailyDash tracks calories and protein.",
