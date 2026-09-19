@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.DailyDash" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">#080D18</item>
-        <item name="android:statusBarColor">#080D18</item>
-        <item name="android:navigationBarColor">#080D18</item>
+        <item name="android:windowBackground">#181818</item>
+        <item name="android:statusBarColor">#181818</item>
+        <item name="android:navigationBarColor">#181818</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
 

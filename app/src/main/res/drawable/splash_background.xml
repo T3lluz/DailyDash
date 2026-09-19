@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Deep navy background -->
+    <!-- Cursor Dark canvas -->
     <item android:drawable="@color/splash_bg" />
     <!-- Logo centred — round crop is handled by the Compose SplashScreen -->
     <item

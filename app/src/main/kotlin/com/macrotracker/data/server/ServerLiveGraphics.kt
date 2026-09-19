@@ -33,14 +33,14 @@ object ServerLiveGraphics {
     private const val STRIP_HEIGHT = 64
 
     // Mirrors ui/theme/Color.kt so the notification and the screen agree.
-    private const val SURFACE = 0xFF111827.toInt()
-    private const val WELL = 0xFF0B1424.toInt()
-    private const val BORDER = 0xFF24324A.toInt()
-    private const val TEXT_PRIMARY = 0xFFEAF0FB.toInt()
-    private const val TEXT_SECONDARY = 0xFF99A8C2.toInt()
-    private const val GOOD = 0xFF22C55E.toInt()
-    private const val WARN = 0xFFF59E0B.toInt()
-    private const val BAD = 0xFFEF4444.toInt()
+    private const val SURFACE = 0xFF1A1A1A.toInt()
+    private const val WELL = 0xFF121212.toInt()
+    private const val BORDER = 0xFF2A2A2A.toInt()
+    private const val TEXT_PRIMARY = 0xFFE4E4E4.toInt()
+    private const val TEXT_SECONDARY = 0xFF8C8C8C.toInt()
+    private const val GOOD = 0xFF3FA266.toInt()
+    private const val WARN = 0xFFF1B467.toInt()
+    private const val BAD = 0xFFE34671.toInt()
     private const val NET_RX = 0xFF34D399.toInt()
     private const val NET_TX = 0xFF60A5FA.toInt()
 

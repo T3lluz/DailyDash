@@ -190,7 +190,7 @@ private fun weatherGradient(symbolCode: String): Brush {
                 colors = listOf(Color(0xFF1565C0), Color(0xFF1976D2), Color(0xFF42A5F5)),
             )
             TimeOfDay.NIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF0D1B2A), Color(0xFF111827), Color(0xFF1A2438)),
+                colors = listOf(Color(0xFF141414), Color(0xFF181818), Color(0xFF1A1A1A)),
             )
             TimeOfDay.TWILIGHT -> Brush.linearGradient(
                 colors = listOf(Color(0xFF1A237E), Color(0xFF311B92), Color(0xFFBF360C)),

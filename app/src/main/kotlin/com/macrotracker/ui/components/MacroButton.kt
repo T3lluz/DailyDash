@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.MacroMotion
+import com.macrotracker.ui.theme.OnAccent
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.PrimaryVariant
 import com.macrotracker.ui.theme.Surface
@@ -48,7 +49,7 @@ fun MacroButton(
     )
 
     val (baseBg, contentColor, borderColor) = when (variant) {
-        ButtonVariant.PRIMARY -> Triple(Primary, Color.White, Primary)
+        ButtonVariant.PRIMARY -> Triple(Primary, OnAccent, Primary)
         ButtonVariant.SECONDARY -> Triple(Surface, TextPrimary, Border)
         ButtonVariant.DANGER -> Triple(com.macrotracker.ui.theme.Error, Color.White, com.macrotracker.ui.theme.Error)
     }

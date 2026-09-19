@@ -2,29 +2,41 @@ package com.macrotracker.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Matches the original React Native color scheme
-val Background = Color(0xFF080D18)
-val Surface = Color(0xFF111827)
-val Primary = Color(0xFF4F7CFF)
-val PrimaryVariant = Color(0xFF3D67DB)
-val Secondary = Color(0xFF22C55E)
-val Error = Color(0xFFEF4444)
-val TextPrimary = Color(0xFFEAF0FB)
-val TextSecondary = Color(0xFF99A8C2)
-val Border = Color(0xFF24324A)
-val Success = Color(0xFF22C55E)
+/**
+ * Cursor Dark Anysphere — values from Cursor's
+ * `cursor-dark-color-theme.json` (editor `#181818`, chrome `#141414`,
+ * overlays of `#E4E4E4` at 92 / 55 / 37 / 7%, accent `#81A1C1`).
+ *
+ * Screens use [Background] as the canvas and [Surface] for cards; chrome
+ * (nav, wells, glass) sits one step darker, matching Cursor's recessed
+ * sidebar rather than a raised navy panel.
+ */
+val Background = Color(0xFF181818)
+val Surface = Color(0xFF1A1A1A)
+val SurfaceElevated = Color(0xFF1F1F1F)
+val SurfaceChrome = Color(0xFF141414)
+val Primary = Color(0xFF81A1C1)
+val PrimaryVariant = Color(0xFF6B8AA8)
+val OnAccent = Color(0xFF191C22)
+val Secondary = Color(0xFF3FA266)
+val Error = Color(0xFFE34671)
+val TextPrimary = Color(0xFFE4E4E4)
+val TextSecondary = Color(0xFF8C8C8C)
+val TextPlaceholder = Color(0xFF616161)
+val Border = Color(0xFF2A2A2A)
+val Success = Color(0xFF3FA266)
 
 // Semantic alias for screen-level headers — keeps every screen in sync
 val HeaderColor = TextPrimary
 
 /** Frosted pill / overlay chrome (navbar, floating composer). */
-val GlassTint = Color(0xFF141C2C)
-val GlassHairline = Color.White.copy(alpha = 0.22f)
-val GlassDot = Color.White.copy(alpha = 0.10f)
+val GlassTint = SurfaceChrome
+val GlassHairline = Color(0xFFE4E4E4).copy(alpha = 0.15f)
+val GlassDot = Color(0xFFE4E4E4).copy(alpha = 0.07f)
 
 /** Health activity maps and inset wells — named, not one-off hex. */
-val MapSurface = Color(0xFF0B1424)
-val MapWell = Color(0xFF0E1626)
+val MapSurface = SurfaceChrome
+val MapWell = Color(0xFF121212)
 val MapStart = Color(0xFF34D399)
 val MapFinish = Color(0xFFFB7185)
 
@@ -62,8 +74,8 @@ val HealthConnectBrand = Color(0xFFE53935)
  * bars and severity chips, shared with the live notification's Canvas renderer
  * in `data/server/ServerLiveGraphics.kt`. Keep the two in step.
  */
-val ServerBrand = Color(0xFF7DD3FC)
-val ServerCpu = Color(0xFF4F7CFF)
+val ServerBrand = Color(0xFF88C0D0)
+val ServerCpu = Primary
 val ServerMemory = Color(0xFFA78BFA)
 val ServerDisk = Color(0xFF22D3EE)
 val ServerNetRx = Color(0xFF34D399)
@@ -71,9 +83,9 @@ val ServerNetTx = Color(0xFF60A5FA)
 val ServerThermal = Color(0xFFFB923C)
 
 /** Severity ramp used by meters and the advisories feed. */
-val ServerGood = Color(0xFF22C55E)
-val ServerWarn = Color(0xFFF59E0B)
-val ServerCritical = Color(0xFFEF4444)
+val ServerGood = Success
+val ServerWarn = Color(0xFFF1B467)
+val ServerCritical = Error
 
 /** Inset wells behind gauges, sparklines and terminal-style readouts. */
-val ServerWell = Color(0xFF0B1424)
+val ServerWell = MapWell

@@ -71,8 +71,8 @@ private val F1Silver   = Color(0xFFA8B0BC)
 private val F1Bronze   = Color(0xFFB87333)
 private val SprintPink = Color(0xFFE879B8)
 private val FL_Purple  = Color(0xFFA855F7)
-private val RowSurface = Color(0xFF101820)
-private val Hairline   = Color(0xFF243044)
+private val RowSurface = com.macrotracker.ui.theme.Surface
+private val Hairline   = com.macrotracker.ui.theme.Border
 private val LabAmber   = Color(0xFFF0A500)
 private val SharpShape = RoundedCornerShape(6.dp)
 
@@ -654,9 +654,9 @@ private fun F1CollapsedWidget(data: F1Standings) {
                             .matchParentSize()
                             .background(
                                 Brush.horizontalGradient(
-                                    0.0f to Color(0xFF111827).copy(alpha = 0.94f),
-                                    0.44f to Color(0xFF111827).copy(alpha = 0.68f),
-                                    0.72f to Color(0xFF111827).copy(alpha = 0.24f),
+                                    0.0f to com.macrotracker.ui.theme.Surface.copy(alpha = 0.94f),
+                                    0.44f to com.macrotracker.ui.theme.Surface.copy(alpha = 0.68f),
+                                    0.72f to com.macrotracker.ui.theme.Surface.copy(alpha = 0.24f),
                                     1.0f to Color.Transparent,
                                 ),
                             ),
@@ -667,7 +667,7 @@ private fun F1CollapsedWidget(data: F1Standings) {
                             .background(
                                 Brush.verticalGradient(
                                     0.5f to Color.Transparent,
-                                    1.0f to Color(0xFF111827).copy(alpha = 0.85f),
+                                    1.0f to com.macrotracker.ui.theme.Surface.copy(alpha = 0.85f),
                                 ),
                             ),
                     )
@@ -1097,7 +1097,7 @@ private fun CompactNextRace(
                         .width(96.dp)
                         .height(64.dp)
                         .clip(SharpShape)
-                        .background(Color(0xFF080D14)),
+                        .background(SurfaceChrome),
                     contentAlignment = Alignment.Center,
                 ) {
                     SubcomposeAsyncImage(
@@ -1333,7 +1333,7 @@ private fun TrackVisualization(circuitId: String, accentColor: Color, raceName: 
             Text("Circuit", color = TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
             Text("· $raceName", color = TextSecondary.copy(alpha = 0.7f), fontSize = 11.sp)
         }
-        Box(modifier = Modifier.fillMaxWidth().height(148.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xFF080D14))) {
+        Box(modifier = Modifier.fillMaxWidth().height(148.dp).clip(RoundedCornerShape(12.dp)).background(SurfaceChrome)) {
             if (svgUrl != null) {
                 val request = remember(svgUrl) {
                     circuitMapRequest(context, svgUrl, width = 960, height = 540)

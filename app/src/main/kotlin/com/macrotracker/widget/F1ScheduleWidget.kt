@@ -445,7 +445,7 @@ private fun RaceRow(
 ) {
     val textColor = if (race.isPast) c.sub else c.text
     val rowBg = c.cardAlt
-    val dataBg = androidx.compose.ui.graphics.Color(0xD91E1E2E)
+    val dataBg = androidx.compose.ui.graphics.Color(0xD91A1A1A)
 
     Box(
         GlanceModifier.fillMaxWidth().then(modifier).height(88.dp).cornerRadius(sc.cornerSm)

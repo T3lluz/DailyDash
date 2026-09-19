@@ -56,7 +56,7 @@ class ServerStore @Inject constructor(
         authMode: ServerAuthMode,
         secret: String,
         keyPassphrase: String = "",
-        accentHex: String = "#4F7CFF",
+        accentHex: String = "#81A1C1",
     ): String {
         val id = UUID.randomUUID().toString()
         val profile = ServerProfile(
