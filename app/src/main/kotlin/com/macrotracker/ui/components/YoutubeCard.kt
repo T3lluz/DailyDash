@@ -115,6 +115,7 @@ import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.Surface
+import com.macrotracker.ui.theme.SurfaceChrome
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.HapticHelper
@@ -132,9 +133,9 @@ import java.time.temporal.ChronoUnit
 
 private val YtRed      = Color(0xFFFF0000)
 private val YtDark     = Color(0xFF0F0F0F)
-private val YtSurface  = Color(0xFF101820)
-private val YtCardBg   = Color(0xFF070B12)
-private val YtHairline = Color(0xFF243044)
+private val YtSurface  = Surface
+private val YtCardBg   = SurfaceChrome
+private val YtHairline = Border
 private val YtSharp    = RoundedCornerShape(6.dp)
 
 private enum class YtLayout { LIST, GRID }

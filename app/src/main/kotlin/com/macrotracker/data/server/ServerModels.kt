@@ -15,7 +15,7 @@ data class ServerProfile(
     val username: String,
     val port: Int = 22,
     val authMode: ServerAuthMode = ServerAuthMode.PASSWORD,
-    val accentHex: String = "#4F7CFF",
+    val accentHex: String = "#81A1C1",
     val enabled: Boolean = true,
     /** Sort order in the list; lower first. */
     val position: Int = 0,

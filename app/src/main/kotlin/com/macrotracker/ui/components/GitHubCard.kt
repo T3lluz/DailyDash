@@ -102,8 +102,11 @@ import com.macrotracker.data.github.parseGitHubInstant
 import com.macrotracker.data.github.repoNamed
 import com.macrotracker.data.github.sortedByRecent
 import com.macrotracker.data.github.statusKey
+import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.MacroMotion
+import com.macrotracker.ui.theme.Surface
+import com.macrotracker.ui.theme.SurfaceElevated
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.HapticHelper
@@ -121,9 +124,9 @@ private val GhMerged = Color(0xFFA371F7)
 private val GhClosed = Color(0xFFF85149)
 private val GhDraft = Color(0xFF8B949E)
 private val GhReview = Color(0xFFE3B341)
-private val GhSurface = Color(0xFF101820)
-private val GhHairline = Color(0xFF243044)
-private val GhChip = Color(0xFF161E2C)
+private val GhSurface = Surface
+private val GhHairline = Border
+private val GhChip = SurfaceElevated
 private val Sharp = RoundedCornerShape(6.dp)
 private val Pill = RoundedCornerShape(20.dp)
 

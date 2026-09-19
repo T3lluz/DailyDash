@@ -521,7 +521,7 @@ private fun WidgetCard(
                 .fillMaxWidth()
                 .aspectRatio(info.previewRatio)
                 .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xFF080D18))
+                .background(Background)
                 .border(1.dp, Border.copy(alpha = 0.4f), RoundedCornerShape(10.dp)),
         ) {
             Image(

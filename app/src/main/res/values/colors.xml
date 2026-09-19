@@ -1,41 +1,41 @@
 <resources>
-  <color name="splashscreen_background">#ffffff</color>
-  <color name="splash_bg">#080D18</color>
+  <color name="splashscreen_background">#181818</color>
+  <color name="splash_bg">#181818</color>
   <color name="iconBackground">#ffffff</color>
-  <color name="colorPrimary">#023c69</color>
-  <color name="colorPrimaryDark">#ffffff</color>
+  <color name="colorPrimary">#81A1C1</color>
+  <color name="colorPrimaryDark">#141414</color>
 
-  <!-- Widget colors — F1-inspired dark palette -->
-  <color name="widget_surface">#15151E</color>
-  <color name="widget_on_surface">#FFFFFF</color>
-  <color name="widget_subtitle">#8A8AA0</color>
+  <!-- Widget colors — Cursor Dark Anysphere -->
+  <color name="widget_surface">#181818</color>
+  <color name="widget_on_surface">#E4E4E4</color>
+  <color name="widget_subtitle">#8C8C8C</color>
   <color name="widget_calorie">#FF6B6B</color>
   <color name="widget_protein">#4ADE80</color>
   <color name="widget_fat">#FB923C</color>
   <color name="widget_carb">#60A5FA</color>
-  <color name="widget_track_bg">#2E2E42</color>
+  <color name="widget_track_bg">#2A2A2A</color>
   <color name="widget_health">#60A5FA</color>
   <color name="widget_weather">#FBBF24</color>
   <color name="widget_calendar">#A78BFA</color>
-  <color name="widget_card_bg">#242433</color>
+  <color name="widget_card_bg">#1A1A1A</color>
   <color name="widget_steps">#60A5FA</color>
   <color name="widget_sleep">#A78BFA</color>
   <color name="widget_heart">#FF6B6B</color>
-  <color name="widget_accent">#2E2E42</color>
-  <color name="widget_on_accent">#FFFFFF</color>
-  <color name="widget_primary">#A78BFA</color>
-  <color name="widget_secondary">#8A8AA0</color>
+  <color name="widget_accent">#2A2A2A</color>
+  <color name="widget_on_accent">#E4E4E4</color>
+  <color name="widget_primary">#81A1C1</color>
+  <color name="widget_secondary">#8C8C8C</color>
 
-  <!-- F1 widget colors -->
+  <!-- F1 widget colors — Cursor chrome, F1 accents -->
   <color name="f1_red">#E8002D</color>
-  <color name="f1_dark">#15151E</color>
-  <color name="f1_surface">#15151E</color>
-  <color name="f1_card">#242433</color>
-  <color name="f1_card_alt">#1E1E2E</color>
-  <color name="f1_pill">#2E2E42</color>
-  <color name="f1_divider">#3A3A4E</color>
-  <color name="f1_text">#FFFFFF</color>
-  <color name="f1_sub">#8A8AA0</color>
+  <color name="f1_dark">#141414</color>
+  <color name="f1_surface">#141414</color>
+  <color name="f1_card">#1A1A1A</color>
+  <color name="f1_card_alt">#181818</color>
+  <color name="f1_pill">#2A2A2A</color>
+  <color name="f1_divider">#2A2A2A</color>
+  <color name="f1_text">#E4E4E4</color>
+  <color name="f1_sub">#8C8C8C</color>
   <color name="f1_gold">#F5C842</color>
   <color name="f1_silver">#C8C8D4</color>
   <color name="f1_bronze">#D4835A</color>

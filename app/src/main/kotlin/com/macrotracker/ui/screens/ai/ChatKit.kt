@@ -68,6 +68,7 @@ import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.GlassHairline
 import com.macrotracker.ui.theme.MacroMotion
+import com.macrotracker.ui.theme.OnAccent
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.Surface
 import com.macrotracker.ui.theme.TextPrimary
@@ -242,7 +243,7 @@ fun UserBubble(text: String) {
                 .background(Primary)
                 .padding(horizontal = 14.dp, vertical = 11.dp),
         ) {
-            Text(text = text, color = Color.White, fontSize = 14.sp, lineHeight = 21.sp)
+            Text(text = text, color = OnAccent, fontSize = 14.sp, lineHeight = 21.sp)
         }
     }
 }
@@ -451,7 +452,7 @@ fun ChatComposer(
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.Send,
                 contentDescription = "Send",
-                tint = if (canSend) Color.White else TextSecondary,
+                tint = if (canSend) OnAccent else TextSecondary,
                 modifier = Modifier.size(17.dp),
             )
         }
