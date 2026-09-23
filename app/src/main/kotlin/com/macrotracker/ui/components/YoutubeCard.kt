@@ -47,7 +47,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.outlined.AccountCircle
@@ -119,7 +118,6 @@ import com.macrotracker.ui.theme.SurfaceChrome
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.HapticHelper
-import com.macrotracker.ui.util.LastUpdatedText
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.ChannelSearchState
 import com.macrotracker.ui.viewmodel.YouTubeGoogleUiState
@@ -210,103 +208,59 @@ fun YoutubeCard(viewModel: YouTubeViewModel = hiltViewModel()) {
         borderColor = YtRed.copy(alpha = 0.18f),
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            // ── Header (always visible) ───────────────────────────────────
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Image(
-                    painter = painterResource(R.drawable.ic_youtube_logo),
-                    contentDescription = "YouTube",
-                    modifier = Modifier.height(22.dp),
-                    contentScale = ContentScale.FillHeight,
-                )
-                Spacer(Modifier.width(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        "YouTube",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Black,
-                        color = TextPrimary,
-                        letterSpacing = 0.2.sp,
-                    )
-                    val headerSub = when {
-                        expanded -> {
-                            val n = trackedChannels.size
-                            "HUB · $n channel${if (n != 1) "s" else ""}"
-                        }
-                        trackedChannels.isEmpty() -> "Add channels to start"
-                        else -> buildString {
-                            append("${trackedChannels.size} channel")
-                            if (trackedChannels.size != 1) append("s")
-                            append(" tracked")
-                            if (successVideos.isNotEmpty()) {
-                                append(" · ${successVideos.size} video")
-                                if (successVideos.size != 1) append("s")
-                            }
+            HubCardHeader(
+                title = "YouTube",
+                subtitle = when {
+                    expanded -> {
+                        val n = trackedChannels.size
+                        "Hub · $n channel${if (n != 1) "s" else ""}"
+                    }
+                    trackedChannels.isEmpty() -> "Add channels to start"
+                    else -> buildString {
+                        append("${trackedChannels.size} channel")
+                        if (trackedChannels.size != 1) append("s")
+                        append(" tracked")
+                        if (successVideos.isNotEmpty()) {
+                            append(" · ${successVideos.size} video")
+                            if (successVideos.size != 1) append("s")
                         }
                     }
-                    Text(
-                        headerSub,
-                        fontSize = 11.sp,
-                        color = TextSecondary,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 0.2.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                },
+                accent = YtRed,
+                expanded = expanded,
+                onToggleExpanded = {
+                    expanded = !expanded
+                    if (expanded) haptics.toggleOn() else haptics.toggleOff()
+                },
+                lastUpdatedAt = successUpdatedAt,
+                onRefresh = { viewModel.loadLatestVideos(forceRefresh = true) },
+                logo = {
+                    Image(
+                        painter = painterResource(R.drawable.ic_youtube_logo),
+                        contentDescription = "YouTube",
+                        modifier = Modifier.height(22.dp),
+                        contentScale = ContentScale.FillHeight,
                     )
-                }
-                LastUpdatedText(
-                    lastUpdatedAt = successUpdatedAt,
-                    color = TextSecondary,
-                )
-                if (expanded) {
-                    IconButton(
-                        onClick = { haptics.tick(); viewModel.loadLatestVideos(forceRefresh = true) },
-                        modifier = Modifier.size(36.dp),
-                    ) {
-                        Icon(
-                            Icons.Filled.Refresh,
-                            contentDescription = "Refresh",
-                            tint = TextSecondary,
-                            modifier = Modifier.size(16.dp),
+                },
+                actions = {
+                    if (expanded) {
+                        HubHeaderAction(
+                            icon = Icons.Outlined.Settings,
+                            contentDescription = "Manage channels",
+                            onClick = { settingsStartTab = 0; showSettings = true },
+                        )
+                    } else {
+                        HubHeaderAction(
+                            icon = Icons.AutoMirrored.Outlined.OpenInNew,
+                            contentDescription = "Open YouTube",
+                            tint = TextSecondary.copy(alpha = 0.55f),
+                            onClick = {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, "https://www.youtube.com".toUri()))
+                            },
                         )
                     }
-                }
-                IconButton(
-                    onClick = {
-                        haptics.tick()
-                        if (expanded) {
-                            settingsStartTab = 0
-                            showSettings = true
-                        } else {
-                            context.startActivity(
-                                Intent(Intent.ACTION_VIEW, "https://www.youtube.com".toUri()),
-                            )
-                        }
-                    },
-                    modifier = Modifier.size(36.dp),
-                ) {
-                    Icon(
-                        imageVector = if (expanded) {
-                            Icons.Outlined.Settings
-                        } else {
-                            Icons.AutoMirrored.Outlined.OpenInNew
-                        },
-                        contentDescription = if (expanded) "Manage channels" else "Open YouTube",
-                        tint = TextSecondary.copy(alpha = if (expanded) 0.85f else 0.55f),
-                        modifier = Modifier.size(if (expanded) 18.dp else 16.dp),
-                    )
-                }
-                WidgetExpandChevron(
-                    expanded = expanded,
-                    onClick = {
-                        expanded = !expanded
-                        if (expanded) haptics.toggleOn() else haptics.toggleOff()
-                    },
-                    accentColor = YtRed,
-                )
-            }
+                },
+            )
 
             // Collapsed glance only — expanded hub starts fresh at the tabs
             if (!expanded) {
@@ -2198,16 +2152,13 @@ private fun YouTubeSettingsSheet(
     Column(modifier = Modifier.fillMaxWidth()) {
         // ── Sheet handle + title ─────────────────────────────────────────
         Column(modifier = Modifier.padding(horizontal = 20.dp).padding(top = 12.dp)) {
-            Box(modifier = Modifier.width(40.dp).height(4.dp).clip(CircleShape).background(Border).align(Alignment.CenterHorizontally))
-            Spacer(Modifier.height(16.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(30.dp).clip(RoundedCornerShape(7.dp)).background(YtRed), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(20.dp))
-                }
-                Spacer(Modifier.width(10.dp))
-                Text("YouTube Channels", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary, modifier = Modifier.weight(1f))
-                IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, "Close", tint = TextSecondary) }
-            }
+            ChannelSheetHeader(
+                title = "YouTube Channels",
+                subtitle = "Subscriptions & watching list",
+                tileColor = YtRed,
+                tileIcon = Icons.Filled.PlayArrow,
+                onDismiss = onDismiss,
+            )
             Spacer(Modifier.height(14.dp))
             YouTubeGoogleAccountCard(
                 googleState = googleState,
@@ -2229,34 +2180,22 @@ private fun YouTubeSettingsSheet(
             HorizontalDivider(color = Border.copy(alpha = 0.4f))
             Spacer(Modifier.height(14.dp))
 
-            // ── Tabs ─────────────────────────────────────────────────────
-            Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Background)) {
-                data class Tab(val label: String, val badge: Int = 0)
-                listOf(
-                    Tab("Watching", trackedChannels.size),
-                    Tab("Search"),
-                ).forEachIndexed { i, tab ->
-                    val selected = activeTab == i
-                    Box(
-                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(12.dp))
-                            .background(if (selected) Primary else Color.Transparent)
-                            .clickable { haptics.tick(); activeTab = i; if (i != 1) viewModel.clearChannelSearch() }
-                            .padding(vertical = 9.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(tab.label, fontSize = 11.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (selected) Color.White else TextSecondary)
-                            if (tab.badge > 0) {
-                                Spacer(Modifier.width(3.dp))
-                                Box(modifier = Modifier.clip(CircleShape).background(if (selected) Color.White.copy(alpha = 0.25f) else Border).padding(horizontal = 4.dp, vertical = 1.dp)) {
-                                    Text("${tab.badge}", fontSize = 9.sp, color = if (selected) Color.White else TextSecondary, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            SegmentedTabs(
+                tabs = listOf(
+                    SegmentedTab(
+                        key = "0",
+                        label = if (trackedChannels.isEmpty()) "Watching" else "Watching · ${trackedChannels.size}",
+                        accent = YtRed,
+                    ),
+                    SegmentedTab(key = "1", label = "Search", accent = YtRed),
+                ),
+                selectedKey = activeTab.toString(),
+                onSelect = { key ->
+                    haptics.tick()
+                    activeTab = key.toInt()
+                    if (activeTab != 1) viewModel.clearChannelSearch()
+                },
+            )
             Spacer(Modifier.height(14.dp))
         }
 
@@ -2305,21 +2244,18 @@ private fun WatchingTab(
     }
     LazyColumn(
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
-        modifier = Modifier.height((trackedChannels.size * 68).coerceAtMost(360).dp),
+        modifier = Modifier.heightIn(max = 360.dp),
     ) {
         items(trackedChannels, key = { it.channelId }) { channel ->
-            val dismissState = rememberSwipeToDismissBoxState(
-                confirmValueChange = { value ->
+            SwipeToDismissBox(
+                state = rememberSwipeToDismissBoxState(),
+                enableDismissFromStartToEnd = false,
+                onDismiss = { value ->
                     if (value == SwipeToDismissBoxValue.EndToStart) {
                         haptics.reject()
                         viewModel.removeChannel(channel.channelId)
-                        true
-                    } else false
-                }
-            )
-            SwipeToDismissBox(
-                state = dismissState,
-                enableDismissFromStartToEnd = false,
+                    }
+                },
                 backgroundContent = {
                     Box(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp).clip(RoundedCornerShape(12.dp)).background(Error.copy(alpha = 0.18f)),

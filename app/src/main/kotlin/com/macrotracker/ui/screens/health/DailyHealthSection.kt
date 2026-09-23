@@ -39,6 +39,7 @@ import androidx.health.connect.client.records.SleepSessionRecord
 import com.macrotracker.R
 import com.macrotracker.data.health.HealthStats
 import com.macrotracker.data.local.DailySummary
+import com.macrotracker.ui.components.CardTitle
 import com.macrotracker.ui.components.ContentSkeleton
 import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.components.StatusCopy
@@ -335,12 +336,7 @@ fun DailyHealthSection(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    "Daily Health",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
-                )
+                CardTitle("Daily Health")
                 Text(dateLabel, fontSize = 13.sp, color = TextSecondary)
             }
 

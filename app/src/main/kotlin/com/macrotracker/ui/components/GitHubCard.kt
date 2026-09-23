@@ -32,7 +32,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
@@ -110,7 +109,6 @@ import com.macrotracker.ui.theme.SurfaceElevated
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.HapticHelper
-import com.macrotracker.ui.util.LastUpdatedText
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.util.rememberRelativeTime
 import com.macrotracker.ui.viewmodel.GitHubAuthUiState
@@ -258,81 +256,50 @@ fun GitHubCard(
 
     MacroCard(borderColor = GhAccent.copy(alpha = 0.16f)) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (data?.user?.avatarUrl != null) {
-                    GhAvatar(data.user.avatarUrl, data.user.login, size = 22.dp)
-                } else {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_github_logo),
-                        contentDescription = "GitHub",
-                        tint = TextPrimary,
-                        modifier = Modifier.size(22.dp),
-                    )
-                }
-                Spacer(Modifier.width(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        "GitHub",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary,
-                        letterSpacing = 0.1.sp,
-                    )
-                    Text(
-                        headerSub,
-                        fontSize = 12.sp,
-                        color = TextSecondary,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                LastUpdatedText(
-                    lastUpdatedAt = success?.lastUpdatedAt,
-                    color = TextSecondary,
-                )
-                if (expanded && state !is GitHubUiState.NeedsAuth) {
-                    IconButton(
-                        onClick = { haptics.click(); viewModel.loadDashboard(forceRefresh = true) },
-                        modifier = Modifier.size(36.dp),
-                    ) {
-                        Icon(Icons.Filled.Refresh, null, tint = TextSecondary, modifier = Modifier.size(16.dp))
+            HubCardHeader(
+                title = "GitHub",
+                subtitle = headerSub,
+                accent = GhAccent,
+                expanded = expanded,
+                onToggleExpanded = {
+                    expanded = !expanded
+                    if (expanded) {
+                        haptics.toggleOn()
+                        if (state is GitHubUiState.NeedsAuth) {
+                            selectedTabName = GhTab.ACCOUNT.name
+                        }
+                    } else {
+                        haptics.toggleOff()
                     }
-                }
-                IconButton(
-                    onClick = {
-                        haptics.tick()
-                        val url = hub?.selectedRepo?.htmlUrl ?: data?.user?.htmlUrl ?: "https://github.com"
-                        context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
-                    },
-                    modifier = Modifier.size(36.dp),
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Outlined.OpenInNew,
+                },
+                lastUpdatedAt = success?.lastUpdatedAt,
+                onRefresh = if (state is GitHubUiState.NeedsAuth) null else {
+                    { viewModel.loadDashboard(forceRefresh = true) }
+                },
+                logo = {
+                    if (data?.user?.avatarUrl != null) {
+                        GhAvatar(data.user.avatarUrl, data.user.login, size = 22.dp)
+                    } else {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_github_logo),
+                            contentDescription = "GitHub",
+                            tint = TextPrimary,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                },
+                actions = {
+                    HubHeaderAction(
+                        icon = Icons.AutoMirrored.Outlined.OpenInNew,
                         contentDescription = "Open GitHub",
                         tint = TextSecondary.copy(alpha = 0.55f),
-                        modifier = Modifier.size(16.dp),
+                        onClick = {
+                            val url = hub?.selectedRepo?.htmlUrl ?: data?.user?.htmlUrl ?: "https://github.com"
+                            context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+                        },
                     )
-                }
-                WidgetExpandChevron(
-                    expanded = expanded,
-                    onClick = {
-                        expanded = !expanded
-                        if (expanded) {
-                            haptics.toggleOn()
-                            if (state is GitHubUiState.NeedsAuth) {
-                                selectedTabName = GhTab.ACCOUNT.name
-                            }
-                        } else {
-                            haptics.toggleOff()
-                        }
-                    },
-                    accentColor = GhAccent,
-                )
-            }
+                },
+            )
 
             if (isVisible) {
                 if (!expanded) {

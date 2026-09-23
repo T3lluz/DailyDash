@@ -22,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -52,10 +53,16 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.layout.width
 import com.macrotracker.ui.theme.Border
-import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.LocalTickersPaused
+import com.macrotracker.ui.util.rememberHaptics
+import com.macrotracker.ui.util.LastUpdatedText
+import java.time.Instant
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.foundation.layout.RowScope
 
 /** Default cap so expanded hubs stay on-screen instead of stretching the home list. */
 val WidgetScrollBoxMaxHeight = 340.dp
@@ -321,6 +328,175 @@ object WidgetPlaceholder {
     val CompactMinHeight: Dp = 108.dp
 }
 
+/** Icon + [CardTitle] (+ optional subtitle) with trailing content — the header [WidgetPlaceholderCard] reserves. */
+@Composable
+fun CardHeader(
+    title: String,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    accent: Color = TextSecondary,
+    subtitle: String? = null,
+    trailing: @Composable RowScope.() -> Unit = {},
+) {
+    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        if (icon != null) {
+            Icon(imageVector = icon, contentDescription = null, tint = accent, modifier = Modifier.size(20.dp))
+            Spacer(modifier = Modifier.width(10.dp))
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            CardTitle(title)
+            if (subtitle != null) {
+                Text(
+                    subtitle,
+                    fontSize = 12.sp,
+                    color = TextSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        trailing()
+    }
+}
+
+/** Drag handle + brand tile, title and close button shared by the YouTube and Twitch channel sheets. */
+@Composable
+fun ChannelSheetHeader(
+    title: String,
+    subtitle: String,
+    tileColor: Color,
+    tileIcon: ImageVector,
+    onDismiss: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterHorizontally)
+                .size(width = 40.dp, height = 4.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(Border),
+        )
+        Spacer(Modifier.height(16.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier.size(30.dp).clip(RoundedCornerShape(8.dp)).background(tileColor),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(tileIcon, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                CardTitle(title)
+                Text(subtitle, fontSize = 12.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            HubHeaderAction(Icons.Outlined.Close, "Close", onDismiss)
+        }
+    }
+}
+
+/** A card explaining what a widget still needs (a permission, precise location…), with one action chip. */
+@Composable
+fun WidgetPromptCard(
+    title: String,
+    message: String,
+    actionLabel: String,
+    actionIcon: ImageVector,
+    accent: Color,
+    onAction: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+    delayMs: Long = 0,
+) {
+    MacroCard(modifier = modifier, delayMs = delayMs) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                CardTitle(title)
+                Text(
+                    message,
+                    fontSize = 13.sp,
+                    color = TextSecondary,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+            if (onAction != null) {
+                Spacer(modifier = Modifier.width(12.dp))
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(accent.copy(alpha = 0.1f))
+                        .clickable(onClick = onAction)
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(actionIcon, contentDescription = null, tint = accent, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(actionLabel, color = accent, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Header row shared by the account hubs (F1, GitHub, YouTube, Twitch): logo, title over a
+ * one-line summary, last-updated stamp, refresh while expanded, any [actions], then the chevron.
+ */
+@Composable
+fun HubCardHeader(
+    title: String,
+    subtitle: String,
+    accent: Color,
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
+    lastUpdatedAt: Instant?,
+    logo: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    subtitleColor: Color = TextSecondary,
+    onRefresh: (() -> Unit)? = null,
+    actions: @Composable RowScope.() -> Unit = {},
+) {
+    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = Modifier.height(22.dp), contentAlignment = Alignment.Center) { logo() }
+        Spacer(Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            CardTitle(title)
+            Text(
+                subtitle,
+                fontSize = 12.sp,
+                color = subtitleColor,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        LastUpdatedText(lastUpdatedAt = lastUpdatedAt, color = TextSecondary)
+        if (expanded && onRefresh != null) {
+            HubHeaderAction(Icons.Outlined.Refresh, "Refresh", onRefresh)
+        }
+        actions()
+        WidgetExpandChevron(expanded = expanded, onClick = onToggleExpanded, accentColor = accent)
+    }
+}
+
+/** 36dp header icon button that lines up with [WidgetExpandChevron]. */
+@Composable
+fun HubHeaderAction(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    tint: Color = TextSecondary,
+) {
+    val haptics = rememberHaptics()
+    IconButton(
+        onClick = { haptics.tick(); onClick() },
+        modifier = Modifier.size(36.dp),
+    ) {
+        Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(18.dp))
+    }
+}
+
 /**
  * The one placeholder every home / health section shows before it has real
  * content — whether it is waiting on data or has not been activated yet.
@@ -345,23 +521,7 @@ fun WidgetPlaceholderCard(
                 .fillMaxWidth()
                 .heightIn(min = minHeight),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (icon != null) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = accent,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                }
-                Text(
-                    title,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
-                )
-            }
+            CardHeader(title = title, icon = icon, accent = accent)
             Spacer(modifier = Modifier.height(14.dp))
             ContentSkeleton(lines = lines, tiles = tiles, accent = Border)
         }

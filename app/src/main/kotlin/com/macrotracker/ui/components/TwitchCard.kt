@@ -36,7 +36,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.outlined.AccountCircle
@@ -103,7 +102,6 @@ import com.macrotracker.ui.theme.Surface
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.HapticHelper
-import com.macrotracker.ui.util.LastUpdatedText
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.TwitchAuthUiState
 import com.macrotracker.ui.viewmodel.TwitchChannelSearchState
@@ -193,97 +191,52 @@ fun TwitchCard(viewModel: TwitchViewModel = hiltViewModel()) {
 
     MacroCard(borderColor = TwPurple.copy(alpha = 0.22f)) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Image(
-                    painter = painterResource(R.drawable.ic_twitch_logo),
-                    contentDescription = "Twitch",
-                    modifier = Modifier.size(22.dp),
-                    contentScale = ContentScale.Fit,
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        "Twitch",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Black,
-                        color = TextPrimary,
-                        letterSpacing = 0.2.sp,
-                    )
-                    val liveCount = successStreams.size
-                    val headerSub = when {
-                        expanded -> {
-                            val n = trackedChannels.size
-                            "HUB · $n channel${if (n != 1) "s" else ""}"
-                        }
-                        trackedChannels.isEmpty() -> "Connect Twitch to import follows"
-                        liveCount > 0 -> "$liveCount live now · ${trackedChannels.size} watching"
-                        else -> "Nobody live · ${trackedChannels.size} watching"
+            val liveCount = successStreams.size
+            HubCardHeader(
+                title = "Twitch",
+                subtitle = when {
+                    expanded -> {
+                        val n = trackedChannels.size
+                        "Hub · $n channel${if (n != 1) "s" else ""}"
                     }
-                    Text(
-                        headerSub,
-                        fontSize = 11.sp,
-                        color = if (liveCount > 0 && !expanded) TwPurple else TextSecondary,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 0.2.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                    trackedChannels.isEmpty() -> "Connect Twitch to import follows"
+                    liveCount > 0 -> "$liveCount live now · ${trackedChannels.size} watching"
+                    else -> "Nobody live · ${trackedChannels.size} watching"
+                },
+                subtitleColor = if (liveCount > 0 && !expanded) TwPurple else TextSecondary,
+                accent = TwPurple,
+                expanded = expanded,
+                onToggleExpanded = {
+                    expanded = !expanded
+                    if (expanded) haptics.toggleOn() else haptics.toggleOff()
+                },
+                lastUpdatedAt = successUpdatedAt,
+                onRefresh = { viewModel.loadLiveStreams(forceRefresh = true) },
+                logo = {
+                    Image(
+                        painter = painterResource(R.drawable.ic_twitch_logo),
+                        contentDescription = "Twitch",
+                        modifier = Modifier.size(22.dp),
+                        contentScale = ContentScale.Fit,
                     )
-                }
-                LastUpdatedText(
-                    lastUpdatedAt = successUpdatedAt,
-                    color = TextSecondary,
-                )
-                if (expanded) {
-                    IconButton(
-                        onClick = {
-                            haptics.tick()
-                            viewModel.loadLiveStreams(forceRefresh = true)
-                        },
-                        modifier = Modifier.size(36.dp),
-                    ) {
-                        Icon(
-                            Icons.Filled.Refresh,
-                            contentDescription = "Refresh live",
-                            tint = TextSecondary,
-                            modifier = Modifier.size(16.dp),
+                },
+                actions = {
+                    if (expanded) {
+                        HubHeaderAction(
+                            icon = Icons.Outlined.Settings,
+                            contentDescription = "Manage channels",
+                            onClick = { settingsStartTab = 0; showSettings = true },
+                        )
+                    } else {
+                        HubHeaderAction(
+                            icon = Icons.AutoMirrored.Outlined.OpenInNew,
+                            contentDescription = "Open Twitch",
+                            tint = TextSecondary.copy(alpha = 0.55f),
+                            onClick = { openUrl(context, "https://www.twitch.tv") },
                         )
                     }
-                }
-                IconButton(
-                    onClick = {
-                        haptics.tick()
-                        if (expanded) {
-                            settingsStartTab = 0
-                            showSettings = true
-                        } else {
-                            openUrl(context, "https://www.twitch.tv")
-                        }
-                    },
-                    modifier = Modifier.size(36.dp),
-                ) {
-                    Icon(
-                        imageVector = if (expanded) {
-                            Icons.Outlined.Settings
-                        } else {
-                            Icons.AutoMirrored.Outlined.OpenInNew
-                        },
-                        contentDescription = if (expanded) "Manage channels" else "Open Twitch",
-                        tint = TextSecondary.copy(alpha = if (expanded) 0.85f else 0.55f),
-                        modifier = Modifier.size(if (expanded) 18.dp else 16.dp),
-                    )
-                }
-                WidgetExpandChevron(
-                    expanded = expanded,
-                    onClick = {
-                        expanded = !expanded
-                        if (expanded) haptics.toggleOn() else haptics.toggleOff()
-                    },
-                    accentColor = TwPurple,
-                )
-            }
+                },
+            )
 
             if (!expanded) {
                 Spacer(modifier = Modifier.height(12.dp))
@@ -1533,34 +1486,13 @@ private fun TwitchSettingsSheet(
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(horizontal = 20.dp).padding(top = 12.dp)) {
-            Box(
-                modifier = Modifier
-                    .width(40.dp)
-                    .height(4.dp)
-                    .clip(CircleShape)
-                    .background(Border)
-                    .align(Alignment.CenterHorizontally),
+            ChannelSheetHeader(
+                title = "Twitch Channels",
+                subtitle = "Live follows & watching list",
+                tileColor = TwPurpleDeep,
+                tileIcon = Icons.Outlined.Videocam,
+                onDismiss = onDismiss,
             )
-            Spacer(modifier = Modifier.height(16.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(30.dp)
-                        .clip(RoundedCornerShape(7.dp))
-                        .background(TwPurpleDeep),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(Icons.Outlined.Videocam, null, tint = Color.White, modifier = Modifier.size(18.dp))
-                }
-                Spacer(modifier = Modifier.width(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Twitch", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                    Text("Live follows & watching list", fontSize = 12.sp, color = TextSecondary)
-                }
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Filled.Close, contentDescription = "Close", tint = TextSecondary)
-                }
-            }
             Spacer(modifier = Modifier.height(14.dp))
             TwitchAccountCard(
                 authState = authState,
@@ -1587,34 +1519,22 @@ private fun TwitchSettingsSheet(
                 onDismissStatus = { viewModel.clearAuthStatus() },
             )
             Spacer(modifier = Modifier.height(14.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(TwSurface)
-                    .padding(4.dp),
-            ) {
-                listOf("Watching", "Search").forEachIndexed { index, label ->
-                    val selected = activeTab == index
-                    Text(
-                        label,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (selected) Color.White else TextSecondary,
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (selected) TwPurple else Color.Transparent)
-                            .clickable {
-                                haptics.tick()
-                                activeTab = index
-                            }
-                            .padding(vertical = 8.dp),
-                        textAlign = TextAlign.Center,
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(12.dp))
+            SegmentedTabs(
+                tabs = listOf(
+                    SegmentedTab(
+                        key = "0",
+                        label = if (trackedChannels.isEmpty()) "Watching" else "Watching · ${trackedChannels.size}",
+                        accent = TwPurple,
+                    ),
+                    SegmentedTab(key = "1", label = "Search", accent = TwPurple),
+                ),
+                selectedKey = activeTab.toString(),
+                onSelect = { key ->
+                    haptics.tick()
+                    activeTab = key.toInt()
+                },
+            )
+            Spacer(modifier = Modifier.height(14.dp))
         }
 
         when (activeTab) {
@@ -1630,21 +1550,19 @@ private fun TwitchSettingsSheet(
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(max = 420.dp),
+                            .heightIn(max = 360.dp),
                         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         items(trackedChannels, key = { it.userId }) { channel ->
-                            val dismissState = rememberSwipeToDismissBoxState(
-                                confirmValueChange = {
-                                    if (it == SwipeToDismissBoxValue.EndToStart) {
-                                        viewModel.removeChannel(channel.userId)
-                                        true
-                                    } else false
-                                },
-                            )
                             SwipeToDismissBox(
-                                state = dismissState,
+                                state = rememberSwipeToDismissBoxState(),
+                                onDismiss = { value ->
+                                    if (value == SwipeToDismissBoxValue.EndToStart) {
+                                        haptics.reject()
+                                        viewModel.removeChannel(channel.userId)
+                                    }
+                                },
                                 backgroundContent = {
                                     Box(
                                         Modifier

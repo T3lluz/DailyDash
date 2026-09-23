@@ -73,6 +73,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.macrotracker.ui.components.CardHeader
 import com.macrotracker.ui.screens.health.ActivitiesSection
 import com.macrotracker.ui.screens.health.AnimatedMacroBarChart
 import com.macrotracker.ui.screens.health.DailyHealthSection
@@ -106,6 +107,7 @@ import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.NutritionCalories
+import com.macrotracker.ui.theme.HealthHeartRate
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.Secondary
 import com.macrotracker.ui.theme.Success
@@ -395,11 +397,10 @@ fun HealthScreen(
 
                         if (metricEntries.any { it.state.isEnabled }) {
                             MacroCard(delayMs = 0) {
-                                Text(
-                                    "Body Stats",
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = TextPrimary,
+                                CardHeader(
+                                    title = "Body Stats",
+                                    icon = Icons.Default.MonitorHeart,
+                                    accent = HealthHeartRate,
                                     modifier = Modifier.padding(bottom = 12.dp),
                                 )
 
@@ -471,17 +472,17 @@ fun HealthScreen(
                             WidgetPlaceholderCard(
                                 title = "Daily Summary",
                                 icon = Icons.Default.ViewDay,
+                                accent = Primary,
                                 minHeight = WidgetPlaceholder.CompactMinHeight,
                                 lines = 2,
                             )
                         } else {
                             val hcStats = (healthConnectState as? HealthConnectUiState.Success)?.stats
                             MacroCard(delayMs = 100) {
-                                Text(
-                                    "Daily Summary",
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = TextPrimary,
+                                CardHeader(
+                                    title = "Daily Summary",
+                                    icon = Icons.Default.ViewDay,
+                                    accent = Primary,
                                     modifier = Modifier.padding(bottom = 16.dp),
                                 )
                                 val calProgress = if (s.calorieGoal > 0) s.totalCalories.toFloat() / s.calorieGoal else 0f
@@ -555,19 +556,12 @@ fun HealthScreen(
                     }
                     "ADD_ENTRY" -> {
                         MacroCard(delayMs = 150) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 16.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
+                            CardHeader(
+                                title = "Add Entry",
+                                icon = Icons.Default.Add,
+                                accent = Primary,
+                                modifier = Modifier.padding(bottom = 16.dp),
                             ) {
-                                Text(
-                                    "Add Entry",
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = TextPrimary,
-                                )
                                 PillButton(
                                     icon = Icons.Outlined.CameraAlt,
                                     label = "Scan label",
@@ -647,7 +641,7 @@ fun HealthScreen(
                                         foodName = ""
                                         calories = ""
                                         protein = ""
-                                        Toast.makeText(context, "✅ Entry added!", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Entry added", Toast.LENGTH_SHORT).show()
                                     } else {
                                         haptics.reject()
                                         Toast.makeText(context, "Enter calories or protein first", Toast.LENGTH_SHORT).show()
@@ -675,11 +669,9 @@ fun HealthScreen(
                     }
                     "RECENT_LOGS" -> {
                         MacroCard(delayMs = 250) {
-                            Text(
-                                "Recent Logs",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary,
+                            CardHeader(
+                                title = "Recent Logs",
+                                icon = Icons.AutoMirrored.Filled.List,
                                 modifier = Modifier.padding(bottom = 8.dp),
                             )
 
@@ -754,11 +746,12 @@ private fun MacroTrendsSection(
 
     Column {
         MacroCard(delayMs = 70) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 10.dp)) {
-                Icon(Icons.Outlined.BarChart, contentDescription = null, tint = barColor, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Macro Trends", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-            }
+            CardHeader(
+                title = "Macro Trends",
+                icon = Icons.Outlined.BarChart,
+                accent = barColor,
+                modifier = Modifier.padding(bottom = 10.dp),
+            )
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 12.dp)) {
                 listOf(7, 14, 30).forEach { option ->

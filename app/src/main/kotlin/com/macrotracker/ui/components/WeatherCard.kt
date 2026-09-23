@@ -63,8 +63,6 @@ import com.macrotracker.data.remote.WindUnit
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.Primary
-import com.macrotracker.ui.theme.TextPrimary
-import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.LastUpdatedText
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.WeatherUiState
@@ -310,7 +308,7 @@ fun WeatherCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 6.dp),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = MacroCardShape,
                     colors = CardDefaults.cardColors(containerColor = Color.Transparent),
                     border = BorderStroke(1.dp, Border.copy(alpha = 0.5f)),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
@@ -332,7 +330,7 @@ fun WeatherCard(
                                 // Left: title + location stacked, timestamp below
                                 Column(modifier = Modifier.weight(1f)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text("Weather", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        CardTitle("Weather", color = Color.White)
                                         if (weather.locationName.isNotBlank()) {
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Icon(
@@ -444,13 +442,13 @@ fun WeatherCard(
                                     accent = accent,
                                     tempUnit = tempUnit,
                                     windUnit = windUnit,
-                                    onCollapse = { expanded = false; haptics.toggleOff() },
+                                    onCollapse = { expanded = false },
                                 )
                             }
                             if (!expanded) {
                                 WidgetExpandFooter(
                                     expanded = false,
-                                    onToggle = { expanded = true; haptics.toggleOn() },
+                                    onToggle = { expanded = true },
                                     accentColor = Color.White,
                                     expandLabel = "Forecast",
                                 )
@@ -462,127 +460,37 @@ fun WeatherCard(
             }
 
             WeatherStateKey.PERMISSION -> {
-                MacroCard {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "Weather",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary
-                            )
-                            Text(
-                                "Allow location access to see weather",
-                                fontSize = 13.sp,
-                                color = TextSecondary,
-                                modifier = Modifier.padding(top = 2.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable(onClick = onRequestPermission)
-                                .background(LocationAccent.copy(alpha = 0.1f))
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.LocationOn,
-                                contentDescription = null,
-                                tint = LocationAccent,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                "Enable",
-                                color = LocationAccent,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
-                            )
-                        }
-                    }
-                }
+                WidgetPromptCard(
+                    title = "Weather",
+                    message = "Allow location access to see weather",
+                    actionLabel = "Enable",
+                    actionIcon = Icons.Outlined.LocationOn,
+                    accent = LocationAccent,
+                    onAction = onRequestPermission,
+                )
             }
 
             WeatherStateKey.APPROXIMATE -> {
-                MacroCard {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "Weather",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary,
-                            )
-                            Text(
-                                "Using approximate location — enable precise location for accurate weather",
-                                fontSize = 13.sp,
-                                color = TextSecondary,
-                                modifier = Modifier.padding(top = 2.dp),
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable(onClick = onRequestPreciseLocation)
-                                .background(LocationAccent.copy(alpha = 0.1f))
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.LocationOn,
-                                contentDescription = null,
-                                tint = LocationAccent,
-                                modifier = Modifier.size(16.dp),
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                "Precise",
-                                color = LocationAccent,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp,
-                            )
-                        }
-                    }
-                }
+                WidgetPromptCard(
+                    title = "Weather",
+                    message = "Using approximate location — enable precise location for accurate weather",
+                    actionLabel = "Precise",
+                    actionIcon = Icons.Outlined.LocationOn,
+                    accent = LocationAccent,
+                    onAction = onRequestPreciseLocation,
+                )
             }
 
             WeatherStateKey.ERROR -> {
                 val errorState = currentState as? WeatherUiState.Error
-                MacroCard {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Icon(Icons.Outlined.LocationOff, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Column {
-                                Text("Weather", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                                Text(text = errorState?.message ?: "", fontSize = 12.sp, color = TextSecondary)
-                            }
-                        }
-                        MacroButton(text = "Retry", onClick = onRetry, variant = ButtonVariant.SECONDARY)
-                    }
-                }
+                WidgetPromptCard(
+                    title = "Weather",
+                    message = errorState?.message ?: "Couldn't load the forecast",
+                    actionLabel = "Retry",
+                    actionIcon = Icons.Outlined.Refresh,
+                    accent = Primary,
+                    onAction = onRetry,
+                )
             }
         }
     }

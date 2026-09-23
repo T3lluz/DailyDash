@@ -48,7 +48,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.macrotracker.data.calendar.CalendarEvent
 import com.macrotracker.ui.theme.Background
-import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.CalendarBrand
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
@@ -90,9 +89,11 @@ fun CalendarCard(
     ) { stateKey ->
         val currentState = state
         when (stateKey) {
-            0 -> MacroCard {
-                ContentSkeleton(lines = 3, accent = Border)
-            }
+            0 -> WidgetPlaceholderCard(
+                title = "Calendar",
+                icon = Icons.Outlined.CalendarMonth,
+                accent = CalendarAccent,
+            )
 
             1 -> {
                 val successState = currentState as? CalendarUiState.Success
@@ -115,12 +116,7 @@ fun CalendarCard(
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
-                                Text(
-                                    "Calendar",
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = TextPrimary,
-                                )
+                                CardTitle("Calendar")
                                 Text(
                                     "No events found for selected calendars.",
                                     fontSize = 13.sp,
@@ -136,50 +132,36 @@ fun CalendarCard(
                             // Header
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        if (events.isNotEmpty()) Icons.Outlined.CalendarMonth else Icons.AutoMirrored.Outlined.EventNote,
-                                        contentDescription = null,
-                                        tint = CalendarAccent,
-                                        modifier = Modifier.size(22.dp),
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        if (events.isNotEmpty()) "Today's Schedule" else "Upcoming Events",
-                                        fontSize = 20.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = TextPrimary,
-                                    )
-                                }
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                ) {
-                                    LastUpdatedText(
-                                        lastUpdatedAt = successState.lastUpdatedAt,
-                                        color = TextSecondary,
-                                    )
-                                    IconButton(onClick = { showDetails = true }, modifier = Modifier.size(36.dp)) {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Outlined.EventNote,
-                                            contentDescription = "Full View",
-                                            tint = TextSecondary,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                    WidgetExpandChevron(
-                                        expanded = expanded,
-                                        onClick = {
-                                            val wasExpanded = expanded
-                                            expanded = !expanded
-                                            if (!wasExpanded) haptics.toggleOn() else haptics.toggleOff()
-                                        },
-                                        accentColor = CalendarAccent,
-                                    )
-                                }
+                                Icon(
+                                    if (events.isNotEmpty()) Icons.Outlined.CalendarMonth else Icons.AutoMirrored.Outlined.EventNote,
+                                    contentDescription = null,
+                                    tint = CalendarAccent,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                CardTitle(
+                                    if (events.isNotEmpty()) "Today's Schedule" else "Upcoming Events",
+                                    modifier = Modifier.weight(1f),
+                                )
+                                LastUpdatedText(
+                                    lastUpdatedAt = successState.lastUpdatedAt,
+                                    color = TextSecondary,
+                                )
+                                HubHeaderAction(
+                                    icon = Icons.AutoMirrored.Outlined.EventNote,
+                                    contentDescription = "Full schedule",
+                                    onClick = { showDetails = true },
+                                )
+                                WidgetExpandChevron(
+                                    expanded = expanded,
+                                    onClick = {
+                                        expanded = !expanded
+                                        if (expanded) haptics.toggleOn() else haptics.toggleOff()
+                                    },
+                                    accentColor = CalendarAccent,
+                                )
                             }
 
                             Spacer(modifier = Modifier.height(12.dp))
@@ -206,10 +188,14 @@ fun CalendarCard(
                                     if (allVisibleEvents.size > 3) {
                                         Spacer(modifier = Modifier.height(8.dp))
                                         Text(
-                                            text = "+${allVisibleEvents.size - 3} more events · Tap icon for full list",
-                                            fontSize = 11.sp,
-                                            color = TextSecondary.copy(alpha = 0.7f),
-                                            modifier = Modifier.padding(start = 22.dp)
+                                            text = "See all ${allVisibleEvents.size} events",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = CalendarAccent,
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .clickable { haptics.tick(); showDetails = true }
+                                                .padding(horizontal = 10.dp, vertical = 6.dp),
                                         )
                                     }
 
@@ -245,53 +231,14 @@ fun CalendarCard(
             }
 
             2 -> {
-                MacroCard {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "Calendar",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary,
-                            )
-                            Text(
-                                "Allow calendar access to see today's events",
-                                fontSize = 13.sp,
-                                color = TextSecondary,
-                                modifier = Modifier.padding(top = 2.dp),
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable(onClick = onRequestPermission)
-                                .background(CalendarAccent.copy(alpha = 0.1f))
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.CalendarToday,
-                                contentDescription = null,
-                                tint = CalendarAccent,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                "Enable",
-                                color = CalendarAccent,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
-                            )
-                        }
-                    }
-                }
+                WidgetPromptCard(
+                    title = "Calendar",
+                    message = "Allow calendar access to see today's events",
+                    actionLabel = "Enable",
+                    actionIcon = Icons.Outlined.CalendarToday,
+                    accent = CalendarAccent,
+                    onAction = onRequestPermission,
+                )
             }
 
             else -> { } // 3 = Unavailable, nothing to show
@@ -322,14 +269,8 @@ private fun CalendarDetailsDialog(
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        "Detailed Schedule",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
+                    CardTitle("Full schedule", modifier = Modifier.weight(1f))
                     IconButton(onClick = onDismiss) {
                         Icon(Icons.Outlined.Close, contentDescription = "Close", tint = TextSecondary)
                     }

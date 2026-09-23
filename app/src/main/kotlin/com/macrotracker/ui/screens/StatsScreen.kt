@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.macrotracker.ui.components.CardTitle
 import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.components.MacroProgressBar
 import com.macrotracker.ui.components.SubScreenHeader
@@ -62,7 +63,7 @@ fun StatsScreen(
 
         // Last 7 Days Card
         MacroCard(delayMs = 100) {
-            Text("Last 7 Days", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary, modifier = Modifier.padding(bottom = 16.dp))
+            CardTitle("Last 7 Days", modifier = Modifier.padding(bottom = 16.dp))
 
             history.forEachIndexed { index, day ->
                 val hasData = day.totalCalories > 0 || day.totalProtein > 0

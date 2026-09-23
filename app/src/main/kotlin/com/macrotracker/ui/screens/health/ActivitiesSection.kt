@@ -59,6 +59,7 @@ import com.macrotracker.data.health.formatActivityWhen
 import com.macrotracker.data.health.formatElevation
 import com.macrotracker.data.health.formatPace
 import com.macrotracker.data.health.pickFeaturedActivity
+import com.macrotracker.ui.components.CardHeader
 import com.macrotracker.ui.components.ContentSkeleton
 import com.macrotracker.ui.components.LoadingSpec
 import com.macrotracker.ui.components.LoadingSpinner
@@ -95,29 +96,13 @@ fun ActivitiesSection(
 ) {
     MacroCard(delayMs = delayMs) {
         val activities = (state as? ActivitiesUiState.Success)?.activities.orEmpty()
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
+        CardHeader(
+            title = "Activities",
+            icon = Icons.Outlined.FavoriteBorder,
+            accent = HealthActivity,
+            subtitle = if (activities.isEmpty()) "Workouts from Garmin and Health Connect" else monthSummary(activities),
             modifier = Modifier.padding(bottom = 12.dp),
         ) {
-            Icon(
-                Icons.Outlined.FavoriteBorder,
-                contentDescription = null,
-                tint = HealthActivity,
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Activities", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                Text(
-                    if (activities.isEmpty()) {
-                        "Workouts from Garmin and Health Connect"
-                    } else {
-                        monthSummary(activities)
-                    },
-                    fontSize = 12.sp,
-                    color = TextSecondary,
-                )
-            }
             if (state is ActivitiesUiState.Success && state.isRefreshing) {
                 LoadingSpinner(color = Primary, size = LoadingSpec.SizeInline)
             }

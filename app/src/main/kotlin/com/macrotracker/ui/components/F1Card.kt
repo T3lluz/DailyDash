@@ -53,7 +53,6 @@ import coil.request.ImageRequest
 import com.macrotracker.data.f1.*
 import com.macrotracker.R
 import com.macrotracker.ui.theme.*
-import com.macrotracker.ui.util.LastUpdatedText
 import com.macrotracker.ui.util.LocalTickersPaused
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.F1UiState
@@ -364,77 +363,44 @@ fun F1Card(
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
 
-            // ── Header (always visible) ────────────────────────────────────
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Image(
-                    painter = painterResource(R.drawable.ic_f1_logo),
-                    contentDescription = "Formula 1",
-                    modifier = Modifier.height(20.dp),
-                    contentScale = ContentScale.FillHeight,
-                )
-                Spacer(Modifier.width(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        "Formula 1",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary,
-                        letterSpacing = 0.1.sp,
-                    )
-                    val successData = (state as? F1UiState.Success)?.f1Data
-                    val seasonYear = successData?.schedule?.firstOrNull()?.raceDate
-                        ?.take(4)
-                        ?: java.time.Year.now().value.toString()
-                    val nextRace = successData?.schedule
-                        ?.filter { !isPast(it.raceDate) }
-                        ?.minByOrNull { daysUntil(it.raceDate) }
-                    val headerSub = when {
-                        !expanded && nextRace != null -> {
-                            val days = daysUntil(nextRace.raceDate)
-                            val name = shortGP(nextRace.raceName)
-                            when {
-                                days == 0L -> "Next · $name · today"
-                                days in 1..7 -> "Next · $name · ${days}d"
-                                else -> "Next · $name"
-                            }
+            val successData = (state as? F1UiState.Success)?.f1Data
+            val seasonYear = successData?.schedule?.firstOrNull()?.raceDate?.take(4)
+                ?: java.time.Year.now().value.toString()
+            val nextRace = successData?.schedule
+                ?.filter { !isPast(it.raceDate) }
+                ?.minByOrNull { daysUntil(it.raceDate) }
+            HubCardHeader(
+                title = "Formula 1",
+                subtitle = when {
+                    expanded -> "$seasonYear season"
+                    nextRace != null -> {
+                        val days = daysUntil(nextRace.raceDate)
+                        val name = shortGP(nextRace.raceName)
+                        when {
+                            days == 0L -> "Next · $name · today"
+                            days in 1..7 -> "Next · $name · ${days}d"
+                            else -> "Next · $name"
                         }
-                        expanded -> "$seasonYear season"
-                        else -> seasonYear
                     }
-                    Text(
-                        headerSub,
-                        fontSize = 12.sp,
-                        color = TextSecondary,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                    else -> seasonYear
+                },
+                accent = F1Red,
+                expanded = expanded,
+                onToggleExpanded = {
+                    expanded = !expanded
+                    if (expanded) haptics.toggleOn() else haptics.toggleOff()
+                },
+                lastUpdatedAt = (state as? F1UiState.Success)?.lastUpdatedAt,
+                onRefresh = onRefresh,
+                logo = {
+                    Image(
+                        painter = painterResource(R.drawable.ic_f1_logo),
+                        contentDescription = "Formula 1",
+                        modifier = Modifier.height(20.dp),
+                        contentScale = ContentScale.FillHeight,
                     )
-                }
-                val headerSuccess = state as? F1UiState.Success
-                LastUpdatedText(
-                    lastUpdatedAt = headerSuccess?.lastUpdatedAt,
-                    color = TextSecondary,
-                )
-                if (expanded) {
-                    IconButton(
-                        onClick = { haptics.click(); onRefresh() },
-                        modifier = Modifier.size(36.dp),
-                    ) {
-                        Icon(Icons.Default.Refresh, null, tint = TextSecondary, modifier = Modifier.size(16.dp))
-                    }
-                }
-                WidgetExpandChevron(
-                    expanded = expanded,
-                    onClick = {
-                        expanded = !expanded
-                        if (expanded) haptics.toggleOn() else haptics.toggleOff()
-                    },
-                    accentColor = F1Red,
-                )
-            }
+                },
+            )
 
             if (isVisible) {
             // ── Compact content — visible widgets only ───────────────────
