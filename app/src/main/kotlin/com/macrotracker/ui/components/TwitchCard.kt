@@ -618,9 +618,18 @@ private fun LiveCarouselItem(stream: TwitchStream, look: MediaItemLook) {
                 .graphicsLayer { alpha = 1f - look.openness() }
                 .background(Color.Black.copy(alpha = 0.35f)),
         )
+        // A peek shows who is live, as their picture; the on-air badge and the words wait for the open card.
+        PeekAvatar(
+            look = look,
+            url = stream.profileImageUrl,
+            fallback = stream.userName,
+            ring = TwPurple,
+            modifier = Modifier.align(Alignment.CenterStart),
+        )
         Row(
             modifier = Modifier
                 .followVisible(look)
+                .graphicsLayer { alpha = look.textAlpha() }
                 .padding(8.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -633,7 +642,6 @@ private fun LiveCarouselItem(stream: TwitchStream, look: MediaItemLook) {
                 color = Color.White,
                 maxLines = 1,
                 modifier = Modifier
-                    .graphicsLayer { alpha = look.textAlpha() }
                     .clip(RoundedCornerShape(4.dp))
                     .background(Color.Black.copy(alpha = 0.55f))
                     .padding(horizontal = 6.dp, vertical = 2.dp),

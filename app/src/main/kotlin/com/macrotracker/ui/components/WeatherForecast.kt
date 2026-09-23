@@ -372,17 +372,29 @@ internal fun HourlyTimeline(
                 Row {
                     steps.forEach { s -> RainCell(s, Modifier.width(step)) }
                 }
-                Spacer(Modifier.height(3.dp))
+                Spacer(Modifier.height(4.dp))
+                // Wind, with its unit on every value so the row needs no legend.
                 Row {
                     steps.forEach { s ->
-                        Text(
-                            WeatherUnits.formatWindValue(s.windSpeed, windUnit),
-                            fontSize = 10.sp,
-                            color = TextTertiary,
-                            textAlign = TextAlign.Center,
-                            maxLines = 1,
+                        Row(
                             modifier = Modifier.width(step),
-                        )
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                painterResource(R.drawable.ic_weather_wind),
+                                contentDescription = "Wind",
+                                tint = TextTertiary,
+                                modifier = Modifier.size(9.dp),
+                            )
+                            Spacer(Modifier.width(2.dp))
+                            Text(
+                                WeatherUnits.formatWind(s.windSpeed, windUnit),
+                                fontSize = 9.sp,
+                                color = TextTertiary,
+                                maxLines = 1,
+                            )
+                        }
                     }
                 }
             }
@@ -450,7 +462,10 @@ private fun TemperatureCurve(temps: List<Double>, lo: Double, hi: Double, step: 
     }
 }
 
-/** Chance of rain over a bar for how much; a dash when the hour is dry. */
+/**
+ * Rain for one step: a bar for how much, the amount in millimetres, and the chance of any.
+ * A dry step says so with a dash.
+ */
 @Composable
 private fun RainCell(step: HourlyForecast, modifier: Modifier) {
     val pop = step.precipProbability ?: 0
@@ -469,14 +484,16 @@ private fun RainCell(step: HourlyForecast, modifier: Modifier) {
             }
         }
         Text(
-            when {
-                pop > 0 -> "$pop%"
-                mm >= 0.1 -> String.format(Locale.US, "%.1f", mm)
-                else -> "–"
-            },
+            if (mm >= 0.1) WeatherUnits.formatPrecipMm(mm) else "–",
             fontSize = 10.sp,
-            fontWeight = if (wet) FontWeight.SemiBold else FontWeight.Normal,
-            color = if (wet) WeatherRain else TextTertiary,
+            fontWeight = if (mm >= 0.1) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (mm >= 0.1) WeatherRain else TextTertiary,
+            maxLines = 1,
+        )
+        Text(
+            if (pop > 0) "$pop%" else " ",
+            fontSize = 9.sp,
+            color = if (wet) WeatherRain.copy(alpha = 0.75f) else TextTertiary,
             maxLines = 1,
         )
     }
@@ -514,14 +531,14 @@ private fun DayRow(
                 modifier = Modifier.width(50.dp),
             )
             Icon(painterResource(day.iconRes), contentDescription = day.description, tint = Color.Unspecified, modifier = Modifier.size(26.dp))
-            Text(
-                day.precipProbability?.takeIf { it >= 10 }?.let { "$it%" }.orEmpty(),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = WeatherRain,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.width(38.dp),
-            )
+            Column(Modifier.width(44.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                day.precipitation?.takeIf { it >= 0.1 }?.let {
+                    Text(WeatherUnits.formatPrecipMm(it), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = WeatherRain, maxLines = 1)
+                }
+                day.precipProbability?.takeIf { it >= 10 }?.let {
+                    Text("$it%", fontSize = 9.sp, color = WeatherRain.copy(alpha = 0.75f), maxLines = 1)
+                }
+            }
             Text(
                 WeatherUnits.formatTempValue(day.minTemp, tempUnit),
                 fontSize = 13.sp,

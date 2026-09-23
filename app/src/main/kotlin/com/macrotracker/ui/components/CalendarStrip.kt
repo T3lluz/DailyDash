@@ -51,6 +51,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.macrotracker.data.calendar.CalendarEvent
+import com.macrotracker.data.calendar.CalendarRepository
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.CalendarBrand
@@ -73,8 +74,8 @@ import java.util.Locale
 /*
  * The calendar card: a line that says where the day stands, a week strip to pick a day
  * from, and that day's events (or everything coming up) as a carousel of cards, each
- * tagged with when, how long, where and how to join. Opened, it lists the next two
- * weeks as an agenda. Every event opens in the calendar app.
+ * tagged with when, how long, where and how to join. Opened, it lists the next month
+ * as an agenda. Every event opens in the calendar app.
  */
 
 /**
@@ -102,7 +103,6 @@ internal fun CalendarContent(
     lastUpdatedAt: Instant?,
     expanded: Boolean,
     onToggleExpanded: () -> Unit,
-    onShowDetails: () -> Unit,
 ) {
     val context = LocalContext.current
     val haptics = rememberHaptics()
@@ -112,7 +112,7 @@ internal fun CalendarContent(
     val today = LocalDate.now()
     val byDay = remember(events) { events.groupBy { it.displayDate() } }
     val picked = pickedDay?.let(LocalDate::parse)
-    val shown = remember(events, picked) { if (picked == null) events.take(12) else byDay[picked].orEmpty() }
+    val shown = remember(events, picked) { if (picked == null) events.take(20) else byDay[picked].orEmpty() }
 
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -129,7 +129,6 @@ internal fun CalendarContent(
                 )
             }
             LastUpdatedText(lastUpdatedAt = lastUpdatedAt, color = TextTertiary)
-            HubHeaderAction(icon = AppIcons.NotepadText, contentDescription = "Full schedule", onClick = onShowDetails)
             WidgetExpandChevron(expanded = expanded, onClick = onToggleExpanded, accentColor = CalendarBrand)
         }
 
@@ -164,8 +163,8 @@ internal fun CalendarContent(
                     haptics.click()
                     openEvent(context, event)
                 },
-                heightRatio = 0.62f,
-                maxHeight = 150.dp,
+                heightRatio = 0.8f,
+                maxHeight = 176.dp,
                 peekWidth = 40.dp,
             ) { event, look ->
                 EventCarouselCard(event = event, look = look, now = now)
@@ -230,10 +229,12 @@ private fun untilLabel(start: LocalDateTime, now: LocalDateTime): String {
     }
 }
 
-private fun dayName(day: LocalDate, today: LocalDate): String = when (day) {
-    today -> "today"
-    today.plusDays(1) -> "Tomorrow"
-    else -> day.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
+/** "today", "Tomorrow", a weekday within the week, and past that the date itself ("Mon 6 Oct"). */
+private fun dayName(day: LocalDate, today: LocalDate): String = when {
+    day == today -> "today"
+    day == today.plusDays(1) -> "Tomorrow"
+    day.isBefore(today.plusDays(7)) -> day.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
+    else -> day.format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.getDefault()))
 }
 
 // ── The week strip ────────────────────────────────────────────────────────────
@@ -260,11 +261,20 @@ private fun DayStrip(
             onClick = { onPick(null) },
             wide = true,
         )
-        for (offset in 0L until 7L) {
+        // A week at least, and on to the last day with something in it, up to the month the app reads.
+        val lastBusy = byDay.keys.maxOrNull() ?: today
+        val days = java.time.temporal.ChronoUnit.DAYS.between(today, lastBusy)
+            .coerceIn(6L, CalendarRepository.WINDOW_DAYS.toLong() - 1)
+        for (offset in 0L..days) {
             val day = today.plusDays(offset)
             val events = byDay[day].orEmpty()
             DayChip(
-                top = if (offset == 0L) "Today" else day.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()),
+                top = when {
+                    offset == 0L -> "Today"
+                    // A new month names itself, so a strip that runs into October says so.
+                    day.dayOfMonth == 1 -> day.month.getDisplayName(TextStyle.SHORT, Locale.getDefault())
+                    else -> day.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault())
+                },
                 main = day.dayOfMonth.toString(),
                 dots = events.map { eventColor(it) }.distinct().take(3),
                 selected = picked == day,
@@ -399,7 +409,7 @@ private fun EventCarouselCard(event: CalendarEvent, look: MediaItemLook, now: Lo
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.height(6.dp))
             Row(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -408,16 +418,77 @@ private fun EventCarouselCard(event: CalendarEvent, look: MediaItemLook, now: Lo
                     Tag(AppIcons.Clock, "${event.startTime.format(TimeFmt)}–${event.endTime.format(TimeFmt)}")
                 }
                 val link = event.meetingLink
-                when {
-                    link != null -> Tag(AppIcons.Link, meetingName(link), tint = color, onClick = {
+                if (link != null) {
+                    Tag(AppIcons.Link, meetingName(link), tint = color, onClick = {
                         runCatching { uriHandler.openUri(link) }
                     })
-                    event.location.isNotBlank() -> Tag(AppIcons.MapPin, event.location, modifier = Modifier.weight(1f, fill = false))
-                    event.calendarName.isNotBlank() -> Tag(null, event.calendarName, dot = color, modifier = Modifier.weight(1f, fill = false))
+                }
+                if (event.calendarName.isNotBlank()) {
+                    Tag(null, event.calendarName, dot = color, modifier = Modifier.weight(1f, fill = false))
                 }
             }
+            // Where, and the first words of the notes, in whatever room the card has left.
+            if (event.location.isNotBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(AppIcons.MapPin, contentDescription = null, tint = TextTertiary, modifier = Modifier.size(11.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(event.location, fontSize = 11.5.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            val notes = remember(event.description) { notesSnippet(event) }
+            if (notes != null) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    notes,
+                    fontSize = 11.sp,
+                    lineHeight = 14.sp,
+                    color = TextTertiary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+
+        // A peek is too narrow for words; it shows the day and the time instead.
+        Column(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .centerInVisible(look)
+                .graphicsLayer { alpha = look.peekAlpha() }
+                .padding(start = 2.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            val day = event.displayDate()
+            Text(
+                if (running && !event.isAllDay) "NOW" else day.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()).uppercase(),
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                color = color,
+                maxLines = 1,
+            )
+            Text(day.dayOfMonth.toString(), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = TextPrimary, maxLines = 1)
+            Text(
+                if (event.isAllDay) "all day" else event.startTime.format(TimeFmt),
+                fontSize = 9.sp,
+                color = TextSecondary,
+                maxLines = 1,
+            )
         }
     }
+}
+
+/** The notes' first words, without markup or the meeting link the card already offers. */
+private fun notesSnippet(event: CalendarEvent): String? {
+    val link = event.meetingLink
+    return event.description
+        .replace(Regex("<[^>]*>"), " ")
+        .replace("&nbsp;", " ")
+        .let { if (link != null) it.replace(link, "") else it }
+        .replace(Regex("https?://\\S+"), "")
+        .replace(Regex("\\s+"), " ")
+        .trim()
+        .takeIf { it.length >= 3 }
 }
 
 private fun durationLabel(event: CalendarEvent): String {

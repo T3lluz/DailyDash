@@ -93,6 +93,9 @@ class CalendarRepository @Inject constructor(
     companion object {
         private const val TAG = "CalendarRepo"
         const val PERMISSION = Manifest.permission.READ_CALENDAR
+
+        /** How far ahead the app reads: the Home card's strip and agenda, and the phone hub, share it. */
+        const val WINDOW_DAYS = 31
         private const val CACHE_TTL_MS = 5 * 60 * 1000L // 5 minutes
     }
 

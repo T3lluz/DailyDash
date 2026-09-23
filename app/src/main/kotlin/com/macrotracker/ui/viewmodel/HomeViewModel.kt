@@ -395,7 +395,7 @@ class HomeViewModel @Inject constructor(
                 calendarRepository.clearCache()
             }
 
-            val allEvents = calendarRepository.readEvents(extraDays = 14, calendarIds = null)
+            val allEvents = calendarRepository.readEvents(extraDays = CalendarRepository.WINDOW_DAYS, calendarIds = null)
             val now = LocalDateTime.now()
             val endOfToday = LocalDate.now().plusDays(1).atStartOfDay()
 
@@ -410,7 +410,7 @@ class HomeViewModel @Inject constructor(
 
             _calendarState.value = CalendarUiState.Success(
                 events = todayEvents,
-                upcomingEvents = upcoming.take(40),
+                upcomingEvents = upcoming.take(200),
                 lastUpdatedAt = Instant.now(),
             )
         } catch (e: Exception) {

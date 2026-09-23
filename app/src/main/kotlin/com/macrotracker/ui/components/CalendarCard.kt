@@ -58,7 +58,6 @@ fun CalendarCard(
     isVisible: Boolean = true,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
-    var showDetails by rememberSaveable { mutableStateOf(false) }
     val haptics = rememberHaptics()
 
     if (!isVisible) {
@@ -119,7 +118,7 @@ fun CalendarCard(
                             Column {
                                 CardTitle("Calendar")
                                 Text(
-                                    "Nothing coming up in the next two weeks.",
+                                    "Nothing coming up in the next month.",
                                     fontSize = 13.sp,
                                     color = TextSecondary,
                                     fontStyle = FontStyle.Italic,
@@ -137,14 +136,6 @@ fun CalendarCard(
                                 expanded = !expanded
                                 if (expanded) haptics.toggleOn() else haptics.toggleOff()
                             },
-                            onShowDetails = { showDetails = true },
-                        )
-                    }
-
-                    if (showDetails) {
-                        CalendarDetailsDialog(
-                            events = allVisibleEvents,
-                            onDismiss = { showDetails = false }
                         )
                     }
                 }
@@ -164,183 +155,5 @@ fun CalendarCard(
 
             else -> { } // 3 = Unavailable, nothing to show
         }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun CalendarDetailsDialog(
-    events: List<CalendarEvent>,
-    onDismiss: () -> Unit
-) {
-    BasicAlertDialog(onDismissRequest = onDismiss) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 24.dp),
-            shape = RoundedCornerShape(24.dp),
-            color = com.macrotracker.ui.theme.Surface,
-            tonalElevation = 8.dp
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(20.dp)
-                    .fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    CardTitle("Full schedule", modifier = Modifier.weight(1f))
-                    IconButton(onClick = onDismiss) {
-                        Icon(AppIcons.Close, contentDescription = "Close", tint = TextSecondary)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.weight(1f, fill = false)
-                ) {
-                    items(events) { event ->
-                        EventTile(event = event, featured = false, showFullInfo = true)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun EventTile(
-    event: CalendarEvent,
-    featured: Boolean,
-    showFullInfo: Boolean = false,
-) {
-    val eventColor = try {
-        Color(event.calendarColor).copy(alpha = 1f)
-    } catch (_: Exception) {
-        CalendarAccent
-    }
-    val uriHandler = LocalUriHandler.current
-
-    val bgColor = if (featured) Background else Background.copy(alpha = 0.5f)
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(if (featured) 10.dp else 8.dp))
-            .background(bgColor)
-            .padding(if (featured) 12.dp else 10.dp),
-        verticalAlignment = Alignment.Top,
-    ) {
-        Box(
-            modifier = Modifier
-                .padding(top = 3.dp)
-                .size(if (featured) 10.dp else 8.dp)
-                .clip(CircleShape)
-                .background(eventColor),
-        )
-        Spacer(modifier = Modifier.width(10.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = event.title,
-                        fontSize = if (featured) 15.sp else 14.sp,
-                        fontWeight = if (featured) FontWeight.Bold else FontWeight.SemiBold,
-                        color = TextPrimary,
-                        maxLines = if (showFullInfo) 3 else 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (event.calendarName.isNotBlank()) {
-                        Text(
-                            text = event.calendarName,
-                            fontSize = 10.sp,
-                            color = eventColor.copy(alpha = 0.8f),
-                            fontWeight = FontWeight.Medium,
-                        )
-                    }
-                }
-                if (event.isHappeningNow) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "NOW",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = eventColor.contentColorOn(),
-                        modifier = Modifier
-                            .background(eventColor, RoundedCornerShape(4.dp))
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                    )
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(4.dp))
-
-            InfoTag(icon = AppIcons.Clock, text = event.formattedDateAndTime, color = TextSecondary)
-
-            if (event.location.isNotBlank()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                InfoTag(icon = AppIcons.MapPin, text = event.location, color = TextSecondary)
-            }
-
-            val link = event.meetingLink
-            if (link != null) {
-                Spacer(modifier = Modifier.height(4.dp))
-                val displayLink = when {
-                    link.contains("meet.google.com") -> "Google Meet"
-                    link.contains("zoom.us") || link.contains("zoom.") -> "Zoom Meeting"
-                    else -> "Join Meeting"
-                }
-                InfoTag(
-                    icon = AppIcons.Link,
-                    text = displayLink,
-                    color = CalendarAccent,
-                    onClick = { try { uriHandler.openUri(link) } catch (_: Exception) { } }
-                )
-            }
-
-            if (showFullInfo && event.description.isNotBlank()) {
-                val snippet = event.description.replace(Regex("<[^>]*>"), "").trim()
-                if (snippet.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = snippet,
-                        fontSize = 12.sp,
-                        color = TextSecondary,
-                        lineHeight = 16.sp
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun InfoTag(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    text: String,
-    color: Color,
-    onClick: (() -> Unit)? = null
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
-    ) {
-        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(12.dp))
-        Spacer(modifier = Modifier.width(4.dp))
-        Text(
-            text = text,
-            fontSize = 11.sp,
-            color = color,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
     }
 }

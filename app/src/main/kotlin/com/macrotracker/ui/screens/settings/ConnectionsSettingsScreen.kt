@@ -312,6 +312,12 @@ fun ConnectionsSettingsScreen(
 
         Spacer(modifier = Modifier.height(10.dp))
 
+        MacroCard(delayMs = 132) {
+            PhoneHubSettingsCard()
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
         MacroCard(delayMs = 140) {
             SettingsCategoryRow(
                 icon = AppIcons.Server,
