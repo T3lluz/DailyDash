@@ -712,7 +712,7 @@ fun HealthScreen(
     }
 }
 
-// ── Macro Trends (moved from History tab) ─────────────────────────────
+// ── Macro Trends ──────────────────────────────────────────────────────
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -855,8 +855,6 @@ private fun MacroTrendsSection(
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(8.dp))
 
         MacroCard(delayMs = 100) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 10.dp)) {

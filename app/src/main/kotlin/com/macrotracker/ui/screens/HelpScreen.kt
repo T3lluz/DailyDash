@@ -20,6 +20,7 @@ import androidx.compose.material.icons.outlined.CameraAlt
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Rocket
@@ -52,7 +53,7 @@ private val STEPS = listOf(
     HelpStep(
         icon = Icons.Outlined.Home,
         title = "Home Screen — Quick Add",
-        body = "The Home screen shows a live greeting with today's date and all your widgets. Use the Quick Add widget to enter a food name (optional), calories and protein, then tap \"Add\". Tap \"View All Logs\" to jump to the full Health tab.",
+        body = "The Home screen shows a live greeting with today's date and all your widgets. Use the Quick Add widget to enter a food name (optional), calories and protein, then tap \"Add\". Tap \"View all logs\" to jump to the full Health tab.",
     ),
     HelpStep(
         icon = Icons.Outlined.Rocket,
@@ -62,7 +63,7 @@ private val STEPS = listOf(
     HelpStep(
         icon = Icons.Outlined.CameraAlt,
         title = "Scan a Nutrition Label",
-        body = "Go to the AI tab and tap \"Scan label\". Point the camera at any nutrition facts label (or pick a photo from your gallery) and Clanker will read calories and protein for you.",
+        body = "Tap \"Scan label\" on the AI tab or in Add Entry on Health. Point the camera at any nutrition facts label (or pick a photo from your gallery) and Clanker will read calories and protein for you.",
     ),
     HelpStep(
         icon = Icons.Outlined.AutoAwesome,
@@ -75,14 +76,19 @@ private val STEPS = listOf(
         body = "On the Health tab, Macro Trends charts your last 7, 14 or 30 days. Use the range chips (7d / 14d / 30d) and the Calories / Protein toggle to switch views. Tap any bar to see and manage the individual food logs for that day.",
     ),
     HelpStep(
+        icon = Icons.Outlined.Dns,
+        title = "Monitor Your Servers",
+        body = "Add an SSH host in Settings → Connections → Servers. The Servers card on Home opens a live dashboard; tap the sparkle on any section to ask Sysop, the Tech support bot on the AI tab, about it.",
+    ),
+    HelpStep(
         icon = Icons.Outlined.Flag,
         title = "Set Daily Goals",
-        body = "Go to Settings → Nutrition. Enter your calorie and protein targets and tap \"Save Goals\". Progress bars turn red when you exceed a goal.",
+        body = "Go to Settings → Nutrition. Enter your calorie and protein targets and tap \"Save goals\". Progress bars turn red when you exceed a goal.",
     ),
     HelpStep(
         icon = Icons.Outlined.Delete,
         title = "Delete a Log Entry",
-        body = "On the Health tab, click the X on any food entry in the Recent Logs list to delete it. You can also navigate back to a past date in the Health tab and delete entries from there.",
+        body = "On the Health tab, tap the X on any food entry in the Recent Logs list to delete it. You can also navigate back to a past date in the Health tab and delete entries from there.",
     ),
 )
 

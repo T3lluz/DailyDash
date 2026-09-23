@@ -98,7 +98,7 @@ class HealthViewModel @Inject constructor(
     private val _todaySleepSessions = MutableStateFlow<List<SleepSessionRecord>>(emptyList())
     val todaySleepSessions: StateFlow<List<SleepSessionRecord>> = _todaySleepSessions
 
-    // Macro trends (formerly History tab)
+    // Macro trends
     private val _macroRangeDays = MutableStateFlow(7)
     val macroRangeDays: StateFlow<Int> = _macroRangeDays
 

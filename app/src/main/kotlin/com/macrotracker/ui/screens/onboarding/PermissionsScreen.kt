@@ -34,6 +34,7 @@ import androidx.compose.material.icons.outlined.AddCircleOutline
 import androidx.compose.material.icons.outlined.CameraAlt
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.Icon
@@ -285,8 +286,16 @@ private fun PermissionRow(
         }
         Spacer(modifier = Modifier.width(12.dp))
         Icon(
-            imageVector = if (granted || item.permission == null) Icons.Filled.CheckCircle else Icons.Outlined.AddCircleOutline,
-            contentDescription = if (granted) "Granted" else "Tap to grant",
+            imageVector = when {
+                granted -> Icons.Filled.CheckCircle
+                item.permission == null -> Icons.Outlined.Info
+                else -> Icons.Outlined.AddCircleOutline
+            },
+            contentDescription = when {
+                granted -> "Granted"
+                item.permission == null -> "Set up later in Settings"
+                else -> "Tap to grant"
+            },
             tint = when {
                 granted -> Success
                 item.permission == null -> TextSecondary
