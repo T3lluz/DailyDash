@@ -332,8 +332,8 @@ fun ServersSettingsScreen(
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                "Keeps an ongoing notification with live gauges, per-core bars and a throughput " +
-                    "sparkline. Expand it for the full panel.",
+                "Keeps an ongoing notification with live gauges. It stays compact; tap More on it " +
+                    "for the full panel with dials, history and every core.",
                 color = TextSecondary,
                 fontSize = 12.sp,
                 lineHeight = 17.sp,
@@ -352,6 +352,12 @@ fun ServersSettingsScreen(
                 },
             )
             if (settings.liveNotificationEnabled) {
+                ToggleRow(
+                    title = "Open onto the full panel",
+                    subtitle = "Off keeps it compact until you tap More",
+                    checked = settings.liveNotificationDetailed,
+                    onCheckedChange = { haptics.tick(); viewModel.setLiveNotificationDetailed(it) },
+                )
                 ToggleRow(
                     title = "Restart after reboot",
                     subtitle = "Bring the notification back when the phone starts",

@@ -300,6 +300,9 @@ class ServerViewModel @Inject constructor(
     fun setLiveNotificationServer(id: String?) =
         store.updateSettings { it.copy(liveNotificationServerId = id) }
 
+    fun setLiveNotificationDetailed(detailed: Boolean) =
+        store.updateSettings { it.copy(liveNotificationDetailed = detailed) }
+
     /**
      * Starting the service is what actually posts the ongoing notification, so
      * the toggle and the service have to move together.
