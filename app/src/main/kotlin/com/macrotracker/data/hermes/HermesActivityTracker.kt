@@ -12,8 +12,13 @@ import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Who is reading a turn's stream: the chat on screen, or [HermesTurnService] once the chat let go. */
-enum class HermesFollower { PANE, SERVICE }
+/**
+ * Who is reading a turn's stream: the chat on screen, [HermesTurnService] once the chat let
+ * go, or [HermesLiveFeed] for a turn started somewhere else (the web dashboard, a duty
+ * round) that nothing on the phone has joined. The feed only ever holds a turn nobody else
+ * follows; the pane or the service takes it over the moment either joins.
+ */
+enum class HermesFollower { PANE, SERVICE, FEED }
 
 /** A turn Hermes is working on, as much of it as the navbar and the notification show. */
 data class HermesTurnActivity(
@@ -73,6 +78,8 @@ class HermesActivityTracker @Inject constructor(
         var isNew = false
         _turns.update { turns ->
             val old = turns[threadId]
+            // The feed sees the same events as a follower that joined; that follower speaks for the turn.
+            if (follower == HermesFollower.FEED && old != null && old.follower != HermesFollower.FEED) return@update turns
             isNew = old == null
             val next = HermesTurnActivity(
                 threadId = threadId,
@@ -101,6 +108,28 @@ class HermesActivityTracker @Inject constructor(
         if (released) HermesTurnService.start(context)
     }
 
+    /**
+     * The app went to the background, so the live feed is about to close. Every turn only
+     * the feed was following goes to the service, which rejoins it and says when it ends.
+     */
+    fun handOffFeed() {
+        var any = false
+        _turns.update { turns ->
+            turns.mapValues { (_, t) ->
+                if (t.follower == HermesFollower.FEED) {
+                    any = true
+                    t.copy(follower = HermesFollower.SERVICE)
+                } else {
+                    t
+                }
+            }
+        }
+        if (any) HermesTurnService.start(context)
+    }
+
+    /** Who follows [threadId]'s turn right now, or null when nothing is running there. */
+    fun followerOf(threadId: String): HermesFollower? = _turns.value[threadId]?.follower
+
     /** Forgets a turn without announcing it (the next queued message is about to start one). */
     fun drop(threadId: String) {
         _turns.update { it - threadId }
@@ -114,10 +143,12 @@ class HermesActivityTracker @Inject constructor(
     /**
      * A turn ended. The first follower to say so wins, so a turn followed by both the pane
      * and the service is only announced once. Speaks up only when the person is not
-     * already looking: the app in the background, or another chat on screen.
+     * already looking: the app in the background, or another chat on screen. With [from]
+     * set, only a turn that follower still holds is settled.
      */
-    fun finish(threadId: String, title: String, outcome: HermesOutcome, preview: String) {
+    fun finish(threadId: String, title: String, outcome: HermesOutcome, preview: String, from: HermesFollower? = null) {
         val turn = _turns.value[threadId] ?: return
+        if (from != null && turn.follower != from) return
         _turns.update { it - threadId }
         if (outcome == HermesOutcome.STOPPED) return
         val now = System.currentTimeMillis()

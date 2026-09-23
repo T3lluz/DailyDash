@@ -97,12 +97,14 @@ fun <T> MediaCarousel(
     heightRatio: Float = 9f / 16f,
     maxHeight: Dp = 230.dp,
     shape: Shape = MediaCarouselShape,
+    /** How wide a neighbour peeks in; narrower leaves the focused item more room for words. */
+    peekWidth: Dp = CarouselDefaults.MaxSmallItemSize,
     content: @Composable (item: T, look: MediaItemLook) -> Unit,
 ) {
     if (items.isEmpty()) return
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         // The focused item is what is left once a peek has taken its share on each side.
-        val focused = maxWidth - (CarouselDefaults.MaxSmallItemSize + ItemSpacing) * 2
+        val focused = maxWidth - (peekWidth + ItemSpacing) * 2
         val height = (focused * heightRatio).coerceIn(120.dp, maxHeight)
 
         if (items.size == 1) {
@@ -141,6 +143,8 @@ fun <T> MediaCarousel(
                     .nestedScroll(rememberWidgetCrossAxisScrollLock()),
                 itemSpacing = ItemSpacing,
                 flingBehavior = CarouselDefaults.singleAdvanceFlingBehavior(state = state),
+                minSmallItemWidth = minOf(peekWidth, CarouselDefaults.MinSmallItemSize),
+                maxSmallItemWidth = peekWidth,
             ) { index ->
                 val item = latest.getOrNull(index) ?: return@HorizontalCenteredHeroCarousel
                 val look = remember(carouselItemDrawInfo) { CarouselLook(carouselItemDrawInfo) }

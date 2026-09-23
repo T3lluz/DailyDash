@@ -61,6 +61,11 @@ data class DailyForecast(
     val humidity: Double? = null,
     val periods: List<DayPeriodForecast> = emptyList(),
     val isToday: Boolean = false,
+    /**
+     * The day step by step, as fine as the forecast goes: hourly for the first two or three
+     * days, then six-hourly. Today's starts at the coming hour.
+     */
+    val steps: List<HourlyForecast> = emptyList(),
 )
 
 data class WeatherInfo(
@@ -339,6 +344,7 @@ class WeatherRepository @Inject constructor(
             var maxPop: Int = 0,
             // period -> (distance from ideal hour, entry)
             val periodCandidates: MutableMap<DayPeriod, MutableList<Pair<Int, JSONObject>>> = mutableMapOf(),
+            val steps: MutableList<HourlyForecast> = mutableListOf(),
         )
         val dailyBuckets = linkedMapOf<String, DayBucket>()
 
@@ -391,6 +397,8 @@ class WeatherRepository @Inject constructor(
                         bucket.maxPop = maxOf(bucket.maxPop, it.roundToInt())
                     }
                 }
+
+                dayStep(entryData, zdt, details, nowInstant)?.let { bucket.steps.add(it) }
 
                 // Collect period candidates inside each 6-hour window; prefer exact anchors
                 if (entryData.has("next_6_hours")) {
@@ -493,6 +501,7 @@ class WeatherRepository @Inject constructor(
                 humidity = bucket.humidities.takeIf { it.isNotEmpty() }?.average(),
                 periods = periods,
                 isToday = isToday,
+                steps = bucket.steps.toList(),
             )
         }.filter { !it.dateFull.beforeToday(todayStr) }.take(7)
 
@@ -520,6 +529,30 @@ class WeatherRepository @Inject constructor(
     }
 
     private fun String.beforeToday(today: String): Boolean = this < today
+
+    /**
+     * One step of a day's timeline from a forecast entry: its next hour where the feed has
+     * one, else its next six. Steps already past are dropped, keeping the hour in progress.
+     */
+    private fun dayStep(entryData: JSONObject, localTime: ZonedDateTime, instant: JSONObject, now: Instant): HourlyForecast? {
+        if (localTime.toInstant().isBefore(now.minusSeconds(30 * 60))) return null
+        val window = entryData.optJSONObject("next_1_hours") ?: entryData.optJSONObject("next_6_hours") ?: return null
+        val symbol = window.optJSONObject("summary")?.optString("symbol_code")?.takeIf { it.isNotBlank() } ?: return null
+        val details = window.optJSONObject("details")
+        val (desc, icon) = mapSymbolCode(symbol)
+        return HourlyForecast(
+            time = localTime.format(DateTimeFormatter.ofPattern("h a", Locale.US)),
+            temperature = instant.optDouble("air_temperature").takeIf { !it.isNaN() } ?: return null,
+            iconRes = icon,
+            windSpeed = instant.optDouble("wind_speed").takeIf { !it.isNaN() } ?: 0.0,
+            description = desc,
+            symbolCode = symbol,
+            dateStr = localTime.toLocalDate().toString(),
+            precipitation = details?.optDouble("precipitation_amount")?.takeIf { !it.isNaN() },
+            precipProbability = details?.optDouble("probability_of_precipitation")?.takeIf { !it.isNaN() }?.roundToInt(),
+            epochMillis = localTime.toInstant().toEpochMilli(),
+        )
+    }
 
     private fun mapSymbolCode(code: String): Pair<String, Int> = WeatherRepository.mapSymbolCode(code)
 }

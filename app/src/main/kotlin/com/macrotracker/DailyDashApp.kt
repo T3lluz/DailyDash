@@ -5,6 +5,8 @@ import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
+import com.macrotracker.data.hermes.HermesLiveFeed
+import com.macrotracker.data.server.DashboardSettingsSync
 import com.macrotracker.data.update.AppUpdateWorker
 import com.macrotracker.data.update.PackageReplacedReceiver
 import com.macrotracker.widget.WeatherWidgetPreview
@@ -17,6 +19,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import javax.inject.Inject
 
 @HiltAndroidApp
 class DailyDashApp : Application(), ImageLoaderFactory {
@@ -27,8 +30,15 @@ class DailyDashApp : Application(), ImageLoaderFactory {
         var splashShownThisProcess: Boolean = false
     }
 
+    /** The dashboard's live feed: Hermes turns from the desk, settings saves, fresh stats. */
+    @Inject lateinit var liveFeed: HermesLiveFeed
+
+    @Inject lateinit var settingsSync: DashboardSettingsSync
+
     override fun onCreate() {
         super.onCreate()
+        liveFeed.bind()
+        settingsSync.bind()
         PackageReplacedReceiver.ensureChannel(this)
         // Every few hours, even with the app closed: a new build shows up as a notification.
         AppUpdateWorker.schedule(this)

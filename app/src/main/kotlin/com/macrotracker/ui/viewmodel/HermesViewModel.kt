@@ -17,6 +17,8 @@ import com.macrotracker.data.hermes.HermesEvent
 import com.macrotracker.data.hermes.HermesException
 import com.macrotracker.data.hermes.HermesItem
 import com.macrotracker.data.hermes.HermesLive
+import com.macrotracker.data.hermes.HermesLiveFeed
+import com.macrotracker.data.hermes.HermesTurnActivity
 import com.macrotracker.data.hermes.HermesMode
 import com.macrotracker.data.hermes.HermesModelOption
 import com.macrotracker.data.hermes.HermesPermission
@@ -98,6 +100,7 @@ class HermesViewModel @Inject constructor(
     private val settings: SettingsRepository,
     private val handoff: ServerAiHandoff,
     private val activity: HermesActivityTracker,
+    private val feed: HermesLiveFeed,
     @param:ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -152,21 +155,53 @@ class HermesViewModel @Inject constructor(
     /** A chat the navbar tab or a notification asked for; the AI tab switches to Tech support and opens it. */
     val openRequest: StateFlow<String?> = activity.openRequest
 
+    /** Every turn running anywhere, with what it is doing, for the rail's rows. */
+    val turns: StateFlow<Map<String, HermesTurnActivity>> = activity.turns
+
     init {
         refresh()
         // A reply typed into a notification runs from the service; the chat on screen follows it too.
         viewModelScope.launch {
-            activity.serviceTurns.collect { id ->
-                val s = _state.value
-                if (s.threadId != id || s.busy) return@collect
-                streamJob?.cancel()
-                _state.update { it.copy(live = HermesLive(startedAtMs = System.currentTimeMillis(), phase = "sending")) }
-                streamJob = launch {
-                    runCatching { client.thread(id) }.onSuccess { thread ->
-                        _state.update { if (it.threadId == id) it.copy(items = thread.items) else it }
-                    }
-                    follow(id, client.watch(id))
+            activity.serviceTurns.collect { id -> joinRunningTurn(id) }
+        }
+    }
+
+    /**
+     * A turn started somewhere else in the chat on screen: at the desk, from a notification,
+     * or before the app opened. Joins it once the server confirms it is still running, so a
+     * late echo of a turn this pane already finished does not start a second one.
+     */
+    private fun joinRunningTurn(id: String) {
+        if (!canJoin(id)) return
+        viewModelScope.launch {
+            val thread = runCatching { client.thread(id) }.getOrNull() ?: return@launch
+            if (!thread.summary.busy || !canJoin(id)) return@launch
+            _state.update {
+                it.copy(
+                    items = thread.items,
+                    threadTitle = thread.summary.title,
+                    live = thread.summary.live ?: HermesLive(startedAtMs = System.currentTimeMillis(), phase = "sending"),
+                )
+            }
+            streamJob = viewModelScope.launch { follow(id, client.watch(id)) }
+        }
+    }
+
+    /** Nothing in this pane is reading a turn in [id] already (a send, a rejoin, the chat opening on a busy turn). */
+    private fun canJoin(id: String): Boolean {
+        val s = _state.value
+        return s.threadId == id && !s.busy && streamJob?.isActive != true && threadJob?.isActive != true
+    }
+
+    /** Reloads the open chat when another device changed it (an approval, a clear) while it sits idle here. */
+    private fun reloadOpenThread(id: String) {
+        if (_state.value.threadId != id || _state.value.busy) return
+        viewModelScope.launch {
+            runCatching { client.thread(id) }.onSuccess { thread ->
+                _state.update {
+                    if (it.threadId != id || it.busy) it else it.copy(items = thread.items, threadTitle = thread.summary.title)
                 }
+                if (thread.summary.busy) joinRunningTurn(id)
             }
         }
     }
@@ -252,9 +287,10 @@ class HermesViewModel @Inject constructor(
     }
 
     /**
-     * Follows the bridge's change feed while the pane is on screen, reconnecting after a
-     * drop. The thread list, the model and a chat's title then change here as they change
-     * on the server; a slow poll stays underneath in case the feed cannot be held open.
+     * Follows the dashboard's live feed while the pane is on screen. The app holds one
+     * connection to it ([HermesLiveFeed]); here it keeps the thread list, the model and the
+     * titles current, reloads the open chat when another device changes it, and joins a turn
+     * the desk starts in it. A slow poll stays underneath in case the feed cannot be held open.
      */
     fun startLive() {
         if (liveJob?.isActive == true) return
@@ -265,32 +301,37 @@ class HermesViewModel @Inject constructor(
                     if (_state.value.reach == HermesReach.READY) refreshThreads()
                 }
             }
-            while (true) {
-                try {
-                    client.live().collect { event ->
-                        when (event.optString("ch")) {
-                            "threads", "thread", "staff" -> refreshThreads()
-                            "status" -> refreshStatus()
-                            "title" -> {
-                                val id = event.optString("thread")
-                                val title = event.optString("title")
-                                if (title.isNotBlank()) {
-                                    _state.update { s ->
-                                        s.copy(
-                                            threadTitle = if (s.threadId == id) title else s.threadTitle,
-                                            threads = s.threads.map { if (it.id == id) it.copy(title = title) else it },
-                                        )
-                                    }
-                                }
+            // Whatever happened while the pane was away: a turn may have started or ended.
+            _state.value.threadId?.let(::reloadOpenThread)
+            feed.events.collect { event ->
+                when (event.optString("ch")) {
+                    "hello" -> {
+                        refreshThreads()
+                        _state.value.threadId?.let(::reloadOpenThread)
+                    }
+                    "threads", "staff" -> refreshThreads()
+                    "thread" -> {
+                        refreshThreads()
+                        event.optString("id").takeIf { it.isNotBlank() }?.let(::reloadOpenThread)
+                    }
+                    "status" -> refreshStatus()
+                    "ai" -> {
+                        val id = event.optString("thread")
+                        if (event.optJSONObject("ev")?.optBoolean("start") == true) joinRunningTurn(id)
+                    }
+                    "title" -> {
+                        val id = event.optString("thread")
+                        val title = event.optString("title")
+                        if (title.isNotBlank()) {
+                            _state.update { s ->
+                                s.copy(
+                                    threadTitle = if (s.threadId == id) title else s.threadTitle,
+                                    threads = s.threads.map { if (it.id == id) it.copy(title = title) else it },
+                                )
                             }
                         }
                     }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (_: Exception) {
-                    // Off the tailnet or the bridge restarted; try again shortly.
                 }
-                delay(LIVE_RETRY_MS)
             }
         }
     }
@@ -946,7 +987,6 @@ class HermesViewModel @Inject constructor(
         const val MAX_LIVE_TOOLS = 30
         const val REPORT_OUTPUT_CHARS = 3_000
         const val SLOW_POLL_MS = 60_000L
-        const val LIVE_RETRY_MS = 5_000L
         const val MAX_UPLOAD_BYTES = 8 * 1024 * 1024
         const val MAX_ATTACHMENTS = 8
     }

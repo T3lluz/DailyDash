@@ -54,6 +54,8 @@ fun SegmentedTabs(
     selectedKey: String,
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
+    /** A slimmer bar for a screen whose content needs the height (the AI tab's chats). */
+    compact: Boolean = false,
 ) {
     if (tabs.isEmpty()) return
     val selectedIndex = tabs.indexOfFirst { it.key == selectedKey }.coerceAtLeast(0)
@@ -87,7 +89,7 @@ fun SegmentedTabs(
                         modifier = Modifier
                             .clip(RoundedCornerShape(11.dp))
                             .clickable { onSelect(tab.key) }
-                            .padding(vertical = 10.dp, horizontal = 8.dp),
+                            .padding(vertical = if (compact) 7.dp else 10.dp, horizontal = 8.dp),
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {

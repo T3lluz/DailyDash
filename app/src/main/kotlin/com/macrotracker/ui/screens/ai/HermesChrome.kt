@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -49,18 +48,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -76,8 +72,8 @@ import com.macrotracker.data.hermes.HermesModelOption
 import com.macrotracker.data.hermes.HermesPermission
 import com.macrotracker.data.hermes.HermesStatus
 import com.macrotracker.data.hermes.HermesThreadSummary
+import com.macrotracker.data.hermes.HermesTurnActivity
 import com.macrotracker.ui.components.LivePulseDot
-import com.macrotracker.ui.components.LocalNavTabRise
 import com.macrotracker.ui.components.LoadingSpinner
 import com.macrotracker.ui.components.dottedGlass
 import com.macrotracker.ui.theme.AppIcons
@@ -98,6 +94,8 @@ import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.theme.TextTertiary
 import com.macrotracker.ui.util.rememberHaptics
 import dev.chrisbanes.haze.HazeState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 /*
  * The frame around a Hermes conversation, shaped like the t3lluz dashboard's panel without
@@ -159,7 +157,7 @@ internal fun HermesHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 4.dp),
+            .padding(start = 4.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box {
@@ -244,6 +242,8 @@ private fun MenuRow(label: String, icon: ImageVector, danger: Boolean = false, o
 @Composable
 internal fun HermesThreadRail(
     threads: List<HermesThreadSummary>,
+    /** Turns running anywhere (this phone, the desk), with what each is doing right now. */
+    turns: Map<String, HermesTurnActivity>,
     selectedId: String?,
     status: HermesStatus?,
     onOpen: (String) -> Unit,
@@ -318,6 +318,7 @@ internal fun HermesThreadRail(
                 items(rows, key = { "t-${it.id}" }) { t ->
                     ThreadRow(
                         thread = t,
+                        turn = turns[t.id],
                         selected = t.id == selectedId,
                         onOpen = { onOpen(t.id) },
                         onRename = { onRename(t) },
@@ -360,6 +361,7 @@ private fun RailHeading(label: String) {
 @Composable
 private fun ThreadRow(
     thread: HermesThreadSummary,
+    turn: HermesTurnActivity?,
     selected: Boolean,
     onOpen: () -> Unit,
     onRename: () -> Unit,
@@ -385,9 +387,10 @@ private fun ThreadRow(
                 .padding(start = 12.dp, end = 2.dp, top = 9.dp, bottom = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            val busy = thread.busy || turn != null
             Box(Modifier.size(12.dp), contentAlignment = Alignment.Center) {
                 when {
-                    thread.busy -> LivePulseDot(color = ServerBrand, size = 12.dp)
+                    busy -> LivePulseDot(color = ServerBrand, size = 12.dp)
                     thread.pending > 0 -> Box(Modifier.size(8.dp).clip(CircleShape).background(ServerWarn))
                     thread.isStaff -> Box(Modifier.size(8.dp).clip(CircleShape).background(ServerGood))
                     else -> Box(Modifier.size(6.dp).clip(CircleShape).background(Border))
@@ -411,7 +414,8 @@ private fun ThreadRow(
                     }
                 }
                 val line = when {
-                    thread.busy -> "working…"
+                    turn != null -> turn.label.text + "…"
+                    busy -> "working…"
                     thread.pending > 0 -> "waiting on you"
                     else -> thread.preview
                 }
@@ -419,7 +423,7 @@ private fun ThreadRow(
                     Text(
                         line,
                         color = when {
-                            thread.busy -> ServerBrand
+                            busy -> ServerBrand
                             thread.pending > 0 -> ServerWarn
                             else -> TextTertiary
                         },
@@ -517,10 +521,7 @@ internal fun HermesComposer(
     onPickDepth: () -> Unit,
     hazeState: HazeState?,
 ) {
-    val density = LocalDensity.current
-    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val imeOpen = WindowInsets.ime.getBottom(density) > 0
-    val bottomPad = if (imeOpen) 10.dp else navBottom + PillNavClearance + LocalNavTabRise.current
+    val bottomPad = composerBottomGap()
     val hasContent = value.isNotBlank() || attachments.isNotEmpty()
     val showStop = busy && value.isBlank()
     val canSend = enabled && hasContent && !uploading

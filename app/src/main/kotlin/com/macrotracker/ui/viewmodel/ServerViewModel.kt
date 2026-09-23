@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.macrotracker.data.server.DashboardLink
+import com.macrotracker.data.hermes.HermesLiveFeed
 import com.macrotracker.data.server.DashboardLinkRepository
 import com.macrotracker.data.server.ServerAuthMode
 import com.macrotracker.data.server.ServerError
@@ -23,7 +24,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import com.macrotracker.data.chat.ServerAiHandoff
 import com.macrotracker.data.server.ServerAdvisory
@@ -50,6 +53,7 @@ class ServerViewModel @Inject constructor(
     private val serverAiHandoff: ServerAiHandoff,
     private val repository: ServerMonitorRepository,
     private val dashboard: DashboardLinkRepository,
+    private val liveFeed: HermesLiveFeed,
     private val focus: ServerFocus,
     private val store: ServerStore,
     private val notifier: ServerNotifier,
@@ -73,7 +77,11 @@ class ServerViewModel @Inject constructor(
      * Keeps the dashboard link fresh while [intervalMs] ticks. Each file keeps its own
      * clock in the repository, so calling this often costs nothing extra.
      */
-    suspend fun followDashboard(intervalMs: Long) {
+    suspend fun followDashboard(intervalMs: Long): Unit = coroutineScope {
+        // The live feed says the moment the collector writes a file; the clock covers a phone off the feed.
+        launch {
+            liveFeed.files.filter { it == "stats" || it == "history" }.collect { dashboard.refresh(force = true) }
+        }
         while (true) {
             dashboard.refresh()
             delay(intervalMs)

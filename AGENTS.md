@@ -60,7 +60,16 @@ com.macrotracker/
                               follower to `finish` a turn wins. HermesNotifier: silent ongoing
                               notification (Android 16 promoted chip, Stop) plus a "done / needs you /
                               failed" one with Reply (RemoteInput → the service sends it), posted only
-                              while the app is in the background. HermesActivityTest pins the labels
+                              while the app is in the background. HermesActivityTest pins the labels.
+                              HermesLiveFeed (bound in DailyDashApp) holds the one `/_api/live` connection
+                              while the app is in front. Every turn on every thread rides it (`ch: ai`), so a
+                              turn started on the web shows in the navbar tab, the ongoing notification and
+                              the open chat; the feed reports it as follower FEED, which never overrides PANE
+                              or SERVICE, and hands its turns to the service (`handOffFeed`) when the app
+                              goes to the background. Duty and staff threads are skipped, as the web skips
+                              them. It also re-emits `events` (the chat pane uses it instead of its own
+                              connection) and `files` (stats/history/f1 changed; the server dashboard and
+                              Coming up refresh off it)
     server/                ← server monitor: SSH probes (SshClient/ServerProbe), ServerMonitorService +
                               ServerNotifier, encrypted ServerStore, ServerAdvisories.
                               ServerProbe has three lanes: the fast script (every poll: /proc, df, hwmon
@@ -68,6 +77,8 @@ com.macrotracker/
                               30 s, only while a `startPolling(detailed = true)` consumer holds it: docker
                               stats, ps by RSS, `ss -tln`, running units, journal errors) and the news script
                               (15 min: updates). Scripts are POSIX sh with no variables, every command guarded.
+                              DashboardSettingsSync: the web's settings blob (`/_api/sync`, last write wins)
+                              shares the new-chat Hermes mode (`ai.perm`), `units` and `wind` with the phone.
                               DashboardLink: `_stats.json`, `_history.json` and the tiles in `index.html` from
                               the dashboard server; it belongs to the SSH profile whose `hostname` matches
                               `host.sys.host` (`DashboardLink.belongsTo`).
@@ -136,7 +147,11 @@ com.macrotracker/
                              drawer (ModalNavigationDrawer, opened by button only), tall composer with mode /
                              model / depth chips, attach, send-or-Stop, queue while busy, slash palette, picker
                              sheets. A chat only restores its saved model when the person opens it; the model
-                             is Hermes-global. Tech support is Hermes when `HermesViewModel.usesHermes`: an
+                             is Hermes-global. The AI tab has no page title: one compact SegmentedTabs row, then
+                             each pane's one-row header. Composers sit `composerBottomGap()` above the pane
+                             bottom (follows the keyboard frame by frame; never switch on "ime > 0"), and
+                             `FollowChatOnKeyboard` pins the list with plain scrolls, never an animation per
+                             frame. Tech support is Hermes when `HermesViewModel.usesHermes`: an
                              explicit `techSupportBrain` choice, or in `auto` whenever Hermes answers, else Sysop)
                              + server/ (the server screen's cards: hero, history, services wall as tiles,
                              activity, compute, memory, network, storage, sensors, processes, containers,
@@ -168,7 +183,13 @@ com.macrotracker/
                               `Modifier.subScreenBottomPadding()`. HomeWidgetShell.kt: card chrome shared by
                               every Home/Health card — `CardHeader`, `HubCardHeader` + `HubHeaderAction`,
                               `HubErrorState` (message + Retry), `WidgetPromptCard`, `ChannelSheetHeader`,
-                              expand/scroll-box helpers. MediaCarousel.kt: the M3 multi-browse carousel the
+                              expand/scroll-box helpers. MarkdownParser.kt + MarkdownText.kt: the web's
+                              `hermes-markdown.js` rules (GFM tables, nested/task lists, callouts, `run`/`search`
+                              fences, diffs); `breaks`/`streaming` for chat. MarkdownParserTest pins it.
+                              WeatherForecast.kt: the opened weather card (one "now" panel, HourlyTimeline with
+                              its temperature curve, a day per row with a range bar that unfolds that day's
+                              `DailyForecast.steps`). CalendarStrip.kt: the calendar card (summary line, week
+                              strip, events in MediaCarousel, agenda). MediaCarousel.kt: the M3 multi-browse carousel the
                               collapsed YouTube and Twitch cards use (`MediaItemLook` read in draw/layer blocks
                               only; tap a peek to bring it in). F1CircuitMap.kt: the dashboard's four-pass circuit
                               (kerb, bed, marque line, car) that paints its lap on screen, with a

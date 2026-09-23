@@ -7,6 +7,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.border
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -1863,30 +1866,81 @@ private fun RaceSessionDetail(
                 raceName = shortGP(race.raceName),
             )
         }
-        race.fp1Date?.let { SessionRow("FP1", it, race.fp1Time, TextSecondary) }
-        race.fp2Date?.let { SessionRow("FP2", it, race.fp2Time, TextSecondary) }
-        race.fp3Date?.let { SessionRow("FP3", it, race.fp3Time, TextSecondary) }
-        race.qualifyingDate?.let { SessionRow("Quali", it, race.qualifyingTime, TextPrimary) }
-        race.sprintDate?.let { SessionRow("Sprint", it, race.sprintTime, SprintPink) }
-        SessionRow("Race", race.raceDate, race.raceTime, accentColor, bold = true)
+        SessionStrip(
+            sessions = listOfNotNull(
+                race.fp1Date?.let { WeekendSession("FP1", it, race.fp1Time, TextSecondary) },
+                race.fp2Date?.let { WeekendSession("FP2", it, race.fp2Time, TextSecondary) },
+                race.fp3Date?.let { WeekendSession("FP3", it, race.fp3Time, TextSecondary) },
+                race.sprintDate?.let { WeekendSession("Sprint", it, race.sprintTime, SprintPink) },
+                race.qualifyingDate?.let { WeekendSession("Quali", it, race.qualifyingTime, TextPrimary) },
+                WeekendSession("Race", race.raceDate, race.raceTime, accentColor, main = true),
+            ).sortedBy { it.sortKey },
+            accentColor = accentColor,
+        )
     }
 }
 
+private data class WeekendSession(
+    val label: String,
+    val date: String,
+    val time: String?,
+    val color: Color,
+    val main: Boolean = false,
+) {
+    /** When it starts on this phone's clock, or null without a time. */
+    val local: java.time.ZonedDateTime? = runCatching {
+        LocalDateTime.parse("${date}T${time!!.replace("Z", "")}").atOffset(ZoneOffset.UTC)
+            .atZoneSameInstant(java.util.TimeZone.getDefault().toZoneId())
+    }.getOrNull()
+    val sortKey: String get() = local?.toInstant()?.toString() ?: date
+    val over: Boolean get() = local?.plusHours(2)?.isBefore(java.time.ZonedDateTime.now()) ?: isPast(date)
+}
+
+/**
+ * The weekend's sessions side by side, in local time: one short strip instead of a row
+ * each. The next one to run is outlined; ones that are over fade back.
+ */
 @Composable
-private fun SessionRow(label: String, date: String, time: String?, color: Color, bold: Boolean = false) {
-    val localTimeStr = remember(date, time) { formatLocalTime(date, time) }
-    val utcTimeStr = time?.take(5) ?: ""
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = color, fontSize = if (bold) 13.sp else 12.sp, fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Medium)
-        Column(horizontalAlignment = Alignment.End) {
-            Text(
-                if (localTimeStr.isNotEmpty()) "${formatShort(date)} · $localTimeStr" else formatShort(date),
-                color = if (bold) TextPrimary else TextSecondary,
-                fontSize = if (bold) 12.sp else 11.sp,
-                fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal,
-            )
-            if (utcTimeStr.isNotEmpty() && localTimeStr.isNotEmpty()) {
-                Text("$utcTimeStr UTC", color = TextTertiary, fontSize = 10.sp)
+private fun SessionStrip(sessions: List<WeekendSession>, accentColor: Color) {
+    val next = sessions.firstOrNull { !it.over }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .nestedScroll(rememberWidgetCrossAxisScrollLock())
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        sessions.forEach { s ->
+            val isNext = s == next
+            Column(
+                modifier = Modifier
+                    .widthIn(min = 62.dp)
+                    .graphicsLayer { alpha = if (s.over) 0.45f else 1f }
+                    .clip(SharpShape)
+                    .background(if (s.main) accentColor.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.04f))
+                    .border(1.dp, if (isNext) accentColor.copy(alpha = 0.7f) else Color.Transparent, SharpShape)
+                    .padding(horizontal = 9.dp, vertical = 7.dp),
+            ) {
+                Text(
+                    s.label.uppercase(),
+                    color = s.color,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.4.sp,
+                )
+                Text(
+                    s.local?.let { it.format(DateTimeFormatter.ofPattern("EEE d")) } ?: formatShort(s.date),
+                    color = TextSecondary,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                )
+                Text(
+                    formatLocalTime(s.date, s.time).ifBlank { "TBC" },
+                    color = if (s.main) TextPrimary else TextPrimary.copy(alpha = 0.9f),
+                    fontSize = 12.sp,
+                    fontWeight = if (s.main || isNext) FontWeight.Bold else FontWeight.SemiBold,
+                    maxLines = 1,
+                )
             }
         }
     }

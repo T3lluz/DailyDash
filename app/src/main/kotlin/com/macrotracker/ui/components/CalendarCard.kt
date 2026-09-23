@@ -1,6 +1,5 @@
 package com.macrotracker.ui.components
 
-import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.contentColorOn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -20,16 +19,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,10 +42,11 @@ import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.CalendarBrand
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
-import com.macrotracker.ui.util.LastUpdatedText
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.CalendarUiState
 import com.macrotracker.ui.theme.AppIcons
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 private val CalendarAccent = CalendarBrand
 
@@ -95,7 +93,15 @@ fun CalendarCard(
                 if (successState != null) {
                 val events = successState.events
                 val upcomingEvents = successState.upcomingEvents
-                val allVisibleEvents = (events + upcomingEvents).distinctBy { it.id }
+                // A recurring event's instances share one id, so an instance is its id and its start.
+                // Ones that have ended drop off; the card is about what is still ahead.
+                val allVisibleEvents = remember(events, upcomingEvents) {
+                    val now = java.time.LocalDateTime.now()
+                    (events + upcomingEvents)
+                        .distinctBy { it.id to it.beginMillis }
+                        .filter { it.endTime.isAfter(now) }
+                        .sortedWith(agendaOrder)
+                }
                 
                 if (allVisibleEvents.isEmpty()) {
                     MacroCard {
@@ -113,7 +119,7 @@ fun CalendarCard(
                             Column {
                                 CardTitle("Calendar")
                                 Text(
-                                    "No events found for selected calendars.",
+                                    "Nothing coming up in the next two weeks.",
                                     fontSize = 13.sp,
                                     color = TextSecondary,
                                     fontStyle = FontStyle.Italic,
@@ -123,96 +129,16 @@ fun CalendarCard(
                     }
                 } else {
                     MacroCard {
-                        Column {
-                            // Header
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(
-                                    if (events.isNotEmpty()) AppIcons.CalendarDays else AppIcons.NotepadText,
-                                    contentDescription = null,
-                                    tint = CalendarAccent,
-                                    modifier = Modifier.size(20.dp),
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                CardTitle(
-                                    if (events.isNotEmpty()) "Today's Schedule" else "Upcoming Events",
-                                    modifier = Modifier.weight(1f),
-                                )
-                                LastUpdatedText(
-                                    lastUpdatedAt = successState.lastUpdatedAt,
-                                    color = TextSecondary,
-                                )
-                                HubHeaderAction(
-                                    icon = AppIcons.NotepadText,
-                                    contentDescription = "Full schedule",
-                                    onClick = { showDetails = true },
-                                )
-                                WidgetExpandChevron(
-                                    expanded = expanded,
-                                    onClick = {
-                                        expanded = !expanded
-                                        if (expanded) haptics.toggleOn() else haptics.toggleOff()
-                                    },
-                                    accentColor = CalendarAccent,
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            // Featured Event (Next up)
-                            val featured = allVisibleEvents.first()
-                            EventTile(
-                                event = featured,
-                                featured = true
-                            )
-
-                            // Expandable list
-                            WidgetExpandSection(visible = expanded && allVisibleEvents.size > 1) {
-                                Column {
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    HorizontalDivider(color = Border)
-                                    Spacer(modifier = Modifier.height(12.dp))
-
-                                    allVisibleEvents.drop(1).take(2).forEachIndexed { index, event ->
-                                        if (index > 0) Spacer(modifier = Modifier.height(8.dp))
-                                        EventTile(event = event, featured = false)
-                                    }
-
-                                    if (allVisibleEvents.size > 3) {
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Text(
-                                            text = "See all ${allVisibleEvents.size} events",
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = CalendarAccent,
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .clickable { haptics.tick(); showDetails = true }
-                                                .padding(horizontal = 10.dp, vertical = 6.dp),
-                                        )
-                                    }
-
-                                    WidgetExpandFooter(
-                                        expanded = true,
-                                        onToggle = { expanded = false },
-                                        accentColor = CalendarAccent,
-                                        collapseLabel = "Show less",
-                                    )
-                                }
-                            }
-
-                            if (!expanded && allVisibleEvents.size > 1) {
-                                Spacer(modifier = Modifier.height(6.dp))
-                                WidgetExpandFooter(
-                                    expanded = false,
-                                    onToggle = { expanded = true },
-                                    accentColor = CalendarAccent,
-                                    expandLabel = "${allVisibleEvents.size - 1} more event${if (allVisibleEvents.size - 1 != 1) "s" else ""}",
-                                )
-                            }
-                        }
+                        CalendarContent(
+                            events = allVisibleEvents,
+                            lastUpdatedAt = successState.lastUpdatedAt,
+                            expanded = expanded,
+                            onToggleExpanded = {
+                                expanded = !expanded
+                                if (expanded) haptics.toggleOn() else haptics.toggleOff()
+                            },
+                            onShowDetails = { showDetails = true },
+                        )
                     }
 
                     if (showDetails) {
