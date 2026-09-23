@@ -83,7 +83,7 @@ fun SysopChatPane(
     val nearBottom by rememberNearChatBottom(listState)
 
     // Follow the stream unless the user has deliberately scrolled up to read.
-    LaunchedEffect(state.messages.lastOrNull()?.id, state.streaming, state.loading) {
+    LaunchedEffect(state.messages.lastOrNull()?.id, state.streaming != null, state.loading) {
         if (state.messages.isEmpty() && state.streaming == null) return@LaunchedEffect
         if (!(forceFollow || nearBottom)) return@LaunchedEffect
         delay(16)

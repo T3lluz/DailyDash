@@ -82,6 +82,7 @@ import com.macrotracker.data.hermes.HermesLive
 import com.macrotracker.data.hermes.HermesPermission
 import com.macrotracker.data.hermes.HermesTool
 import com.macrotracker.ui.components.LoadingSpinner
+import com.macrotracker.ui.components.MarkdownText
 import com.macrotracker.ui.components.PillButton
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Background
@@ -141,6 +142,7 @@ fun HermesChatPane(
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsState()
+    val turns by viewModel.turns.collectAsState()
     val haptics = rememberHaptics()
     val listState = rememberLazyListState()
     val density = LocalDensity.current
@@ -156,9 +158,8 @@ fun HermesChatPane(
     var confirmDelete by remember { mutableStateOf<HermesThreadSummary?>(null) }
 
     val nearBottom by rememberNearChatBottom(listState)
-    val liveSignature = state.live?.let { "${it.got.length}:${it.tools.size}:${it.think.length > 0}" }
-
-    LaunchedEffect(state.items.size, liveSignature, state.threadId) {
+    // A new message glides into view; a reply growing in place is kept pinned by FollowChatOnKeyboard.
+    LaunchedEffect(state.items.size, state.live != null, state.threadId) {
         if (state.items.isEmpty() && state.live == null) return@LaunchedEffect
         if (!(forceFollow || nearBottom)) return@LaunchedEffect
         delay(16)
@@ -237,6 +238,7 @@ fun HermesChatPane(
             ) {
                 HermesThreadRail(
                     threads = state.threads,
+                    turns = turns,
                     selectedId = state.threadId,
                     status = state.status,
                     onOpen = { id ->
@@ -270,7 +272,8 @@ fun HermesChatPane(
                     title = state.threadTitle,
                     status = headerStatus(state),
                     working = state.busy,
-                    railAttention = state.threads.any { it.id != state.threadId && (it.busy || it.pending > 0) },
+                    railAttention = state.threads.any { it.id != state.threadId && (it.busy || it.pending > 0) } ||
+                        turns.keys.any { it != state.threadId },
                     pinned = current?.pinned == true,
                     hasThread = state.threadId != null,
                     onOpenRail = {
@@ -676,7 +679,7 @@ private fun AssistantTurn(item: HermesItem.Assistant) {
                         .border(1.dp, Border, BotBubbleShape)
                         .padding(horizontal = 14.dp, vertical = 11.dp),
                 ) {
-                    com.macrotracker.ui.components.MarkdownText(markdown = item.text, fontSize = 14.sp, color = TextPrimary)
+                    MarkdownText(markdown = item.text, fontSize = 14.sp, lineHeight = 20.sp, color = TextPrimary, linkColor = ServerBrand, breaks = true)
                 }
             }
             if (item.changes.isNotEmpty()) {
@@ -1142,7 +1145,15 @@ private fun LiveTurn(live: HermesLive) {
                         .border(1.dp, Border, BotBubbleShape)
                         .padding(horizontal = 14.dp, vertical = 11.dp),
                 ) {
-                    com.macrotracker.ui.components.MarkdownText(markdown = live.got + "▌", fontSize = 14.sp, color = TextPrimary)
+                    MarkdownText(
+                        markdown = live.got,
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp,
+                        color = TextPrimary,
+                        linkColor = ServerBrand,
+                        breaks = true,
+                        streaming = true,
+                    )
                 }
             }
         }

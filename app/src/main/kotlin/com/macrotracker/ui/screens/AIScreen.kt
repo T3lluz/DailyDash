@@ -46,12 +46,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -74,26 +72,21 @@ import com.macrotracker.ui.components.ButtonVariant
 import com.macrotracker.ui.components.MacroButton
 import com.macrotracker.ui.components.MacroTextField
 import com.macrotracker.ui.components.PillButton
-import com.macrotracker.ui.components.ScreenHeader
-import com.macrotracker.ui.components.ScreenHeaderSpacer
 import com.macrotracker.data.chat.ChatBot
 import com.macrotracker.ui.components.SegmentedTab
 import com.macrotracker.ui.components.SegmentedTabs
-import com.macrotracker.ui.screens.ai.BotAvatar
 import com.macrotracker.ui.screens.ai.BotBubble
 import com.macrotracker.ui.screens.ai.BotIdentity
 import com.macrotracker.ui.screens.ai.ChatComposer
 import com.macrotracker.ui.screens.ai.ChatPaneHeader
 import com.macrotracker.ui.screens.ai.ChatPillShape
 import com.macrotracker.ui.screens.ai.FollowChatOnKeyboard
-import com.macrotracker.ui.screens.ai.SysopIdentity
 import com.macrotracker.ui.screens.ai.followChatBottom
 import com.macrotracker.ui.screens.ai.rememberNearChatBottom
 import com.macrotracker.ui.screens.ai.DishSuggestion
 import com.macrotracker.ui.screens.ai.SmallActionChip
 import com.macrotracker.ui.screens.ai.SysopChatPane
 import com.macrotracker.ui.screens.ai.HermesChatPane
-import com.macrotracker.ui.screens.ai.HermesIdentity
 import com.macrotracker.ui.viewmodel.HermesViewModel
 import com.macrotracker.ui.screens.ai.TypingBubble
 import com.macrotracker.ui.screens.ai.UserBubble
@@ -122,6 +115,8 @@ import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.TextTertiary
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 private val PortionOptions = listOf(0.5f, 1f, 1.5f, 2f)
 
@@ -188,36 +183,26 @@ fun AIScreen(
             .fillMaxSize()
             .background(Background),
     ) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-            ScreenHeaderSpacer()
-            ScreenHeader(
-                title = "AI",
-                trailing = {
-                    BotAvatar(
-                        identity = when {
-                            selectedTab != ChatBot.SYSOP.id -> ClankerIdentity
-                            usesHermes -> HermesIdentity
-                            else -> SysopIdentity
-                        },
-                        size = 44.dp,
-                        live = false,
-                    )
-                },
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            SegmentedTabs(
-                tabs = listOf(
-                    SegmentedTab(ChatBot.MACROS.id, "Macros", AppIcons.Restaurant, Primary),
-                    SegmentedTab(ChatBot.SYSOP.id, "Tech support", AppIcons.Terminal, ServerBrand),
+        // One slim row instead of a page title: the chats need the height more than the
+        // tab needs its name, which the nav pill already shows.
+        SegmentedTabs(
+            tabs = listOf(
+                SegmentedTab(ChatBot.MACROS.id, "Macros", AppIcons.Restaurant, Primary),
+                SegmentedTab(
+                    ChatBot.SYSOP.id,
+                    if (usesHermes) "Hermes" else "Tech support",
+                    AppIcons.Terminal,
+                    ServerBrand,
                 ),
-                selectedKey = selectedTab,
-                onSelect = {
-                    haptics.tick()
-                    selectedTab = it
-                },
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-        }
+            ),
+            selectedKey = selectedTab,
+            onSelect = {
+                haptics.tick()
+                selectedTab = it
+            },
+            compact = true,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 2.dp),
+        )
 
         Box(modifier = Modifier.weight(1f)) {
             if (selectedTab == ChatBot.SYSOP.id && usesHermes) {

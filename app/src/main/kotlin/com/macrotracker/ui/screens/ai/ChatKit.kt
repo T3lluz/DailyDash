@@ -34,10 +34,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -72,6 +70,13 @@ import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import dev.chrisbanes.haze.HazeState
 import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.lazy.LazyListState
@@ -80,9 +85,10 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.text.style.TextOverflow
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.macrotracker.ui.theme.AppIcons
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 /**
  * Every visual primitive both chat bots share.
@@ -109,21 +115,29 @@ val ChatPillShape = RoundedCornerShape(999.dp)
 internal val ComposerShape = RoundedCornerShape(22.dp)
 private val ComposerSendShape = RoundedCornerShape(999.dp)
 
+/** How much of the newest message may hide under the composer and still count as following along. */
+private const val NEAR_BOTTOM_PX = 160
+
 /** Pill nav = 64dp + 8dp bottom pad; keep a little air above it. */
 internal val PillNavClearance = 80.dp
 
 // ── Scrolling ────────────────────────────────────────────────────────────────
 
-/** Scroll far enough that the newest message's bottom clears the floating composer. */
-suspend fun LazyListState.followChatBottom() {
+/**
+ * Scroll far enough that the newest message's bottom clears the floating composer. A
+ * message already on screen is scrolled by what is left of it, so a reply streaming in
+ * glides instead of jumping to its own top first.
+ */
+suspend fun LazyListState.followChatBottom(animate: Boolean = true) {
     val lastIndex = layoutInfo.totalItemsCount - 1
     if (lastIndex < 0) return
-    // Jump to the last item, then nudge so tall cards aren't clipped by the composer strip.
-    animateScrollToItem(lastIndex)
-    val lastItem = layoutInfo.visibleItemsInfo.lastOrNull() ?: return
+    if (layoutInfo.visibleItemsInfo.none { it.index == lastIndex }) scrollToItem(lastIndex)
+    val lastItem = layoutInfo.visibleItemsInfo.firstOrNull { it.index == lastIndex } ?: return
     val visibleBottom = layoutInfo.viewportEndOffset - layoutInfo.afterContentPadding
     val overflow = (lastItem.offset + lastItem.size) - visibleBottom
-    if (overflow > 0) animateScrollBy(overflow.toFloat())
+    if (overflow > 0) {
+        if (animate) animateScrollBy(overflow.toFloat()) else scrollBy(overflow.toFloat())
+    }
 }
 
 /** True while the newest message is (nearly) in view — i.e. the user is following along. */
@@ -131,31 +145,73 @@ suspend fun LazyListState.followChatBottom() {
 fun rememberNearChatBottom(listState: LazyListState): State<Boolean> = remember(listState) {
     derivedStateOf {
         val info = listState.layoutInfo
-        val lastVisible = info.visibleItemsInfo.lastOrNull() ?: return@derivedStateOf true
         val lastIndex = info.totalItemsCount - 1
-        if (lastIndex < 0) return@derivedStateOf true
-        lastVisible.index >= lastIndex - 1 &&
-            (lastVisible.offset + lastVisible.size) >= (info.viewportEndOffset - 120)
+        if (lastIndex < 0 || info.visibleItemsInfo.isEmpty()) return@derivedStateOf true
+        val visibleBottom = info.viewportEndOffset - info.afterContentPadding
+        // At most a little of the newest message (or, the moment one arrives, of the one
+        // before it) is hidden under the composer.
+        info.visibleItemsInfo.any { item ->
+            item.index >= lastIndex - 1 && (item.offset + item.size) - visibleBottom <= NEAR_BOTTOM_PX
+        }
     }
 }
 
-/** Re-pin the conversation when the keyboard opens or closes and the chat height changes. */
+/**
+ * Keeps the conversation pinned to its newest message while the space around it changes:
+ * the keyboard sliding in or out, the composer growing a line, a reply streaming in. It
+ * reacts to each layout with a plain scroll by what is hidden, never a fresh animation per
+ * frame, so the chat moves with the keyboard instead of stuttering behind it. A message
+ * that has just been added is left to the pane's own gliding follow.
+ */
 @Composable
 fun FollowChatOnKeyboard(listState: LazyListState, shouldFollow: () -> Boolean) {
-    val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
-    LaunchedEffect(imeBottom) {
-        if (shouldFollow()) {
-            delay(16)
-            listState.followChatBottom()
+    val follow by rememberUpdatedState(shouldFollow)
+    LaunchedEffect(listState) {
+        var lastCount = -1
+        snapshotFlow {
+            val info = listState.layoutInfo
+            val count = info.totalItemsCount
+            val last = info.visibleItemsInfo.lastOrNull()?.takeIf { it.index == count - 1 }
+            val hidden = if (last == null) 0 else (last.offset + last.size) - (info.viewportEndOffset - info.afterContentPadding)
+            count to hidden
         }
+            .distinctUntilChanged()
+            .collect { (count, hidden) ->
+                val added = count != lastCount
+                lastCount = count
+                // A finger on the list, or a follow already gliding, has the scroll.
+                if (added || hidden <= 0 || !follow() || listState.isScrollInProgress) return@collect
+                try {
+                    listState.scrollBy(hidden.toFloat())
+                } catch (e: CancellationException) {
+                    // The person grabbed the list mid-pin; keep listening unless this effect is gone.
+                    currentCoroutineContext().ensureActive()
+                }
+            }
     }
+}
+
+/**
+ * How far the floating composer sits above the bottom of its pane. The pane is lifted by
+ * the keyboard (`imePadding`), so with the keyboard up only a small gap is left, and with
+ * it down the composer clears the nav pill. Both ends follow the keyboard frame by frame,
+ * so the composer never jumps when the keyboard starts to open or finishes closing.
+ */
+@Composable
+internal fun composerBottomGap(): Dp {
+    val density = LocalDensity.current
+    val ime = with(density) { WindowInsets.ime.getBottom(density).toDp() }
+    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val clearNav = navBottom + PillNavClearance + LocalNavTabRise.current
+    return (clearNav - ime).coerceAtLeast(10.dp)
 }
 
 // ── Pane header ──────────────────────────────────────────────────────────────
 
 /**
- * The strip above each conversation: a live status line, then that bot's actions.
- * Both panes use it so switching tabs never shifts the chat up or down.
+ * The strip above each conversation: a live status line on the left, that bot's actions
+ * on the right, in one row so the chat keeps the height. Both phone panes use it, so
+ * switching tabs never shifts the chat up or down.
  */
 @Composable
 fun ChatPaneHeader(
@@ -164,26 +220,27 @@ fun ChatPaneHeader(
     accent: Color,
     actions: @Composable RowScope.() -> Unit,
 ) {
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp),
+            .padding(start = 16.dp, end = 12.dp, top = 6.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            ChatStatusDot(active = active, accent = accent)
-            Spacer(modifier = Modifier.width(7.dp))
-            Text(
-                text = status,
-                fontSize = 14.sp,
-                color = TextSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
+        ChatStatusDot(active = active, accent = accent)
+        Spacer(modifier = Modifier.width(7.dp))
+        Text(
+            text = status,
+            fontSize = 12.sp,
+            lineHeight = 15.sp,
+            color = TextSecondary,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Spacer(modifier = Modifier.width(8.dp))
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(top = 10.dp),
             content = actions,
         )
     }
@@ -297,9 +354,13 @@ fun BotBubble(
                     Text(text = text, color = Error, fontSize = 14.sp, lineHeight = 21.sp)
                 } else {
                     MarkdownText(
-                        markdown = if (streaming) "$text▌" else text,
+                        markdown = text,
                         fontSize = 14.sp,
+                        lineHeight = 20.sp,
                         color = TextPrimary,
+                        linkColor = identity.accent,
+                        breaks = true,
+                        streaming = streaming,
                     )
                 }
             }
@@ -447,10 +508,7 @@ fun ChatComposer(
     hazeState: HazeState?,
     leading: (@Composable () -> Unit)? = null,
 ) {
-    val density = LocalDensity.current
-    val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val imeOpen = WindowInsets.ime.getBottom(density) > 0
-    val bottomPad = if (imeOpen) 10.dp else navBottom + PillNavClearance + LocalNavTabRise.current
+    val bottomPad = composerBottomGap()
     val canSend = enabled && value.isNotBlank()
     val sendBackground by animateColorAsState(
         targetValue = if (canSend) accent else Border,
