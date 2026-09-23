@@ -182,7 +182,7 @@ fun PermissionsScreen(onContinue: () -> Unit) {
             )
             Spacer(modifier = Modifier.height(12.dp))
             MacroButton(
-                text = "Grant All Permissions",
+                text = "Grant all permissions",
                 onClick = { multiLauncher.launch(permissionsToRequest) },
                 variant = ButtonVariant.PRIMARY,
                 modifier = Modifier.fillMaxWidth(),
@@ -278,8 +278,16 @@ private fun PermissionRow(
         }
         Spacer(modifier = Modifier.width(12.dp))
         Icon(
-            imageVector = if (granted || item.permission == null) AppIcons.CheckCircleFilled else AppIcons.AddCircle,
-            contentDescription = if (granted) "Granted" else "Tap to grant",
+            imageVector = when {
+                granted -> AppIcons.CheckCircleFilled
+                item.permission == null -> AppIcons.Info
+                else -> AppIcons.AddCircle
+            },
+            contentDescription = when {
+                granted -> "Granted"
+                item.permission == null -> "Set up later in Settings"
+                else -> "Tap to grant"
+            },
             tint = when {
                 granted -> Success
                 item.permission == null -> TextSecondary

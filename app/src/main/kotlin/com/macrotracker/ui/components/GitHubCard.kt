@@ -1,8 +1,5 @@
 package com.macrotracker.ui.components
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import android.content.Intent
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -22,6 +19,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -57,13 +55,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
-import kotlinx.coroutines.delay
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -98,7 +94,6 @@ import com.macrotracker.ui.theme.SurfaceElevated
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.HapticHelper
-import com.macrotracker.ui.util.LastUpdatedText
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.util.rememberRelativeTime
 import com.macrotracker.ui.viewmodel.GitHubAuthUiState
@@ -248,81 +243,50 @@ fun GitHubCard(
 
     MacroCard(borderColor = GhAccent.copy(alpha = 0.16f)) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (data?.user?.avatarUrl != null) {
-                    GhAvatar(data.user.avatarUrl, data.user.login, size = 22.dp)
-                } else {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_github_logo),
-                        contentDescription = "GitHub",
-                        tint = TextPrimary,
-                        modifier = Modifier.size(22.dp),
-                    )
-                }
-                Spacer(Modifier.width(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        "GitHub",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary,
-                        letterSpacing = 0.1.sp,
-                    )
-                    Text(
-                        headerSub,
-                        fontSize = 12.sp,
-                        color = TextSecondary,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                LastUpdatedText(
-                    lastUpdatedAt = success?.lastUpdatedAt,
-                    color = TextSecondary,
-                )
-                if (expanded && state !is GitHubUiState.NeedsAuth) {
-                    IconButton(
-                        onClick = { haptics.click(); viewModel.loadDashboard(forceRefresh = true) },
-                        modifier = Modifier.size(36.dp),
-                    ) {
-                        Icon(AppIcons.Refresh, null, tint = TextSecondary, modifier = Modifier.size(16.dp))
+            HubCardHeader(
+                title = "GitHub",
+                subtitle = headerSub,
+                accent = GhAccent,
+                expanded = expanded,
+                onToggleExpanded = {
+                    expanded = !expanded
+                    if (expanded) {
+                        haptics.toggleOn()
+                        if (state is GitHubUiState.NeedsAuth) {
+                            selectedTabName = GhTab.ACCOUNT.name
+                        }
+                    } else {
+                        haptics.toggleOff()
                     }
-                }
-                IconButton(
-                    onClick = {
-                        haptics.tick()
-                        val url = hub?.selectedRepo?.htmlUrl ?: data?.user?.htmlUrl ?: "https://github.com"
-                        context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
-                    },
-                    modifier = Modifier.size(36.dp),
-                ) {
-                    Icon(
-                        AppIcons.ExternalLink,
+                },
+                lastUpdatedAt = success?.lastUpdatedAt,
+                onRefresh = if (state is GitHubUiState.NeedsAuth) null else {
+                    { viewModel.loadDashboard(forceRefresh = true) }
+                },
+                logo = {
+                    if (data?.user?.avatarUrl != null) {
+                        GhAvatar(data.user.avatarUrl, data.user.login, size = 22.dp)
+                    } else {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_github_logo),
+                            contentDescription = "GitHub",
+                            tint = TextPrimary,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                },
+                actions = {
+                    HubHeaderAction(
+                        icon = AppIcons.ExternalLink,
                         contentDescription = "Open GitHub",
                         tint = TextTertiary,
-                        modifier = Modifier.size(16.dp),
+                        onClick = {
+                            val url = hub?.selectedRepo?.htmlUrl ?: data?.user?.htmlUrl ?: "https://github.com"
+                            context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+                        },
                     )
-                }
-                WidgetExpandChevron(
-                    expanded = expanded,
-                    onClick = {
-                        expanded = !expanded
-                        if (expanded) {
-                            haptics.toggleOn()
-                            if (state is GitHubUiState.NeedsAuth) {
-                                selectedTabName = GhTab.ACCOUNT.name
-                            }
-                        } else {
-                            haptics.toggleOff()
-                        }
-                    },
-                    accentColor = GhAccent,
-                )
-            }
+                },
+            )
 
             if (isVisible) {
                 if (!expanded) {
@@ -331,8 +295,13 @@ fun GitHubCard(
                         GitHubUiState.Loading, GitHubUiState.Idle -> GhLoading()
                         GitHubUiState.NeedsAuth -> {
                             if (authState.isAwaitingBrowser) {
-                                GitHubDeviceCodePanel(
+                                DeviceCodePanel(
+                                    service = "GitHub",
                                     userCode = authState.deviceLogin?.userCode,
+                                    activationHint = "Approve DailyDash at github.com/login/device",
+                                    accent = GhAccent,
+                                    codeSurface = GhSurface,
+                                    shape = Sharp,
                                     onOpenActivation = { viewModel.openActivation() },
                                     onCancelLogin = { viewModel.cancelBrowserLogin() },
                                 )
@@ -345,7 +314,11 @@ fun GitHubCard(
                                 }
                             }
                         }
-                        is GitHubUiState.Error -> GhError((state as GitHubUiState.Error).message)
+                        is GitHubUiState.Error -> HubErrorState(
+                            message = (state as GitHubUiState.Error).message,
+                            accent = GhAccent,
+                            onRetry = { viewModel.loadDashboard(forceRefresh = true) },
+                        )
                         is GitHubUiState.Success -> {
                             val currentHub = hub
                             if (currentHub == null) {
@@ -436,9 +409,11 @@ fun GitHubCard(
                         ) { phase ->
                             when (phase) {
                                 0 -> GhLoading()
-                                1 -> GhError(
-                                    (state as? GitHubUiState.Error)?.message
+                                1 -> HubErrorState(
+                                    message = (state as? GitHubUiState.Error)?.message
                                         ?: "Couldn’t load GitHub data",
+                                    accent = GhAccent,
+                                    onRetry = { viewModel.loadDashboard(forceRefresh = true) },
                                 )
                                 2 -> AccountTab(
                                     snapshot = null,
@@ -488,6 +463,8 @@ fun GitHubCard(
                                                     selectedFullName = currentHub.selectedFullName,
                                                     focus = currentHub.focus,
                                                     focusLoading = repoFocusState is GitHubRepoFocusUiState.Loading,
+                                                    focusError = (repoFocusState as? GitHubRepoFocusUiState.Error)?.message,
+                                                    onRetryFocus = { viewModel.loadRepoFocus(currentHub.selectedFullName, forceRefresh = true) },
                                                     onSelectRepo = { viewModel.selectRepo(it) },
                                                     haptics = haptics,
                                                 )
@@ -589,26 +566,7 @@ private fun GhTabChip(
 
 @Composable
 private fun GhLoading() {
-    Box(
-        Modifier.fillMaxWidth().height(56.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        ContentSkeleton(lines = 4, accent = GhHairline, surface = GhSurface)
-    }
-}
-
-@Composable
-private fun GhError(message: String) {
-    Text(
-        message,
-        color = TextSecondary,
-        fontSize = 13.sp,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(Sharp)
-            .background(Error.copy(alpha = 0.08f))
-            .padding(horizontal = 12.dp, vertical = 12.dp),
-    )
+    ContentSkeleton(lines = 4, accent = GhHairline, surface = GhSurface)
 }
 
 @Composable
@@ -1043,7 +1001,8 @@ private fun RecentRepoChip(
             .clip(Pill)
             .background(if (selected) GhAccent.copy(alpha = 0.16f) else GhChip)
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .heightIn(min = 32.dp)
+            .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
@@ -1065,6 +1024,8 @@ private fun RecentRepoChip(
             fontWeight = FontWeight.SemiBold,
             color = TextPrimary,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = 140.dp),
         )
         GhRelative(repo.pushedAt ?: repo.updatedAt)
     }
@@ -1112,9 +1073,12 @@ private fun IssuesTab(
             }
         }
         if (filtered.isEmpty()) {
+            val scope = focusedRepo?.let { "in $it" } ?: "across your repos"
             EmptyHint(
-                if (focusedRepo != null) "No open issues in $focusedRepo"
-                else "No open issues across your repos",
+                when (filter) {
+                    IssueFilter.ALL -> "No open issues $scope"
+                    IssueFilter.ASSIGNED -> "No open issues assigned to you $scope"
+                },
             )
         } else {
             WidgetScrollBox(
@@ -1169,9 +1133,13 @@ private fun PullsTab(
             }
         }
         if (filtered.isEmpty()) {
+            val scope = focusedRepo?.let { "in $it" } ?: "across your repos"
             EmptyHint(
-                if (focusedRepo != null) "No open pull requests in $focusedRepo"
-                else "No open pull requests across your repos",
+                when (filter) {
+                    PrFilter.ALL -> "No open pull requests $scope"
+                    PrFilter.MINE -> "You have no open pull requests $scope"
+                    PrFilter.REVIEW -> "No reviews waiting on you $scope"
+                },
             )
         } else {
             WidgetScrollBox(
@@ -1217,6 +1185,8 @@ private fun ReposTab(
     selectedFullName: String,
     focus: GitHubRepoFocus?,
     focusLoading: Boolean,
+    focusError: String?,
+    onRetryFocus: () -> Unit,
     onSelectRepo: (String) -> Unit,
     haptics: HapticHelper,
 ) {
@@ -1226,6 +1196,8 @@ private fun ReposTab(
             repo = selected,
             focus = focus,
             loading = focusLoading,
+            error = focusError,
+            onRetry = onRetryFocus,
             haptics = haptics,
             onClear = { haptics.tick(); onSelectRepo("") },
         )
@@ -1334,7 +1306,6 @@ private fun RepoPicker(
     selectedFullName: String,
     onSelect: (String) -> Unit,
     compact: Boolean = false,
-    compactMeta: String? = null,
 ) {
     var open by rememberSaveable(compact) { mutableStateOf(false) }
     val selected = repos.firstOrNull { it.fullName.equals(selectedFullName, ignoreCase = true) }
@@ -1368,16 +1339,6 @@ private fun RepoPicker(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                if (!compactMeta.isNullOrBlank()) {
-                    Text(
-                        compactMeta,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = TextSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
             } else {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -1503,6 +1464,8 @@ private fun RepoDetail(
     repo: GitHubRepo,
     focus: GitHubRepoFocus?,
     loading: Boolean,
+    error: String?,
+    onRetry: () -> Unit,
     haptics: HapticHelper,
     onClear: () -> Unit,
 ) {
@@ -1582,6 +1545,8 @@ private fun RepoDetail(
 
         if (loading && focus == null) {
             GhLoading()
+        } else if (error != null && focus == null) {
+            HubErrorState(message = error, accent = GhAccent, onRetry = onRetry)
         }
 
         if (commits.isNotEmpty()) {
@@ -1602,7 +1567,7 @@ private fun RepoDetail(
         if (runs.isNotEmpty()) {
             SectionLabel("ACTIONS")
             WidgetScrollBox(
-                maxHeight = 180.dp,
+                maxHeight = 200.dp,
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 runs.take(8).forEach { run ->
@@ -1681,6 +1646,7 @@ private fun CommitRow(commit: GitHubCommit, onClick: () -> Unit) {
                 color = TextSecondary,
                 fontFamily = FontFamily.Monospace,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         GhRelative(commit.committedAt)
@@ -1716,6 +1682,7 @@ private fun WorkflowRow(run: GitHubWorkflowRun, onClick: () -> Unit) {
                 fontSize = 11.sp,
                 color = TextSecondary,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         StatusTag(key.uppercase().take(8), statusColor(key))
@@ -1811,10 +1778,7 @@ private fun AccountTab(
                     onConnect()
                 }
             },
-            onDisconnect = {
-                haptics.reject()
-                onDisconnect()
-            },
+            onDisconnect = onDisconnect,
             onCancelLogin = onCancelLogin,
             onOpenActivation = onOpenActivation,
         )
@@ -1840,8 +1804,13 @@ private fun GitHubAccountActions(
 ) {
     when {
         authState.isAwaitingBrowser -> {
-            GitHubDeviceCodePanel(
+            DeviceCodePanel(
+                service = "GitHub",
                 userCode = authState.deviceLogin?.userCode,
+                activationHint = "Approve DailyDash at github.com/login/device",
+                accent = GhAccent,
+                codeSurface = GhSurface,
+                shape = Sharp,
                 onOpenActivation = onOpenActivation,
                 onCancelLogin = onCancelLogin,
             )
@@ -1881,129 +1850,6 @@ private fun GitHubAccountActions(
                     if (authState.isBusy) "Connecting…" else "Connect GitHub",
                     fontSize = 13.sp,
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun GitHubDeviceCodePanel(
-    userCode: String?,
-    onOpenActivation: () -> Unit,
-    onCancelLogin: () -> Unit,
-) {
-    val haptics = rememberHaptics()
-    val context = LocalContext.current
-    var copied by remember { mutableStateOf(false) }
-    val code = userCode?.takeIf { it.isNotBlank() }
-
-    fun copyCode(fromUser: Boolean = false) {
-        val value = code ?: return
-        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText("GitHub code", value))
-        copied = true
-        if (fromUser) haptics.confirm()
-    }
-
-    LaunchedEffect(code) {
-        if (code != null) copyCode(fromUser = false)
-    }
-    LaunchedEffect(copied, code) {
-        if (copied) {
-            delay(2500)
-            copied = false
-        }
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(Sharp)
-            .background(GhAccent.copy(alpha = 0.08f))
-            .border(1.dp, GhAccent.copy(alpha = 0.35f), Sharp)
-            .padding(14.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            "Enter this code on GitHub",
-            fontSize = 12.sp,
-            color = TextSecondary,
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(
-            modifier = Modifier
-                .clip(Sharp)
-                .background(GhSurface)
-                .clickable(enabled = code != null, onClick = { copyCode(fromUser = true) })
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Text(
-                code ?: "····",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary,
-                letterSpacing = 1.5.sp,
-                fontFamily = FontFamily.Monospace,
-            )
-            Icon(
-                imageVector = if (copied) AppIcons.Check else AppIcons.Copy,
-                contentDescription = if (copied) "Copied" else "Copy code",
-                tint = if (copied) GhOpen else GhAccent,
-                modifier = Modifier.size(18.dp),
-            )
-        }
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            if (copied) "Copied to clipboard" else "Copied automatically · tap to copy again",
-            fontSize = 11.sp,
-            color = if (copied) GhOpen else TextSecondary,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(modifier = Modifier.height(10.dp))
-        Text(
-            "Approve DailyDash at github.com/login/device",
-            fontSize = 11.sp,
-            color = TextSecondary,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Button(
-                onClick = {
-                    haptics.click()
-                    onOpenActivation()
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = GhAccent),
-                shape = Sharp,
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-            ) {
-                Icon(
-                    AppIcons.ExternalLink,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Open GitHub", fontSize = 13.sp)
-            }
-            Button(
-                onClick = { copyCode(fromUser = true) },
-                enabled = code != null,
-                colors = ButtonDefaults.buttonColors(containerColor = GhChip, contentColor = TextPrimary),
-                shape = Sharp,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            ) {
-                Icon(
-                    if (copied) AppIcons.Check else AppIcons.Copy,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(if (copied) "Copied" else "Copy", fontSize = 13.sp)
-            }
-            TextButton(onClick = { haptics.tick(); onCancelLogin() }) {
-                Text("Cancel", color = TextSecondary, fontSize = 13.sp)
             }
         }
     }
@@ -2105,7 +1951,14 @@ private fun PullRow(pr: GitHubPullRequest, onClick: () -> Unit) {
         ) {
             RepoTag(pr.repoFullName)
             GhAvatar(pr.userAvatarUrl, pr.userLogin, size = 14.dp)
-            Text(pr.userLogin, fontSize = 11.sp, color = TextSecondary, maxLines = 1)
+            Text(
+                pr.userLogin,
+                fontSize = 11.sp,
+                color = TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 96.dp),
+            )
             Spacer(Modifier.weight(1f))
             pr.labels.take(2).forEach { LabelChip(it) }
             GhRelative(pr.updatedAt)
@@ -2180,16 +2033,17 @@ private fun RepoRow(repo: GitHubRepo, onClick: () -> Unit) {
             if (repo.isPrivate) {
                 Icon(AppIcons.Lock, null, tint = GhDraft, modifier = Modifier.size(13.dp))
             }
-            Icon(
-                AppIcons.ExternalLink,
-                contentDescription = "Open on GitHub",
-                tint = TextTertiary,
-                modifier = Modifier
-                    .size(16.dp)
-                    .clickable {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, repo.htmlUrl.toUri()))
-                    },
-            )
+            IconButton(
+                onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, repo.htmlUrl.toUri())) },
+                modifier = Modifier.size(36.dp),
+            ) {
+                Icon(
+                    AppIcons.ExternalLink,
+                    contentDescription = "Open on GitHub",
+                    tint = TextTertiary,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
         }
         repo.description?.takeIf { it.isNotBlank() }?.let {
             Text(
@@ -2259,6 +2113,8 @@ private fun MetaChip(
             fontWeight = FontWeight.SemiBold,
             color = TextPrimary,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = 160.dp),
         )
     }
 }
@@ -2284,17 +2140,17 @@ private fun FilterChip(
 ) {
     val bg = if (active) activeColor.copy(alpha = 0.18f) else GhChip
     val fg = if (active) activeColor else TextSecondary
-    Text(
-        label,
-        fontSize = 11.sp,
-        fontWeight = FontWeight.SemiBold,
-        color = fg,
+    Box(
         modifier = Modifier
+            .heightIn(min = 32.dp)
             .clip(Pill)
             .background(bg)
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 5.dp),
-    )
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = fg, maxLines = 1)
+    }
 }
 
 @Composable
@@ -2329,6 +2185,7 @@ private fun StatusTag(text: String, color: Color) {
             .background(color.copy(alpha = 0.16f))
             .padding(horizontal = 7.dp, vertical = 2.dp),
         maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
     )
 }
 

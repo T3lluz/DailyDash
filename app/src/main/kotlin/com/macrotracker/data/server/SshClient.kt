@@ -130,7 +130,7 @@ class SshClient @Inject constructor(
             if (secret.isBlank()) {
                 throw ServerException(ServerError.AuthFailed("No password saved for this server"))
             }
-            session.setPassword(secret)
+            session.setPassword(secret.toByteArray(Charsets.UTF_8))
         }
         session.setConfig("StrictHostKeyChecking", "ask")
         session.setConfig(

@@ -119,10 +119,6 @@ class NutritionAiRepository @Inject constructor(
         return parseNutritionEstimate(responseText, "Meal photo")
     }
 
-    // ─── Scan image for nutrition label ───────────────────────────────────────
-    suspend fun analyzeImageWithGemini(base64Image: String): ScanResult =
-        analyzeNutritionLabelImage(base64Image)
-
     suspend fun analyzeNutritionLabelImage(base64Image: String): ScanResult {
         val auth = requireAuth()
 

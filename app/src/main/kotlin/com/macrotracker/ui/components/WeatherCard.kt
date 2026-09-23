@@ -200,7 +200,7 @@ fun WeatherCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 6.dp),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = MacroCardShape,
                     colors = CardDefaults.cardColors(containerColor = Color.Transparent),
                     border = BorderStroke(1.dp, Border),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
@@ -222,7 +222,7 @@ fun WeatherCard(
                                 // Left: title + location stacked, timestamp below
                                 Column(modifier = Modifier.weight(1f)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text("Weather", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                        CardTitle("Weather")
                                         if (weather.locationName.isNotBlank()) {
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Icon(
@@ -303,14 +303,20 @@ fun WeatherCard(
                                     tint = Color.Unspecified
                                 )
                                 Spacer(Modifier.width(16.dp))
-                                Column {
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         WeatherUnits.formatTemp(weather.temperature, tempUnit),
                                         fontSize = 36.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = TextPrimary,
                                     )
-                                    Text(weather.description, fontSize = 15.sp, color = TextPrimary)
+                                    Text(
+                                        weather.description,
+                                        fontSize = 15.sp,
+                                        color = TextPrimary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
                                     weather.feelsLike?.let { feels ->
                                         Text(
                                             "Feels like ${WeatherUnits.formatTempValue(feels, tempUnit)}",
@@ -320,7 +326,7 @@ fun WeatherCard(
                                         )
                                     }
                                 }
-                                Spacer(modifier = Modifier.weight(1f))
+                                Spacer(modifier = Modifier.width(8.dp))
                                 WeatherMetricChip(
                                     iconRes = R.drawable.ic_weather_wind,
                                     label = WeatherUnits.formatWind(weather.windSpeed, windUnit),
@@ -334,13 +340,13 @@ fun WeatherCard(
                                     accent = accent,
                                     tempUnit = tempUnit,
                                     windUnit = windUnit,
-                                    onCollapse = { expanded = false; haptics.toggleOff() },
+                                    onCollapse = { expanded = false },
                                 )
                             }
                             if (!expanded) {
                                 WidgetExpandFooter(
                                     expanded = false,
-                                    onToggle = { expanded = true; haptics.toggleOn() },
+                                    onToggle = { expanded = true },
                                     accentColor = TextPrimary,
                                     expandLabel = "Forecast",
                                 )
@@ -352,127 +358,37 @@ fun WeatherCard(
             }
 
             WeatherStateKey.PERMISSION -> {
-                MacroCard {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "Weather",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary
-                            )
-                            Text(
-                                "Allow location access to see weather",
-                                fontSize = 13.sp,
-                                color = TextSecondary,
-                                modifier = Modifier.padding(top = 2.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable(onClick = onRequestPermission)
-                                .background(LocationAccent.copy(alpha = 0.1f))
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = AppIcons.MapPin,
-                                contentDescription = null,
-                                tint = LocationAccent,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                "Enable",
-                                color = LocationAccent,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
-                            )
-                        }
-                    }
-                }
+                WidgetPromptCard(
+                    title = "Weather",
+                    message = "Allow location access to see weather",
+                    actionLabel = "Enable",
+                    actionIcon = AppIcons.MapPin,
+                    accent = LocationAccent,
+                    onAction = onRequestPermission,
+                )
             }
 
             WeatherStateKey.APPROXIMATE -> {
-                MacroCard {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "Weather",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary,
-                            )
-                            Text(
-                                "Using approximate location — enable precise location for accurate weather",
-                                fontSize = 13.sp,
-                                color = TextSecondary,
-                                modifier = Modifier.padding(top = 2.dp),
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Row(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable(onClick = onRequestPreciseLocation)
-                                .background(LocationAccent.copy(alpha = 0.1f))
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                imageVector = AppIcons.MapPin,
-                                contentDescription = null,
-                                tint = LocationAccent,
-                                modifier = Modifier.size(16.dp),
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                "Precise",
-                                color = LocationAccent,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp,
-                            )
-                        }
-                    }
-                }
+                WidgetPromptCard(
+                    title = "Weather",
+                    message = "Using approximate location — enable precise location for accurate weather",
+                    actionLabel = "Precise",
+                    actionIcon = AppIcons.MapPin,
+                    accent = LocationAccent,
+                    onAction = onRequestPreciseLocation,
+                )
             }
 
             WeatherStateKey.ERROR -> {
                 val errorState = currentState as? WeatherUiState.Error
-                MacroCard {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Icon(AppIcons.MapPinOff, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Column {
-                                Text("Weather", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                                Text(text = errorState?.message ?: "", fontSize = 12.sp, color = TextSecondary)
-                            }
-                        }
-                        MacroButton(text = "Retry", onClick = onRetry, variant = ButtonVariant.SECONDARY)
-                    }
-                }
+                WidgetPromptCard(
+                    title = "Weather",
+                    message = errorState?.message ?: "Couldn't load the forecast",
+                    actionLabel = "Retry",
+                    actionIcon = AppIcons.Refresh,
+                    accent = Primary,
+                    onAction = onRetry,
+                )
             }
         }
     }
@@ -1254,6 +1170,7 @@ private fun DayStatPill(
                 color = TextTertiary,
                 letterSpacing = 0.3.sp,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         Spacer(modifier = Modifier.height(3.dp))
@@ -1263,6 +1180,7 @@ private fun DayStatPill(
             fontWeight = FontWeight.SemiBold,
             color = TextPrimary,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -1270,7 +1188,7 @@ private fun DayStatPill(
 @Composable
 private fun WeatherMetricChip(
     label: String,
-    iconRes: Int? = null,
+    iconRes: Int,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -1279,15 +1197,13 @@ private fun WeatherMetricChip(
             .background(Color.White.copy(alpha = 0.12f), RoundedCornerShape(999.dp))
             .padding(horizontal = 8.dp, vertical = 4.dp),
     ) {
-        if (iconRes != null) {
-            Icon(
-                painter = painterResource(iconRes),
-                contentDescription = null,
-                tint = TextPrimary,
-                modifier = Modifier.size(14.dp),
-            )
-        }
-        Text(label, fontSize = 12.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
+        Icon(
+            painter = painterResource(iconRes),
+            contentDescription = null,
+            tint = TextPrimary,
+            modifier = Modifier.size(14.dp),
+        )
+        Text(label, fontSize = 12.sp, color = TextPrimary, fontWeight = FontWeight.Medium, maxLines = 1)
     }
 }
 

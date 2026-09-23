@@ -15,17 +15,18 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
-data class CalendarInfo(
-    val id: Long,
-    val name: String,
-    val color: Int,
-    val accountName: String
-)
+/**
+ * Wall-clock time of a calendar instance boundary. The provider stores all-day events at
+ * UTC midnight, so reading them in the device zone moves them a day early west of UTC.
+ */
+fun calendarLocalDateTime(epochMillis: Long, allDay: Boolean, zone: ZoneId): LocalDateTime =
+    LocalDateTime.ofInstant(Instant.ofEpochMilli(epochMillis), if (allDay) ZoneOffset.UTC else zone)
 
 data class CalendarEvent(
     val id: Long,
@@ -113,49 +114,6 @@ class CalendarRepository @Inject constructor(
     }
 
     /**
-     * Get all available calendars on the device.
-     */
-    suspend fun getAvailableCalendars(): List<CalendarInfo> = withContext(Dispatchers.IO) {
-        if (!hasPermission()) return@withContext emptyList()
-
-        val projection = arrayOf(
-            CalendarContract.Calendars._ID,
-            CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,
-            CalendarContract.Calendars.CALENDAR_COLOR,
-            CalendarContract.Calendars.ACCOUNT_NAME
-        )
-
-        val calendars = mutableListOf<CalendarInfo>()
-        var cursor: Cursor? = null
-        try {
-            cursor = context.contentResolver.query(
-                CalendarContract.Calendars.CONTENT_URI,
-                projection,
-                null,
-                null,
-                "${CalendarContract.Calendars.CALENDAR_DISPLAY_NAME} ASC"
-            )
-            cursor?.let {
-                while (it.moveToNext()) {
-                    calendars.add(
-                        CalendarInfo(
-                            id = it.getLong(0),
-                            name = it.getString(1) ?: "Unknown",
-                            color = it.getInt(2),
-                            accountName = it.getString(3) ?: ""
-                        )
-                    )
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to query calendars", e)
-        } finally {
-            cursor?.close()
-        }
-        calendars
-    }
-
-    /**
      * Read calendar events for today and optionally the next [extraDays] days.
      * Optionally filter by [calendarIds].
      */
@@ -231,8 +189,10 @@ class CalendarRepository @Inject constructor(
                     val calendarName = it.getString(9) ?: ""
                     val calendarId = it.getLong(10)
 
-                    val startDt = LocalDateTime.ofInstant(Instant.ofEpochMilli(begin), zone)
-                    val endDt = LocalDateTime.ofInstant(Instant.ofEpochMilli(end), zone)
+                    val startDt = calendarLocalDateTime(begin, allDay, zone)
+                    val endDt = calendarLocalDateTime(end, allDay, zone)
+                    // The UTC-based query window also catches yesterday's all-day events east of UTC.
+                    if (allDay && !endDt.toLocalDate().isAfter(LocalDate.now())) continue
 
                     events.add(
                         CalendarEvent(

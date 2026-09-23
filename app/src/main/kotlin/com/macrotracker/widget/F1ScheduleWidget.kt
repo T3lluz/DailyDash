@@ -2,7 +2,6 @@ package com.macrotracker.widget
 
 import android.content.Context
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
@@ -13,7 +12,6 @@ import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
-import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.lazy.items
@@ -40,7 +38,6 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import com.macrotracker.MainActivity
 import java.time.LocalDate
-import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import androidx.glance.ColorFilter
 import com.macrotracker.R
@@ -71,48 +68,12 @@ private fun F1ScheduleRoot(data: F1WidgetData) {
     }
 }
 
-// ——— Header ——————————————————————————————————————————————————————————————————————————————————————————————————————
-@Composable
-private fun ScheduleHeader(title: String, data: F1WidgetData, c: F1Clr, sc: WScale) {
-    Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Box(GlanceModifier.width(3.dp).height(sc.flg.value.dp).cornerRadius(2.dp).background(c.red)) {}
-        Spacer(GlanceModifier.width(sc.spaceSm))
-        Text(title, style = TextStyle(fontWeight = FontWeight.Bold, fontSize = sc.flg, color = c.text), maxLines = 1)
-        Spacer(GlanceModifier.defaultWeight())
-        val statusText = statusTagText(data)
-        if (statusText.isNotBlank() && statusText != "—") {
-            Box(
-                GlanceModifier.cornerRadius(sc.btnCorner)
-                    .background(if (data.isStale) c.cardAlt else c.card)
-                    .padding(horizontal = sc.spaceSm, vertical = 2.dp),
-            ) {
-                Text(statusText, style = TextStyle(fontSize = sc.fxs,
-                    fontWeight = FontWeight.Medium,
-                    color = if (data.isStale) c.gold else c.sub), maxLines = 1)
-            }
-            Spacer(GlanceModifier.width(sc.spaceSm))
-        }
-        Box(
-            GlanceModifier.width(sc.btnSize).height(sc.btnSize).cornerRadius(sc.btnCorner)
-                .background(c.card).clickable(actionRunCallback<RefreshF1WidgetAction>()).padding(sc.btnPad),
-            contentAlignment = Alignment.Center,
-        ) {
-            Image(
-                provider = ImageProvider(R.drawable.ic_refresh),
-                contentDescription = "Refresh",
-                modifier = GlanceModifier.fillMaxSize(),
-                colorFilter = ColorFilter.tint(c.sub),
-            )
-        }
-    }
-}
-
 // ——— FULL —————————————————————————————————————————————————————————————————————————————————————————
 @Composable
 private fun ScheduleFull(d: F1WidgetData, c: F1Clr, sc: WScale) {
     val w = widgetContentWidth(sc)
     Column(GlanceModifier.fillMaxSize()) {
-        ScheduleHeader("Formula 1    ${LocalDate.now().year}", d, c, sc)
+        F1WidgetHeader("Formula 1 · ${LocalDate.now().year}", d, c, sc)
         Spacer(GlanceModifier.height(sc.spaceSm))
         if (d.schedule.isEmpty()) {
             Spacer(GlanceModifier.defaultWeight())
@@ -202,7 +163,7 @@ private fun LastRaceCard(d: F1WidgetData, c: F1Clr, sc: WScale, compact: Boolean
                     Text(d.lastRaceFlag, style = TextStyle(fontSize = sc.iconSm))
                 }
                 Spacer(GlanceModifier.width(sc.spaceSm))
-                Text(cleanRaceName(d.lastRaceName ?: "Last Race").take(if (compact) 18 else 24),
+                Text(cleanRaceName(d.lastRaceName ?: "Last Race").clip(if (compact) 18 else 24),
                     style = TextStyle(fontWeight = FontWeight.Bold, fontSize = sc.fsm, color = c.sub), maxLines = 1)
                 Spacer(GlanceModifier.defaultWeight())
                 Box(GlanceModifier.cornerRadius(3.dp).background(c.pill).padding(horizontal = 4.dp, vertical = 1.dp)) {
@@ -275,7 +236,7 @@ private fun QualiGridCard(d: F1WidgetData, c: F1Clr, sc: WScale, compact: Boolea
                     Text(d.lastRaceFlag, style = TextStyle(fontSize = sc.iconSm))
                 }
                 Spacer(GlanceModifier.width(sc.spaceSm))
-                Text(cleanRaceName(d.lastRaceName ?: "Qualifying").take(18),
+                Text(cleanRaceName(d.lastRaceName ?: "Qualifying").clip(18),
                     style = TextStyle(fontWeight = FontWeight.Bold, fontSize = sc.fsm, color = c.sub), maxLines = 1)
                 Spacer(GlanceModifier.defaultWeight())
                 Box(GlanceModifier.cornerRadius(3.dp).background(c.gold).padding(horizontal = 4.dp, vertical = 1.dp)) {
@@ -365,7 +326,7 @@ private fun HeroCardFull(race: ScheduleRow, d: F1WidgetData, c: F1Clr, sc: WScal
                         }
                         Spacer(GlanceModifier.width(sc.spaceSm))
                         Column(GlanceModifier.defaultWeight()) {
-                            Text(cleanRaceName(race.raceName).take(24),
+                            Text(cleanRaceName(race.raceName).clip(24),
                                 style = TextStyle(fontWeight = FontWeight.Bold, fontSize = 13.sp, color = c.text), maxLines = 1)
                             Text(race.locality.uppercase(),
                                 style = TextStyle(fontWeight = FontWeight.Bold, fontSize = 7.sp, color = c.sub), maxLines = 1)
@@ -416,32 +377,11 @@ private fun HeroSessionChip(session: SessionRow, c: F1Clr, modifier: GlanceModif
         contentAlignment = Alignment.Center,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(abbrevSession(session.label), style = TextStyle(fontWeight = FontWeight.Bold, fontSize = 7.sp, color = fg), maxLines = 1)
+            Text(sessionAbbrev(session.label), style = TextStyle(fontWeight = FontWeight.Bold, fontSize = 7.sp, color = fg), maxLines = 1)
             Spacer(GlanceModifier.width(3.dp))
-            Text(fmtLocalTime(session.date, session.time).ifEmpty { fmtShortDate(session.date) },
+            Text(sessionLocalTime(session.date, session.time).ifEmpty { fmtShortDate(session.date) },
                 style = TextStyle(fontWeight = if (isNext) FontWeight.Bold else FontWeight.Medium, fontSize = 8.sp, color = fg), maxLines = 1)
         }
-    }
-}
-
-// ——— COUNTDOWN BLOCK ——————————————————————————————————————————————————————————————————————————————————————
-@Composable
-private fun CountdownBlock(d: F1WidgetData, c: F1Clr, sc: WScale, compact: Boolean) {
-    val main = when {
-        d.daysUntil > 0 -> d.daysUntil.toString()
-        d.hoursUntil >= 0 -> "${d.hoursUntil}:${d.minutesUntil.toString().padStart(2, '0')}"
-        else -> d.round?.toString() ?: "—"
-    }
-    Box(GlanceModifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(main, style = TextStyle(fontWeight = FontWeight.Bold, fontSize = 28.sp, color = c.text), maxLines = 1)
-    }
-}
-
-// ——— SPRINT BADGE ————————————————————————————————————————————————————————————————————————————————————————
-@Composable
-private fun SprintBadge(c: F1Clr, sc: WScale) {
-    Box(GlanceModifier.cornerRadius(3.dp).background(c.card).padding(horizontal = 5.dp, vertical = 1.dp)) {
-        Text("SPRINT", style = TextStyle(fontWeight = FontWeight.Bold, fontSize = sc.fxs, color = c.text))
     }
 }
 
@@ -504,7 +444,7 @@ private fun RaceRow(
                                 ), maxLines = 1)
                             }
                             Spacer(GlanceModifier.width(6.dp))
-                            Text(cleanRaceName(race.raceName).take(18),
+                            Text(cleanRaceName(race.raceName).clip(18),
                                 style = TextStyle(
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 12.sp, color = textColor,
@@ -514,7 +454,7 @@ private fun RaceRow(
                         Spacer(GlanceModifier.height(3.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (showLocality && race.locality.isNotEmpty()) {
-                                Text(race.locality.uppercase().take(13), style = TextStyle(fontWeight = FontWeight.Bold, fontSize = 7.sp, color = c.sub), maxLines = 1)
+                                Text(race.locality.uppercase().clip(13), style = TextStyle(fontWeight = FontWeight.Bold, fontSize = 7.sp, color = c.sub), maxLines = 1)
                             }
                             if (race.isNext) {
                                 Spacer(GlanceModifier.width(5.dp))
@@ -565,7 +505,7 @@ private fun CalendarSessionLine(
     compact: Boolean,
     modifier: GlanceModifier = GlanceModifier,
 ) {
-    val localT = fmtLocalTime(date, time).ifEmpty { "—" }
+    val localT = sessionLocalTime(date, time).ifEmpty { "—" }
     Box(
         modifier.fillMaxWidth().cornerRadius(5.dp)
             .background(if (highlight) c.red else c.pill)
@@ -585,41 +525,9 @@ private fun CalendarSessionLine(
 }
 
 // ——— HELPERS ——————————————————————————————————————————————————————————————————————————————————————————————
-private fun cleanRaceName(n: String): String {
-    val noPrefix = n.removePrefix("Formula 1 ").trim()
-    return if (noPrefix.startsWith("Grand Prix of ")) {
-        "${noPrefix.removePrefix("Grand Prix of ").trim()} GP"
-    } else {
-        noPrefix.replace("Grand Prix", "GP").trim()
-    }
-}
-
-private fun abbrevSession(label: String): String = when {
-    label.startsWith("Sprint Quali", ignoreCase = true) -> "SQ"
-    label.startsWith("Sprint",       ignoreCase = true) -> "SPR"
-    label.startsWith("Qualifying",   ignoreCase = true) -> "QUALI"
-    label.startsWith("Race",         ignoreCase = true) -> "RACE"
-    label.startsWith("FP",           ignoreCase = true) -> label.take(3).uppercase()
-    else -> label.take(5).uppercase()
-}
-
-private fun fmtLocalTime(dateStr: String?, timeStr: String?): String {
-    if (dateStr == null || timeStr == null) return ""
-    return try {
-        val clean = timeStr.trimEnd('Z')
-        val dt    = java.time.LocalDateTime.parse("${dateStr}T$clean", DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-        dt.atZone(ZoneId.of("UTC")).withZoneSameInstant(ZoneId.systemDefault())
-            .format(DateTimeFormatter.ofPattern("HH:mm"))
-    } catch (_: Exception) { "" }
-}
-
 private fun fmtShortDate(dateStr: String?): String {
     if (dateStr == null) return "—"
     return try {
         LocalDate.parse(dateStr).format(DateTimeFormatter.ofPattern("EEE d"))
     } catch (_: Exception) { dateStr.take(5) }
 }
-
-private fun fmtLongDate(dateStr: String): String = try {
-    LocalDate.parse(dateStr).format(DateTimeFormatter.ofPattern("EEE d MMM"))
-} catch (_: Exception) { dateStr }

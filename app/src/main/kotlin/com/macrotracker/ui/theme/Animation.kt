@@ -119,9 +119,6 @@ object MacroMotion {
     fun <T> chartRevealTween(durationMs: Int = 700): FiniteAnimationSpec<T> =
         tween(durationMs, easing = FastOutSlowInEasing)
 
-    /** Stagger delay between chart bars / insight chips (ms). */
-    fun chartStaggerMs(index: Int, stepMs: Int = 45): Int = index * stepMs
-
     /**
      * Splash overlay — the one cinematic sequence in the app, and the only place
      * with bespoke easings. They live here, not at the call site, so
@@ -163,15 +160,6 @@ object MacroMotion {
     val iconSwapTransition: ContentTransform
         get() = (fadeIn(fadeTween(150)) + scaleIn(fadeTween(150))) togetherWith
             fadeOut(fadeTween(100))
-
-    /** Subtle in-card horizontal mode switch (e.g. F1 battle tabs). */
-    fun subtleHorizontalSwitch(toRight: Boolean): ContentTransform {
-        val dir = if (toRight) 1 else -1
-        return (fadeIn(fadeTween(180)) + slideInHorizontally(slideTween(200)) { dir * it / 10 })
-            .togetherWith(
-                fadeOut(fadeTween(120)) + slideOutHorizontally(slideTween(120)) { -dir * it / 10 },
-            )
-    }
 
     /**
      * In-card tab pager (F1 hub). Directional slide + fade.

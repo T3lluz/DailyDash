@@ -16,6 +16,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import com.macrotracker.ui.theme.Error
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.macrotracker.ui.theme.Border
@@ -87,10 +90,13 @@ fun MacroButton(
         ),
         border = BorderStroke(1.dp, if (enabled) borderColor else Border),
     ) {
+        // One line, always: buttons share rows, and a wrapped label makes its button taller than its neighbour.
         Text(
             text = text,
             fontSize = 16.sp,
-            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(vertical = 4.dp),
         )
     }

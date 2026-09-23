@@ -2,7 +2,6 @@ package com.macrotracker.data.twitch
 
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.util.Log
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.content.edit
@@ -98,9 +97,6 @@ class TwitchAuthClient @Inject constructor(
         prefs.getString(KEY_DISPLAY_NAME, null)?.takeIf { it.isNotBlank() } ?: connectedLogin()
     fun connectedUserId(): String? = prefs.getString(KEY_USER_ID, null)?.takeIf { it.isNotBlank() }
 
-    /** Kept for MainActivity deep-link stubs; Device Code Flow does not use redirects. */
-    fun isTwitchRedirect(uri: Uri?): Boolean = false
-
     /**
      * Starts Device Code login: shows a code, opens twitch.tv/activate, polls until done.
      */
@@ -165,11 +161,6 @@ class TwitchAuthClient @Inject constructor(
         val uri = _deviceLogin.value?.verificationUri ?: return
         launchCustomTabs(uri)
     }
-
-    /** No-op for Device Code Flow (kept so MainActivity call sites stay simple). */
-    fun handleRedirectIntent(intent: Intent?): Boolean = false
-
-    fun handleRedirectUri(uri: Uri): Boolean = false
 
     /** Returns a valid user access token, refreshing when needed. */
     suspend fun validAccessToken(): String? = withContext(Dispatchers.IO) {

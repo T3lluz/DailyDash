@@ -20,7 +20,6 @@ import androidx.glance.layout.Box
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
-import androidx.glance.layout.fillMaxHeight
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
@@ -108,12 +107,12 @@ private fun HealthContent(d: DashboardWidgetData, c: WidgetClr, sc: WScale) {
             return@Column
         }
 
-        // ── Inline vitals ─────────────────────────────────────────────────
-        val vitals = buildInlineVitals(d, c)
+        // ── Inline vitals (short slots only — taller ones show the grid below) ──
+        val vitals = if (ws == WSize.COMPACT) buildInlineVitals(d, c) else emptyList()
         if (vitals.isNotEmpty()) {
             Spacer(GlanceModifier.height(sc.spaceSm))
             Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                vitals.take(if (ws == WSize.COMPACT) 3 else 2).forEachIndexed { i, v ->
+                vitals.take(if (contentW >= 260.dp) 3 else 2).forEachIndexed { i, v ->
                     if (i > 0) Spacer(GlanceModifier.width(sc.spaceMd))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Image(

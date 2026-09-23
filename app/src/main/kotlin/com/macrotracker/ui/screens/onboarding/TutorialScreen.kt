@@ -71,7 +71,7 @@ private val PAGES = listOf(
         body = "DailyDash is more than a macro tracker — it's a customisable home screen for your daily life. Weather, calendar, sport, news and nutrition all in one glanceable view.",
         tips = listOf(
             "Long-press and drag any home widget to reorder the layout",
-            "Toggle widgets on or off in Widget-Settings",
+            "Tap the pencil on Home to show or hide widgets",
             "Every section updates automatically throughout the day",
         ),
     ),
@@ -80,12 +80,11 @@ private val PAGES = listOf(
         accentColor = androidx.compose.ui.graphics.Color(0xFFF59E0B),
         badge = "Widgets",
         title = "Live Info at a Glance",
-        body = "The home screen pulls in live weather for your location, your Google Calendar events for the day, Formula 1 race schedules and a curated YouTube feed — refreshed automatically.",
+        body = "Home pulls in live weather, today's calendar, Formula 1, your YouTube and Twitch picks, GitHub activity and server health — refreshed automatically.",
         tips = listOf(
             "Weather requires location permission",
-            "Calendar syncs with your Google account",
-            "F1 widget shows the next race countdown",
-            "YouTube card shows latest videos from your picks",
+            "Connect YouTube, Twitch and GitHub in Settings → Connections",
+            "Add Android home-screen widgets from Settings → Widgets",
         ),
     ),
     TutorialPage(
@@ -105,12 +104,12 @@ private val PAGES = listOf(
         icon = AppIcons.Sparkles,
         accentColor = androidx.compose.ui.graphics.Color(0xFFA855F7),
         badge = "AI",
-        title = "Chat With Clanker",
-        body = "On the AI tab, describe a meal like \"large bowl of porridge with banana\" — Clanker returns calories and protein you can portion and log.",
+        title = "Two AI Helpers",
+        body = "On the AI tab, describe a meal like \"large bowl of porridge with banana\" and Clanker returns calories and protein you can portion and log. Switch to Tech support to ask Sysop about your servers.",
         tips = listOf(
             "Type a dish name to get smart add-on suggestions",
-            "Add a Gemini, OpenAI, or OpenRouter API key in Settings → AI",
-            "Confidence shows how sure the estimate is",
+            "Connect Claude, or add a Gemini, OpenAI or OpenRouter key, in Settings → AI",
+            "Tap the sparkle on any server card to ask Sysop about it",
         ),
     ),
     TutorialPage(
@@ -118,7 +117,7 @@ private val PAGES = listOf(
         accentColor = androidx.compose.ui.graphics.Color(0xFFEC4899),
         badge = "Health",
         title = "Optional Health Metrics",
-        body = "Connect Health Connect to layer in steps, heart rate, sleep, workouts, floors climbed and active calories alongside your nutrition data. All stored locally — nothing uploaded.",
+        body = "Connect Health Connect to layer in steps, heart rate, sleep, workouts, floors climbed and active calories alongside your nutrition data. Read-only — DailyDash never writes to Health Connect.",
         tips = listOf(
             "Enable Health Connect in Settings → Connections",
             "Sync Garmin Connect (or another fitness app) to Health Connect to see walks and rides",
@@ -132,9 +131,9 @@ private val PAGES = listOf(
         title = "See Your Trends",
         body = "The Health tab charts your last 7, 14 or 30 days of nutrition. Tap any bar to drill into the individual food logs for that day.",
         tips = listOf(
-            "Set daily goals in Settings → Daily Goals",
-            "Green bars = under goal, red = over goal",
-            "Stats screen shows your last 7 days",
+            "Set daily goals in Settings → Nutrition",
+            "The dashed line marks your average for the range",
+            "Settings → Stats shows your last 7 days",
         ),
     ),
     TutorialPage(
@@ -142,10 +141,10 @@ private val PAGES = listOf(
         accentColor = Secondary,
         badge = "All set!",
         title = "You're Ready to Go 🎉",
-        body = "DailyDash is your one-stop daily companion. Everything runs offline, nothing leaves your device, and you control exactly what you see.",
+        body = "DailyDash is your one-stop daily companion. No account needed, your food logs stay on your device, and you control exactly what you see.",
         tips = listOf(
-           "Add the home-screen widget for instant macro stats",
-            "Tap Help in Settings any time you need a refresher"
+            "Add home-screen widgets for instant macro stats",
+            "Tap Help in Settings any time you need a refresher",
         ),
     ),
 )
@@ -230,7 +229,7 @@ fun TutorialScreen(onFinish: () -> Unit) {
             ) {
                 if (isLastPage) {
                     MacroButton(
-                        text = "Start Dashing 🚀",
+                        text = "Start dashing",
                         onClick = onFinish,
                         variant = ButtonVariant.PRIMARY,
                         modifier = Modifier.fillMaxWidth(),

@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import com.macrotracker.ui.theme.MacroMotion
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,6 +45,7 @@ import com.macrotracker.ui.components.ButtonVariant
 import com.macrotracker.ui.components.MacroButton
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Primary
+import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.Surface
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
@@ -57,7 +59,7 @@ private val features = listOf(
     Feature(
         AppIcons.Dashboard,
         "Your Personal Dashboard",
-        "Weather, Formula 1, YouTube feed, calendar events and health stats — all on one home screen, laid out your way.",
+        "Weather, calendar, Formula 1, YouTube, Twitch, GitHub and health stats — all on one home screen, laid out your way.",
     ),
     Feature(
         AppIcons.Blocks,
@@ -72,7 +74,7 @@ private val features = listOf(
     Feature(
         AppIcons.Sparkles,
         "AI-Powered Throughout",
-        "Chat with Clanker to estimate meal macros, or scan a nutrition label. Pick Gemini, OpenAI, or OpenRouter and add your API key in Settings → AI.",
+        "Chat with Clanker to estimate meal macros, or ask Sysop about your servers. Connect Claude or add a Gemini, OpenAI or OpenRouter key in Settings → AI.",
     ),
 )
 
@@ -196,7 +198,7 @@ fun WelcomeScreen(onGetStarted: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             MacroButton(
-                text = "Get Started →",
+                text = "Get started →",
                 onClick = onGetStarted,
                 variant = ButtonVariant.PRIMARY,
                 modifier = Modifier.fillMaxWidth(),
@@ -218,31 +220,32 @@ private fun FeatureRow(feature: Feature) {
         modifier = Modifier
             .fillMaxWidth()
             .background(Surface, RoundedCornerShape(14.dp))
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .border(1.dp, Border, RoundedCornerShape(14.dp))
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
-                .size(42.dp)
-                .background(Primary.copy(alpha = 0.15f), RoundedCornerShape(12.dp)),
+                .size(44.dp)
+                .background(Primary.copy(alpha = 0.12f), RoundedCornerShape(12.dp)),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = feature.icon,
                 contentDescription = null,
                 tint = Primary,
-                modifier = Modifier.size(21.dp),
+                modifier = Modifier.size(22.dp),
             )
         }
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = feature.title,
-                fontSize = 14.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = TextPrimary,
             )
-            Spacer(modifier = Modifier.height(2.dp))
+            Spacer(modifier = Modifier.height(3.dp))
             Text(
                 text = feature.subtitle,
                 fontSize = 12.sp,

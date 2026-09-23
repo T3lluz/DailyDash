@@ -1,6 +1,5 @@
 package com.macrotracker.ui.screens
 
-import android.Manifest
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -12,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -23,7 +23,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -32,7 +31,7 @@ import androidx.compose.ui.unit.sp
 import com.macrotracker.ui.components.BodyStats
 import com.macrotracker.ui.components.ButtonVariant
 import com.macrotracker.ui.components.CalendarCard
-import com.macrotracker.ui.components.ContentSkeleton
+import com.macrotracker.ui.components.CardHeader
 import com.macrotracker.ui.components.F1Card
 import com.macrotracker.ui.components.GitHubCard
 import com.macrotracker.ui.components.HealthMetricUiState
@@ -51,7 +50,6 @@ import com.macrotracker.ui.components.WidgetPlaceholderCard
 import com.macrotracker.ui.components.TwitchCard
 import com.macrotracker.ui.components.YoutubeCard
 import com.macrotracker.ui.theme.Background
-import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.HealthHeartRate
 import com.macrotracker.ui.theme.HealthMove
@@ -166,7 +164,7 @@ private fun HomeCalendarWidget(
 @Composable
 private fun HomeBodyStatsWidget(viewModel: HomeViewModel, isVisible: Boolean) {
     if (!isVisible) {
-        WidgetPlaceholderCard(title = "Body Stats", icon = AppIcons.HeartPulse)
+        WidgetPlaceholderCard(title = "Body Stats", icon = AppIcons.HeartPulse, accent = HealthHeartRate)
         return
     }
     val healthState by viewModel.healthState.collectAsState()
@@ -174,37 +172,17 @@ private fun HomeBodyStatsWidget(viewModel: HomeViewModel, isVisible: Boolean) {
         is HomeHealthState.Success -> {
             val stats = hs.stats
             MacroCard {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
+                CardHeader(
+                    title = "Body Stats",
+                    icon = AppIcons.HeartPulse,
+                    accent = HealthHeartRate,
+                    subtitle = "via Health Connect",
+                    modifier = Modifier.padding(bottom = 12.dp),
                 ) {
-                    Column {
-                        Text(
-                            "Body Stats",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary,
-                            modifier = Modifier.padding(bottom = 4.dp),
-                        )
-                        Text(
-                            "via Health Connect",
-                            fontSize = 12.sp,
-                            color = TextSecondary,
-                            modifier = Modifier.padding(bottom = 12.dp),
-                        )
-                    }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        LastUpdatedText(
-                            lastUpdatedAt = hs.lastUpdatedAt,
-                            color = TextSecondary,
-                        )
-                        if (hs.isRefreshing) {
-                            LoadingSpinner(size = LoadingSpec.SizeInline)
-                        }
+                    LastUpdatedText(lastUpdatedAt = hs.lastUpdatedAt, color = TextSecondary)
+                    if (hs.isRefreshing) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        LoadingSpinner(size = LoadingSpec.SizeInline)
                     }
                 }
 
@@ -253,15 +231,14 @@ private fun HomeBodyStatsWidget(viewModel: HomeViewModel, isVisible: Boolean) {
             }
         }
         is HomeHealthState.Loading -> {
-            WidgetPlaceholderCard(title = "Body Stats", icon = AppIcons.HeartPulse)
+            WidgetPlaceholderCard(title = "Body Stats", icon = AppIcons.HeartPulse, accent = HealthHeartRate)
         }
         HomeHealthState.Unavailable -> {
             MacroCard {
-                Text(
-                    "Body Stats",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
+                CardHeader(
+                    title = "Body Stats",
+                    icon = AppIcons.HeartPulse,
+                    accent = HealthHeartRate,
                     modifier = Modifier.padding(bottom = 4.dp),
                 )
                 Text(
@@ -287,6 +264,7 @@ private fun HomeProgressWidget(
         WidgetPlaceholderCard(
             title = "Today's Progress",
             icon = AppIcons.Restaurant,
+            accent = Primary,
             minHeight = WidgetPlaceholder.CompactMinHeight,
             lines = 2,
         )
@@ -294,22 +272,13 @@ private fun HomeProgressWidget(
     }
 
     MacroCard {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+        CardHeader(
+            title = "Today's Progress",
+            icon = AppIcons.Restaurant,
+            accent = Primary,
+            modifier = Modifier.padding(bottom = 12.dp),
         ) {
-            Text(
-                "Today's Progress",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary,
-                modifier = Modifier.padding(bottom = 12.dp),
-            )
-            LastUpdatedText(
-                lastUpdatedAt = logsLastUpdatedAt,
-                color = TextSecondary,
-            )
+            LastUpdatedText(lastUpdatedAt = logsLastUpdatedAt, color = TextSecondary)
         }
 
         Row(
@@ -430,11 +399,10 @@ private fun HomeQuickAddWidget(
     val haptics = rememberHaptics()
 
     MacroCard {
-        Text(
-            "Quick Add",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-            color = TextPrimary,
+        CardHeader(
+            title = "Quick Add",
+            icon = AppIcons.Add,
+            accent = Primary,
             modifier = Modifier.padding(bottom = 12.dp),
         )
 
@@ -518,7 +486,7 @@ private fun HomeQuickAddWidget(
                 modifier = Modifier.weight(1f),
             )
             MacroButton(
-                text = "📋 View All Logs",
+                text = "View all logs",
                 onClick = onNavigateToHealth,
                 modifier = Modifier.weight(1f),
                 variant = ButtonVariant.SECONDARY,

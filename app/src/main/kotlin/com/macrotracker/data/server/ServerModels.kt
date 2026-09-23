@@ -254,8 +254,6 @@ data class ServerRuntime(
     val lastErrorMs: Long = 0L,
 ) {
     val isOnline: Boolean get() = connection is ServerConnectionState.Online
-    val worstSeverity: AdvisorySeverity?
-        get() = advisories.maxByOrNull { it.severity.rank }?.severity
 }
 
 /** Alert thresholds. Defaults are deliberately quiet — a NAS at 80% RAM is normal. */

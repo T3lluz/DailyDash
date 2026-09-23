@@ -9,26 +9,24 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.macrotracker.ui.components.CardTitle
 import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.components.MacroProgressBar
-import com.macrotracker.ui.components.ScreenHeader
+import com.macrotracker.ui.components.SubScreenHeader
+import com.macrotracker.ui.components.subScreenBottomPadding
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.Primary
@@ -38,7 +36,6 @@ import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.viewmodel.StatsViewModel
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import com.macrotracker.ui.theme.AppIcons
 
 @Composable
 fun StatsScreen(
@@ -55,27 +52,18 @@ fun StatsScreen(
             .background(Background)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp)
-            .padding(top = 24.dp, bottom = 120.dp),
+            .subScreenBottomPadding(),
     ) {
-        ScreenHeader(
+        SubScreenHeader(
             title = "Stats",
-            leading = {
-                IconButton(onClick = onNavigateBack, modifier = Modifier.size(40.dp)) {
-                    Icon(
-                        AppIcons.ArrowBack,
-                        contentDescription = "Back",
-                        tint = Primary,
-                        modifier = Modifier.size(24.dp),
-                    )
-                }
-            },
+            subtitle = "Calories and protein, day by day",
+            onNavigateBack = onNavigateBack,
         )
-
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         // Last 7 Days Card
         MacroCard(delayMs = 100) {
-            Text("Last 7 Days", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary, modifier = Modifier.padding(bottom = 16.dp))
+            CardTitle("Last 7 Days", modifier = Modifier.padding(bottom = 16.dp))
 
             history.forEachIndexed { index, day ->
                 val hasData = day.totalCalories > 0 || day.totalProtein > 0

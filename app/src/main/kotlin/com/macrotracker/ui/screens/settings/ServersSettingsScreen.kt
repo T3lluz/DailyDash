@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -54,6 +55,8 @@ import com.macrotracker.data.server.ServerAuthMode
 import com.macrotracker.data.server.ServerConnectionState
 import com.macrotracker.data.server.ServerProfile
 import com.macrotracker.data.server.parseServerTarget
+import com.macrotracker.ui.components.SubScreenHeader
+import com.macrotracker.ui.components.subScreenBottomPadding
 import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.components.MacroTextField
 import com.macrotracker.ui.components.ServerTag
@@ -117,11 +120,12 @@ fun ServersSettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Background)
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp)
-            .padding(bottom = 120.dp),
+            .subScreenBottomPadding(),
     ) {
-        SettingsSubScreenHeader(
+        SubScreenHeader(
             title = "Servers",
             subtitle = "SSH monitoring for your own machines",
             onNavigateBack = onNavigateBack,

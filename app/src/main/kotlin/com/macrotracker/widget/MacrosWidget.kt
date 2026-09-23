@@ -84,8 +84,9 @@ private fun MacrosTiny(d: DashboardWidgetData, c: WidgetClr, sc: WScale) {
         Spacer(GlanceModifier.height(sc.spaceSm))
         WidgetProgressBar(pct(d.totalCalories, d.calorieGoal), c.cal, c.track, sc, barW)
         Spacer(GlanceModifier.height(sc.spaceXs))
+        val calLeft = d.calorieGoal - d.totalCalories
         Text(
-            "${(d.calorieGoal - d.totalCalories).coerceAtLeast(0)} kcal left",
+            if (calLeft >= 0) "$calLeft kcal left" else "${-calLeft} kcal over",
             style = TextStyle(fontSize = sc.fxs, color = c.sub),
             maxLines = 1,
         )
@@ -194,16 +195,35 @@ private fun MacrosFull(d: DashboardWidgetData, c: WidgetClr, sc: WScale) {
             ) {
                 Column(GlanceModifier.fillMaxWidth()) {
                     Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        SectionLabel("RECENT MEALS", c.cal, c, sc)
-                        Spacer(GlanceModifier.defaultWeight())
-                        MacroPctPill(0f, c.text, c, sc, "${d.mealCount} meals")
+                        Box(GlanceModifier.defaultWeight()) { SectionLabel("RECENT MEALS", c.cal, c, sc) }
+                        Box(
+                            GlanceModifier.cornerRadius(999.dp).background(c.pill)
+                                .padding(horizontal = sc.spaceSm, vertical = 1.dp),
+                        ) {
+                            Text(
+                                "${d.mealCount} meal${if (d.mealCount != 1) "s" else ""}",
+                                style = TextStyle(fontWeight = FontWeight.Bold, fontSize = sc.fxs, color = c.text),
+                                maxLines = 1,
+                            )
+                        }
                     }
                     d.recentMeals.take(mealRows).forEach { meal ->
+                        val name = meal.substringBeforeLast(" · ")
+                        val kcal = meal.substringAfterLast(" · ", missingDelimiterValue = "")
                         Spacer(GlanceModifier.height(sc.spaceXs))
                         Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Box(GlanceModifier.width(2.dp).height(sc.fsm.value.dp).cornerRadius(1.dp).background(c.cal)) {}
                             Spacer(GlanceModifier.width(sc.spaceSm))
-                            Text(meal, style = TextStyle(fontSize = sc.fsm, color = c.text), maxLines = 1)
+                            Text(
+                                name,
+                                modifier = GlanceModifier.defaultWeight(),
+                                style = TextStyle(fontSize = sc.fsm, color = c.text),
+                                maxLines = 1,
+                            )
+                            if (kcal.isNotBlank()) {
+                                Spacer(GlanceModifier.width(sc.spaceSm))
+                                Text(kcal, style = TextStyle(fontSize = sc.fxs, color = c.sub), maxLines = 1)
+                            }
                         }
                     }
                 }
@@ -249,19 +269,5 @@ private fun MacroHeroCardFull(
             Spacer(GlanceModifier.height(sc.spaceSm))
             WidgetProgressBar(progress, accent, c.track, sc, contentWidth)
         }
-    }
-}
-
-@Composable
-private fun MacroPctPill(progress: Float, accent: androidx.glance.unit.ColorProvider, c: WidgetClr, sc: WScale, text: String? = null) {
-    val pctInt = (progress * 100).toInt()
-    Box(
-        GlanceModifier.cornerRadius(999.dp).background(c.pill)
-            .padding(horizontal = sc.spaceSm, vertical = 1.dp),
-    ) {
-        Text(
-            text ?: "$pctInt%",
-            style = TextStyle(fontWeight = FontWeight.Bold, fontSize = sc.fxs, color = accent),
-        )
     }
 }

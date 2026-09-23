@@ -10,6 +10,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.Composable
 import androidx.glance.GlanceModifier
 import androidx.glance.LocalSize
+import androidx.glance.action.Action
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.action.actionRunCallback
@@ -29,6 +30,7 @@ import androidx.glance.layout.Spacer
 import androidx.glance.layout.width
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
+import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import androidx.glance.Image
@@ -65,12 +67,6 @@ object WidgetSizes {
     /** Standard: all 8 slots from 2×2 to 5×3 */
     val ALL = setOf(SIZE_2x2, SIZE_3x2, SIZE_4x2, SIZE_5x2, SIZE_2x3, SIZE_3x3, SIZE_4x3, SIZE_5x3)
 
-    /** Tiny-capable widgets (2×2 start) */
-    val SMALL_WIDGET = ALL
-    /** Wider-start widgets that look bad at 2×2 — start from 3×2 */
-    val WIDE_WIDGET  = setOf(SIZE_3x2, SIZE_4x2, SIZE_5x2, SIZE_3x3, SIZE_4x3, SIZE_5x3)
-    /** Dashboard: starts fine at 2×2 too */
-    val DASH_WIDGET  = ALL
     /** F1 countdown: 2×2 capable */
     val F1_SMALL     = ALL
     /** F1 schedule/standings: list-heavy, start from 3×2 */
@@ -300,81 +296,80 @@ fun isDataStale(lastUpdatedAt: Long): Boolean {
     return System.currentTimeMillis() - lastUpdatedAt > 30 * 60 * 1000L
 }
 
+/**
+ * A wrap-content text in a RemoteViews row takes all the width it asks for and pushes the
+ * siblings after it off-edge, so names that sit before other content are shortened up front.
+ */
+fun String.clip(max: Int): String = if (length <= max) this else take(max - 1).trimEnd() + "…"
+
 // ─────────────────────────────────────────────────────────────────
 //  STATUS TAG  (matches F1 widget style)
 // ─────────────────────────────────────────────────────────────────
 
 fun widgetStatusText(lastUpdatedAt: Long): String = when {
     lastUpdatedAt <= 0L -> ""
-    isDataStale(lastUpdatedAt) -> "Updated ${relativeTimeLabel(lastUpdatedAt)} · cached"
+    isDataStale(lastUpdatedAt) -> "${relativeTimeLabel(lastUpdatedAt)} · cached"
     else -> relativeTimeLabel(lastUpdatedAt)
 }
 
-@Composable
-fun WidgetStatusTag(lastUpdatedAt: Long, c: WidgetClr, sc: WScale) {
-    val stale = isDataStale(lastUpdatedAt)
-    val text = widgetStatusText(lastUpdatedAt)
-    if (text.isBlank()) return
-    Box(
-        GlanceModifier.cornerRadius(sc.btnCorner)
-            .background(if (stale) c.cardAlt else c.card)
-            .padding(horizontal = sc.spaceSm, vertical = 2.dp),
-    ) {
-        Text(
-            text = text,
-            style = TextStyle(
-                fontSize = sc.fxs,
-                fontWeight = FontWeight.Medium,
-                color = if (stale) c.gold else c.sub,
-            ),
-            maxLines = 1,
-        )
-    }
-}
-
 // ─────────────────────────────────────────────────────────────────
-//  HEADER  (accent bar + title + status tag + refresh button)
+//  HEADER  (accent rule + title + status tag + refresh button)
 // ─────────────────────────────────────────────────────────────────
 
 /**
- * Widget title bar: accent rule, title, freshness tag, refresh button.
+ * The one title bar every home-screen widget uses.
  *
- * At [WSize.TINY] there is no room for the tag *and* the button, so the tag
- * drops and a greeting collapses to the plain title — the button stays, because
- * a widget the user cannot refresh by hand is worse than one without a
- * timestamp.
+ * At [WSize.TINY] there is no room for the status tag *and* the button, so the
+ * tag drops — the button stays, because a widget the user cannot refresh by
+ * hand is worse than one without a timestamp. The title takes the remaining
+ * width and ellipsizes, so a long title can never push the button off-edge.
  */
 @Composable
-fun WidgetHeader(
+fun WidgetTitleBar(
     title: String,
-    c: WidgetClr,
+    accent: ColorProvider,
+    statusText: String,
+    stale: Boolean,
+    refresh: Action,
     sc: WScale,
-    showGreeting: Boolean = false,
-    lastUpdatedAt: Long = 0L,
-    accent: ColorProvider? = null,
 ) {
-    val accentColor = accent ?: c.accent
+    val c = WidgetClr()
     val tiny = wSize() == WSize.TINY
     Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Box(
             GlanceModifier.width(3.dp).height((sc.flg.value + 4).dp)
-                .cornerRadius(2.dp).background(accentColor),
+                .cornerRadius(2.dp).background(accent),
         ) {}
         Spacer(GlanceModifier.width(sc.spaceSm))
         Text(
-            if (showGreeting && !tiny) greeting() else title,
+            title,
+            modifier = GlanceModifier.defaultWeight(),
             style = TextStyle(fontWeight = FontWeight.Bold, fontSize = sc.flg, color = c.text),
             maxLines = 1,
         )
-        Spacer(GlanceModifier.defaultWeight())
-        if (!tiny) {
-            WidgetStatusTag(lastUpdatedAt, c, sc)
+        if (!tiny && statusText.isNotBlank()) {
             Spacer(GlanceModifier.width(sc.spaceSm))
+            Box(
+                GlanceModifier.cornerRadius(sc.btnCorner)
+                    .background(if (stale) c.cardAlt else c.card)
+                    .padding(horizontal = sc.spaceSm, vertical = 2.dp),
+            ) {
+                Text(
+                    text = statusText,
+                    style = TextStyle(
+                        fontSize = sc.fxs,
+                        fontWeight = FontWeight.Medium,
+                        color = if (stale) c.gold else c.sub,
+                    ),
+                    maxLines = 1,
+                )
+            }
         }
+        Spacer(GlanceModifier.width(sc.spaceSm))
         Box(
             GlanceModifier.size(sc.btnSize).cornerRadius(sc.btnCorner)
                 .background(c.card)
-                .clickable(actionRunCallback<RefreshWidgetAction>())
+                .clickable(refresh)
                 .padding(sc.btnPad),
             contentAlignment = Alignment.Center,
         ) {
@@ -388,27 +383,30 @@ fun WidgetHeader(
     }
 }
 
+/** [WidgetTitleBar] for the DailyDash widgets, refreshed through [RefreshWidgetAction]. */
+@Composable
+fun WidgetHeader(
+    title: String,
+    c: WidgetClr,
+    sc: WScale,
+    showGreeting: Boolean = false,
+    lastUpdatedAt: Long = 0L,
+    accent: ColorProvider? = null,
+) {
+    val tiny = wSize() == WSize.TINY
+    WidgetTitleBar(
+        title = if (showGreeting && !tiny) greeting() else title,
+        accent = accent ?: c.accent,
+        statusText = widgetStatusText(lastUpdatedAt),
+        stale = isDataStale(lastUpdatedAt),
+        refresh = actionRunCallback<RefreshWidgetAction>(),
+        sc = sc,
+    )
+}
+
 // ─────────────────────────────────────────────────────────────────
 //  NO DATA PLACEHOLDER
 // ─────────────────────────────────────────────────────────────────
-
-@Composable
-fun NoDataPlaceholder(iconRes: Int, message: String, c: WidgetClr, sc: WScale) {
-    Column(
-        GlanceModifier.fillMaxWidth().fillMaxHeight().padding(sc.pad),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Image(
-            provider = ImageProvider(iconRes),
-            contentDescription = null,
-            modifier = GlanceModifier.size(24.dp),
-            colorFilter = ColorFilter.tint(c.sub)
-        )
-        Spacer(GlanceModifier.height(sc.spaceSm))
-        Text(message, style = TextStyle(fontSize = sc.fsm, color = c.sub), maxLines = 2)
-    }
-}
 
 /**
  * The one non-success panel for every DailyDash widget.
@@ -454,12 +452,21 @@ fun WidgetStateMessage(
         Spacer(GlanceModifier.height(sc.spaceSm))
         Text(
             headline,
-            style = TextStyle(fontSize = sc.fsm, fontWeight = FontWeight.Bold, color = c.text),
+            style = TextStyle(
+                fontSize = sc.fsm,
+                fontWeight = FontWeight.Bold,
+                color = c.text,
+                textAlign = TextAlign.Center,
+            ),
             maxLines = 2,
         )
         if (detail.isNotBlank()) {
             Spacer(GlanceModifier.height(sc.spaceXs))
-            Text(detail, style = TextStyle(fontSize = sc.fxs, color = c.sub), maxLines = 2)
+            Text(
+                detail,
+                style = TextStyle(fontSize = sc.fxs, color = c.sub, textAlign = TextAlign.Center),
+                maxLines = 2,
+            )
         }
     }
 }
@@ -544,8 +551,12 @@ fun EnhancedLabeledBar(
                 )
                 Spacer(GlanceModifier.width(sc.spaceSm))
             }
-            Text(label, style = TextStyle(fontSize = sc.fsm, fontWeight = FontWeight.Bold, color = c.text), maxLines = 1)
-            Spacer(GlanceModifier.defaultWeight())
+            Text(
+                label,
+                modifier = GlanceModifier.defaultWeight(),
+                style = TextStyle(fontSize = sc.fsm, fontWeight = FontWeight.Bold, color = c.text),
+                maxLines = 1,
+            )
             Text(value, style = TextStyle(fontSize = sc.fxs, color = accent), maxLines = 1)
             Spacer(GlanceModifier.width(sc.spaceSm))
             Box(

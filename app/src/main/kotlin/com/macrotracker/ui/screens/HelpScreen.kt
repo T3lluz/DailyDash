@@ -1,6 +1,7 @@
 package com.macrotracker.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -23,11 +24,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.macrotracker.ui.components.ButtonVariant
-import com.macrotracker.ui.components.MacroButton
 import com.macrotracker.ui.components.MacroCard
-import com.macrotracker.ui.components.ScreenHeader
-import com.macrotracker.ui.components.ScreenHeaderSpacer
+import com.macrotracker.ui.components.SubScreenHeader
+import com.macrotracker.ui.components.subScreenBottomPadding
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.Primary
@@ -45,7 +44,7 @@ private val STEPS = listOf(
     HelpStep(
         icon = AppIcons.Home,
         title = "Home Screen — Quick Add",
-        body = "The Home screen shows a live greeting with today's date and all your widgets. Use the Quick Add widget to enter a food name (optional), calories and protein, then tap \"Add\". Tap \"View All Logs\" to jump to the full Health tab.",
+        body = "The Home screen shows a live greeting with today's date and all your widgets. Use the Quick Add widget to enter a food name (optional), calories and protein, then tap \"Add\". Tap \"View all logs\" to jump to the full Health tab.",
     ),
     HelpStep(
         icon = AppIcons.Rocket,
@@ -55,7 +54,7 @@ private val STEPS = listOf(
     HelpStep(
         icon = AppIcons.Camera,
         title = "Scan a Nutrition Label",
-        body = "Go to the AI tab and tap \"Scan label\". Point the camera at any nutrition facts label (or pick a photo from your gallery) and Clanker will read calories and protein for you.",
+        body = "Tap \"Scan label\" on the AI tab or in Add Entry on Health. Point the camera at any nutrition facts label (or pick a photo from your gallery) and Clanker will read calories and protein for you.",
     ),
     HelpStep(
         icon = AppIcons.Sparkles,
@@ -68,14 +67,19 @@ private val STEPS = listOf(
         body = "On the Health tab, Macro Trends charts your last 7, 14 or 30 days. Use the range chips (7d / 14d / 30d) and the Calories / Protein toggle to switch views. Tap any bar to see and manage the individual food logs for that day.",
     ),
     HelpStep(
+        icon = AppIcons.Server,
+        title = "Monitor Your Servers",
+        body = "Add an SSH host in Settings → Connections → Servers. The Servers card on Home opens a live dashboard; tap the sparkle on any section to ask Sysop, the Tech support bot on the AI tab, about it.",
+    ),
+    HelpStep(
         icon = AppIcons.Flag,
         title = "Set Daily Goals",
-        body = "Go to Settings → Nutrition. Enter your calorie and protein targets and tap \"Save Goals\". Progress bars turn red when you exceed a goal.",
+        body = "Go to Settings → Nutrition. Enter your calorie and protein targets and tap \"Save goals\". Progress bars turn red when you exceed a goal.",
     ),
     HelpStep(
         icon = AppIcons.Delete,
         title = "Delete a Log Entry",
-        body = "On the Health tab, click the X on any food entry in the Recent Logs list to delete it. You can also navigate back to a past date in the Health tab and delete entries from there.",
+        body = "On the Health tab, tap the X on any food entry in the Recent Logs list to delete it. You can also navigate back to a past date in the Health tab and delete entries from there.",
     ),
 )
 
@@ -121,15 +125,15 @@ fun HelpScreen(
             .fillMaxSize()
             .background(Background)
             .verticalScroll(rememberScrollState())
-            .padding(16.dp)
-            .padding(bottom = 120.dp),
+            .padding(horizontal = 16.dp)
+            .subScreenBottomPadding(),
     ) {
-        ScreenHeaderSpacer()
-        ScreenHeader(
+        SubScreenHeader(
             title = "Help & How-To",
             subtitle = "Get started in minutes",
+            onNavigateBack = onNavigateBack,
         )
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         // Quick Start card
         MacroCard(delayMs = 60) {
@@ -153,7 +157,7 @@ fun HelpScreen(
                             .size(34.dp)
                             .background(Background, RoundedCornerShape(10.dp)),
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+                        verticalArrangement = Arrangement.Center,
                     ) {
                         Icon(step.icon, contentDescription = null, tint = Primary, modifier = Modifier.size(18.dp))
                     }
@@ -190,16 +194,5 @@ fun HelpScreen(
                 }
             }
         }
-
-        MacroButton(
-            text = "← Back",
-            onClick = onNavigateBack,
-            variant = ButtonVariant.SECONDARY,
-            modifier = Modifier.padding(top = 8.dp),
-        )
     }
 }
-
-
-
-

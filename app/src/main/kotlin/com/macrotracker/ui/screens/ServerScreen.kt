@@ -7,6 +7,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,20 +33,19 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.macrotracker.data.server.AdvisoryCategory
 import com.macrotracker.data.server.ServerAiSection
 import com.macrotracker.data.server.AdvisorySeverity
 import com.macrotracker.data.server.ServerAdvisory
@@ -54,7 +58,7 @@ import com.macrotracker.data.server.formatRate
 import com.macrotracker.data.server.formatUptime
 import com.macrotracker.ui.components.LivePulseDot
 import com.macrotracker.ui.components.MacroCard
-import com.macrotracker.ui.components.ScreenHeader
+import com.macrotracker.ui.components.SubScreenHeader
 import com.macrotracker.ui.components.ServerCoreBars
 import com.macrotracker.ui.components.ServerMeterBar
 import com.macrotracker.ui.components.ServerRingGauge
@@ -97,7 +101,8 @@ import com.macrotracker.ui.theme.TextTertiary
 fun ServerScreen(
     onNavigateBack: () -> Unit,
     onNavigateToSettings: () -> Unit,
-    onAskAi: (String) -> Unit = {},
+    /** Null hides every "ask the AI" affordance (no provider configured). */
+    onAskAi: ((String) -> Unit)? = null,
     initialServerId: String? = null,
     viewModel: ServerViewModel = hiltViewModel(),
 ) {
@@ -121,20 +126,11 @@ fun ServerScreen(
             .fillMaxSize()
             .background(Background),
     ) {
-        ScreenHeader(
+        SubScreenHeader(
             title = "Servers",
             subtitle = runtime?.profile?.displayTarget,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).padding(top = 28.dp),
-            leading = {
-                IconButton(onClick = onNavigateBack, modifier = Modifier.size(40.dp)) {
-                    Icon(
-                        AppIcons.ArrowBack,
-                        contentDescription = "Back",
-                        tint = Primary,
-                        modifier = Modifier.size(24.dp),
-                    )
-                }
-            },
+            onNavigateBack = onNavigateBack,
+            modifier = Modifier.padding(horizontal = 16.dp),
             trailing = {
                 IconButton(onClick = onNavigateToSettings, modifier = Modifier.size(40.dp)) {
                     Icon(
@@ -195,10 +191,12 @@ fun ServerScreen(
 
         // Every card gets the same affordance: bundle this section's live readings
         // and open a Sysop thread on them.
-        val ask: (ServerAiSection) -> () -> Unit = { section ->
-            {
-                haptics.click()
-                viewModel.askAiAbout(runtime.profile.id, section)?.let(onAskAi)
+        val ask: (ServerAiSection) -> (() -> Unit)? = { section ->
+            onAskAi?.let { open ->
+                {
+                    haptics.click()
+                    viewModel.askAiAbout(runtime.profile.id, section)?.let(open)
+                }
             }
         }
 
@@ -206,7 +204,9 @@ fun ServerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 140.dp),
+            contentPadding = PaddingValues(
+                bottom = 24.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+            ),
         ) {
             item(key = "identity") { ServerIdentityCard(runtime, ask(ServerAiSection.OVERVIEW)) }
             if (runtime.advisories.isNotEmpty()) {
@@ -215,9 +215,11 @@ fun ServerScreen(
                         runtime = runtime,
                         onTrustHostKey = { viewModel.trustNewHostKey(runtime.profile.id) },
                         onAskAi = ask(ServerAiSection.ADVISORIES),
-                        onAskAiAbout = { advisory ->
-                            haptics.click()
-                            viewModel.askAiAboutAdvisory(runtime.profile.id, advisory)?.let(onAskAi)
+                        onAskAiAbout = onAskAi?.let { open ->
+                            { advisory ->
+                                haptics.click()
+                                viewModel.askAiAboutAdvisory(runtime.profile.id, advisory)?.let(open)
+                            }
                         },
                     )
                 }
@@ -310,7 +312,7 @@ private fun StatusDot(runtime: ServerRuntime?) {
 @Composable
 private fun SectionHeader(
     title: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     accent: Color,
     trailing: String? = null,
     onAskAi: (() -> Unit)? = null,
@@ -327,7 +329,17 @@ private fun SectionHeader(
             modifier = Modifier.weight(1f),
         )
         if (trailing != null) {
-            StatValue(trailing, color = TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = trailing,
+                color = TextSecondary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 160.dp),
+            )
         }
         if (onAskAi != null) {
             Spacer(modifier = Modifier.width(6.dp))
@@ -343,10 +355,6 @@ private fun ServerIdentityCard(runtime: ServerRuntime, onAskAi: (() -> Unit)? = 
         Row(verticalAlignment = Alignment.CenterVertically) {
             StatusDot(runtime)
             Spacer(modifier = Modifier.width(9.dp))
-            if (onAskAi != null) {
-                AskAiButton(accent = Primary, onClick = onAskAi)
-                Spacer(modifier = Modifier.width(9.dp))
-            }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = runtime.profile.label,
@@ -380,6 +388,10 @@ private fun ServerIdentityCard(runtime: ServerRuntime, onAskAi: (() -> Unit)? = 
                     else -> TextSecondary
                 },
             )
+            if (onAskAi != null) {
+                Spacer(modifier = Modifier.width(6.dp))
+                AskAiButton(accent = Primary, onClick = onAskAi)
+            }
         }
 
         val host = runtime.hostProfile
@@ -766,7 +778,7 @@ private fun ServerStorageCard(runtime: ServerRuntime, onAskAi: (() -> Unit)? = n
 private fun ServerThermalCard(runtime: ServerRuntime, onAskAi: (() -> Unit)? = null) {
     val temps = runtime.snapshot?.temperatures.orEmpty()
     MacroCard(delayMs = 150) {
-        SectionHeader(title = "Thermals", icon = AppIcons.Bolt, accent = ServerThermal)
+        SectionHeader(title = "Thermals", icon = AppIcons.Bolt, accent = ServerThermal, onAskAi = onAskAi)
         temps.take(6).forEach { reading ->
             Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
@@ -798,7 +810,7 @@ private fun ServerThermalCard(runtime: ServerRuntime, onAskAi: (() -> Unit)? = n
 private fun ServerProcessCard(runtime: ServerRuntime, onAskAi: (() -> Unit)? = null) {
     val processes = runtime.snapshot?.processes.orEmpty()
     MacroCard(delayMs = 160) {
-        SectionHeader(title = "Top processes", icon = AppIcons.Cpu, accent = ServerCpu)
+        SectionHeader(title = "Top processes", icon = AppIcons.Cpu, accent = ServerCpu, onAskAi = onAskAi)
         if (processes.isEmpty()) {
             Text(
                 "No process list — this server's ps does not support the portable output format.",

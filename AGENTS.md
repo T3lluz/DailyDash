@@ -25,7 +25,7 @@ GITHUB_TOKEN=...           # optional PAT fallback if OAuth Client ID is not set
 ```
 **GitHub Releases:** `.github/workflows/build-apk.yml` writes the same keys from repo Actions secrets into `local.properties` before `assembleRelease`. Required for Twitch in published APKs: `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`. Required for GitHub Connect in published APKs: Actions secret `GH_OAUTH_CLIENT_ID` (OAuth App Client ID — **not** a PAT and **not** the automatic Actions `GITHUB_TOKEN`; GitHub forbids secrets named `GITHUB_*`). CI writes it as `GITHUB_CLIENT_ID` in `local.properties`. Optional mirrors of local keys: `GEMINI_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `YOUTUBE_API_KEY`. YouTube **Connect Google** does not use BuildConfig keys — it needs Google Cloud Console (YouTube Data API v3 + Android OAuth client for package `com.macrotracker` + `tester.jks` SHA-1); CI already signs releases with `app/tester.jks`.
 
-At runtime, Settings lets the user pick **Gemini**, **OpenAI**, **OpenRouter**, or **Claude**. Gemini / OpenAI / OpenRouter need a pasted API key. Claude can **Connect** with Claude Code's public OAuth (Pro / Max / Team / Enterprise — same login T3 Code uses via `claude auth login`) so usage comes from the Claude.ai subscription; an `sk-ant-…` key remains an optional fallback. For OpenRouter, Settings also shows a curated cheap-model picker with list prices. Stored keys take priority over build-time keys; a Claude OAuth session wins over a stored Anthropic key. `NutritionAiRepository` / `WeatherAiRepository` / widget insights / chat all route through `AiApiClient` based on `SettingsRepository.aiProvider` (`AiCredentialResolver` + `ClaudeAuthClient`).
+At runtime, Settings lets the user pick **Gemini**, **OpenAI**, **OpenRouter**, or **Claude**. Gemini / OpenAI / OpenRouter need a pasted API key. Claude can **Connect** with Claude Code's public OAuth (Pro / Max / Team / Enterprise — same login T3 Code uses via `claude auth login`) so usage comes from the Claude.ai subscription; an `sk-ant-…` key remains an optional fallback. For OpenRouter, Settings also shows a curated cheap-model picker with list prices. Stored keys take priority over build-time keys; a Claude OAuth session wins over a stored Anthropic key. `NutritionAiRepository` / widget insights / chat (`data/chat/AiChatClient`) all route through `AiApiClient` based on `SettingsRepository.aiProvider` (`AiCredentialResolver` + `ClaudeAuthClient`).
 
 ## Architecture Overview
 ```
@@ -40,8 +40,13 @@ com.macrotracker/
                               SettingsRepository (two SharedPrefs: `macro_tracker_settings` +
                               `health_connect_settings`; per-metric health toggles + master toggle
                               + `weatherEnabled`/`calendarEnabled` all as `StateFlow`)
-    remote/                ← Gemini/OpenAI/OpenRouter via OkHttp (`AiApiClient`; NutritionAiRepository, WeatherAiRepository),
-                              WeatherRepository, LocationProvider
+    remote/                ← Gemini/OpenAI/OpenRouter/Claude via OkHttp (`AiApiClient`; NutritionAiRepository),
+                              WeatherRepository (met.no forecast) + ClothingAdvice, LocationProvider
+    chat/                  ← AI tab chat: ChatRepository, AiChatClient, BotPrompts, ServerAiHandoff
+                              (server dashboard → AI tab context hand-off, keyed by seed id)
+    server/                ← server monitor: SSH probes (SshClient/ServerProbe), ServerMonitorService +
+                              ServerNotifier, encrypted ServerStore, ServerAdvisories
+    update/                ← GitHub Releases in-app updater (see "In-app updates")
     health/                ← HealthConnectRepository (read-only; lazy client; PERMISSIONS companion set);
                               reads: Steps, HeartRate, RestingHeartRate, OxygenSaturation,
                               RespiratoryRate, Distance, FloorsClimbed, ActiveCaloriesBurned,
@@ -66,7 +71,9 @@ com.macrotracker/
                               5-min memory + SharedPrefs disk cache; GitHubAuthClient Device Code
                               OAuth (Custom Tabs → github.com/login/device, scopes `repo read:user`);
                               leftover PAT / BuildConfig.GITHUB_TOKEN is an optional fallback
-    calendar/              ← CalendarRepository (READ_CALENDAR permission)
+    calendar/              ← CalendarRepository (READ_CALENDAR permission). All-day instances are stored
+                              at UTC midnight — always convert with `calendarLocalDateTime(millis, allDay, zone)`
+                              (shared with DashboardWidgetDataProvider) so they land on the right day
   di/
     AppModule.kt           ← all @Provides (DB, DAO, OkHttpClient, KtorClient);
                               @Binds abstract modules for F1, YouTube, Twitch, and GitHub interface → impl
@@ -74,6 +81,8 @@ com.macrotracker/
     screens/               ← one file per tab screen (HomeScreen, HealthScreen, AIScreen,
                              SettingsScreen) + sub-screens (StatsScreen, HelpScreen, CameraScanScreen)
                              + onboarding/ (SplashScreen overlay, WelcomeScreen, PermissionsScreen, TutorialScreen)
+                             + ai/ (ChatKit.kt shared chat bubbles/header/composer + IME helpers, SysopChatPane)
+                             + health/ (Health tab sections) + settings/ (category sub-screens)
     viewmodel/             ← one @HiltViewModel per screen; UI state as sealed classes via StateFlow;
                               includes OnboardingViewModel (manages onboardingCompleted + splashShown flags);
                               DashboardViewModel (per-metric Health Connect StateFlows with today/yesterday
@@ -85,29 +94,42 @@ com.macrotracker/
                               GitHubViewModel (account dashboard — consumed by GitHubCard via
                               hiltViewModel());
                               F1UiState.kt / GitHubUiState.kt (dedicated files for sealed UI state)
-navigation/            ← Screen.kt (sealed class, 4 bottom-nav tabs) + OnboardingRoutes (const routes)
-                         + DailyDashNavHost.kt
+    navigation/            ← Screen.kt (sealed class, 4 bottom-nav tabs) + OnboardingRoutes / SettingsRoutes /
+                             SubScreenRoutes (const routes) + DailyDashNavHost.kt + NavigationActions.kt
+                             (`navigateToTab`, `popSubScreen`, `subScreen` destination builder)
     components/            ← shared Composables (MacroCard, PillNavigationBar, DraggableWidgetColumn,
-                              WidgetEditor, WidgetExpandBar, …); DottedFrost.kt holds the
+                              WidgetEditor, WidgetExpandBar, PillButton, …). ScreenHeader.kt: tab
+                              `ScreenHeader`, pushed-screen `SubScreenHeader`, `TabContentBottomPadding`,
+                              `Modifier.subScreenBottomPadding()`. HomeWidgetShell.kt: card chrome shared by
+                              every Home/Health card — `CardHeader`, `HubCardHeader` + `HubHeaderAction`,
+                              `HubErrorState` (message + Retry), `WidgetPromptCard`, `ChannelSheetHeader`,
+                              expand/scroll-box helpers. DeviceCodePanel.kt: GitHub/Twitch device-code
+                              sign-in (copyable code + equal-width Open / Cancel). DottedFrost.kt holds the
                               Cinema-Info glass chrome — use `Modifier.dottedGlass(hazeState, shape)`
                               on any frosted surface above a `hazeSource` (nav pill, AI composer).
                               It stacks two masked haze passes: heavy blur everywhere *except* the
                               dot cores, then a light blur *only* at the cores. `Modifier.dottedFrost()`
                               is just the painted-dot fallback for surfaces with nothing to blur
                               (and for API < 31) — don't reach for it as the effect itself.
-    theme/                 ← Color, Theme, Animation (MacroMotion object — single source for all specs)
+    theme/                 ← Color, Theme, Animation (MacroMotion object — single source for all specs),
+                              AppIcons.kt — the app's only icon set (generated Lucide/Tabler ImageVectors).
+                              The Material icons dependency is gone: never import
+                              `androidx.compose.material.icons`. Text colours use `TextPrimary` /
+                              `TextSecondary` / `TextTertiary`, never `TextSecondary.copy(alpha = …)`
     util/                  ← HapticHelper (Compose-friendly performHapticFeedback wrapper, ui/util/Haptics.kt)
                               + LastUpdatedText composable + rememberRelativeTime (ui/util/LastUpdated.kt)
   widget/                  ← Glance-based home-screen widgets:
                               DashboardWidget, MacrosWidget, HealthWidget, WeatherWidget, CalendarWidget,
                               F1CountdownWidget, F1StandingsWidget, F1ScheduleWidget (+ *Receiver.kt for each);
-                              WidgetComponents.kt (shared Glance composables + WidgetSizes grid constants);
+                              WidgetComponents.kt (shared Glance composables — `WidgetTitleBar`,
+                              `WidgetStateMessage`, `SectionLabel`, `String.clip` — + WidgetSizes grid constants);
                               DashboardWidgetDataProvider (reads DB/Health Connect/Weather directly — no Hilt);
                               F1WidgetDataProvider (15-min memory+disk cache);
                               RefreshWidgetAction / RefreshF1WidgetAction (Glance ActionCallbacks);
                               WidgetUpdater + WidgetRefreshWorker;
                               F1WidgetColors.kt (F1Clr token class + teamColorProvider/podiumColor helpers);
-                              F1WidgetStatus.kt (F1WidgetStatusTag composable + statusTagText/f1WidgetEmptyMessage);
+                              F1WidgetStatus.kt (`F1WidgetHeader` + statusTagText/f1WidgetEmptyMessage);
+                              F1WidgetFormat.kt (race-name / session label + local-time formatting);
                               DashboardWidgetData.kt (DashboardWidgetData snapshot + HourlyForecast + CalendarEvent)
   util/                    ← HapticUtils (raw VibrationEffect-based haptics, used outside Compose)
 ```
@@ -141,7 +163,11 @@ fun loadDataThrottled() {
 ### Navigation
 `DailyDashNavHost` owns all routes. The **`SplashOverlay` is a full-window Compose overlay** placed above the `Scaffold` in `MainScreen` — it is **not a nav destination** and lives in `OnboardingViewModel.splashShown`. The rest of the onboarding flow (`WelcomeScreen`, `PermissionsScreen`, `TutorialScreen`) **are** nav destinations via `OnboardingRoutes.WELCOME/PERMISSIONS/TUTORIAL`. Transitions are defined exclusively in `MacroMotion` (`ui/theme/Animation.kt`); do not hardcode tween/spring values elsewhere.
 
-Sub-screens (`stats`, `help`, `camera_scan`) are composed inside `DailyDashNavHost` with `MacroMotion.subScreenEnter/Exit/PopEnter/PopExit` transitions and are navigated to imperatively from their parent screens (e.g. `SettingsScreen` → `help`, `AIScreen`/`HealthScreen` → `camera_scan`).
+Sub-screens (`SubScreenRoutes.STATS/HELP/WIDGETS/CAMERA_SCAN` and the `SettingsRoutes` categories, including the `servers` dashboard) are registered with the `subScreen(route) { … }` builder from `NavigationActions.kt`, which applies the `MacroMotion.subScreenEnter/Exit/PopEnter/PopExit` transitions. Parent screens push them imperatively (e.g. `SettingsScreen` → `help`, `AIScreen`/`HealthScreen` → `camera_scan`). Every sub-screen uses `SubScreenHeader` and closes with `navController.popSubScreen(entry)` so a double-tapped back arrow can't pop the tab underneath.
+
+**Tab switches must go through `navigateToTab(route)`** (pop to the start destination with `saveState`, `launchSingleTop`, `restoreState`). Never `navigate()` a tab route on top of another tab or a sub-screen — that tab's saved stack then ends in the other tab and the nav pill stops responding. (The one exception is finishing onboarding, which replaces the onboarding stack with Home.) The server dashboard → AI hand-off uses `navigateToTab(Screen.AI.withSeed(id), restoreState = false)` so the seed args beat the AI tab's saved state.
+
+Callers must not add haptics to components that already fire their own: `MacroButton`, `HubHeaderAction`, `HubErrorState`, `WidgetExpandBar`, `DeviceCodePanel`.
 
 ### Home Screen Widgets (draggable)
 Widget order and visibility are persisted as a single colon-and-comma encoded string in SharedPrefs:
@@ -161,7 +187,7 @@ All Glance widgets are refreshed together via `WidgetUpdater.updateAllWidgets(co
 
 `DashboardWidgetDataProvider` reads Room, Health Connect, weather cache, and calendar directly without Hilt (same no-injection pattern as `F1WidgetDataProvider` — use `EntryPointAccessors` when an interface is needed). `WidgetComponents.kt` houses all shared Glance composables and the `WidgetSizes` grid-constant object (cell formula: `74×n − 2 dp`; min 2×2, max 5×3).
 
-F1 widget theming goes through `F1WidgetColors.kt`: instantiate `F1Clr` for the palette, call `teamColorProvider(hex)` to parse a team hex string into a Glance `ColorProvider`, and `podiumColor(position, c)` for gold/silver/bronze medal colours. Status tags (last-updated, stale, syncing) are rendered via `F1WidgetStatus.kt` (`F1WidgetStatusTag`, `statusTagText`, `f1WidgetEmptyMessage`). The dashboard widget snapshot type is `DashboardWidgetData` in `DashboardWidgetData.kt` (also contains `HourlyForecast` and widget-layer `CalendarEvent`).
+F1 widget theming goes through `F1WidgetColors.kt`: instantiate `F1Clr` for the palette, call `teamColorProvider(hex)` to parse a team hex string into a Glance `ColorProvider`, and `podiumColor(position, c)` for gold/silver/bronze medal colours. Every widget header goes through `WidgetTitleBar` (weighted title so the refresh button never falls off-edge); F1 widgets wrap it in `F1WidgetHeader`, which adds the last-updated / stale / syncing tag from `statusTagText`, with `f1WidgetEmptyMessage` for the empty state. Glance text does ellipsize, but a wrap-content `Text` in a `Row` still pushes later siblings off-edge — weight it or `String.clip` it. The dashboard widget snapshot type is `DashboardWidgetData` in `DashboardWidgetData.kt` (also contains `HourlyForecast` and widget-layer `CalendarEvent`).
 
 ### In-app updates (GitHub Releases)
 Sideload/tester path — not Play Core. CI publishes `DailyDash-{versionName}-vc{versionCode}.apk` on master merges. `AppUpdateRepository` polls GitHub while foregrounded; `AppUpdateDialog` downloads + `PackageInstaller` self-updates; `UpdateInstallActivity` relaunches `MainActivity` with `EXTRA_RELAUNCHED_AFTER_UPDATE` / `EXTRA_SHOW_WHATS_NEW`. `PackageReplacedReceiver` posts a tap-to-open notification if relaunch is blocked. Post-update, `WhatsNewDialog` shows once (notes cached at download time, enriched from `/releases`). Soft-snooze is 12h (`Later`); Settings badge deep-links to About + opens the update dialog. Key files: `data/update/*`, `ui/components/AppUpdateDialog.kt`, `WhatsNewDialog.kt`, `AppUpdateViewModel`, `.github/scripts/package-release.sh`.
@@ -214,13 +240,13 @@ Briefly tell the user:
 | OpenF1 | Ktor (`HttpClient`) | Base URL `https://api.openf1.org/v1/`; browser User-Agent set in `AppModule` |
 | YouTube | RSS feed (OkHttp) + Data API v3 OAuth | Manual channels via RSS; Connect Google imports `subscriptions.list` into Watching |
 | Twitch | Helix (OkHttp) + Device Code (Custom Tabs) | `twitch.tv/activate` (no runtime redirect); imports follows; live board (60s cache) |
-| Weather | HTTP (WeatherRepository) | AI summary via Gemini |
+| Weather | OkHttp (`WeatherRepository`) | met.no Locationforecast 2.0 (Yr symbol codes); clothing advice is local (`ClothingAdvice`) |
 | Health Connect | SDK | Read-only; lazy client; gracefully returns null if SDK unavailable |
 | GitHub (home card) | OkHttp (`GitHubRepository` + `GitHubAuthClient`) | Device Code OAuth (Custom Tabs → github.com/login/device); REST `/user`, search issues/PRs `involves:@me`, `/user/repos`, `/users/{login}/events`; scopes `repo read:user` |
 | GitHub Releases | OkHttp (`AppUpdateRepository`) | In-app APK updates + changelog |
 
 ### Compose Strong Skipping
-`composeCompiler { enableStrongSkippingMode = true }` is set in `app/build.gradle.kts`. Composables with unstable parameters will skip recomposition automatically — avoid fighting this with `@Stable`/`@Immutable` unless you observe real correctness issues.
+Strong skipping is the Compose compiler default on Kotlin 2.x, so there is no flag in `app/build.gradle.kts`. Composables with unstable parameters will skip recomposition automatically — avoid fighting this with `@Stable`/`@Immutable` unless you observe real correctness issues.
 
 ## Important Files to Read First
 - `di/AppModule.kt` — understand what is injected and how

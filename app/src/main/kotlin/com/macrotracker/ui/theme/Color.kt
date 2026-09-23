@@ -60,8 +60,6 @@ val GlassDot = Color(0xFFE4E4E4).copy(alpha = 0.07f)
 /** Health activity maps and inset wells — named, not one-off hex. */
 val MapSurface = SurfaceChrome
 val MapWell = Color(0xFF121212)
-val MapStart = Color(0xFF34D399)
-val MapFinish = Color(0xFFFB7185)
 
 /**
  * Health metric accents — one palette for rings, chips, stat cards and charts.
@@ -81,7 +79,6 @@ val HealthDistance = Color(0xFF32ADE6)
 val HealthEnergy = Color(0xFFFFD60A)
 val HealthProtein = Color(0xFF32D74B)
 val HealthActivity = Color(0xFF34D399)
-val HealthRecovery = Color(0xFF26C6DA)
 
 /** Nutrition accents — calories and protein, wherever either is charted. */
 val NutritionCalories = Color(0xFFFF9F43)

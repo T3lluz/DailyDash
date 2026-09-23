@@ -239,11 +239,6 @@ class HealthConnectRepository @Inject constructor(
         }
     }
 
-    suspend fun hasAllPermissions(): Boolean {
-        val granted = getGrantedPermissions()
-        return PERMISSIONS.all { it in granted }
-    }
-
     /**
      * True when at least one Health Connect **data** read permission is granted.
      * READ_EXERCISE_ROUTES alone reads nothing on its own, so it doesn't count —
@@ -256,12 +251,6 @@ class HealthConnectRepository @Inject constructor(
 
     suspend fun hasPermission(permission: String): Boolean {
         return permission in getGrantedPermissions()
-    }
-
-    suspend fun hasPermissions(permissions: Set<String>): Boolean {
-        if (permissions.isEmpty()) return true
-        val granted = getGrantedPermissions()
-        return permissions.all { it in granted }
     }
 
     suspend fun revokeAllPermissions() {

@@ -56,19 +56,14 @@ private fun WeatherRoot(d: DashboardWidgetData) {
             Spacer(GlanceModifier.height(sc.spaceMd))
 
             if (!d.hasWeatherData) {
-                Box(GlanceModifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    // Say *why* there is no forecast — a missing location
-                    // permission is a fixable problem, a failed fetch is not the
-                    // same thing.
-                    WidgetNoData(
-                        R.drawable.ic_weather_cloud_sun,
-                        when (d.weatherState) {
-                            WidgetSourceState.NO_PERMISSION -> "Location not shared\nTap to allow"
-                            WidgetSourceState.ERROR -> "Couldn't load weather\nTap to retry"
-                            else -> "No weather data yet"
-                        },
-                        c,
-                        sc,
+                Box(GlanceModifier.fillMaxSize()) {
+                    WidgetStateMessage(
+                        state = d.weatherState,
+                        subject = if (d.weatherState == WidgetSourceState.NO_PERMISSION) "Location" else "Weather",
+                        iconRes = R.drawable.ic_weather_cloud_sun,
+                        c = c,
+                        sc = sc,
+                        emptyMessage = "No weather data yet",
                     )
                 }
             } else {
@@ -150,7 +145,7 @@ private fun ColumnScope.WeatherDetailsGrid(d: DashboardWidgetData, c: WidgetClr,
             Box(GlanceModifier.defaultWeight().fillMaxHeight()) {
                 MetricItem(
                     label = "WIND",
-                    value = "${d.weatherWindSpeed ?: "--"} m/s",
+                    value = d.weatherWindSpeed?.let { "$it m/s" } ?: "--",
                     icon = R.drawable.ic_wind,
                     c = c, sc = sc
                 )
@@ -159,7 +154,7 @@ private fun ColumnScope.WeatherDetailsGrid(d: DashboardWidgetData, c: WidgetClr,
             Box(GlanceModifier.defaultWeight().fillMaxHeight()) {
                 MetricItem(
                     label = "HUMIDITY",
-                    value = "${d.weatherHumidity ?: "--"}%",
+                    value = d.weatherHumidity?.let { "$it%" } ?: "--",
                     icon = R.drawable.ic_humidity,
                     c = c, sc = sc
                 )
@@ -420,23 +415,5 @@ private fun WeatherHeaderBlock(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun WidgetNoData(iconRes: Int, message: String, c: WidgetClr, sc: WScale) {
-    Column(
-        GlanceModifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Image(
-            provider = ImageProvider(iconRes),
-            contentDescription = null,
-            modifier = GlanceModifier.size(48.dp),
-            colorFilter = ColorFilter.tint(c.sub)
-        )
-        Spacer(GlanceModifier.height(sc.spaceSm))
-        Text(message, style = TextStyle(fontSize = sc.fsm, color = c.sub), maxLines = 1)
     }
 }

@@ -39,6 +39,7 @@ import androidx.health.connect.client.records.SleepSessionRecord
 import com.macrotracker.R
 import com.macrotracker.data.health.HealthStats
 import com.macrotracker.data.local.DailySummary
+import com.macrotracker.ui.components.CardTitle
 import com.macrotracker.ui.components.ContentSkeleton
 import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.components.StatusCopy
@@ -335,12 +336,7 @@ fun DailyHealthSection(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    "Daily Health",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
-                )
+                CardTitle("Daily Health")
                 Text(dateLabel, fontSize = 13.sp, color = TextSecondary)
             }
 
@@ -646,28 +642,4 @@ private fun pct(progress: Float) = (progress.coerceIn(0f, 1f) * 100).roundToInt(
 private fun signedPct(value: Double): String {
     val sign = if (value >= 0) "+" else ""
     return "$sign${String.format(Locale.US, "%.0f", value)}%"
-}
-
-// Back-compat aliases
-@Composable
-fun DailyGoalRings(
-    outerProgress: Float,
-    middleProgress: Float,
-    innerProgress: Float,
-    outerColor: Color,
-    middleColor: Color,
-    innerColor: Color,
-    modifier: Modifier = Modifier,
-) {
-    ConcentricGoalRings(outerProgress, middleProgress, innerProgress, modifier)
-}
-
-@Composable
-fun AppleActivityRings(
-    moveProgress: Float,
-    exerciseProgress: Float,
-    standProgress: Float,
-    modifier: Modifier = Modifier,
-) {
-    ConcentricGoalRings(standProgress, exerciseProgress, moveProgress, modifier)
 }

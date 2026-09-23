@@ -94,7 +94,7 @@ fun ServerCard(
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Servers", color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    CardTitle("Servers")
                     Text(
                         "Add an SSH host to watch it live",
                         color = TextSecondary,
@@ -123,11 +123,8 @@ fun ServerCard(
                 modifier = Modifier.size(20.dp),
             )
             Spacer(modifier = Modifier.width(10.dp))
-            Text(
+            CardTitle(
                 "Servers",
-                color = TextPrimary,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f),
             )
             val criticalCount = runtimes.values.sumOf { runtime ->

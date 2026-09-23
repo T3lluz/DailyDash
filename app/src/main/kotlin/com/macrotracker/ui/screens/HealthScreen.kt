@@ -15,12 +15,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -48,7 +48,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -60,18 +59,16 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.macrotracker.ui.components.CardHeader
 import com.macrotracker.ui.screens.health.ActivitiesSection
 import com.macrotracker.ui.screens.health.AnimatedMacroBarChart
 import com.macrotracker.ui.screens.health.DailyHealthSection
 import com.macrotracker.ui.screens.health.HealthMetric
 import com.macrotracker.ui.screens.health.HealthMetricEntry
 import com.macrotracker.ui.screens.health.HealthMetricGrid
-import com.macrotracker.ui.screens.health.HealthStatCard
 import com.macrotracker.ui.screens.health.HealthTrendsSection
-import com.macrotracker.ui.screens.health.iconRes
 import com.macrotracker.data.local.DailySummary
 import com.macrotracker.data.local.MacroLogEntity
-import com.macrotracker.ui.components.ButtonVariant
 import com.macrotracker.ui.components.HealthConnectCard
 import com.macrotracker.ui.components.LoadingRow
 import com.macrotracker.ui.components.MacroButton
@@ -80,13 +77,14 @@ import com.macrotracker.ui.components.MacroLogItem
 import com.macrotracker.ui.components.WidgetScrollBox
 import com.macrotracker.ui.components.MacroProgressBar
 import com.macrotracker.ui.components.MacroTextField
+import com.macrotracker.ui.components.PillButton
 import com.macrotracker.ui.components.ScreenHeader
+import com.macrotracker.ui.components.TabContentBottomPadding
 import com.macrotracker.ui.components.StatusCopy
 import com.macrotracker.ui.components.ScreenHeaderSpacer
 import com.macrotracker.ui.components.WidgetEditor
 import com.macrotracker.ui.components.WidgetPlaceholder
 import com.macrotracker.ui.components.WidgetPlaceholderCard
-import com.macrotracker.ui.components.calculatePercentageChange
 import com.macrotracker.ui.components.draggableWidgetItems
 import com.macrotracker.ui.components.encodeWidgetConfig
 import com.macrotracker.ui.components.parseWidgetConfig
@@ -95,10 +93,10 @@ import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.NutritionCalories
+import com.macrotracker.ui.theme.HealthHeartRate
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.Secondary
 import com.macrotracker.ui.theme.Success
-import com.macrotracker.ui.theme.Surface
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.HapticHelper
@@ -252,82 +250,79 @@ fun HealthScreen(
         userScrollEnabled = !dragState.isDragActive,
         modifier = Modifier
             .fillMaxSize()
-            .background(Background),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 120.dp),
+            .background(Background)
+            .imePadding(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = TabContentBottomPadding),
     ) {
         item(key = "header") {
-        ScreenHeaderSpacer()
+            ScreenHeaderSpacer()
 
-        ScreenHeader(
-            title = "Health",
-            subtitle = todayFormatted,
-            trailing = {
-                IconButton(onClick = { haptics.tick(); isEditMode = !isEditMode }) {
-                    Icon(AppIcons.Edit, contentDescription = "Edit Widgets", tint = Primary)
-                }
-            },
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        when (val hc = healthConnectState) {
-            is HealthConnectUiState.PermissionRequired -> {
-                HealthConnectCard(
-                    onRequestPermission = {
-                        hcPermissionLauncher.launch(healthViewModel.healthConnectPermissions)
+            ScreenHeader(
+                title = "Health",
+                subtitle = todayFormatted,
+                trailing = {
+                    IconButton(onClick = { haptics.tick(); isEditMode = !isEditMode }) {
+                        Icon(AppIcons.Edit, contentDescription = "Edit Widgets", tint = Primary)
                     }
-                )
-                Spacer(modifier = Modifier.height(20.dp))
-            }
-            is HealthConnectUiState.NotAvailable -> {
-                HealthConnectCard(
-                    title = "Health Connect Unavailable",
-                    message = "Health Connect isn’t available on this device. Macro tracking still works.",
-                    onRequestPermission = null,
-                )
-                Spacer(modifier = Modifier.height(20.dp))
-            }
-            is HealthConnectUiState.Error -> {
-                HealthConnectCard(
-                    title = "Health Connect Error",
-                    message = hc.message,
-                    actionLabel = "Retry",
-                    onRequestPermission = { healthViewModel.loadHealthConnect() },
-                )
-                Spacer(modifier = Modifier.height(20.dp))
-            }
-            else -> {
-                // Permissions read as granted but Health Connect refuses the
-                // reads — its AppOp has desynced from the grant. Only re-granting
-                // in Health Connect resyncs it, so send the user straight there
-                // rather than leaving the screen looking empty.
-                if (readRefusedDespiteGrant) {
+                },
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            when (val hc = healthConnectState) {
+                is HealthConnectUiState.PermissionRequired -> {
                     HealthConnectCard(
-                        title = "Health Connect is blocking access",
-                        message = "DailyDash has permission, but Health Connect is refusing to " +
-                            "share the data. Open it, turn DailyDash’s permissions off and " +
-                            "back on, then come back.",
-                        actionLabel = "Open Health Connect",
                         onRequestPermission = {
-                            haptics.tick()
-                            openHealthConnectSettings(context)
-                        },
+                            hcPermissionLauncher.launch(healthViewModel.healthConnectPermissions)
+                        }
                     )
-                    Spacer(modifier = Modifier.height(20.dp))
+                }
+                is HealthConnectUiState.NotAvailable -> {
+                    HealthConnectCard(
+                        title = "Health Connect Unavailable",
+                        message = "Health Connect isn’t available on this device. Macro tracking still works.",
+                        onRequestPermission = null,
+                    )
+                }
+                is HealthConnectUiState.Error -> {
+                    HealthConnectCard(
+                        title = "Health Connect Error",
+                        message = hc.message,
+                        actionLabel = "Retry",
+                        onRequestPermission = { healthViewModel.loadHealthConnect() },
+                    )
+                }
+                else -> {
+                    // Permissions read as granted but Health Connect refuses the
+                    // reads — its AppOp has desynced from the grant. Only re-granting
+                    // in Health Connect resyncs it, so send the user straight there
+                    // rather than leaving the screen looking empty.
+                    if (readRefusedDespiteGrant) {
+                        HealthConnectCard(
+                            title = "Health Connect is blocking access",
+                            message = "DailyDash has permission, but Health Connect is refusing to " +
+                                "share the data. Open it, turn DailyDash’s permissions off and " +
+                                "back on, then come back.",
+                            actionLabel = "Open Health Connect",
+                            onRequestPermission = {
+                                haptics.tick()
+                                openHealthConnectSettings(context)
+                            },
+                        )
+                    }
                 }
             }
-        }
         }
 
         if (isEditMode) {
             item(key = "editor") {
-            WidgetEditor(
-                configs = parsedConfigs,
-                onConfigsChanged = { newConfigs ->
-                    healthViewModel.updateHealthWidgetOrder(encodeWidgetConfig(newConfigs))
-                },
-                onClose = { isEditMode = false }
-            )
+                WidgetEditor(
+                    configs = parsedConfigs,
+                    onConfigsChanged = { newConfigs ->
+                        healthViewModel.updateHealthWidgetOrder(encodeWidgetConfig(newConfigs))
+                    },
+                    onClose = { isEditMode = false },
+                )
             }
         } else {
             draggableWidgetItems(
@@ -353,7 +348,6 @@ fun HealthScreen(
                             floorsToday = floorsClimbedState.today?.toDouble(),
                             loading = healthConnectState is HealthConnectUiState.Loading,
                         )
-                        Spacer(modifier = Modifier.height(12.dp))
                     }
                     "ACTIVITIES" -> {
                         ActivitiesSection(
@@ -365,7 +359,6 @@ fun HealthScreen(
                             onRetry = { healthViewModel.retryHealthConnect() },
                             onExpandActivity = { healthViewModel.onActivityExpanded(it) },
                         )
-                        Spacer(modifier = Modifier.height(12.dp))
                     }
                     "BODY_STATS" -> {
                         // Every enabled metric gets a card. This grid used to be
@@ -391,11 +384,10 @@ fun HealthScreen(
 
                         if (metricEntries.any { it.state.isEnabled }) {
                             MacroCard(delayMs = 0) {
-                                Text(
-                                    "Body Stats",
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = TextPrimary,
+                                CardHeader(
+                                    title = "Body Stats",
+                                    icon = AppIcons.HeartPulse,
+                                    accent = HealthHeartRate,
                                     modifier = Modifier.padding(bottom = 12.dp),
                                 )
 
@@ -417,7 +409,6 @@ fun HealthScreen(
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(20.dp))
                         }
                     }
                     "HISTORY" -> {
@@ -430,7 +421,6 @@ fun HealthScreen(
                                 icon = AppIcons.ChartLine,
                                 lines = 4,
                             )
-                            Spacer(modifier = Modifier.height(20.dp))
                         } else {
                             HealthTrendsSection(
                                 healthHistory = healthHistory,
@@ -461,7 +451,6 @@ fun HealthScreen(
                                 onPreviousWeek = { healthViewModel.previousWeek() },
                                 onNextWeek = { healthViewModel.nextWeek() },
                             )
-                            Spacer(modifier = Modifier.height(20.dp))
                         }
                     }
                     "SUMMARY" -> {
@@ -470,18 +459,17 @@ fun HealthScreen(
                             WidgetPlaceholderCard(
                                 title = "Daily Summary",
                                 icon = AppIcons.Rows,
+                                accent = Primary,
                                 minHeight = WidgetPlaceholder.CompactMinHeight,
                                 lines = 2,
                             )
-                            Spacer(modifier = Modifier.height(20.dp))
                         } else {
                             val hcStats = (healthConnectState as? HealthConnectUiState.Success)?.stats
                             MacroCard(delayMs = 100) {
-                                Text(
-                                    "Daily Summary",
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = TextPrimary,
+                                CardHeader(
+                                    title = "Daily Summary",
+                                    icon = AppIcons.Rows,
+                                    accent = Primary,
                                     modifier = Modifier.padding(bottom = 16.dp),
                                 )
                                 val calProgress = if (s.calorieGoal > 0) s.totalCalories.toFloat() / s.calorieGoal else 0f
@@ -551,31 +539,25 @@ fun HealthScreen(
                                     }
                                 }
                             }
-                            Spacer(modifier = Modifier.height(20.dp))
                         }
                     }
                     "ADD_ENTRY" -> {
                         MacroCard(delayMs = 150) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 16.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
+                            CardHeader(
+                                title = "Add Entry",
+                                icon = AppIcons.Add,
+                                accent = Primary,
+                                modifier = Modifier.padding(bottom = 16.dp),
                             ) {
-                                Text(
-                                    "Add Entry",
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = TextPrimary,
-                                )
-                                MacroButton(
-                                    text = "📷 Scan Label",
-                                    onClick = onNavigateToCameraScan,
-                                    modifier = Modifier
-                                        .padding(start = 8.dp)
-                                        .width(160.dp),
-                                    variant = ButtonVariant.PRIMARY,
+                                PillButton(
+                                    icon = AppIcons.Camera,
+                                    label = "Scan label",
+                                    emphasized = true,
+                                    onClick = {
+                                        haptics.click()
+                                        onNavigateToCameraScan()
+                                    },
+                                    modifier = Modifier.padding(start = 8.dp),
                                 )
                             }
 
@@ -646,7 +628,7 @@ fun HealthScreen(
                                         foodName = ""
                                         calories = ""
                                         protein = ""
-                                        Toast.makeText(context, "✅ Entry added!", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Entry added", Toast.LENGTH_SHORT).show()
                                     } else {
                                         haptics.reject()
                                         Toast.makeText(context, "Enter calories or protein first", Toast.LENGTH_SHORT).show()
@@ -655,7 +637,6 @@ fun HealthScreen(
                                 modifier = Modifier.padding(top = 8.dp),
                             )
                         }
-                        Spacer(modifier = Modifier.height(20.dp))
                     }
                     "WEEK_AT_A_GLANCE" -> {
                         MacroTrendsSection(
@@ -672,15 +653,12 @@ fun HealthScreen(
                             onDateSelected = { healthViewModel.selectMacroDate(it) },
                             onDeleteLog = { healthViewModel.deleteLog(it) },
                         )
-                        Spacer(modifier = Modifier.height(20.dp))
                     }
                     "RECENT_LOGS" -> {
                         MacroCard(delayMs = 250) {
-                            Text(
-                                "Recent Logs",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary,
+                            CardHeader(
+                                title = "Recent Logs",
+                                icon = AppIcons.List,
                                 modifier = Modifier.padding(bottom = 8.dp),
                             )
 
@@ -705,7 +683,6 @@ fun HealthScreen(
                                 }
                             }
                         }
-                        Spacer(modifier = Modifier.height(20.dp))
                     }
                 }
             }
@@ -714,7 +691,7 @@ fun HealthScreen(
     }
 }
 
-// ── Macro Trends (moved from History tab) ─────────────────────────────
+// ── Macro Trends ──────────────────────────────────────────────────────
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -756,11 +733,12 @@ private fun MacroTrendsSection(
 
     Column {
         MacroCard(delayMs = 70) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 10.dp)) {
-                Icon(AppIcons.ChartBar, contentDescription = null, tint = barColor, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Macro Trends", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-            }
+            CardHeader(
+                title = "Macro Trends",
+                icon = AppIcons.ChartBar,
+                accent = barColor,
+                modifier = Modifier.padding(bottom = 10.dp),
+            )
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 12.dp)) {
                 listOf(7, 14, 30).forEach { option ->
@@ -858,8 +836,6 @@ private fun MacroTrendsSection(
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(8.dp))
 
         MacroCard(delayMs = 100) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 10.dp)) {

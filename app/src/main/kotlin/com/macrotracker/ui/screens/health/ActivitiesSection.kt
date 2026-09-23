@@ -7,7 +7,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -22,7 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,7 +35,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.health.connect.client.records.ExerciseSessionRecord
@@ -50,6 +47,7 @@ import com.macrotracker.data.health.formatActivityWhen
 import com.macrotracker.data.health.formatElevation
 import com.macrotracker.data.health.formatPace
 import com.macrotracker.data.health.pickFeaturedActivity
+import com.macrotracker.ui.components.CardHeader
 import com.macrotracker.ui.components.ContentSkeleton
 import com.macrotracker.ui.components.LoadingSpec
 import com.macrotracker.ui.components.LoadingSpinner
@@ -88,29 +86,13 @@ fun ActivitiesSection(
 ) {
     MacroCard(delayMs = delayMs) {
         val activities = (state as? ActivitiesUiState.Success)?.activities.orEmpty()
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
+        CardHeader(
+            title = "Activities",
+            icon = AppIcons.Heart,
+            accent = HealthActivity,
+            subtitle = if (activities.isEmpty()) "Workouts from Garmin and Health Connect" else monthSummary(activities),
             modifier = Modifier.padding(bottom = 12.dp),
         ) {
-            Icon(
-                AppIcons.Heart,
-                contentDescription = null,
-                tint = HealthActivity,
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Activities", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                Text(
-                    if (activities.isEmpty()) {
-                        "Workouts from Garmin and Health Connect"
-                    } else {
-                        monthSummary(activities)
-                    },
-                    fontSize = 12.sp,
-                    color = TextSecondary,
-                )
-            }
             if (state is ActivitiesUiState.Success && state.isRefreshing) {
                 LoadingSpinner(color = Primary, size = LoadingSpec.SizeInline)
             }

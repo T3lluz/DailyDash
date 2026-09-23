@@ -10,7 +10,6 @@ import kotlin.math.roundToInt
 
 const val DEFAULT_ACTIVE_CAL_GOAL = 500.0
 const val DEFAULT_EXERCISE_MINUTES_GOAL = 30.0
-const val DEFAULT_FLOORS_GOAL = 10.0
 
 /** Apple-style Activity progress for today. */
 data class TodayActivitySnapshot(
@@ -44,14 +43,6 @@ data class SleepNightScore(
     val lightMinutes: Long,
     val awakeMinutes: Long,
     val label: String,
-)
-
-/** Simple recovery 0–100 from sleep score + resting HR context. */
-data class RecoverySnapshot(
-    val score: Int,
-    val label: String,
-    val restingHr: Long?,
-    val sleepScore: Int?,
 )
 
 /**
@@ -228,39 +219,6 @@ private fun stageBandScore(
     // ~half credit 8pp outside band, near-zero 20pp outside
     val factor = exp(-((dist * 100.0) / 10.0).let { it * it } / 50.0)
     return (maxPts * factor).coerceIn(0.0, maxPts)
-}
-
-fun computeRecovery(
-    sleepScore: Int?,
-    restingHr: Long?,
-    avgRestingHrWeek: Long?,
-): RecoverySnapshot {
-    var score = 50
-    sleepScore?.let { score = (score * 0.35 + it * 0.65).roundToInt() }
-    if (restingHr != null && avgRestingHrWeek != null && avgRestingHrWeek > 0) {
-        val delta = restingHr - avgRestingHrWeek
-        score += when {
-            delta <= -3 -> 12
-            delta <= 0 -> 6
-            delta <= 5 -> -4
-            else -> -12
-        }
-    } else if (restingHr != null) {
-        score += when {
-            restingHr <= 55 -> 10
-            restingHr <= 65 -> 4
-            restingHr <= 75 -> 0
-            else -> -8
-        }
-    }
-    score = score.coerceIn(0, 100)
-    val label = when {
-        score >= 80 -> "Ready"
-        score >= 60 -> "Moderate"
-        score >= 40 -> "Strained"
-        else -> "Rest"
-    }
-    return RecoverySnapshot(score, label, restingHr, sleepScore)
 }
 
 /**

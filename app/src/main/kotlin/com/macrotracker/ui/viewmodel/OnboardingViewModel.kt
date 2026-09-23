@@ -33,10 +33,6 @@ class OnboardingViewModel @Inject constructor(
         settings.setOnboardingCompleted(true)
     }
 
-    /** Dev/debug helper — resets the flag so onboarding shows again on next launch. */
-    fun resetOnboarding() {
-        settings.setOnboardingCompleted(false)
-    }
 }
 
 

@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -136,16 +135,4 @@ fun SegmentedTabs(
             }
         }
     }
-}
-
-/** Fills a pane while its content is off-screen, so tab switches don't reflow. */
-@Composable
-fun TabPaneHost(content: @Composable () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize()) { content() }
-}
-
-/** Spacer matching [SegmentedTabs]'s vertical footprint. */
-@Composable
-fun SegmentedTabsSpacer() {
-    Spacer(modifier = Modifier.height(10.dp))
 }
