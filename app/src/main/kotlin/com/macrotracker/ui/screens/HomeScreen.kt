@@ -53,6 +53,7 @@ import kotlinx.coroutines.launch
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.viewmodel.GitHubViewModel
+import com.macrotracker.ui.viewmodel.UpcomingViewModel
 import com.macrotracker.ui.viewmodel.HomeViewModel
 import com.macrotracker.ui.viewmodel.TwitchViewModel
 import com.macrotracker.ui.viewmodel.YouTubeViewModel
@@ -69,6 +70,7 @@ fun HomeScreen(
     youtubeViewModel: YouTubeViewModel = hiltViewModel(),
     twitchViewModel: TwitchViewModel = hiltViewModel(),
     githubViewModel: GitHubViewModel = hiltViewModel(),
+    upcomingViewModel: UpcomingViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
     val isRefreshing by viewModel.isRefreshing.collectAsState()
@@ -90,6 +92,7 @@ fun HomeScreen(
             Triple("TWITCH", "Twitch Live", AppIcons.Video),
             Triple("WEATHER", "Weather", AppIcons.Cloud),
             Triple("CALENDAR", "Calendar", AppIcons.CalendarDays),
+            Triple("UPCOMING", "Coming up", AppIcons.TvPlay),
             Triple("BODY_STATS", "Body Stats", AppIcons.HeartPulse),
             Triple("PROGRESS", "Today's Progress", AppIcons.ChartPie),
             Triple("QUICK_ADD", "Quick Add", AppIcons.Add),
@@ -167,6 +170,9 @@ fun HomeScreen(
                     if ("GITHUB" in visibleIds) {
                         githubViewModel.loadDashboard(forceRefresh = false)
                     }
+                    if ("UPCOMING" in visibleIds) {
+                        upcomingViewModel.load(forceRefresh = false)
+                    }
                 }
             }
         }
@@ -203,6 +209,9 @@ fun HomeScreen(
             }
             if ("GITHUB" in visibleIds) {
                 githubViewModel.loadDashboard(forceRefresh = true)
+            }
+            if ("UPCOMING" in visibleIds) {
+                upcomingViewModel.load(forceRefresh = true)
             }
         },
         modifier = Modifier.fillMaxSize().background(Background),

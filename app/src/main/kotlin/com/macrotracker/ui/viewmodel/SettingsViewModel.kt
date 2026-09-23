@@ -48,6 +48,7 @@ class SettingsViewModel @Inject constructor(
     val claudeMessage: StateFlow<String?> = _claudeMessage
     val tempUnit: StateFlow<TempUnit> = settings.tempUnit
     val windUnit: StateFlow<WindUnit> = settings.windUnit
+    val dashboardServerUrl: StateFlow<String> = settings.dashboardServerUrl
 
     private val _healthConnectConnected = MutableStateFlow(false)
     val healthConnectConnected: StateFlow<Boolean> = _healthConnectConnected
@@ -91,6 +92,10 @@ class SettingsViewModel @Inject constructor(
     fun setMasterWeatherEnabled(enabled: Boolean) {
         settings.setWeatherEnabled(enabled)
         refreshConnectionStatus()
+    }
+
+    fun setDashboardServerUrl(url: String) {
+        settings.setDashboardServerUrl(url)
     }
 
     fun setTempUnit(unit: TempUnit) {

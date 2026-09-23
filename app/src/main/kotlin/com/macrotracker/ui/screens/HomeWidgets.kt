@@ -48,6 +48,7 @@ import com.macrotracker.ui.components.WidgetConfig
 import com.macrotracker.ui.components.WidgetPlaceholder
 import com.macrotracker.ui.components.WidgetPlaceholderCard
 import com.macrotracker.ui.components.TwitchCard
+import com.macrotracker.ui.components.UpcomingCard
 import com.macrotracker.ui.components.YoutubeCard
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Error
@@ -85,6 +86,7 @@ fun HomeWidgetItem(
     when (config.id) {
         "F1" -> HomeF1Widget(viewModel, isVisible = isVisible)
         "GITHUB" -> GitHubCard(isVisible = isVisible)
+        "UPCOMING" -> UpcomingCard(isVisible = isVisible)
         "SERVERS" -> ServerCard(isVisible = isVisible, onOpenServers = onNavigateToServers)
         "YOUTUBE" -> YoutubeCard()
         "TWITCH" -> TwitchCard()

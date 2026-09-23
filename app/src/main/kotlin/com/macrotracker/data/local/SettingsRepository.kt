@@ -69,6 +69,12 @@ class SettingsRepository @Inject constructor(
     private val _calendarEnabled = MutableStateFlow(prefs.getBoolean("calendar_enabled", true))
     val calendarEnabled: StateFlow<Boolean> = _calendarEnabled
 
+    /** Base URL of the t3lluz dashboard whose `_stats.json` feeds the Coming up card. */
+    private val _dashboardServerUrl = MutableStateFlow(
+        prefs.getString(KEY_DASHBOARD_SERVER_URL, DEFAULT_DASHBOARD_SERVER_URL) ?: DEFAULT_DASHBOARD_SERVER_URL,
+    )
+    val dashboardServerUrl: StateFlow<String> = _dashboardServerUrl
+
     private val _heartRateEnabled = MutableStateFlow(healthPrefs.getBoolean("heart_rate_enabled", true))
     val heartRateEnabled: StateFlow<Boolean> = _heartRateEnabled
 
@@ -225,6 +231,12 @@ class SettingsRepository @Inject constructor(
         _windUnit.value = unit
     }
 
+    fun setDashboardServerUrl(url: String) {
+        val trimmed = url.trim().trimEnd('/')
+        prefs.edit { putString(KEY_DASHBOARD_SERVER_URL, trimmed) }
+        _dashboardServerUrl.value = trimmed
+    }
+
     fun setCalendarEnabled(enabled: Boolean) {
         prefs.edit { putBoolean("calendar_enabled", enabled) }
         _calendarEnabled.value = enabled
@@ -277,12 +289,28 @@ class SettingsRepository @Inject constructor(
         const val KEY_WIND_UNIT = "wind_unit"
         const val KEY_GITHUB_TOKEN = "github_token"
         const val KEY_GITHUB_FOCUS_REPO = "github_focus_repo"
+        const val KEY_DASHBOARD_SERVER_URL = "dashboard_server_url"
 
-        const val DEFAULT_HOME_WIDGET_ORDER = "WEATHER:true,CALENDAR:true,BODY_STATS:true,PROGRESS:true,QUICK_ADD:true,F1:true,GITHUB:true,SERVERS:true,YOUTUBE:true,TWITCH:true"
+        const val DEFAULT_DASHBOARD_SERVER_URL = "https://t3lluz.com"
 
-        /** Existing installs get the Servers card appended, off by nobody's surprise. */
-        fun migrateHomeWidgetOrder(order: String): String =
-            if (order.contains("SERVERS")) order else "$order,SERVERS:true"
+        const val DEFAULT_HOME_WIDGET_ORDER = "WEATHER:true,CALENDAR:true,UPCOMING:true,BODY_STATS:true,PROGRESS:true,QUICK_ADD:true,F1:true,GITHUB:true,SERVERS:true,YOUTUBE:true,TWITCH:true"
+
+        /**
+         * Existing installs get the Servers card appended, and Coming up placed right
+         * under Calendar, where the rest of the day's schedule already is.
+         */
+        fun migrateHomeWidgetOrder(order: String): String {
+            var result = if (order.contains("SERVERS")) order else "$order,SERVERS:true"
+            if (!result.contains("UPCOMING")) {
+                val calendar = Regex("""CALENDAR:(true|false)""").find(result)
+                result = if (calendar != null) {
+                    result.replaceRange(calendar.range, "${calendar.value},UPCOMING:true")
+                } else {
+                    "$result,UPCOMING:true"
+                }
+            }
+            return result
+        }
 
         /** Keep Daily Health first; insert Activities after it for older installs. */
         fun migrateHealthWidgetOrder(order: String): String {

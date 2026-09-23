@@ -30,6 +30,7 @@ Updates install from inside the app. When a new release is out, DailyDash downlo
 | <img src="docs/integrations/health-connect.svg" width="20" alt="" /> | **Health** | Activity rings, today vs. yesterday, workouts from the last month | [Health Connect](https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata) |
 | <img src="docs/integrations/weather.svg" width="20" alt="" /> | **Weather** | Local forecast, sunrise and sunset, what to wear | Location permission |
 | <img src="docs/integrations/calendar.svg" width="20" alt="" /> | **Calendar** | Today's upcoming events | Calendar permission |
+| <img src="docs/integrations/calendar.svg" width="20" alt="" /> | **Coming up** | Episodes, films and F1 sessions on one swipeable timeline, from your t3lluz dashboard | Dashboard server in **Settings → Connections**, on Tailscale |
 | <img src="docs/integrations/f1.svg" width="20" alt="" /> | **Formula 1** | Next race countdown, standings, latest results, season schedule | None |
 | <img src="docs/integrations/github.svg" width="20" alt="" /> | **GitHub** | Your issues, PRs, activity, and repos | Connect GitHub |
 | <img src="docs/integrations/youtube.svg" width="20" alt="" /> | **YouTube** | Newest videos from channels you follow | None, or Connect Google to import subscriptions |

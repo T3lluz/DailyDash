@@ -156,6 +156,7 @@ dependencies {
 
     // Image loading
     implementation(libs.coil.compose)
+    implementation(libs.coil.svg)
 
     // Location
     implementation(libs.play.services.location)

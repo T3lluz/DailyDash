@@ -19,6 +19,20 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.input.KeyboardType
+import com.macrotracker.data.local.SettingsRepository
+import com.macrotracker.ui.components.MacroButton
+import com.macrotracker.ui.components.MacroTextField
+import com.macrotracker.ui.theme.Primary
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -61,6 +75,7 @@ fun ConnectionsSettingsScreen(
     val masterCalendarEnabled by viewModel.masterCalendarEnabled.collectAsState()
     val tempUnit by viewModel.tempUnit.collectAsState()
     val windUnit by viewModel.windUnit.collectAsState()
+    val dashboardServerUrl by viewModel.dashboardServerUrl.collectAsState()
 
     val heartRateEnabled by viewModel.heartRateEnabled.collectAsState()
     val restingHeartRateEnabled by viewModel.restingHeartRateEnabled.collectAsState()
@@ -288,6 +303,15 @@ fun ConnectionsSettingsScreen(
 
         Spacer(modifier = Modifier.height(10.dp))
 
+        MacroCard(delayMs = 125) {
+            DashboardServerSection(
+                savedUrl = dashboardServerUrl,
+                onSave = { viewModel.setDashboardServerUrl(it) },
+            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
         MacroCard(delayMs = 140) {
             SettingsCategoryRow(
                 icon = AppIcons.Server,
@@ -307,5 +331,47 @@ fun ConnectionsSettingsScreen(
                 },
             )
         }
+    }
+}
+
+/** Where the Home tab's Coming up card reads its schedule: the t3lluz dashboard's `_stats.json`. */
+@Composable
+private fun DashboardServerSection(savedUrl: String, onSave: (String) -> Unit) {
+    val haptics = rememberHaptics()
+    var draft by rememberSaveable(savedUrl) { mutableStateOf(savedUrl) }
+    val cleaned = draft.trim().trimEnd('/')
+    val valid = cleaned.startsWith("https://") || cleaned.startsWith("http://")
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(AppIcons.TvPlay, contentDescription = null, tint = Primary, modifier = Modifier.size(28.dp))
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text("Dashboard server", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+            Text(
+                "Coming up shows the schedule this t3lluz dashboard publishes: Sonarr, Radarr, Stremio and F1. " +
+                    "It is tailnet-only, so keep Tailscale on.",
+                fontSize = 12.sp,
+                color = TextSecondary,
+                lineHeight = 16.sp,
+            )
+        }
+    }
+    Spacer(modifier = Modifier.height(10.dp))
+    MacroTextField(
+        value = draft,
+        onValueChange = { draft = it },
+        placeholder = SettingsRepository.DEFAULT_DASHBOARD_SERVER_URL,
+        keyboardType = KeyboardType.Uri,
+    )
+    if (cleaned != savedUrl) {
+        MacroButton(
+            text = if (valid) "Save server" else "Needs http:// or https://",
+            enabled = valid,
+            onClick = {
+                haptics.confirm()
+                onSave(cleaned)
+            },
+            modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+        )
     }
 }
