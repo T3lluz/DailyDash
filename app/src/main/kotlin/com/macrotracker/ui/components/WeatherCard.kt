@@ -411,14 +411,20 @@ fun WeatherCard(
                                     tint = Color.Unspecified
                                 )
                                 Spacer(Modifier.width(16.dp))
-                                Column {
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         WeatherUnits.formatTemp(weather.temperature, tempUnit),
                                         fontSize = 36.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White,
                                     )
-                                    Text(weather.description, fontSize = 15.sp, color = Color.White.copy(alpha = 0.85f))
+                                    Text(
+                                        weather.description,
+                                        fontSize = 15.sp,
+                                        color = Color.White.copy(alpha = 0.85f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
                                     weather.feelsLike?.let { feels ->
                                         Text(
                                             "Feels like ${WeatherUnits.formatTempValue(feels, tempUnit)}",
@@ -428,7 +434,7 @@ fun WeatherCard(
                                         )
                                     }
                                 }
-                                Spacer(modifier = Modifier.weight(1f))
+                                Spacer(modifier = Modifier.width(8.dp))
                                 WeatherMetricChip(
                                     iconRes = R.drawable.ic_weather_wind,
                                     label = WeatherUnits.formatWind(weather.windSpeed, windUnit),
@@ -1272,6 +1278,7 @@ private fun DayStatPill(
                 color = Color.White.copy(alpha = 0.45f),
                 letterSpacing = 0.3.sp,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         Spacer(modifier = Modifier.height(3.dp))
@@ -1281,6 +1288,7 @@ private fun DayStatPill(
             fontWeight = FontWeight.SemiBold,
             color = Color.White.copy(alpha = 0.9f),
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -1288,7 +1296,7 @@ private fun DayStatPill(
 @Composable
 private fun WeatherMetricChip(
     label: String,
-    iconRes: Int? = null,
+    iconRes: Int,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -1297,15 +1305,13 @@ private fun WeatherMetricChip(
             .background(Color.White.copy(alpha = 0.12f), RoundedCornerShape(999.dp))
             .padding(horizontal = 8.dp, vertical = 4.dp),
     ) {
-        if (iconRes != null) {
-            Icon(
-                painter = painterResource(iconRes),
-                contentDescription = null,
-                tint = Color.White.copy(alpha = 0.85f),
-                modifier = Modifier.size(14.dp),
-            )
-        }
-        Text(label, fontSize = 12.sp, color = Color.White.copy(alpha = 0.85f), fontWeight = FontWeight.Medium)
+        Icon(
+            painter = painterResource(iconRes),
+            contentDescription = null,
+            tint = Color.White.copy(alpha = 0.85f),
+            modifier = Modifier.size(14.dp),
+        )
+        Text(label, fontSize = 12.sp, color = Color.White.copy(alpha = 0.85f), fontWeight = FontWeight.Medium, maxLines = 1)
     }
 }
 

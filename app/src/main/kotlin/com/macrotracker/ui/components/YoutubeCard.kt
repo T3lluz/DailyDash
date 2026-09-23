@@ -736,6 +736,7 @@ private fun CompactVideoFeed(
                 ) {
                     Box(
                         modifier = Modifier
+                            .weight(1f, fill = false)
                             .clip(RoundedCornerShape(12.dp))
                             .background(YtRed.copy(alpha = 0.12f))
                             .border(0.5.dp, YtRed.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
@@ -746,12 +747,15 @@ private fun CompactVideoFeed(
                             fontSize = 10.sp,
                             color = YtRed,
                             fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                     Text(
                         "Tap avatar to clear",
                         fontSize = 9.sp,
                         color = TextSecondary.copy(alpha = 0.5f),
+                        maxLines = 1,
                     )
                 }
             }

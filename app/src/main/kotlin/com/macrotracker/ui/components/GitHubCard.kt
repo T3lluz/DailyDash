@@ -2120,6 +2120,8 @@ private fun MetaChip(
             fontWeight = FontWeight.SemiBold,
             color = TextPrimary.copy(alpha = 0.88f),
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = 160.dp),
         )
     }
 }
@@ -2190,6 +2192,7 @@ private fun StatusTag(text: String, color: Color) {
             .background(color.copy(alpha = 0.16f))
             .padding(horizontal = 7.dp, vertical = 2.dp),
         maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
     )
 }
 
