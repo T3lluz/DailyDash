@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.core.content.edit
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -164,10 +165,14 @@ class F1CircuitRepository @Inject constructor(
                     async {
                         gate.withPermit {
                             val id = race.circuitId!!
-                            runCatching { outline(id, race.lat!!, race.lon!!) }
-                                .onFailure { Log.w(TAG, "No outline for $id: ${it.message}") }
-                                .getOrNull()
-                                ?.let { id to it }
+                            try {
+                                outline(id, race.lat!!, race.lon!!)?.let { id to it }
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                Log.w(TAG, "No outline for $id: ${e.message}")
+                                null
+                            }
                         }
                     }
                 }
