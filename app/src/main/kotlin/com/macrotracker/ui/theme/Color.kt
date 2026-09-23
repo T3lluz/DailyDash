@@ -79,6 +79,26 @@ val HealthDistance = Color(0xFF32ADE6)
 val HealthEnergy = Color(0xFFFFD60A)
 val HealthProtein = Color(0xFF32D74B)
 val HealthActivity = Color(0xFF34D399)
+val HealthHrv = Color(0xFF5AC8FA)
+val HealthWeight = Color(0xFF8E8CFF)
+val HealthBodyFat = Color(0xFFFFB86B)
+val HealthVo2 = Color(0xFF2DD4BF)
+val HealthTemperature = Color(0xFFFF9F68)
+val HealthBloodPressure = Color(0xFFFF6B8B)
+val HealthHydration = Color(0xFF4FC3F7)
+val HealthBmr = HealthEnergy
+
+/** Sleep stages — hypnogram, stage strip and legend share these. */
+val SleepStageAwake = Color(0xFFFF8A65)
+val SleepStageRem = Color(0xFF4FC3F7)
+val SleepStageLight = Color(0xFF7E57C2)
+val SleepStageDeep = Color(0xFF5C6BC0)
+
+/** Readiness bands, low → high. */
+val ReadinessLow = Error
+val ReadinessFair = Warning
+val ReadinessGood = Color(0xFF64D2FF)
+val ReadinessHigh = Success
 
 /** Nutrition accents — calories and protein, wherever either is charted. */
 val NutritionCalories = Color(0xFFFF9F43)

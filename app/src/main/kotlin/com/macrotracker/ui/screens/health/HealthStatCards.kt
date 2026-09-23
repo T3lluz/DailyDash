@@ -34,18 +34,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.macrotracker.ui.theme.Background
-import com.macrotracker.ui.theme.Border
-import com.macrotracker.ui.theme.Error
-import com.macrotracker.ui.theme.MacroMotion
-import com.macrotracker.ui.theme.Success
-import com.macrotracker.ui.theme.TextPrimary
-import com.macrotracker.ui.theme.TextSecondary
+import com.macrotracker.data.health.DailyHealthStats
 import com.macrotracker.ui.components.HealthMetricUiState
 import com.macrotracker.ui.components.calculatePercentageChange
+import com.macrotracker.ui.theme.Background
+import com.macrotracker.ui.theme.Border
+import com.macrotracker.ui.theme.MacroMotion
+import com.macrotracker.ui.theme.TextPrimary
+import com.macrotracker.ui.theme.TextSecondary
 import java.text.DecimalFormat
 import kotlin.math.abs
-import com.macrotracker.ui.theme.AppIcons
 
 @Composable
 fun HealthStatCard(
@@ -59,6 +57,10 @@ fun HealthStatCard(
     note: String? = null,
     /** Softens the card when it is a placeholder rather than a live number. */
     dimmed: Boolean = false,
+    /** Which way is good, so the delta is green or red for the right reason. */
+    better: Better = Better.HIGHER,
+    /** The last few days, oldest first, drawn as a sparkline beside the value. */
+    trend: List<Double> = emptyList(),
 ) {
     val valueColor = if (dimmed) TextSecondary else TextPrimary
     val accent = if (dimmed) color.copy(alpha = 0.45f) else color
@@ -106,26 +108,40 @@ fun HealthStatCard(
             }
 
             Column {
-                AnimatedContent(
-                    targetState = value,
-                    transitionSpec = {
-                        fadeIn(MacroMotion.fadeTween(160)) togetherWith fadeOut(MacroMotion.fadeTween(100))
-                    },
-                    label = "statValue",
-                ) { animatedValue ->
-                    Text(
-                        text = animatedValue,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = valueColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AnimatedContent(
+                        targetState = value,
+                        transitionSpec = {
+                            fadeIn(MacroMotion.fadeTween(160)) togetherWith fadeOut(MacroMotion.fadeTween(100))
+                        },
+                        label = "statValue",
+                        modifier = Modifier.weight(1f),
+                    ) { animatedValue ->
+                        Text(
+                            text = animatedValue,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = valueColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    if (!dimmed && trend.count { it > 0.0 } >= 2) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Sparkline(
+                            values = trend,
+                            color = color,
+                            modifier = Modifier
+                                .width(48.dp)
+                                .height(22.dp),
+                            strokeWidthDp = 1.5f,
+                        )
+                    }
                 }
                 when {
                     percentageChange != null -> {
                         Spacer(modifier = Modifier.height(2.dp))
-                        HealthPercentageChange(percentageChange)
+                        HealthPercentageChange(percentageChange, better)
                     }
                     note != null -> {
                         Spacer(modifier = Modifier.height(2.dp))
@@ -144,35 +160,18 @@ fun HealthStatCard(
     }
 }
 
+/**
+ * "↑ 4.2% vs yesterday". Green only when the change went the good way for the
+ * metric (a lower resting heart rate is good news), grey when it doesn't matter.
+ */
 @Composable
-fun HealthPercentageChange(percentage: Double) {
-    val isPositive = percentage >= 0
-    val color = if (isPositive) Success else Error
-    val icon = if (isPositive) AppIcons.ArrowUp else AppIcons.ArrowDown
+fun HealthPercentageChange(percentage: Double, better: Better = Better.HIGHER) {
     val formatter = DecimalFormat("0.0'%'")
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(color.copy(alpha = 0.12f))
-            .padding(horizontal = 6.dp, vertical = 2.dp),
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = if (isPositive) "Increase" else "Decrease",
-            tint = color,
-            modifier = Modifier.size(11.dp),
-        )
-        Spacer(modifier = Modifier.width(2.dp))
-        Text(
-            text = formatter.format(abs(percentage)),
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = color,
-            maxLines = 1,
-        )
-    }
+    DeltaPill(
+        text = "${formatter.format(abs(percentage))} vs yday",
+        change = percentage,
+        better = better,
+    )
 }
 
 /**
@@ -200,6 +199,8 @@ data class HealthMetricEntry(
 fun HealthMetricGrid(
     entries: List<HealthMetricEntry>,
     modifier: Modifier = Modifier,
+    /** Recent days, oldest first, for each card's sparkline. */
+    history: List<DailyHealthStats> = emptyList(),
 ) {
     val visible = entries.filter { it.state.isEnabled }
     if (visible.isEmpty()) return
@@ -229,6 +230,8 @@ fun HealthMetricGrid(
                     else -> null
                 },
                 dimmed = !state.hasValue,
+                better = entry.metric.better(),
+                trend = history.takeLast(7).map { it.stats.valueOf(entry.metric) },
             )
         }
         // Keeps the last row aligned to the same column widths.

@@ -121,6 +121,15 @@ com.macrotracker/
                               `hasAnyPermissions()` ignores READ_EXERCISE_ROUTES (it reads no data
                               on its own). `readTodayStats()` throws only when every granted
                               metric failed, so the ViewModel can tell "empty" from "broken".
+                              Body & Vitals: `readBodyVitals()` reads Weight, BodyFat, Height, Vo2Max,
+                              HRV (RMSSD), RestingHR, SpO2, RespiratoryRate, BodyTemperature,
+                              BasalMetabolicRate, BloodPressure (90 days; the rate-like vitals as one
+                              mean per day over 30) and Hydration per day (14), each only when granted,
+                              and reports the rest in `BodyVitals.notShared`. `readSleepNights()` groups
+                              two weeks of sessions by the 18:00 → 18:00 sleep day; `readHourlySteps()`
+                              is today in 24 one-hour slices. HealthVitals.kt holds the pure maths
+                              (daily means, 30-day baselines, readiness, sleep consistency, BMI / blood
+                              pressure / VO₂ max bands); HealthVitalsTest pins it.
     f1/                    ← F1Repository via Ktor + OpenF1 API (https://api.openf1.org/v1/);
                               15-min in-memory + SharedPrefs disk cache. F1Circuits: circuit outlines from
                               bacinger/f1-circuits matched by coordinates (nearest within ~25 km), folded into a
@@ -294,9 +303,9 @@ Widget order and visibility are persisted as a single colon-and-comma encoded st
 
 The **Health screen** uses the same draggable pattern with a separate key (`healthWidgetOrder`):
 ```
-"DAILY_HEALTH:true,ACTIVITIES:true,BODY_STATS:true,HISTORY:true,SUMMARY:true,ADD_ENTRY:true,WEEK_AT_A_GLANCE:true,RECENT_LOGS:true"
+"DAILY_HEALTH:true,SLEEP:true,ACTIVITIES:true,VITALS:true,BODY_STATS:true,HISTORY:true,SUMMARY:true,ADD_ENTRY:true,WEEK_AT_A_GLANCE:true,RECENT_LOGS:true"
 ```
-`DAILY_HEALTH` is the hero Daily Health card (Apple-style activity rings + dynamic today metrics). **`ACTIVITIES`** lists the **last month** of workouts synced through Health Connect (Garmin Connect, Google Fit, Samsung Health, Strava, and others): type, source, duration, distance, pace, heart rate, elevation, and a GPS route map when the session includes one. A featured hero card sits above three compact rows, with **Show N more** revealing the rest in a scroll box. GPS is read up front only for the newest `EAGER_ROUTE_COUNT` sessions; the rest resolve through `HealthViewModel.onActivityExpanded()` when a row is opened (`routeResolved` gates the "Loading map…" placeholder). `WEEK_AT_A_GLANCE` is the Macro Trends widget (7/14/30-day nutrition chart + per-day food logs), moved from the former History tab.
+A card missing from a saved order (one added in an update) is slotted in after the card that precedes it by default (`parseWidgetConfig`), not appended. `DAILY_HEALTH` is the hero Daily Health card (Apple-style activity rings, readiness from last night's sleep + HRV + resting HR against the person's own 30-day baseline, today's steps hour by hour, and dynamic today metrics). **`SLEEP`** is last night in full (score, bed → wake, stage mix, hypnogram) over a two-week schedule chart; tap or drag a night to read it, with bedtime/wake regularity and sleep debt below. **`VITALS`** (Body & Vitals) is one tile per measure Health Connect has (HRV, resting HR, weight + BMI, body fat, VO₂ max, blood pressure, SpO₂, respiration, temperature, hydration, resting energy); a tile opens its scrubbable trend with the person's usual range. Shared pieces (chips, delta pills that know which way is good, sparklines, stat tiles) live in `health/HealthUiKit.kt`. The tab pulls to refresh (`HealthViewModel.refresh()`), and Trends pages back `HealthViewModel.MAX_WEEKS_BACK` weeks with week-over-week deltas. **`ACTIVITIES`** lists the **last month** of workouts synced through Health Connect (Garmin Connect, Google Fit, Samsung Health, Strava, and others): type, source, duration, distance, pace, heart rate, elevation, and a GPS route map when the session includes one. A featured hero card sits above three compact rows, with **Show N more** revealing the rest in a scroll box. GPS is read up front only for the newest `EAGER_ROUTE_COUNT` sessions; the rest resolve through `HealthViewModel.onActivityExpanded()` when a row is opened (`routeResolved` gates the "Loading map…" placeholder). `WEEK_AT_A_GLANCE` is the Macro Trends widget (7/14/30-day nutrition chart + per-day food logs), moved from the former History tab.
 
 ### App Widget (Glance)
 The only home-screen widget is **`WeatherWidget`** (fixed 5×3, `SizeMode.Single`). It is refreshed via `WidgetUpdater.updateAllWidgets(context)` (call from the app when weather changes) or `WidgetRefreshWorker` (periodic WorkManager task, 15-min interval, no network constraint). `WeatherWidgetDataProvider` reads the forecast the app caches in the `daily_dash_weather_cache` SharedPrefs without Hilt (use `EntryPointAccessors` / `WidgetEntryPoint` when an injected dependency is needed).

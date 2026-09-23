@@ -5,20 +5,31 @@ import android.util.Log
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
+import androidx.health.connect.client.records.BasalMetabolicRateRecord
+import androidx.health.connect.client.records.BloodPressureRecord
+import androidx.health.connect.client.records.BodyFatRecord
+import androidx.health.connect.client.records.BodyTemperatureRecord
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ElevationGainedRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.FloorsClimbedRecord
 import androidx.health.connect.client.records.HeartRateRecord
+import androidx.health.connect.client.records.HeartRateVariabilityRmssdRecord
+import androidx.health.connect.client.records.HeightRecord
+import androidx.health.connect.client.records.HydrationRecord
 import androidx.health.connect.client.records.OxygenSaturationRecord
+import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.RespiratoryRateRecord
 import androidx.health.connect.client.records.RestingHeartRateRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
+import androidx.health.connect.client.records.Vo2MaxRecord
+import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.aggregate.AggregateMetric
 import androidx.health.connect.client.aggregate.AggregationResult
 import androidx.health.connect.client.aggregate.AggregationResultGroupedByPeriod
+import androidx.health.connect.client.request.AggregateGroupByDurationRequest
 import androidx.health.connect.client.request.AggregateGroupByPeriodRequest
 import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
@@ -42,6 +53,7 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.reflect.KClass
 
 data class HealthStats(
     val steps: Long = 0,
@@ -84,6 +96,17 @@ class HealthConnectRepository @Inject constructor(
             HealthPermission.getReadPermission(FloorsClimbedRecord::class),
             HealthPermission.getReadPermission(ExerciseSessionRecord::class),
             HealthPermission.getReadPermission(ElevationGainedRecord::class),
+            // Body & Vitals. Every one of these is optional: a card that finds
+            // one missing asks for it instead of breaking.
+            HealthPermission.getReadPermission(HeartRateVariabilityRmssdRecord::class),
+            HealthPermission.getReadPermission(WeightRecord::class),
+            HealthPermission.getReadPermission(HeightRecord::class),
+            HealthPermission.getReadPermission(BodyFatRecord::class),
+            HealthPermission.getReadPermission(Vo2MaxRecord::class),
+            HealthPermission.getReadPermission(BasalMetabolicRateRecord::class),
+            HealthPermission.getReadPermission(HydrationRecord::class),
+            HealthPermission.getReadPermission(BloodPressureRecord::class),
+            HealthPermission.getReadPermission(BodyTemperatureRecord::class),
         )
 
         val STEPS_PERMISSION = HealthPermission.getReadPermission(StepsRecord::class)
@@ -98,6 +121,33 @@ class HealthConnectRepository @Inject constructor(
         val FLOORS_PERMISSION = HealthPermission.getReadPermission(FloorsClimbedRecord::class)
         val EXERCISE_PERMISSION = HealthPermission.getReadPermission(ExerciseSessionRecord::class)
         val ELEVATION_PERMISSION = HealthPermission.getReadPermission(ElevationGainedRecord::class)
+        val HRV_PERMISSION = HealthPermission.getReadPermission(HeartRateVariabilityRmssdRecord::class)
+        val WEIGHT_PERMISSION = HealthPermission.getReadPermission(WeightRecord::class)
+        val HEIGHT_PERMISSION = HealthPermission.getReadPermission(HeightRecord::class)
+        val BODY_FAT_PERMISSION = HealthPermission.getReadPermission(BodyFatRecord::class)
+        val VO2_MAX_PERMISSION = HealthPermission.getReadPermission(Vo2MaxRecord::class)
+        val BMR_PERMISSION = HealthPermission.getReadPermission(BasalMetabolicRateRecord::class)
+        val HYDRATION_PERMISSION = HealthPermission.getReadPermission(HydrationRecord::class)
+        val BLOOD_PRESSURE_PERMISSION = HealthPermission.getReadPermission(BloodPressureRecord::class)
+        val BODY_TEMPERATURE_PERMISSION = HealthPermission.getReadPermission(BodyTemperatureRecord::class)
+
+        /** How far back Body & Vitals reads: long enough for a weight trend. */
+        const val VITALS_HISTORY_DAYS = 90L
+
+        /** Nights the Sleep card charts. */
+        const val SLEEP_NIGHTS = 14
+
+        /** Days of rate-like vitals (HRV, resting HR, SpO₂…) Body & Vitals charts. */
+        private const val VITALS_RATE_DAYS = 30L
+
+        /** Days of hydration totals. */
+        private const val HYDRATION_DAYS = 14L
+
+        /** Height is entered once and rarely again, so look back far. */
+        private val HEIGHT_LOOKBACK: Duration = Duration.ofDays(3650)
+
+        /** Health Connect's page cap; newest first so a chatty watch trims the oldest days. */
+        private const val VITALS_PAGE_SIZE = 5000
 
         /** Everything in [PERMISSIONS] reads data, so this is the whole set. */
         val DATA_PERMISSIONS: Set<String> = PERMISSIONS
@@ -1049,4 +1099,256 @@ class HealthConnectRepository @Inject constructor(
         )
     }
 
+    // ── Body & Vitals ─────────────────────────────────────────────────────
+
+    /**
+     * Everything the Body & Vitals card shows: [days] of body measurements
+     * and a month of rate-like vitals, one range read per type. Each read
+     * stands alone, so a type that isn't granted (or that a provider refuses)
+     * only leaves its own series empty.
+     */
+    suspend fun readBodyVitals(days: Long = VITALS_HISTORY_DAYS): BodyVitals = withContext(Dispatchers.IO) {
+        val hc = client ?: return@withContext BodyVitals()
+        val granted = getGrantedPermissions()
+        val zone = ZoneId.systemDefault()
+        val now = Instant.now()
+        val bodyRange = TimeRangeFilter.between(now.minus(Duration.ofDays(days)), now)
+        val rateStart = LocalDate.now(zone).minusDays(VITALS_RATE_DAYS - 1).atStartOfDay(zone).toInstant()
+        val rateRange = TimeRangeFilter.between(rateStart, now)
+
+        fun has(permission: String) = permission in granted
+
+        coroutineScope {
+            val weight = async {
+                if (!has(WEIGHT_PERMISSION)) emptyList()
+                else readSeries(hc, WeightRecord::class, bodyRange) { VitalSample(it.time, it.weight.inKilograms) }
+            }
+            val bodyFat = async {
+                if (!has(BODY_FAT_PERMISSION)) emptyList()
+                else readSeries(hc, BodyFatRecord::class, bodyRange) { VitalSample(it.time, it.percentage.value) }
+            }
+            val height = async {
+                if (!has(HEIGHT_PERMISSION)) null
+                else readSeries(
+                    hc,
+                    HeightRecord::class,
+                    TimeRangeFilter.between(now.minus(HEIGHT_LOOKBACK), now),
+                ) { VitalSample(it.time, it.height.inMeters) }.lastOrNull()?.value
+            }
+            val vo2 = async {
+                if (!has(VO2_MAX_PERMISSION)) emptyList()
+                else readSeries(hc, Vo2MaxRecord::class, bodyRange) {
+                    VitalSample(it.time, it.vo2MillilitersPerMinuteKilogram)
+                }
+            }
+            val hrv = async {
+                if (!has(HRV_PERMISSION)) emptyList()
+                else dailyMeans(
+                    readSeries(hc, HeartRateVariabilityRmssdRecord::class, rateRange) {
+                        VitalSample(it.time, it.heartRateVariabilityMillis)
+                    },
+                    zone,
+                )
+            }
+            val rhr = async {
+                if (!has(RESTING_HEART_RATE_PERMISSION)) emptyList()
+                else dailyMeans(
+                    readSeries(hc, RestingHeartRateRecord::class, rateRange) {
+                        VitalSample(it.time, it.beatsPerMinute.toDouble())
+                    },
+                    zone,
+                )
+            }
+            val spo2 = async {
+                if (!has(OXYGEN_SATURATION_PERMISSION)) emptyList()
+                else dailyMeans(
+                    readSeries(hc, OxygenSaturationRecord::class, rateRange) { VitalSample(it.time, it.percentage.value) },
+                    zone,
+                )
+            }
+            val resp = async {
+                if (!has(RESPIRATORY_RATE_PERMISSION)) emptyList()
+                else dailyMeans(
+                    readSeries(hc, RespiratoryRateRecord::class, rateRange) { VitalSample(it.time, it.rate) },
+                    zone,
+                )
+            }
+            val temp = async {
+                if (!has(BODY_TEMPERATURE_PERMISSION)) emptyList()
+                else readSeries(hc, BodyTemperatureRecord::class, bodyRange) {
+                    VitalSample(it.time, it.temperature.inCelsius)
+                }
+            }
+            val bmr = async {
+                if (!has(BMR_PERMISSION)) null
+                else readSeries(hc, BasalMetabolicRateRecord::class, bodyRange) {
+                    VitalSample(it.time, it.basalMetabolicRate.inKilocaloriesPerDay)
+                }.lastOrNull { it.value > 0.0 }?.value
+            }
+            val pressure = async {
+                if (!has(BLOOD_PRESSURE_PERMISSION)) emptyList()
+                else readSeries(hc, BloodPressureRecord::class, bodyRange) {
+                    BloodPressureSample(
+                        time = it.time,
+                        systolic = it.systolic.inMillimetersOfMercury,
+                        diastolic = it.diastolic.inMillimetersOfMercury,
+                    )
+                }
+            }
+            val hydration = async {
+                if (!has(HYDRATION_PERMISSION)) emptyList() else readHydrationByDay(hc, zone)
+            }
+
+            BodyVitals(
+                weightKg = weight.await(),
+                bodyFatPct = bodyFat.await(),
+                heightM = height.await(),
+                vo2Max = vo2.await(),
+                hrvMs = hrv.await(),
+                restingHr = rhr.await(),
+                spo2 = spo2.await(),
+                respiratoryRate = resp.await(),
+                bodyTempC = temp.await(),
+                bmrKcal = bmr.await(),
+                bloodPressure = pressure.await(),
+                hydrationByDay = hydration.await(),
+                notShared = buildSet {
+                    if (!has(WEIGHT_PERMISSION)) add(VitalKind.WEIGHT)
+                    if (!has(BODY_FAT_PERMISSION)) add(VitalKind.BODY_FAT)
+                    if (!has(HEIGHT_PERMISSION)) add(VitalKind.HEIGHT)
+                    if (!has(VO2_MAX_PERMISSION)) add(VitalKind.VO2_MAX)
+                    if (!has(HRV_PERMISSION)) add(VitalKind.HRV)
+                    if (!has(RESTING_HEART_RATE_PERMISSION)) add(VitalKind.RESTING_HR)
+                    if (!has(OXYGEN_SATURATION_PERMISSION)) add(VitalKind.SPO2)
+                    if (!has(RESPIRATORY_RATE_PERMISSION)) add(VitalKind.RESPIRATORY)
+                    if (!has(BODY_TEMPERATURE_PERMISSION)) add(VitalKind.TEMPERATURE)
+                    if (!has(BMR_PERMISSION)) add(VitalKind.BMR)
+                    if (!has(BLOOD_PRESSURE_PERMISSION)) add(VitalKind.BLOOD_PRESSURE)
+                    if (!has(HYDRATION_PERMISSION)) add(VitalKind.HYDRATION)
+                },
+            )
+        }
+    }
+
+    /** Oldest first. A failed read is logged and comes back empty. */
+    private suspend fun <T : Record, R> readSeries(
+        hc: HealthConnectClient,
+        type: KClass<T>,
+        range: TimeRangeFilter,
+        map: (T) -> R,
+    ): List<R> = try {
+        hc.readRecords(
+            ReadRecordsRequest(
+                recordType = type,
+                timeRangeFilter = range,
+                ascendingOrder = false,
+                pageSize = VITALS_PAGE_SIZE,
+            ),
+        ).records.asReversed().map(map)
+    } catch (e: Exception) {
+        Log.w(TAG, "Failed to read ${type.simpleName}: ${e.message}")
+        noteReadFailure(e)
+        emptyList()
+    }
+
+    /** Litres per local day for the last two weeks, zero-filled so the bars line up. */
+    private suspend fun readHydrationByDay(hc: HealthConnectClient, zone: ZoneId): List<VitalSample> {
+        val today = LocalDate.now(zone)
+        val first = today.minusDays(HYDRATION_DAYS - 1)
+        val now = LocalDateTime.now(zone)
+        val byDay = mutableMapOf<LocalDate, Double>()
+        try {
+            hc.aggregateGroupByPeriod(
+                AggregateGroupByPeriodRequest(
+                    metrics = setOf(HydrationRecord.VOLUME_TOTAL),
+                    timeRangeFilter = TimeRangeFilter.between(first.atStartOfDay(), now),
+                    timeRangeSlicer = Period.ofDays(1),
+                ),
+            ).forEach { bucket ->
+                bucket.result[HydrationRecord.VOLUME_TOTAL]?.inLiters?.let {
+                    byDay[bucket.startTime.toLocalDate()] = it
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to read hydration: ${e.message}")
+            noteReadFailure(e)
+            return emptyList()
+        }
+        return (0 until HYDRATION_DAYS).map { i ->
+            val date = first.plusDays(i)
+            VitalSample(date.atTime(12, 0).atZone(zone).toInstant(), byDay[date] ?: 0.0)
+        }
+    }
+
+    // ── Intraday + multi-night reads ──────────────────────────────────────
+
+    /** Steps in each hour of [date] (24 entries, zero where nothing moved). */
+    suspend fun readHourlySteps(date: LocalDate = LocalDate.now()): List<Long> = withContext(Dispatchers.IO) {
+        val hc = client ?: return@withContext emptyList()
+        if (!hasPermission(STEPS_PERMISSION)) return@withContext emptyList()
+        val zone = ZoneId.systemDefault()
+        val start = date.atStartOfDay(zone).toInstant()
+        val end = date.plusDays(1).atStartOfDay(zone).toInstant().coerceAtMost(Instant.now())
+        if (!start.isBefore(end)) return@withContext emptyList()
+        try {
+            val hours = LongArray(24)
+            hc.aggregateGroupByDuration(
+                AggregateGroupByDurationRequest(
+                    metrics = setOf(StepsRecord.COUNT_TOTAL),
+                    timeRangeFilter = TimeRangeFilter.between(start, end),
+                    timeRangeSlicer = Duration.ofHours(1),
+                ),
+            ).forEach { bucket ->
+                val hour = bucket.startTime.atZone(zone).hour
+                hours[hour] += bucket.result[StepsRecord.COUNT_TOTAL] ?: 0L
+            }
+            hours.toList()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to read hourly steps: ${e.message}")
+            noteReadFailure(e)
+            emptyList()
+        }
+    }
+
+    /**
+     * The last [nights] sleep days (18:00 → 18:00, as everywhere else in
+     * Health), oldest first, each with the sessions that ended in it.
+     */
+    suspend fun readSleepNights(nights: Int = SLEEP_NIGHTS): Map<LocalDate, List<SleepSessionRecord>> =
+        withContext(Dispatchers.IO) {
+            val hc = client ?: return@withContext emptyMap()
+            if (!hasPermission(SLEEP_PERMISSION)) return@withContext emptyMap()
+            val zone = ZoneId.systemDefault()
+            val today = LocalDate.now(zone)
+            val first = today.minusDays(nights - 1L)
+            val start = first.minusDays(1).atTime(18, 0).atZone(zone).toInstant()
+            val end = Instant.now()
+            if (!start.isBefore(end)) return@withContext emptyMap()
+            try {
+                hc.readRecords(
+                    ReadRecordsRequest(
+                        recordType = SleepSessionRecord::class,
+                        timeRangeFilter = TimeRangeFilter.between(start, end),
+                    ),
+                ).records
+                    .groupBy { sleepDayOf(it.endTime, zone) }
+                    .filterKeys { !it.isBefore(first) && !it.isAfter(today) }
+                    .mapValues { (_, sessions) -> sessions.sortedBy { it.startTime } }
+                    .toSortedMap()
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to read sleep nights: ${e.message}")
+                noteReadFailure(e)
+                emptyMap()
+            }
+        }
+
+    /** Sleep ending before 18:00 belongs to that day; after 18:00, to the next. */
+    private fun sleepDayOf(end: Instant, zone: ZoneId): LocalDate {
+        val local = end.atZone(zone)
+        return if (local.toLocalTime().isBefore(java.time.LocalTime.of(18, 0))) {
+            local.toLocalDate()
+        } else {
+            local.toLocalDate().plusDays(1)
+        }
+    }
 }

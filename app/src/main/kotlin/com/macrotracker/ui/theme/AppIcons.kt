@@ -205,6 +205,20 @@ object AppIcons {
     val Warning: ImageVector by lazy { icon("Warning") { s("m21.73 18 l-8 -14 a2 2 0 0 0 -3.48 0 l-8 14 A2 2 0 0 0 4 21 h16 a2 2 0 0 0 1.73 -3"); s("M12 9 v4"); s("M12 17 h0.01") } }
     /** Tabler `yoga` */
     val Yoga: ImageVector by lazy { icon("Yoga") { s("M4 20 h4 l1.5 -3"); s("M17 20 l-1 -5 h-5 l1 -7"); s("M4 10 l4 -1 l4 -1 l4 1.5 l4 1.5"); s("M10.007 5 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0") } }
+    /** Lucide `weight` */
+    val Scale: ImageVector by lazy { icon("Scale") { s("M9 5 a3 3 0 1 0 6 0 a3 3 0 1 0 -6 0"); s("M6.5 8 a2 2 0 0 0 -1.905 1.46 L2.1 18.5 A2 2 0 0 0 4 21 h16 a2 2 0 0 0 1.925 -2.54 L19.4 9.5 A2 2 0 0 0 17.48 8 Z") } }
+    /** Lucide `thermometer` */
+    val Thermometer: ImageVector by lazy { icon("Thermometer") { s("M14 4 v10.54 a4 4 0 1 1 -4 0 V4 a2 2 0 0 1 4 0 Z") } }
+    /** Lucide `glass-water` */
+    val GlassWater: ImageVector by lazy { icon("GlassWater") { s("M5.116 4.104 A1 1 0 0 1 6.11 3 h11.78 a1 1 0 0 1 0.994 1.105 L17.19 20.21 A2 2 0 0 1 15.2 22 H8.8 a2 2 0 0 1 -2 -1.79 Z"); s("M6 12 a5 5 0 0 1 6 0 a5 5 0 0 0 6 0") } }
+    /** Lucide `gauge` */
+    val Gauge: ImageVector by lazy { icon("Gauge") { s("m12 14 l4 -4"); s("M3.34 19 a10 10 0 1 1 17.32 0") } }
+    /** Lucide `sunrise` */
+    val Sunrise: ImageVector by lazy { icon("Sunrise") { s("M12 2 v8"); s("m4.93 10.93 l1.41 1.41"); s("M2 18 h2"); s("M20 18 h2"); s("m19.07 10.93 l-1.41 1.41"); s("M22 22 H2"); s("m8 6 l4 -4 l4 4"); s("M16 18 a4 4 0 0 0 -8 0") } }
+    /** Lucide `droplet` */
+    val Droplet: ImageVector by lazy { icon("Droplet") { s("M12 22 a7 7 0 0 0 7 -7 c0 -2 -1 -3.9 -3 -5.5 s-3.5 -4 -4 -6.5 c-0.5 2.5 -2 4.9 -4 6.5 C6 11.1 5 13 5 15 a7 7 0 0 0 7 7 z") } }
+    /** Lucide `wind` */
+    val Wind: ImageVector by lazy { icon("Wind") { s("M12.8 19.6 A2 2 0 1 0 14 16 H2"); s("M17.5 8 a2.5 2.5 0 1 1 2 4 H2"); s("M9.8 4.4 A2 2 0 1 1 11 8 H2") } }
 }
 
 private val Ink = SolidColor(Color.Black)

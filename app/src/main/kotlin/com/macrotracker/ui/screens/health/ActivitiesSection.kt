@@ -66,7 +66,11 @@ import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.HapticHelper
 import com.macrotracker.ui.viewmodel.ActivitiesUiState
+import androidx.compose.ui.text.style.TextAlign
 import java.time.Duration
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.roundToInt
 import com.macrotracker.ui.theme.AppIcons
@@ -88,7 +92,7 @@ fun ActivitiesSection(
         val activities = (state as? ActivitiesUiState.Success)?.activities.orEmpty()
         CardHeader(
             title = "Activities",
-            icon = AppIcons.Heart,
+            icon = AppIcons.Activity,
             accent = HealthActivity,
             subtitle = if (activities.isEmpty()) "Workouts from Garmin and Health Connect" else monthSummary(activities),
             modifier = Modifier.padding(bottom = 12.dp),
@@ -152,6 +156,8 @@ fun ActivitiesSection(
                         },
                     )
                 } else {
+                    WeekActivityStrip(activities = state.activities)
+                    Spacer(modifier = Modifier.height(14.dp))
                     ActivitiesList(
                         activities = state.activities,
                         haptics = haptics,
@@ -159,6 +165,58 @@ fun ActivitiesSection(
                     )
                 }
             }
+        }
+    }
+}
+
+/** Minutes a week the WHO recommends at moderate intensity. */
+private const val WEEKLY_ACTIVE_GOAL_MINUTES = 150L
+
+/** The last seven days of workouts, per day, against the WHO's 150 minutes a week. */
+@Composable
+private fun WeekActivityStrip(activities: List<HealthActivity>) {
+    val zone = remember { ZoneId.systemDefault() }
+    val today = LocalDate.now(zone)
+    val days = remember(today) { (6 downTo 0).map { today.minusDays(it.toLong()) } }
+    val perDay = remember(activities, days) {
+        val byDay = activities.groupBy { it.startTime.atZone(zone).toLocalDate() }
+        days.map { day -> byDay[day].orEmpty().sumOf { it.duration.toMinutes() } }
+    }
+    val total = perDay.sum()
+    val sessions = activities.count { !it.startTime.atZone(zone).toLocalDate().isBefore(days.first()) }
+    HealthSectionLabel(
+        text = "Last 7 days",
+        trailing = buildString {
+            append(if (total > 0) formatMinutesCompact(total) else "0m")
+            append(" of ${WEEKLY_ACTIVE_GOAL_MINUTES}m")
+            if (sessions > 0) append(if (sessions == 1) " · 1 workout" else " · $sessions workouts")
+        },
+    )
+    Spacer(modifier = Modifier.height(6.dp))
+    HealthProgressBar(
+        progress = total.toFloat() / WEEKLY_ACTIVE_GOAL_MINUTES,
+        color = HealthActivity,
+        heightDp = 5f,
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    MiniBars(
+        values = perDay.map { it.toDouble() },
+        color = HealthActivity,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(34.dp),
+    )
+    Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+        days.forEachIndexed { i, day ->
+            Text(
+                if (i == days.lastIndex) "Today" else day.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()),
+                fontSize = 9.sp,
+                color = if (i == days.lastIndex) TextPrimary else TextTertiary,
+                fontWeight = if (i == days.lastIndex) FontWeight.SemiBold else FontWeight.Normal,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                modifier = Modifier.weight(1f),
+            )
         }
     }
 }
@@ -512,12 +570,12 @@ private fun ActivityHrSparkline(samples: List<ActivityHrPoint>, accent: Color) {
             drawPath(
                 path,
                 color = accent.copy(alpha = 0.28f),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 8f, cap = StrokeCap.Round),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 5.dp.toPx(), cap = StrokeCap.Round),
             )
             drawPath(
                 path,
                 color = accent,
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5f, cap = StrokeCap.Round),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round),
             )
         }
     }

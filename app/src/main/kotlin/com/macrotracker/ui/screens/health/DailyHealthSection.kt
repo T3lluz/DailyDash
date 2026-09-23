@@ -1,9 +1,12 @@
 package com.macrotracker.ui.screens.health
 
+import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.annotation.DrawableRes
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -21,7 +24,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -30,6 +37,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -38,15 +47,21 @@ import androidx.compose.ui.unit.sp
 import androidx.health.connect.client.records.SleepSessionRecord
 import com.macrotracker.R
 import com.macrotracker.data.health.HealthStats
+import com.macrotracker.data.health.Readiness
 import com.macrotracker.data.local.DailySummary
-import com.macrotracker.ui.components.CardTitle
+import com.macrotracker.ui.components.CardHeader
 import com.macrotracker.ui.components.ContentSkeleton
 import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.components.StatusCopy
+import com.macrotracker.ui.theme.AppIcons
+import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.HealthEnergy
 import com.macrotracker.ui.theme.HealthFloors
+import com.macrotracker.ui.theme.HealthActivity
 import com.macrotracker.ui.theme.HealthHeartRate
+import com.macrotracker.ui.theme.HealthHrv
+import com.macrotracker.ui.theme.HealthHydration
 import com.macrotracker.ui.theme.HealthMove
 import com.macrotracker.ui.theme.HealthOxygen
 import com.macrotracker.ui.theme.HealthProtein
@@ -55,11 +70,20 @@ import com.macrotracker.ui.theme.HealthRestingHr
 import com.macrotracker.ui.theme.HealthSleep
 import com.macrotracker.ui.theme.HealthSteps
 import com.macrotracker.ui.theme.MacroMotion
+import com.macrotracker.ui.theme.ReadinessFair
+import com.macrotracker.ui.theme.ReadinessGood
+import com.macrotracker.ui.theme.ReadinessHigh
+import com.macrotracker.ui.theme.ReadinessLow
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
+import com.macrotracker.ui.theme.TextTertiary
+import com.macrotracker.ui.util.rememberHaptics
+import com.macrotracker.ui.util.rememberReducedMotion
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 // Local aliases for the shared health palette (Color.kt) so this file reads
@@ -79,7 +103,8 @@ private enum class HeroKind { SLEEP, STEPS, MOVE, RESTING, ENERGY }
 
 /**
  * Daily Health — Whoop/Oura-inspired: one hero number, concentric rings,
- * thin goal bars, then a flat chip strip of whatever else exists today.
+ * thin goal bars, readiness and why, the day's steps hour by hour, then a
+ * flat grid of whatever else exists today.
  */
 @Composable
 fun DailyHealthSection(
@@ -101,9 +126,17 @@ fun DailyHealthSection(
     activeCaloriesToday: Double? = null,
     distanceToday: Double? = null,
     floorsToday: Double? = null,
+    /** Last night's sleep plus HRV and resting HR against the person's baseline. */
+    readiness: Readiness? = null,
+    /** Steps per hour of today, 24 entries from midnight. */
+    hourlySteps: List<Long> = emptyList(),
+    exerciseMinutesToday: Long? = null,
+    hrvMs: Double? = null,
+    hydrationLitres: Double? = null,
     loading: Boolean = false,
     delayMs: Long = 0L,
 ) {
+    val haptics = rememberHaptics()
     val activity = remember(stats, stepsToday, activeCaloriesToday, distanceToday, floorsToday) {
         computeTodayActivity(
             stats = stats,
@@ -144,7 +177,10 @@ fun DailyHealthSection(
         ?: restingHrBpm?.filter { it.isDigit() }?.toLongOrNull()
     val eaten = summary?.totalCalories?.takeIf { it > 0 }
     val protein = summary?.totalProtein?.takeIf { it > 0 }
-    val burned = activity.activeCalories.takeIf { it > 0 }?.roundToInt()
+    // Total burn (resting + active) is the honest "out" side of energy; active
+    // alone is the fallback for sources that only write active calories.
+    val totalBurn = stats?.totalCaloriesBurned?.takeIf { it > 0 }?.roundToInt()
+    val burned = totalBurn ?: activity.activeCalories.takeIf { it > 0 }?.roundToInt()
     val quiet = activity.steps == 0L && sleepMin == 0L && activity.activeCalories <= 0
 
     val hasAny = !quiet || resting != null || eaten != null ||
@@ -327,18 +363,28 @@ fun DailyHealthSection(
             )
         }
         if (protein != null) add(Chip("Protein", "${protein}g", ProteinC, R.drawable.ic_protein))
+        if (totalBurn != null && hero != HeroKind.ENERGY) {
+            add(Chip("Total burn", "$totalBurn kcal", MoveC, R.drawable.ic_flame))
+        }
+        exerciseMinutesToday?.takeIf { it > 0 }?.let {
+            add(Chip("Exercise", formatMinutesCompact(it), HealthActivity, icon = AppIcons.Run))
+        }
+        hrvMs?.takeIf { it > 0 }?.let {
+            add(Chip("HRV", "${it.roundToInt()} ms", HealthHrv, icon = AppIcons.HeartPulse))
+        }
+        hydrationLitres?.takeIf { it > 0 }?.let {
+            add(Chip("Water", String.format(Locale.US, "%.1f L", it), HealthHydration, icon = AppIcons.GlassWater))
+        }
     }
 
     MacroCard(delayMs = delayMs) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                CardTitle("Daily Health")
-                Text(dateLabel, fontSize = 13.sp, color = TextSecondary)
-            }
+            CardHeader(
+                title = "Daily Health",
+                icon = AppIcons.HeartPulse,
+                accent = MoveC,
+                subtitle = dateLabel,
+            )
 
             Spacer(modifier = Modifier.height(14.dp))
 
@@ -452,6 +498,16 @@ fun DailyHealthSection(
                 }
             }
 
+            if (readiness != null) {
+                Spacer(modifier = Modifier.height(14.dp))
+                ReadinessRow(readiness)
+            }
+
+            if (hourlySteps.sum() > 0L) {
+                Spacer(modifier = Modifier.height(14.dp))
+                HourlySteps(hourly = hourlySteps, onScrub = { haptics.tick() })
+            }
+
             if (chips.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(14.dp))
                 // Dense 2-column metric grid fills remaining width
@@ -486,7 +542,8 @@ private data class Chip(
     val label: String,
     val value: String,
     val color: Color,
-    @param:DrawableRes val iconRes: Int,
+    @param:DrawableRes val iconRes: Int? = null,
+    val icon: ImageVector? = null,
 )
 
 @Composable
@@ -533,25 +590,7 @@ private fun GoalBar(
             )
         }
         Spacer(modifier = Modifier.height(if (compact) 4.dp else 6.dp))
-        Canvas(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(if (compact) 4.dp else 6.dp),
-        ) {
-            drawRoundRect(
-                color = color.copy(alpha = 0.15f),
-                size = size,
-                cornerRadius = CornerRadius(size.height / 2f),
-            )
-            val w = size.width * progress.coerceIn(0f, 1f)
-            if (w > 0f) {
-                drawRoundRect(
-                    color = color,
-                    size = Size(w, size.height),
-                    cornerRadius = CornerRadius(size.height / 2f),
-                )
-            }
-        }
+        HealthProgressBar(progress = progress, color = color, heightDp = if (compact) 4f else 6f)
     }
 }
 
@@ -564,12 +603,20 @@ private fun MetricCell(chip: Chip, modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Icon(
-            painter = painterResource(chip.iconRes),
-            contentDescription = null,
-            tint = chip.color,
-            modifier = Modifier.size(16.dp),
-        )
+        when {
+            chip.iconRes != null -> Icon(
+                painter = painterResource(chip.iconRes),
+                contentDescription = null,
+                tint = chip.color,
+                modifier = Modifier.size(16.dp),
+            )
+            chip.icon != null -> Icon(
+                imageVector = chip.icon,
+                contentDescription = null,
+                tint = chip.color,
+                modifier = Modifier.size(16.dp),
+            )
+        }
         Column(modifier = Modifier.weight(1f)) {
             Text(chip.label, fontSize = 10.sp, color = TextSecondary, maxLines = 1)
             Text(
@@ -642,4 +689,155 @@ private fun pct(progress: Float) = (progress.coerceIn(0f, 1f) * 100).roundToInt(
 private fun signedPct(value: Double): String {
     val sign = if (value >= 0) "+" else ""
     return "$sign${String.format(Locale.US, "%.0f", value)}%"
+}
+
+fun readinessColor(score: Int): Color = when {
+    score >= 85 -> ReadinessHigh
+    score >= 70 -> ReadinessGood
+    score >= 55 -> ReadinessFair
+    else -> ReadinessLow
+}
+
+/** Readiness score in a ring, with the parts that made it. */
+@Composable
+private fun ReadinessRow(readiness: Readiness) {
+    val color = readinessColor(readiness.score)
+    val reduced = rememberReducedMotion()
+    val progress = remember { Animatable(if (reduced) readiness.score / 100f else 0f) }
+    LaunchedEffect(readiness.score) {
+        progress.animateTo(readiness.score / 100f, MacroMotion.chartRevealTween(700))
+    }
+    val parts = buildList {
+        readiness.sleepScore?.let { add("Sleep $it") }
+        readiness.hrvDeltaPct?.let {
+            val n = abs(it).roundToInt()
+            add(if (n == 0) "HRV at your usual" else "HRV $n% ${if (it > 0) "above" else "below"} usual")
+        }
+        readiness.rhrDeltaBpm?.let {
+            val n = abs(it).roundToInt()
+            add(if (n == 0) "resting HR at usual" else "resting HR $n ${if (it > 0) "above" else "below"}")
+        }
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Background, RoundedCornerShape(12.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(modifier = Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+            Canvas(modifier = Modifier.size(44.dp)) {
+                val stroke = 4.5.dp.toPx()
+                val inset = stroke / 2f
+                val arcSize = Size(size.width - stroke, size.height - stroke)
+                drawArc(
+                    color = color.copy(alpha = 0.18f),
+                    startAngle = -90f,
+                    sweepAngle = 360f,
+                    useCenter = false,
+                    topLeft = Offset(inset, inset),
+                    size = arcSize,
+                    style = Stroke(stroke),
+                )
+                drawArc(
+                    color = color,
+                    startAngle = -90f,
+                    sweepAngle = 360f * progress.value,
+                    useCenter = false,
+                    topLeft = Offset(inset, inset),
+                    size = arcSize,
+                    style = Stroke(stroke, cap = StrokeCap.Round),
+                )
+            }
+            Text("${readiness.score}", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Readiness", fontSize = 11.sp, color = TextSecondary)
+                Text("  ·  ", fontSize = 11.sp, color = TextTertiary)
+                Text(readiness.label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = color)
+            }
+            Text(
+                parts.joinToString(" · ").replaceFirstChar { it.uppercase() },
+                fontSize = 11.sp,
+                color = TextPrimary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/**
+ * Today's steps per hour. Hours still to come draw as stubs; tap or drag to
+ * read one hour, the label follows.
+ */
+@Composable
+private fun HourlySteps(hourly: List<Long>, onScrub: () -> Unit) {
+    var picked by remember { mutableIntStateOf(-1) }
+    val currentOnScrub by rememberUpdatedState(onScrub)
+    val nowHour = remember { LocalTime.now().hour }
+    val peak = hourly.indices.maxByOrNull { hourly[it] } ?: 0
+    val reduced = rememberReducedMotion()
+    val reveal = remember { Animatable(if (reduced) 1f else 0f) }
+    LaunchedEffect(Unit) {
+        if (reveal.value < 1f) reveal.animateTo(1f, MacroMotion.chartRevealTween(700))
+    }
+
+    val trailing = if (picked in hourly.indices) {
+        String.format(Locale.US, "%02d:00–%02d:00 · %,d steps", picked, (picked + 1) % 24, hourly[picked])
+    } else {
+        String.format(Locale.US, "Busiest %02d:00 · %,d", peak, hourly[peak])
+    }
+    HealthSectionLabel(text = "Through the day", trailing = trailing)
+    Spacer(modifier = Modifier.height(8.dp))
+    Canvas(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .pointerInput(hourly.size) {
+                detectTapGestures { offset ->
+                    val i = (offset.x / size.width * hourly.size).toInt().coerceIn(0, hourly.lastIndex)
+                    picked = if (picked == i) -1 else i
+                    currentOnScrub()
+                }
+            }
+            .pointerInput(hourly.size) {
+                detectHorizontalDragGestures { change, _ ->
+                    val i = (change.position.x / size.width * hourly.size).toInt().coerceIn(0, hourly.lastIndex)
+                    if (i != picked) {
+                        picked = i
+                        currentOnScrub()
+                    }
+                }
+            },
+    ) {
+        val max = (hourly.maxOrNull() ?: 0L).coerceAtLeast(1L).toFloat()
+        val slot = size.width / hourly.size
+        val barW = slot * 0.62f
+        val stub = 2.dp.toPx()
+        hourly.forEachIndexed { i, steps ->
+            val future = i > nowHour
+            val h = if (steps <= 0L || future) stub else (size.height * (steps / max) * reveal.value).coerceAtLeast(stub)
+            val color = when {
+                future || steps <= 0L -> Border
+                i == picked -> StepsC
+                picked >= 0 -> StepsC.copy(alpha = 0.35f)
+                i == nowHour -> StepsC
+                else -> StepsC.copy(alpha = 0.6f)
+            }
+            drawRoundRect(
+                color = color,
+                topLeft = Offset(slot * i + (slot - barW) / 2f, size.height - h),
+                size = Size(barW, h),
+                cornerRadius = CornerRadius(barW / 3f),
+            )
+        }
+    }
+    Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+        listOf("00", "06", "12", "18").forEach {
+            Text(it, fontSize = 9.sp, color = TextTertiary, modifier = Modifier.weight(1f))
+        }
+    }
 }

@@ -63,12 +63,17 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 import com.macrotracker.ui.theme.TextTertiary
+import com.macrotracker.ui.theme.HealthHeartRate
+import com.macrotracker.ui.theme.SleepStageAwake
+import com.macrotracker.ui.theme.SleepStageDeep
+import com.macrotracker.ui.theme.SleepStageLight
+import com.macrotracker.ui.theme.SleepStageRem
 
-private val HrColor = Color(0xFFEF5350)
-private val SleepAwake = Color(0xFFFF8A65)
-private val SleepRem = Color(0xFF4FC3F7)
-private val SleepLight = Color(0xFF7E57C2)
-private val SleepDeep = Color(0xFF5C6BC0)
+private val HrColor = HealthHeartRate
+private val SleepAwake = SleepStageAwake
+private val SleepRem = SleepStageRem
+private val SleepLight = SleepStageLight
+private val SleepDeep = SleepStageDeep
 
 /** Lane index for Apple-style chart: 0 Awake (top) → 3 Deep (bottom). */
 private fun sleepStageLane(stage: Int): Int? = when (stage) {
@@ -531,7 +536,6 @@ fun SleepDetailChart(
         val lightMin = nightScore?.lightMinutes ?: 0L
         val remMin = nightScore?.remMinutes ?: 0L
         val awakeMin = nightScore?.awakeMinutes ?: 0L
-        val mixTotal = (deepMin + lightMin + remMin + awakeMin).coerceAtLeast(1L)
 
         Spacer(modifier = Modifier.height(18.dp))
         Text(
@@ -542,7 +546,47 @@ fun SleepDetailChart(
         )
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Compact mix strip (replaces bulky per-stage bars)
+        SleepStageMix(
+            deepMinutes = deepMin,
+            lightMinutes = lightMin,
+            remMinutes = remMin,
+            awakeMinutes = awakeMin,
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        val chartStages = remember(stages) {
+            mergeSleepStages(stages.filter { sleepStageLane(it.stage) != null })
+        }
+        if (chartStages.isEmpty()) {
+            Text("No sleep-stage breakdown for this night.", color = TextSecondary, fontSize = 13.sp)
+            return@Column
+        }
+
+        SleepStagesHypnogram(
+            segments = chartStages,
+            reveal = reveal.value,
+            haptics = haptics,
+        )
+    }
+}
+
+/** One strip of the night's stage mix with a legend of minutes and shares under it. */
+@Composable
+fun SleepStageMix(
+    deepMinutes: Long,
+    lightMinutes: Long,
+    remMinutes: Long,
+    awakeMinutes: Long,
+    modifier: Modifier = Modifier,
+) {
+    val parts = listOf(
+        Triple("Deep", deepMinutes, SleepDeep),
+        Triple("Light", lightMinutes, SleepLight),
+        Triple("REM", remMinutes, SleepRem),
+        Triple("Awake", awakeMinutes, SleepAwake),
+    )
+    val total = parts.sumOf { it.second }.coerceAtLeast(1L)
+    Column(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -550,12 +594,7 @@ fun SleepDetailChart(
                 .clip(RoundedCornerShape(6.dp))
                 .background(Border.copy(alpha = 0.3f)),
         ) {
-            listOf(
-                deepMin to SleepDeep,
-                lightMin to SleepLight,
-                remMin to SleepRem,
-                awakeMin to SleepAwake,
-            ).forEach { (mins, color) ->
+            parts.forEach { (_, mins, color) ->
                 if (mins <= 0L) return@forEach
                 Box(
                     modifier = Modifier
@@ -570,13 +609,8 @@ fun SleepDetailChart(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            listOf(
-                Triple("Deep", deepMin, SleepDeep),
-                Triple("Light", lightMin, SleepLight),
-                Triple("REM", remMin, SleepRem),
-                Triple("Awake", awakeMin, SleepAwake),
-            ).filter { it.second > 0 }.forEach { (label, mins, color) ->
-                val pct = (mins * 100f / mixTotal).roundToInt()
+            parts.filter { it.second > 0 }.forEach { (label, mins, color) ->
+                val pct = (mins * 100f / total).roundToInt()
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
@@ -597,23 +631,29 @@ fun SleepDetailChart(
                 }
             }
         }
+    }
+}
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        val chartStages = remember(stages) {
-            mergeSleepStages(stages.filter { sleepStageLane(it.stage) != null })
-        }
-        if (chartStages.isEmpty()) {
-            Text("No sleep-stage breakdown for this night.", color = TextSecondary, fontSize = 13.sp)
-            return@Column
-        }
-
-        SleepStagesHypnogram(
-            segments = chartStages,
-            reveal = reveal.value,
-            haptics = haptics,
+/** The night's hypnogram on its own, for cards that show their own summary above it. */
+@Composable
+fun SleepNightHypnogram(
+    sessions: List<SleepSessionRecord>,
+    haptics: HapticHelper,
+) {
+    val segments = remember(sessions) {
+        mergeSleepStages(
+            sessions.flatMap { it.stages }
+                .sortedBy { it.startTime }
+                .filter { sleepStageLane(it.stage) != null },
         )
     }
+    if (segments.isEmpty()) return
+    val reveal = remember(sessions) { Animatable(0f) }
+    LaunchedEffect(sessions) {
+        reveal.snapTo(0f)
+        reveal.animateTo(1f, MacroMotion.chartRevealTween(700))
+    }
+    SleepStagesHypnogram(segments = segments, reveal = reveal.value, haptics = haptics)
 }
 
 /**
