@@ -410,7 +410,7 @@ class HomeViewModel @Inject constructor(
 
             _calendarState.value = CalendarUiState.Success(
                 events = todayEvents,
-                upcomingEvents = upcoming.take(10),
+                upcomingEvents = upcoming.take(40),
                 lastUpdatedAt = Instant.now(),
             )
         } catch (e: Exception) {

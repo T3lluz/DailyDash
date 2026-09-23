@@ -40,6 +40,9 @@ data class CalendarEvent(
     val customAppUri: String = "",
     val calendarName: String = "",
     val calendarId: Long = 0,
+    /** The instance's own begin and end as the provider stores them, for opening it in the calendar app. */
+    val beginMillis: Long = 0,
+    val endMillis: Long = 0,
 ) {
     /** Extract the first URL (meeting link) from description or customAppUri */
     val meetingLink: String?
@@ -207,6 +210,8 @@ class CalendarRepository @Inject constructor(
                             customAppUri = customAppUri,
                             calendarName = calendarName,
                             calendarId = calendarId,
+                            beginMillis = begin,
+                            endMillis = end,
                         ),
                     )
                 }
