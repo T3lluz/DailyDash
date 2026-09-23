@@ -22,5 +22,16 @@
     <string name="server_live_less">Less</string>
     <string name="server_ask_hermes">Ask Hermes</string>
     <string name="server_ask_ai">Ask AI</string>
+
+    <!-- Hermes -->
+    <string name="hermes_channel_group">Hermes</string>
+    <string name="hermes_channel_working">Hermes is working</string>
+    <string name="hermes_channel_working_desc">The quiet notification that keeps the phone listening while Hermes works on something</string>
+    <string name="hermes_channel_done">Hermes replies</string>
+    <string name="hermes_channel_done_desc">When Hermes finishes, needs your approval, or runs into a problem</string>
+    <string name="hermes_stop">Stop</string>
+    <string name="hermes_reply">Reply</string>
+    <string name="hermes_reply_hint">Message Hermes</string>
+    <string name="hermes_open">Open</string>
 </resources>
 

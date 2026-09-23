@@ -175,6 +175,34 @@ object MacroMotion {
         const val REST_MS = 420L
     }
 
+    /**
+     * opencode's working indicator, as its TUI draws it: eight blocks, a bright lead with a
+     * six-step trail sweeping out and back, a short rest at the far end and a long one at
+     * home while the trail fades, one frame every 40 ms (about 2.2 s a cycle).
+     */
+    object WorkingScanner {
+        const val FRAME_MS = 40L
+        const val BLOCKS = 8
+        const val HOLD_START = 30
+        const val HOLD_END = 9
+        const val TRAIL = 6
+
+        /** Resting blocks are the accent at this alpha, dimmed further by the fade. */
+        const val INACTIVE_ALPHA = 0.6f
+        const val MIN_ALPHA = 0.3f
+    }
+
+    /** The navbar's activity tab rising out of the pill and settling back into it: a touch of give, no wobble. */
+    fun <T> navTabSpring() = spring<T>(dampingRatio = 0.82f, stiffness = 420f)
+
+    /** The tab's label changing ("Thinking" → "Running commands"): the old word rolls up, the new one in. */
+    val navTabLabelSwap: ContentTransform
+        get() = ContentTransform(
+            targetContentEnter = slideInVertically(slideTween(260)) { it / 2 } + fadeIn(fadeTween(200)),
+            initialContentExit = slideOutVertically(slideTween(200)) { -it / 2 } + fadeOut(fadeTween(FADE_OUT_MS)),
+            sizeTransform = SizeTransform(clip = false) { _, _ -> tween(260, easing = FastOutSlowInEasing) },
+        )
+
     private const val CAROUSEL_TRAVEL_MIN_MS = 300
     private const val CAROUSEL_TRAVEL_PER_MS = 110
     private const val CAROUSEL_TRAVEL_MAX_MS = 1100

@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import com.macrotracker.data.hermes.HermesNotifier
 import com.macrotracker.data.server.ServerIntentRequest
 import com.macrotracker.data.server.ServerNotifier
 import com.macrotracker.ui.screens.MainScreen
@@ -24,17 +25,24 @@ class MainActivity : ComponentActivity() {
     private val _serverRequest = MutableStateFlow<ServerIntentRequest?>(null)
     private val serverRequest: StateFlow<ServerIntentRequest?> = _serverRequest
 
+    /** A tapped Hermes notification: the chat to open, or "" for Tech support as it was. */
+    private val _hermesRequest = MutableStateFlow<String?>(null)
+    private val hermesRequest: StateFlow<String?> = _hermesRequest
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // Switch away from the splash theme before Compose draws its first frame
         setTheme(R.style.Theme_DailyDash)
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         handleServerIntent(intent)
+        handleHermesIntent(intent)
         setContent {
             DailyDashTheme {
                 MainScreen(
                     serverRequest = serverRequest,
                     onServerRequestHandled = { _serverRequest.value = null },
+                    hermesRequest = hermesRequest,
+                    onHermesRequestHandled = { _hermesRequest.value = null },
                 )
             }
         }
@@ -44,6 +52,13 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleServerIntent(intent)
+        handleHermesIntent(intent)
+    }
+
+    private fun handleHermesIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(HermesNotifier.EXTRA_OPEN_HERMES, false) != true) return
+        _hermesRequest.value = intent.getStringExtra(HermesNotifier.EXTRA_THREAD_ID).orEmpty()
+        intent.removeExtra(HermesNotifier.EXTRA_OPEN_HERMES)
     }
 
     private fun handleServerIntent(intent: Intent?) {

@@ -174,6 +174,15 @@ fun AIScreen(
         }
     }
 
+    // The navbar's Hermes tab or a Hermes notification was tapped: that chat, in Tech support.
+    val hermesOpenRequest by hermesViewModel.openRequest.collectAsState()
+    LaunchedEffect(hermesOpenRequest) {
+        val threadId = hermesOpenRequest ?: return@LaunchedEffect
+        selectedTab = ChatBot.SYSOP.id
+        sysopForHandoff = false
+        hermesViewModel.openRequested(threadId)
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()

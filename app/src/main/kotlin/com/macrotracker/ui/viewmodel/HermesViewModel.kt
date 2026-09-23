@@ -6,8 +6,11 @@ import android.provider.OpenableColumns
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.macrotracker.data.chat.ServerAiHandoff
+import com.macrotracker.data.hermes.HermesActivityTracker
 import com.macrotracker.data.hermes.HermesAttachment
 import com.macrotracker.data.hermes.HermesCatalog
+import com.macrotracker.data.hermes.HermesFollower
+import com.macrotracker.data.hermes.HermesOutcome
 import com.macrotracker.data.hermes.HermesClient
 import com.macrotracker.data.hermes.HermesCommand
 import com.macrotracker.data.hermes.HermesEvent
@@ -94,6 +97,7 @@ class HermesViewModel @Inject constructor(
     private val client: HermesClient,
     private val settings: SettingsRepository,
     private val handoff: ServerAiHandoff,
+    private val activity: HermesActivityTracker,
     @param:ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -145,8 +149,36 @@ class HermesViewModel @Inject constructor(
     private var wantThink = false
     private var wantFast = false
 
+    /** A chat the navbar tab or a notification asked for; the AI tab switches to Tech support and opens it. */
+    val openRequest: StateFlow<String?> = activity.openRequest
+
     init {
         refresh()
+        // A reply typed into a notification runs from the service; the chat on screen follows it too.
+        viewModelScope.launch {
+            activity.serviceTurns.collect { id ->
+                val s = _state.value
+                if (s.threadId != id || s.busy) return@collect
+                streamJob?.cancel()
+                _state.update { it.copy(live = HermesLive(startedAtMs = System.currentTimeMillis(), phase = "sending")) }
+                streamJob = launch {
+                    runCatching { client.thread(id) }.onSuccess { thread ->
+                        _state.update { if (it.threadId == id) it.copy(items = thread.items) else it }
+                    }
+                    follow(id, client.watch(id))
+                }
+            }
+        }
+    }
+
+    fun openRequested(id: String) {
+        activity.consumeOpen(id)
+        if (id.isNotBlank() && id != _state.value.threadId) openThread(id)
+    }
+
+    /** The pane is on screen and the app in front, so this chat's turns need no announcing. */
+    fun setViewing(onScreen: Boolean) {
+        activity.setViewing(if (onScreen) _state.value.threadId else null)
     }
 
     /** The person picked a bot; that sticks until they pick the other. */
@@ -273,6 +305,7 @@ class HermesViewModel @Inject constructor(
     fun openThread(id: String, chosen: Boolean = true) {
         if (chosen) threadChosen = true
         if (_state.value.threadId == id && _state.value.items.isNotEmpty()) return
+        releaseLive()
         streamJob?.cancel()
         threadJob?.cancel()
         val summary = _state.value.threads.firstOrNull { it.id == id }
@@ -316,6 +349,7 @@ class HermesViewModel @Inject constructor(
     /** A new thread is made on the server with the first message, so an empty one is never left behind. */
     fun newThread() {
         threadChosen = true
+        releaseLive()
         streamJob?.cancel()
         threadJob?.cancel()
         _state.update {
@@ -644,6 +678,7 @@ class HermesViewModel @Inject constructor(
                     _state.value.currentModel?.id?.let { model -> runCatching { client.setThreadModel(id, model) } }
                     refreshThreads()
                 }
+                report()
                 follow(threadId, client.chat(threadId, prompt, modeId, phoneContext(context), output, clarifyId, attachments))
             } catch (e: CancellationException) {
                 throw e
@@ -670,10 +705,16 @@ class HermesViewModel @Inject constructor(
         var stream = first
         var attempts = 0
         var failure: String? = null
+        var doneError: String? = null
+        var stopped = false
         while (!finished && attempts < MAX_REJOINS) {
             try {
                 stream.collect { event ->
-                    if (event is HermesEvent.Done) finished = true
+                    if (event is HermesEvent.Done) {
+                        finished = true
+                        doneError = event.error
+                        stopped = event.stopped
+                    }
                     apply(event)
                 }
             } catch (e: CancellationException) {
@@ -693,13 +734,43 @@ class HermesViewModel @Inject constructor(
             delay(REJOIN_DELAY_MS)
             stream = client.watch(threadId)
         }
+        val error = if (!finished) failure else doneError
         if (!finished && failure != null) {
             endTurnWithError(failure)
         } else {
             _state.update { it.copy(live = null) }
         }
         reconcile(threadId)
+        announce(threadId, error, stopped)
         sendQueued(threadId)
+    }
+
+    /** What the navbar tab and the ongoing notification show while this chat's turn runs. */
+    private fun report() {
+        val s = _state.value
+        val id = s.threadId ?: return
+        val live = s.live ?: return
+        activity.progress(id, s.threadTitle, live, HermesFollower.PANE)
+    }
+
+    /** Tells the phone how the turn ended, so it can say so if nobody is looking. */
+    private fun announce(threadId: String, error: String?, stopped: Boolean) {
+        val s = _state.value
+        if (s.queued != null && s.threadId == threadId) {
+            // The next message goes straight away; that turn is the one worth announcing.
+            activity.drop(threadId)
+            return
+        }
+        val items = if (s.threadId == threadId) s.items else emptyList()
+        val outcome = HermesOutcome.of(items, error, stopped)
+        val title = if (s.threadId == threadId) s.threadTitle else ""
+        activity.finish(threadId, title, outcome, HermesOutcome.preview(items, outcome, error))
+    }
+
+    /** About to stop reading a turn that is still running: the service sees it through instead. */
+    private fun releaseLive() {
+        val s = _state.value
+        if (s.busy) s.threadId?.let(activity::release)
     }
 
     private fun sendQueued(threadId: String) {
@@ -751,6 +822,7 @@ class HermesViewModel @Inject constructor(
                 )
             }
         }
+        report()
     }
 
     private fun mergeTool(tools: List<HermesTool>, tool: HermesTool): List<HermesTool> {
@@ -837,6 +909,7 @@ class HermesViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        releaseLive()
         streamJob?.cancel()
         threadJob?.cancel()
         liveJob?.cancel()
