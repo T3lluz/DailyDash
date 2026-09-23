@@ -1,113 +1,97 @@
 <div align="center">
-  <img src="docs/assets/icon.png" width="88" alt="DailyDash icon" />
+  <img src="docs/assets/icon.png" width="96" alt="DailyDash" />
   <h1>DailyDash</h1>
-  <p><b>Your whole day on one screen.</b><br/>Nutrition, health, weather, calendar, F1, GitHub, YouTube, Twitch, and your servers in one Android app.</p>
+  <p><b>Your whole day on one Android screen.</b><br/>Food, health, weather, calendar, F1, GitHub, YouTube, Twitch and your own servers, with an AI that knows them.</p>
   <p>
-    <a href="https://github.com/T3lluz/DailyDash/releases/latest"><img alt="Download the latest APK" src="https://img.shields.io/github/v/release/T3lluz/DailyDash?label=Download%20APK&logo=android&logoColor=white&color=4F7CFF&style=for-the-badge" /></a>
+    <a href="https://github.com/T3lluz/DailyDash/releases/latest"><img alt="Download APK" src="https://img.shields.io/github/v/release/T3lluz/DailyDash?label=Download%20APK&logo=android&logoColor=white&color=4F7CFF&style=for-the-badge" /></a>
   </p>
   <p>
+    <a href="https://github.com/T3lluz/DailyDash/actions/workflows/build-apk.yml"><img alt="Build & Release APK" src="https://github.com/T3lluz/DailyDash/actions/workflows/build-apk.yml/badge.svg?branch=master" /></a>
     <img alt="Android 8.0+" src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white" />
-    <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-2.2-7F52FF?logo=kotlin&logoColor=white" />
-    <img alt="Jetpack Compose" src="https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?logo=jetpackcompose&logoColor=white" />
-    <img alt="Data stays on device" src="https://img.shields.io/badge/data-on--device-22C55E" />
+    <img alt="Kotlin 2.2" src="https://img.shields.io/badge/Kotlin-2.2-7F52FF?logo=kotlin&logoColor=white" />
+    <img alt="Jetpack Compose" src="https://img.shields.io/badge/Compose-Material%203-4285F4?logo=jetpackcompose&logoColor=white" />
+    <img alt="No account, no tracking" src="https://img.shields.io/badge/account-none-22C55E" />
+  </p>
+  <p>
+    <img src="docs/integrations/health-connect.svg" width="22" alt="Health Connect" title="Health Connect" />&nbsp;
+    <img src="docs/integrations/claude.svg" width="22" alt="Claude" title="Claude" />&nbsp;
+    <img src="docs/integrations/gemini.svg" width="22" alt="Gemini" title="Gemini" />&nbsp;
+    <img src="docs/integrations/openai.svg" width="22" alt="OpenAI" title="OpenAI" />&nbsp;
+    <img src="docs/integrations/openrouter.svg" width="22" alt="OpenRouter" title="OpenRouter" />&nbsp;
+    <img src="docs/integrations/f1.svg" width="22" alt="Formula 1" title="Formula 1" />&nbsp;
+    <img src="docs/integrations/github.svg" width="22" alt="GitHub" title="GitHub" />&nbsp;
+    <img src="docs/integrations/youtube.svg" width="22" alt="YouTube" title="YouTube" />&nbsp;
+    <img src="docs/integrations/twitch.svg" width="22" alt="Twitch" title="Twitch" />&nbsp;
+    <img src="docs/integrations/google.svg" width="22" alt="Google" title="Google" />&nbsp;
+    <img src="docs/integrations/tailscale.svg" width="22" alt="Tailscale" title="Tailscale" />&nbsp;
+    <img src="docs/integrations/hermes.png" width="22" alt="Hermes" title="Hermes" />
   </p>
 </div>
 
-## Get started
+**Install:** grab the APK from [Releases](https://github.com/T3lluz/DailyDash/releases/latest) · turn services on in **Settings → Connections** · press and hold a Home or Health card to reorder it. The app updates itself from Releases and shows **What's new** after each update.
 
-1. Download the APK from [**Releases**](https://github.com/T3lluz/DailyDash/releases/latest) and install it. Allow installs from unknown sources if Android asks.
-2. Open DailyDash and turn on the services you want in **Settings → Connections**.
-3. Press and hold a card on **Home** or **Health** to reorder or hide it.
+## Features
 
-Updates install from inside the app. When a new release is out, DailyDash downloads it, restarts, and shows **What's new**.
-
-## What's inside
-
-| | Feature | What you get | Setup |
+| | | What you get | Needs |
 | :---: | --- | --- | --- |
-| <img src="docs/integrations/nutrition.svg" width="20" alt="" /> | **Nutrition** | Calories and protein against daily goals, Quick Add, 7/14/30-day trends | None |
-| <img src="docs/integrations/ai.svg" width="20" alt="" /> | **AI** | Log a meal by describing it or scanning its label, and chat about your servers in **Tech support**: **Hermes** on your t3lluz server, which can look around for itself and asks before changing anything, or **Sysop** on this phone's AI | Claude subscription or your own API key; Hermes needs the dashboard server on Tailscale |
-| <img src="docs/integrations/health-connect.svg" width="20" alt="" /> | **Health** | Activity rings, today vs. yesterday, workouts from the last month | [Health Connect](https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata) |
-| <img src="docs/integrations/weather.svg" width="20" alt="" /> | **Weather** | Local forecast, sunrise and sunset, what to wear | Location permission |
-| <img src="docs/integrations/calendar.svg" width="20" alt="" /> | **Calendar** | Today's upcoming events | Calendar permission |
-| <img src="docs/integrations/calendar.svg" width="20" alt="" /> | **Coming up** | Episodes, films and F1 sessions on one swipeable timeline, from your t3lluz dashboard | Dashboard server in **Settings → Connections**, on Tailscale |
-| <img src="docs/integrations/f1.svg" width="20" alt="" /> | **Formula 1** | Next race countdown over its circuit, which paints its own lap, plus standings, latest results and the season schedule | None |
-| <img src="docs/integrations/github.svg" width="20" alt="" /> | **GitHub** | Your issues, PRs, activity and repos, and a year of contributions with a snake eating it | Connect GitHub |
-| <img src="docs/integrations/youtube.svg" width="20" alt="" /> | **YouTube** | Newest videos from channels you follow | None, or Connect Google to import subscriptions |
-| <img src="docs/integrations/twitch.svg" width="20" alt="" /> | **Twitch** | Who's live right now from channels you follow | Connect Twitch |
-| <img src="docs/integrations/servers.svg" width="20" alt="" /> | **Servers** | Live CPU, memory, disk, network and disk I/O, every temperature sensor, pressure stall, battery, containers with their usage, listening ports, systemd and the journal, pending updates, alerts, and an ongoing notification that leads with whatever matters right now and expands to dials, history, network and every core, with an Ask button that opens Tech support on the problem. A server running the t3lluz dashboard also gets a day of history, service uptime, and what is playing or downloading | SSH login, with nothing to install on the server |
-| <img src="docs/integrations/widgets.svg" width="20" alt="" /> | **Home-screen widgets** | Dashboard, Nutrition, Health, Weather, Calendar, F1 Next Race, F1 Standings, F1 Schedule | Long-press your home screen |
+| <img src="docs/integrations/nutrition.svg" width="20" alt="" /> | **Nutrition** | Calories and protein against goals, Quick Add, 7/14/30-day trends | — (AI for meal text and label photos) |
+| <img src="docs/integrations/health-connect.svg" width="20" alt="" /> | **Health** | Activity rings, today vs. yesterday, sleep, a month of workouts with GPS routes | [Health Connect](https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata) |
+| <img src="docs/integrations/weather.svg" width="20" alt="" /> | **Weather** | Now, hourly curve, daily ranges, UV, wind, sunrise/sunset, what to wear | Location |
+| <img src="docs/integrations/calendar.svg" width="20" alt="" /> | **Calendar** | Day strip and agenda up to 31 days ahead | Calendar access |
+| <img src="docs/integrations/calendar.svg" width="20" alt="" /> | **Coming up** | Episodes, films and F1 sessions on one swipeable timeline | Dashboard server <sup>†</sup> |
+| <img src="docs/integrations/f1.svg" width="20" alt="" /> | **Formula 1** | Countdown over an animated circuit map, driver and constructor standings, results, schedule | — |
+| <img src="docs/integrations/github.svg" width="20" alt="" /> | **GitHub** | Issues, PRs, activity and repos across your account; contribution year with the snake | Connect GitHub |
+| <img src="docs/integrations/youtube.svg" width="20" alt="" /> | **YouTube** | Newest videos from followed channels in a carousel | — (Connect Google imports subscriptions) |
+| <img src="docs/integrations/twitch.svg" width="20" alt="" /> | **Twitch** | Who is live now from the channels you follow | Connect Twitch |
+| <img src="docs/integrations/servers.svg" width="20" alt="" /> | **Servers** | CPU, memory, disks, network, sensors, containers, ports, systemd, journal, updates, alerts; live notification with dials and an **Ask** button | SSH login, nothing installed server-side |
+| <img src="docs/integrations/ai.svg" width="20" alt="" /> | **AI** | Log meals by describing them; **Tech support** chat, as **Hermes** on your server or **Sysop** on the phone | An AI provider; Hermes needs the dashboard server <sup>†</sup> |
+| <img src="docs/integrations/phone.svg" width="20" alt="" /> | **Phone hub** | The phone on your desk dashboard: battery, media, notifications (dismiss, reply); ring, torch, open URL, clipboard, volume from the desk; **Send to desk** in the share sheet | Dashboard server <sup>†</sup> |
+| <img src="docs/integrations/widgets.svg" width="20" alt="" /> | **Widget** | Weather on the home screen (5×3) | Long-press the home screen |
 
-### <img src="docs/integrations/health-connect.svg" width="20" alt="" /> Health metrics
+<sup>†</sup> The t3lluz dashboard, reached over <img src="docs/integrations/tailscale.svg" width="12" alt="" /> Tailscale and set in **Settings → Connections**.
 
-Read-only through Health Connect, each with its own toggle: **steps, heart rate, resting HR, SpO₂, respiratory rate, distance, floors, elevation, sleep, active and total calories, and workouts**. Workouts can come from any app that syncs to Health Connect, such as Garmin Connect, Samsung Health, Google Fit, or Strava.
+**Health Connect metrics** (read-only, each with its own toggle): steps, heart rate, resting HR, SpO₂, respiratory rate, distance, floors, elevation, sleep, active and total calories, workouts from Garmin Connect, Samsung Health, Google Fit, Strava and others.
 
-### <img src="docs/integrations/ai.svg" width="20" alt="" /> AI providers
+**AI providers** (**Settings → AI**): <img src="docs/integrations/claude.svg" width="14" alt="" /> **Claude** by signing in with Pro, Max, Team or Enterprise, or an [API key](https://console.anthropic.com/) · <img src="docs/integrations/gemini.svg" width="14" alt="" /> **Gemini** ([free key](https://aistudio.google.com/)) · <img src="docs/integrations/openai.svg" width="14" alt="" /> **OpenAI** ([key](https://platform.openai.com/api-keys)) · <img src="docs/integrations/openrouter.svg" width="14" alt="" /> **OpenRouter** ([key](https://openrouter.ai/keys), with a priced picker of cheap models).
 
-Choose a provider in **Settings → AI**. Meal estimates show a confidence level, so check them against a label or enter values yourself when accuracy matters.
+## <img src="docs/integrations/privacy.svg" width="20" alt="" /> Privacy
 
-| | Provider | How to connect |
-| :---: | --- | --- |
-| <img src="docs/integrations/claude.svg" width="20" alt="" /> | **Claude** | **Connect** with a Claude Pro, Max, Team, or Enterprise plan, or use an API key from [console.anthropic.com](https://console.anthropic.com/) |
-| <img src="docs/integrations/gemini.svg" width="20" alt="" /> | **Gemini** | [aistudio.google.com](https://aistudio.google.com/) (free tier) |
-| <img src="docs/integrations/openai.svg" width="20" alt="" /> | **OpenAI** | [platform.openai.com](https://platform.openai.com/api-keys) |
-| <img src="docs/integrations/openrouter.svg" width="20" alt="" /> | **OpenRouter** | [openrouter.ai/keys](https://openrouter.ai/keys) (includes a picker for low-cost models with prices) |
+- Food logs, chats, goals and settings stay on the phone. Health Connect data is never uploaded.
+- AI requests go only to the provider you pick. Hermes threads live on your own server.
+- SSH passwords and keys are encrypted with the Android Keystore; monitoring only reads.
+- No DailyDash account, analytics or tracking.
 
-### <img src="docs/integrations/privacy.svg" width="20" alt="" /> Privacy
+**Data:** [MET Norway](https://api.met.no/) · [Jolpica](https://github.com/jolpica/jolpica-f1) + [OpenF1](https://openf1.org/) + [bacinger/f1-circuits](https://github.com/bacinger/f1-circuits) · YouTube RSS + Data API · Twitch Helix · GitHub REST + GraphQL · SSH · t3lluz dashboard bridge · Health Connect · Calendar Provider
 
-- Food logs, chats, goals, and settings are stored only on your phone.
-- Health Connect data is read on the phone and never uploaded.
-- AI requests go only to the provider you pick. They contain your message, plus a server's readings when you tap the ✨ on a server card.
-- Server passwords and SSH keys are encrypted with the Android Keystore. Monitoring only reads stats and never changes anything on your servers.
-- Hermes chats live on your own server, in the dashboard's bridge, so the web dashboard shows the same threads. Hermes changes nothing on the server until you tap an approval card, unless you give a thread Full access.
-- There's no DailyDash account, analytics, or tracking.
+## Build
 
-## Data sources
-
-[MET Norway / Yr](https://api.met.no/) (weather) · [Jolpica](https://github.com/jolpica/jolpica-f1), [OpenF1](https://openf1.org/) and [bacinger/f1-circuits](https://github.com/bacinger/f1-circuits) (F1) · YouTube RSS and Data API · Twitch Helix · GitHub REST and GraphQL · SSH to your own servers · your t3lluz dashboard and its Hermes bridge · Android Health Connect and Calendar
-
----
-
-## Build from source
-
-**Requirements:** Android Studio or JDK 17, Android SDK 36, and a device or emulator running Android 8.0+ (API 26).
+JDK 17, Android SDK 36, a device on Android 8.0+ (API 26).
 
 ```bash
-git clone https://github.com/T3lluz/DailyDash.git
-cd DailyDash
+git clone https://github.com/T3lluz/DailyDash.git && cd DailyDash
 cp local.properties.example local.properties   # set sdk.dir
-./gradlew installDebug                          # build and install on a connected device
+./gradlew installDebug
 ```
 
-The app builds and runs without any keys. Add keys to `local.properties` only for the features you want:
+It builds without keys. Add only what you need to `local.properties`:
 
-| Key | Enables | Where to get it |
-| --- | --- | --- |
-| `GITHUB_CLIENT_ID` | Connect GitHub (Device Flow, no secret needed) | [GitHub OAuth App](https://github.com/settings/developers), with Device Flow turned on |
-| `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET` | Connect Twitch | [Twitch console](https://dev.twitch.tv/console) (Confidential app) |
-| `GEMINI_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY` | Default AI keys (keys and Claude sign-ins in Settings take priority) | Links above |
+| Key | Enables |
+| --- | --- |
+| `GITHUB_CLIENT_ID` | Connect GitHub: [OAuth App](https://github.com/settings/developers) with Device Flow on, no secret |
+| `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET` | Connect Twitch: [confidential app](https://dev.twitch.tv/console) |
+| `GEMINI_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY` | Default AI keys; keys and Claude sign-in from Settings win |
 
-Connect Google for YouTube doesn't use a key. It needs a Google Cloud **Android OAuth client** for `com.macrotracker` with the `app/tester.jks` SHA-1, and **YouTube Data API v3** turned on. The SHA-1 and step-by-step setup are in [`local.properties.example`](local.properties.example).
+Connect Google (YouTube) needs no key: an Android OAuth client for `com.macrotracker` with the `app/tester.jks` SHA-1 and YouTube Data API v3 on. Steps are in [`local.properties.example`](local.properties.example).
 
 > [!WARNING]
-> Never commit `local.properties` or real API keys. `app/tester.jks` is a shared test signing key, committed on purpose so sideloaded builds can update each other.
+> Never commit `local.properties` or API keys. `app/tester.jks` is a shared test key, committed so sideloaded builds can update each other.
 
 ## Releases
 
-Every push to `master` runs [`build-apk.yml`](.github/workflows/build-apk.yml). The workflow bumps the version, builds a signed APK, and publishes a GitHub Release. **Commit subjects become the in-app What's new notes**, so write them for users.
+Each push to `master` runs [Build & Release APK](.github/workflows/build-apk.yml): it bumps the version, signs the APK and publishes `DailyDash-{version}-vc{code}.apk` to GitHub Releases. **Commit subjects since the last tag become the in-app What's new**, so write them for users. Published builds read the Actions secrets `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET` and `GH_OAUTH_CLIENT_ID` (GitHub reserves the `GITHUB_*` prefix).
 
-To enable Twitch and GitHub in published builds, add these Actions secrets: `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`, and `GH_OAUTH_CLIENT_ID`. The last one isn't named `GITHUB_CLIENT_ID` because GitHub reserves the `GITHUB_*` prefix.
+## Stack
 
-## Project layout
+Kotlin · Jetpack Compose (Material 3) · Hilt · Room · OkHttp + Ktor · JSch · Haze · Glance · WorkManager · CameraX
 
-Kotlin · Jetpack Compose · Hilt · Room · Ktor and OkHttp · JSch · Glance · WorkManager
-
-```
-app/src/main/kotlin/com/macrotracker/
-├── data/     Room, settings, AI and chat, weather, F1, GitHub, YouTube, Twitch, Health Connect, servers, updates
-├── di/       Hilt modules
-├── ui/       screens, components, navigation, theme
-└── widget/   Glance home-screen widgets
-```
-
-The app is named **DailyDash**, but its package name is still `com.macrotracker`. Architecture notes are in [`AGENTS.md`](AGENTS.md).
+The app is **DailyDash**; the package is still `com.macrotracker`. Architecture notes live in [`AGENTS.md`](AGENTS.md).
