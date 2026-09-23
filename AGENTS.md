@@ -46,9 +46,13 @@ com.macrotracker/
                               (server dashboard → AI tab context hand-off, keyed by seed id)
     hermes/                ← HermesClient: Tech support through Hermes on the dashboard server, via the
                               bridge at `<dashboardServerUrl>/_api/ai/*` (status, threads, chat + watch SSE,
-                              stop, exec for approval cards, model). Threads live on the server, shared with
-                              the web dashboard. Send a thread's own `permId` back unchanged (it may be a CLI
-                              mode like `agent`)
+                              stop, exec for approval cards, model, window, rename/pin/clear, commands,
+                              upload) and the `/_api/live` change feed. Threads live on the server, shared
+                              with the web dashboard. Send a thread's own `permId` back unchanged (it may be a
+                              CLI mode like `agent`). HermesCatalog ports the web's picker rules
+                              (`hermes-models.js` / `hermes-core.js`): families per provider, OpenCode's billed
+                              rows behind search, `pickVariant` for depth/think/fast, modes per CLI source with
+                              `modeFor` mapping a saved mode by kind. HermesCatalogTest pins them
     server/                ← server monitor: SSH probes (SshClient/ServerProbe), ServerMonitorService +
                               ServerNotifier, encrypted ServerStore, ServerAdvisories.
                               ServerProbe has three lanes: the fast script (every poll: /proc, df, hwmon
@@ -64,9 +68,14 @@ com.macrotracker/
                               text appearances, pictures from ServerLiveGraphics). Graphics are drawn in dp at
                               the screen density (capped at 2.5×, 2× before Android 12), RGB_565, light or dark
                               with the system; keep them well under the 2 MB RemoteViews warning. Nothing is
-                              redrawn while the screen is off. Actions: Ask (opens Tech support on the worst
-                              advisory via `EXTRA_ASK_ABOUT`, also on alert notifications), Next server, Stop.
-                              A tapped notification opens the dashboard on its server through `ServerFocus`
+                              redrawn while the screen is off. SystemUI always opens the notification at the
+                              top of the shade, and an FGS channel cannot go below LOW, so the full panel is
+                              opt-in: `liveNotificationDetailed` (More / Less action, or Settings) sets the big
+                              view; otherwise the opened view is the compact row plus actions. Three actions at
+                              most: More/Less, then Ask (compact) or Next server (panel), then Stop. Ask opens
+                              Tech support on the worst advisory via `EXTRA_ASK_ABOUT` (also on alert
+                              notifications). A tapped notification opens the dashboard on its server through
+                              `ServerFocus`
     update/                ← GitHub Releases in-app updater (see "In-app updates")
     health/                ← HealthConnectRepository (read-only; lazy client; PERMISSIONS companion set);
                               reads: Steps, HeartRate, RestingHeartRate, OxygenSaturation,
@@ -84,7 +93,9 @@ com.macrotracker/
                               15-min in-memory + SharedPrefs disk cache. F1Circuits: circuit outlines from
                               bacinger/f1-circuits matched by coordinates (nearest within ~25 km), folded into a
                               0–100 box exactly as the dashboard's `f1_path()` does, cached per circuit for good
-                              and attached to each `RaceScheduleEntry.outline`
+                              and attached to each `RaceScheduleEntry.outline`. A cancelled load must never be
+                              cached (it used to cache a season with no circuits); a cache hit fills in any
+                              circuits it is missing
     youtube/               ← YouTubeRepository via RSS feeds + optional Google OAuth subscription
                               import (AuthorizationClient / youtube.readonly); tracked channels in SharedPrefs
     twitch/                ← TwitchRepository via Helix + Device Code OAuth (Custom Tabs →
@@ -113,10 +124,16 @@ com.macrotracker/
                              SettingsScreen) + sub-screens (StatsScreen, HelpScreen, CameraScanScreen)
                              + onboarding/ (SplashScreen overlay, WelcomeScreen, PermissionsScreen, TutorialScreen)
                              + ai/ (ChatKit.kt shared chat bubbles/header/composer + IME helpers, SysopChatPane,
-                             HermesChatPane; Tech support is Hermes when `HermesViewModel.usesHermes`: an explicit
-                             `techSupportBrain` choice, or in `auto` whenever Hermes answers, else Sysop)
-                             + server/ (the server screen's cards: hero, history, services wall, activity,
-                             compute, memory, network, storage, sensors, processes, containers, system)
+                             HermesChatPane + HermesChrome.kt: the web panel without its side pane — thread
+                             drawer (ModalNavigationDrawer, opened by button only), tall composer with mode /
+                             model / depth chips, attach, send-or-Stop, queue while busy, slash palette, picker
+                             sheets. A chat only restores its saved model when the person opens it; the model
+                             is Hermes-global. Tech support is Hermes when `HermesViewModel.usesHermes`: an
+                             explicit `techSupportBrain` choice, or in `auto` whenever Hermes answers, else Sysop)
+                             + server/ (the server screen's cards: hero, history, services wall as tiles,
+                             activity, compute, memory, network, storage, sensors, processes, containers,
+                             system). Sections reorder and toggle like Home (pencil in the header;
+                             `serverSectionOrder`); a section with nothing to show keeps its slot
                              + health/ (Health tab sections) + settings/ (category sub-screens)
     viewmodel/             ← one @HiltViewModel per screen; UI state as sealed classes via StateFlow;
                               includes OnboardingViewModel (manages onboardingCompleted + splashShown flags);
@@ -138,7 +155,9 @@ com.macrotracker/
                               `Modifier.subScreenBottomPadding()`. HomeWidgetShell.kt: card chrome shared by
                               every Home/Health card — `CardHeader`, `HubCardHeader` + `HubHeaderAction`,
                               `HubErrorState` (message + Retry), `WidgetPromptCard`, `ChannelSheetHeader`,
-                              expand/scroll-box helpers. F1CircuitMap.kt: the dashboard's four-pass circuit
+                              expand/scroll-box helpers. MediaCarousel.kt: the M3 multi-browse carousel the
+                              collapsed YouTube and Twitch cards use (`MediaItemLook` read in draw/layer blocks
+                              only; tap a peek to bring it in). F1CircuitMap.kt: the dashboard's four-pass circuit
                               (kerb, bed, marque line, car) that paints its lap on screen, with a
                               `CircuitMapWeight` per place and `CircuitMotion` STILL / PAINT_ONCE / BACKDROP
                               (replays, and keeps a dim car lapping). GitHubContributionGraph.kt: the year with
@@ -219,6 +238,8 @@ Widget order and visibility are persisted as a single colon-and-comma encoded st
 ```
 `DraggableWidgetColumn` + `WidgetEditor` read/write this via `SettingsRepository`. **`GITHUB`** is the home GitHub hub (`GitHubCard`): account-wide issues, PRs, activity, and repos for the connected GitHub user (not a single project). Connect with Device Code OAuth on the Account tab (`repo` + `read:user`).
 
+**`YOUTUBE`** and **`TWITCH`** collapsed show their videos / live streams in `MediaCarousel`; the Twitch channel chips carry the live dot there too.
+
 **`UPCOMING`** is Coming up (`UpcomingCard`): a Material 3 `HorizontalCenteredHeroCarousel` with `singleAdvanceFlingBehavior`, one card per entry in time order. Items are masked, not resized, so anything that grows or fades with a card reads `carouselItemDrawInfo` inside `graphicsLayer`/draw blocks (`openness()`, `followMask()`) and never in composition. Programmatic moves use `MacroMotion.carouselTravel`.
 
 The **Health screen** uses the same draggable pattern with a separate key (`healthWidgetOrder`):
@@ -235,7 +256,7 @@ The only home-screen widget is **`WeatherWidget`** (fixed 5×3, `SizeMode.Single
 Glance text does ellipsize, but a wrap-content `Text` in a `Row` still pushes later siblings off-edge — weight it or clip it.
 
 ### In-app updates (GitHub Releases)
-Sideload/tester path — not Play Core. CI publishes `DailyDash-{versionName}-vc{versionCode}.apk` on master merges. `AppUpdateRepository` polls GitHub while foregrounded; `AppUpdateDialog` downloads + `PackageInstaller` self-updates; `UpdateInstallActivity` relaunches `MainActivity` with `EXTRA_RELAUNCHED_AFTER_UPDATE` / `EXTRA_SHOW_WHATS_NEW`. `PackageReplacedReceiver` posts a tap-to-open notification if relaunch is blocked. Post-update, `WhatsNewDialog` shows once (notes cached at download time, enriched from `/releases`). Soft-snooze is 12h (`Later`); Settings badge deep-links to About + opens the update dialog. Key files: `data/update/*`, `ui/components/AppUpdateDialog.kt`, `WhatsNewDialog.kt`, `AppUpdateViewModel`, `.github/scripts/package-release.sh`.
+Sideload/tester path — not Play Core. CI publishes `DailyDash-{versionName}-vc{versionCode}.apk` on master merges. `AppUpdateRepository` polls GitHub while foregrounded; `AppUpdateWorker` checks every 6 h in the background and `AppUpdateNotifier` posts "DailyDash X is ready" with an Update action (`EXTRA_SHOW_UPDATE` / `EXTRA_START_UPDATE`, read in `MainScreen`), once per versionCode (`markAnnounced`, also set when the in-app sheet shows). The install is a process-scoped state machine, `AppUpdateInstaller`: Downloading (`.part` file, byte progress, cancellable; a finished APK is reused) → Installing (session committed) → Installing awaiting confirmation (Android's prompt is up; its intent is kept for "Show Android's prompt") → relaunch, or Ready with a note when the prompt was closed / the install failed / nothing came back in 90 s. `UpdateInstallActivity` reports every PackageInstaller status through `UpdateInstallEvents`. `AppUpdateViewModel` lays the phase over the GitHub check; `AppUpdateSheet` (bottom sheet, after Essentials) shows exactly one step's controls. No permission yet → `NeedsPermission`; the update starts on return from Android's settings. `UpdateInstallActivity` relaunches `MainActivity` with `EXTRA_RELAUNCHED_AFTER_UPDATE` / `EXTRA_SHOW_WHATS_NEW`; `PackageReplacedReceiver` posts a tap-to-open notification if relaunch is blocked. Post-update, `WhatsNewDialog` shows once (notes cached at download time, enriched from `/releases`). Soft-snooze is 12h (`Later`); Settings badge deep-links to About + opens the sheet. Key files: `data/update/*`, `ui/components/AppUpdateDialog.kt` (`AppUpdateSheet`), `WhatsNewDialog.kt`, `AppUpdateViewModel`, `.github/scripts/package-release.sh`.
 
 ## Commit, push & release (mandatory when user asks)
 

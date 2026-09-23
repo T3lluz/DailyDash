@@ -1,6 +1,19 @@
 package com.macrotracker.ui.screens.ai
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import com.macrotracker.data.hermes.HermesCatalog
+import com.macrotracker.data.hermes.HermesThreadSummary
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -11,6 +24,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -102,13 +116,16 @@ private val CardShape = RoundedCornerShape(14.dp)
 private val Mono = FontFamily.Monospace
 
 /**
- * Tech support through Hermes, the agent that lives on the server.
+ * Tech support through Hermes, the agent that lives on the server, in the shape of the
+ * t3lluz dashboard's panel: the threads in a drawer on the left, the conversation, and a
+ * tall composer with what Hermes may do, which model it thinks with and how hard.
  *
- * The threads are the server's, so a conversation started on the t3lluz dashboard is
- * here too. Hermes can look for itself: the commands it ran show as terminal cards,
- * and anything that would change the server arrives as an approval card that does
- * nothing until it is tapped. Built on the same [ChatKit] pieces as the other bots.
+ * The threads are the server's, so a conversation started on the dashboard is here too,
+ * and the bridge's live feed keeps the list current. Hermes can look for itself: the
+ * commands it ran show as terminal cards, and anything that would change the server
+ * arrives as an approval card that does nothing until it is tapped.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HermesChatPane(
     viewModel: HermesViewModel,
@@ -119,13 +136,16 @@ fun HermesChatPane(
     val haptics = rememberHaptics()
     val listState = rememberLazyListState()
     val density = LocalDensity.current
+    val scope = rememberCoroutineScope()
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
 
     var draft by rememberSaveable { mutableStateOf("") }
     var forceFollow by remember { mutableStateOf(true) }
     var composerHeight by remember { mutableStateOf(0.dp) }
-    var threadMenuOpen by remember { mutableStateOf(false) }
-    var permMenuOpen by remember { mutableStateOf(false) }
-    var modelMenuOpen by remember { mutableStateOf(false) }
+    var sheet by remember { mutableStateOf<HermesSheet?>(null) }
+    var renaming by remember { mutableStateOf<HermesThreadSummary?>(null) }
+    var confirmClear by remember { mutableStateOf<HermesThreadSummary?>(null) }
+    var confirmDelete by remember { mutableStateOf<HermesThreadSummary?>(null) }
 
     val nearBottom by rememberNearChatBottom(listState)
     val liveSignature = state.live?.let { "${it.got.length}:${it.tools.size}:${it.think.length > 0}" }
@@ -139,329 +159,347 @@ fun HermesChatPane(
     }
     FollowChatOnKeyboard(listState) { forceFollow || nearBottom }
 
-    // Keep the thread list fresh while the pane is open, as a chat started on the desk may appear.
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(THREADS_REFRESH_MS)
-            if (state.reach == HermesReach.READY) viewModel.refreshThreads()
-        }
+    // The bridge's change feed, while the pane is on screen: a chat started on the desk
+    // shows up in the drawer as it happens.
+    DisposableEffect(viewModel) {
+        viewModel.startLive()
+        onDispose { viewModel.stopLive() }
+    }
+
+    val attachLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let(viewModel::attach)
+    }
+
+    fun closeRail() {
+        scope.launch { drawerState.close() }
     }
 
     fun send(text: String) {
         val body = text.trim()
-        if (body.isEmpty() || state.busy) return
+        if (body.isEmpty() && state.attachments.isEmpty()) return
+        // The pickers are sheets here, so their commands open them.
+        when (body.lowercase()) {
+            "/model" -> { draft = ""; sheet = HermesSheet.MODEL; return }
+            "/mode", "/plan" -> { draft = ""; sheet = HermesSheet.MODE; return }
+        }
         haptics.click()
         draft = ""
         forceFollow = true
         viewModel.send(body)
     }
 
+    val current = state.currentThread
     val chatHaze = rememberHazeState()
+    val modifiers = remember(state.status) { HermesCatalog.modifiers(state.status) }
 
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Background)
-            .imePadding(),
-    ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            ChatPaneHeader(
-                status = headerStatus(state),
-                active = state.busy,
-                accent = ServerBrand,
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        // Only the rail's own swipe closes it; opening is the button, so the tab switcher
+        // and the chat's own horizontal scrolls keep their gestures.
+        gesturesEnabled = drawerState.isOpen,
+        scrimColor = Color.Black.copy(alpha = 0.45f),
+        modifier = modifier,
+        drawerContent = {
+            ModalDrawerSheet(
+                drawerContainerColor = Surface,
+                drawerShape = RoundedCornerShape(topEnd = 22.dp, bottomEnd = 22.dp),
+                modifier = Modifier.widthIn(max = 320.dp),
+                // The pane sits under the AI tab's header, not at the top of the screen.
+                windowInsets = WindowInsets(0, 0, 0, 0),
             ) {
-                if (state.busy) {
-                    PillButton(
-                        icon = AppIcons.Close,
-                        label = "Stop",
-                        accent = ServerBrand,
-                        onClick = {
-                            haptics.tick()
-                            viewModel.stop()
-                        },
-                    )
-                } else {
-                    Box {
-                        PillButton(
-                            icon = AppIcons.History,
-                            label = "Threads",
-                            accent = ServerBrand,
-                            onClick = {
-                                haptics.tick()
-                                viewModel.refreshThreads()
-                                threadMenuOpen = true
-                            },
-                        )
-                        DropdownMenu(
-                            expanded = threadMenuOpen,
-                            onDismissRequest = { threadMenuOpen = false },
-                            modifier = Modifier.background(Surface).widthIn(max = 320.dp),
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("New chat", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold) },
-                                leadingIcon = { Icon(AppIcons.NewChat, null, tint = ServerBrand, modifier = Modifier.size(16.dp)) },
-                                onClick = {
-                                    threadMenuOpen = false
-                                    forceFollow = true
-                                    viewModel.newThread()
-                                },
-                            )
-                            state.threads.take(16).forEach { thread ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Column {
-                                            Text(
-                                                thread.title,
-                                                color = if (thread.id == state.threadId) ServerBrand else TextPrimary,
-                                                fontSize = 13.sp,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                            )
-                                            val meta = listOfNotNull(
-                                                "working…".takeIf { thread.busy },
-                                                "needs you".takeIf { thread.pending > 0 },
-                                                thread.preview.takeIf { it.isNotBlank() },
-                                            ).joinToString(" · ")
-                                            if (meta.isNotBlank()) {
-                                                Text(meta, color = TextTertiary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                            }
-                                        }
-                                    },
-                                    leadingIcon = {
-                                        Box(
-                                            Modifier.size(7.dp).clip(RoundedCornerShape(4.dp)).background(
-                                                when {
-                                                    thread.busy -> ServerBrand
-                                                    thread.pending > 0 -> ServerWarn
-                                                    thread.kind == "employee" -> ServerGood
-                                                    else -> Border
-                                                },
-                                            ),
-                                        )
-                                    },
-                                    onClick = {
-                                        threadMenuOpen = false
-                                        forceFollow = true
-                                        viewModel.openThread(thread.id)
-                                    },
-                                )
-                            }
-                        }
-                    }
-                }
-                Box {
-                    PillButton(
-                        icon = permissionIcon(state.permission),
-                        label = state.permission.label,
-                        accent = permissionColor(state.permission),
-                        emphasized = state.permission == HermesPermission.FULL,
-                        onClick = {
-                            haptics.tick()
-                            permMenuOpen = true
-                        },
-                    )
-                    DropdownMenu(
-                        expanded = permMenuOpen,
-                        onDismissRequest = { permMenuOpen = false },
-                        modifier = Modifier.background(Surface).widthIn(max = 300.dp),
-                    ) {
-                        Text(
-                            "What Hermes may do",
-                            color = TextTertiary,
-                            fontSize = 11.sp,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                        )
-                        HermesPermission.entries.forEach { p ->
-                            DropdownMenuItem(
-                                text = {
-                                    Column {
-                                        Text(
-                                            p.label,
-                                            color = if (p == state.permission) permissionColor(p) else TextPrimary,
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                        )
-                                        Text(p.blurb, color = TextSecondary, fontSize = 11.sp, lineHeight = 14.sp)
-                                    }
-                                },
-                                leadingIcon = { Icon(permissionIcon(p), null, tint = permissionColor(p), modifier = Modifier.size(16.dp)) },
-                                onClick = {
-                                    permMenuOpen = false
-                                    haptics.tick()
-                                    viewModel.setPermission(p)
-                                },
-                            )
-                        }
-                    }
-                }
-                Box {
-                    PillButton(
-                        icon = AppIcons.Settings,
-                        label = "More",
-                        accent = ServerBrand,
-                        onClick = {
-                            haptics.tick()
-                            modelMenuOpen = true
-                        },
-                    )
-                    DropdownMenu(
-                        expanded = modelMenuOpen,
-                        onDismissRequest = { modelMenuOpen = false },
-                        modifier = Modifier.background(Surface).widthIn(max = 320.dp).heightIn(max = 420.dp),
-                    ) {
-                        state.status?.let { status ->
-                            Text(
-                                "Hermes thinks with",
-                                color = TextTertiary,
-                                fontSize = 11.sp,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                            )
-                            // Families only; the web keeps the depth variants.
-                            status.models.filter { '@' !in it.id }.take(24).forEach { m ->
-                                val current = m.id == status.model || m.current
-                                DropdownMenuItem(
-                                    text = {
-                                        Column {
-                                            Text(m.label, color = if (current) ServerBrand else TextPrimary, fontSize = 13.sp, fontWeight = if (current) FontWeight.Bold else FontWeight.Medium)
-                                            Text(listOfNotNull(m.group, m.note).joinToString(" · "), color = TextTertiary, fontSize = 10.sp, maxLines = 1)
-                                        }
-                                    },
-                                    onClick = {
-                                        modelMenuOpen = false
-                                        if (!current) viewModel.setModel(m.id)
-                                    },
-                                )
-                            }
-                            HorizontalDivider(color = Border)
-                        }
-                        if (onUsePhoneAi != null) {
-                            DropdownMenuItem(
-                                text = { Text("Use this phone's AI instead", color = TextPrimary, fontSize = 13.sp) },
-                                leadingIcon = { Icon(AppIcons.Bot, null, tint = TextSecondary, modifier = Modifier.size(16.dp)) },
-                                onClick = {
-                                    modelMenuOpen = false
-                                    onUsePhoneAi()
-                                },
-                            )
-                        }
-                        state.threadId?.let { id ->
-                            DropdownMenuItem(
-                                text = { Text("Delete this thread", color = Error, fontSize = 13.sp) },
-                                leadingIcon = { Icon(AppIcons.Delete, null, tint = Error, modifier = Modifier.size(16.dp)) },
-                                onClick = {
-                                    modelMenuOpen = false
-                                    viewModel.deleteThread(id)
-                                },
-                            )
-                        }
-                    }
-                }
-            }
-
-            when {
-                state.reach == HermesReach.DOWN -> HermesUnreachable(
-                    message = state.reachError ?: "Hermes did not answer.",
-                    onRetry = { viewModel.refresh() },
-                    onUsePhoneAi = onUsePhoneAi,
-                    modifier = Modifier.weight(1f),
+                HermesThreadRail(
+                    threads = state.threads,
+                    selectedId = state.threadId,
+                    status = state.status,
+                    onOpen = { id ->
+                        haptics.tick()
+                        forceFollow = true
+                        viewModel.openThread(id)
+                        closeRail()
+                    },
+                    onNewChat = {
+                        haptics.tick()
+                        forceFollow = true
+                        viewModel.newThread()
+                        closeRail()
+                    },
+                    onRename = { renaming = it },
+                    onTogglePin = { viewModel.setPinned(it.id, !it.pinned) },
+                    onClear = { confirmClear = it },
+                    onDelete = { confirmDelete = it },
                 )
-                (state.reach == HermesReach.CHECKING || state.reach == HermesReach.UNKNOWN) && state.status == null -> Box(
-                    Modifier.weight(1f).fillMaxWidth(),
-                    contentAlignment = Alignment.Center,
-                ) { LoadingSpinner(color = ServerBrand) }
-                else -> LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .hazeSource(state = chatHaze),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 10.dp, bottom = composerHeight + 10.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    if (state.items.isEmpty() && !state.loadingThread && state.live == null) {
-                        item(key = "greeting") {
-                            BotBubble(
-                                identity = HermesIdentity,
-                                text = "Hermes here, on the server itself. I can look at it directly: logs, containers, " +
-                                    "disks, services. Anything that would change something comes back to you as a card to approve first.",
-                            )
-                        }
-                    }
-                    if (state.loadingThread) {
-                        item(key = "loading") {
-                            Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                                LoadingSpinner(color = ServerBrand)
-                            }
-                        }
-                    }
-                    items(state.items, key = { it.key }) { item ->
-                        HermesItemView(
-                            item = item,
-                            state = state,
-                            onDecide = { card, i, run ->
-                                haptics.click()
-                                forceFollow = true
-                                viewModel.decide(card, i, run)
-                            },
-                            onAnswer = { card, choice ->
-                                haptics.click()
-                                forceFollow = true
-                                viewModel.answer(card, choice)
-                            },
-                        )
-                    }
-                    state.live?.let { live ->
-                        item(key = "live") { LiveTurn(live) }
-                    }
-                }
             }
-        }
-
-        Column(
+        },
+    ) {
+        Box(
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(
-                        0f to Color.Transparent,
-                        0.35f to Background.copy(alpha = 0.92f),
-                        1f to Background,
-                    ),
-                )
-                .onSizeChanged { composerHeight = with(density) { it.height.toDp() } },
+                .fillMaxSize()
+                .background(Background)
+                .imePadding(),
         ) {
-            state.notice?.let { notice ->
-                Row(
-                    modifier = Modifier
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Error.copy(alpha = 0.1f))
-                        .clickable { viewModel.dismissNotice() }
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(AppIcons.Warning, null, tint = Error, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(notice, color = TextSecondary, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Column(modifier = Modifier.fillMaxSize()) {
+                HermesHeader(
+                    title = state.threadTitle,
+                    status = headerStatus(state),
+                    working = state.busy,
+                    railAttention = state.threads.any { it.id != state.threadId && (it.busy || it.pending > 0) },
+                    pinned = current?.pinned == true,
+                    hasThread = state.threadId != null,
+                    onOpenRail = {
+                        viewModel.refreshThreads()
+                        scope.launch { drawerState.open() }
+                    },
+                    onNewChat = {
+                        forceFollow = true
+                        viewModel.newThread()
+                    },
+                    onRename = { current?.let { renaming = it } ?: state.threadId?.let { id -> renaming = placeholderThread(id, state.threadTitle) } },
+                    onTogglePin = { state.threadId?.let { viewModel.setPinned(it, current?.pinned != true) } },
+                    onClear = { state.threadId?.let { id -> confirmClear = current ?: placeholderThread(id, state.threadTitle) } },
+                    onDelete = { state.threadId?.let { id -> confirmDelete = current ?: placeholderThread(id, state.threadTitle) } },
+                    onUsePhoneAi = onUsePhoneAi,
+                )
+
+                when {
+                    state.reach == HermesReach.DOWN -> HermesUnreachable(
+                        message = state.reachError ?: "Hermes did not answer.",
+                        onRetry = { viewModel.refresh() },
+                        onUsePhoneAi = onUsePhoneAi,
+                        modifier = Modifier.weight(1f),
+                    )
+                    (state.reach == HermesReach.CHECKING || state.reach == HermesReach.UNKNOWN) && state.status == null -> Box(
+                        Modifier.weight(1f).fillMaxWidth(),
+                        contentAlignment = Alignment.Center,
+                    ) { LoadingSpinner(color = ServerBrand) }
+                    else -> LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .hazeSource(state = chatHaze),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 10.dp, bottom = composerHeight + 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        if (state.items.isEmpty() && !state.loadingThread && state.live == null) {
+                            item(key = "greeting") {
+                                BotBubble(
+                                    identity = HermesIdentity,
+                                    text = "Hermes here, on the server itself. I can look at it directly: logs, containers, " +
+                                        "disks, services. Anything that would change something comes back to you as a card to approve first.",
+                                )
+                            }
+                        }
+                        if (state.loadingThread) {
+                            item(key = "loading") {
+                                Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                                    LoadingSpinner(color = ServerBrand)
+                                }
+                            }
+                        }
+                        items(state.items, key = { it.key }) { item ->
+                            HermesItemView(
+                                item = item,
+                                state = state,
+                                onDecide = { card, i, run ->
+                                    haptics.click()
+                                    forceFollow = true
+                                    viewModel.decide(card, i, run)
+                                },
+                                onAnswer = { card, choice ->
+                                    haptics.click()
+                                    forceFollow = true
+                                    viewModel.answer(card, choice)
+                                },
+                            )
+                        }
+                        state.live?.let { live ->
+                            item(key = "live") { LiveTurn(live) }
+                        }
+                    }
                 }
             }
-            if (state.items.isEmpty() && !state.busy && state.reach == HermesReach.READY) {
-                ChatStarters(HermesStarters) { send(it) }
+
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            0f to Color.Transparent,
+                            0.35f to Background.copy(alpha = 0.92f),
+                            1f to Background,
+                        ),
+                    )
+                    .onSizeChanged { composerHeight = with(density) { it.height.toDp() } },
+            ) {
+                state.notice?.let { notice ->
+                    Row(
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Error.copy(alpha = 0.1f))
+                            .clickable { viewModel.dismissNotice() }
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(AppIcons.Warning, null, tint = Error, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(notice, color = TextSecondary, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                state.queued?.let { queued ->
+                    Row(
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(ServerBrand.copy(alpha = 0.10f))
+                            .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(AppIcons.Clock, null, tint = ServerBrand, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "Next: $queued",
+                            color = TextSecondary,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        IconButton(onClick = { viewModel.clearQueued() }, modifier = Modifier.size(28.dp)) {
+                            Icon(AppIcons.Close, contentDescription = "Don't send", tint = TextTertiary, modifier = Modifier.size(14.dp))
+                        }
+                    }
+                }
+                val slashOpen = draft.startsWith("/") && ' ' !in draft && '\n' !in draft
+                if (slashOpen) {
+                    SlashPalette(
+                        entries = slashEntries(state.commands, draft),
+                        onPick = { entry ->
+                            haptics.tick()
+                            when {
+                                entry.local && entry.name == "model" -> { draft = ""; sheet = HermesSheet.MODEL }
+                                entry.local && entry.name == "mode" -> { draft = ""; sheet = HermesSheet.MODE }
+                                entry.args.isNotBlank() -> draft = "/${entry.name} "
+                                else -> send("/${entry.name}")
+                            }
+                        },
+                    )
+                    Spacer(Modifier.height(4.dp))
+                } else if (state.items.isEmpty() && !state.busy && state.reach == HermesReach.READY) {
+                    ChatStarters(HermesStarters) { send(it) }
+                }
+                HermesComposer(
+                    value = draft,
+                    onValueChange = { draft = it },
+                    onSend = { send(draft) },
+                    onStop = { viewModel.stop() },
+                    enabled = state.reach == HermesReach.READY,
+                    busy = state.busy,
+                    hint = when {
+                        state.busy -> "Type to queue the next message…"
+                        openQuestion(state) != null -> "Answer Hermes…"
+                        else -> HermesIdentity.composerHint + "  / for commands"
+                    },
+                    mode = state.mode,
+                    model = state.currentModel,
+                    modelFallback = state.status?.modelLabel,
+                    switchingModel = state.switchingModel,
+                    modifiers = modifiers,
+                    attachments = state.attachments,
+                    uploading = state.uploading,
+                    onAttach = { attachLauncher.launch("*/*") },
+                    onRemoveAttachment = viewModel::removeAttachment,
+                    onPickMode = { sheet = HermesSheet.MODE },
+                    onPickModel = { sheet = HermesSheet.MODEL },
+                    onPickDepth = { sheet = HermesSheet.DEPTH },
+                    hazeState = chatHaze,
+                )
             }
-            ChatComposer(
-                value = draft,
-                onValueChange = { draft = it },
-                onSend = { send(draft) },
-                enabled = !state.busy && state.reach == HermesReach.READY,
-                hint = if (openQuestion(state) != null) "Answer Hermes…" else HermesIdentity.composerHint,
-                accent = ServerBrand,
-                hazeState = chatHaze,
-            )
         }
+    }
+
+    sheet?.let { which ->
+        HermesPickerSheet(
+            sheet = which,
+            status = state.status,
+            modeId = state.modeId,
+            onDismiss = { sheet = null },
+            onPickMode = { mode ->
+                haptics.tick()
+                sheet = null
+                viewModel.setMode(mode.id)
+            },
+            onPickFamily = { family ->
+                haptics.tick()
+                sheet = null
+                viewModel.pickFamily(family)
+            },
+            onPickEffort = { effort ->
+                haptics.tick()
+                viewModel.setEffort(effort)
+            },
+            onToggleThink = { haptics.tick(); viewModel.toggleThink() },
+            onToggleFast = { haptics.tick(); viewModel.toggleFast() },
+            onPickWindow = { tokens ->
+                haptics.tick()
+                viewModel.setWindow(tokens)
+            },
+        )
+    }
+    renaming?.let { thread ->
+        RenameThreadDialog(
+            current = thread.title,
+            onDismiss = { renaming = null },
+            onRename = { name ->
+                renaming = null
+                viewModel.renameThread(thread.id, name)
+            },
+        )
+    }
+    confirmClear?.let { thread ->
+        ConfirmThreadDialog(
+            title = "Clear “${thread.title}”?",
+            body = "The transcript goes, and Hermes forgets the conversation too. The chat itself stays.",
+            action = "Clear",
+            onDismiss = { confirmClear = null },
+            onConfirm = {
+                confirmClear = null
+                viewModel.clearThread(thread.id)
+            },
+        )
+    }
+    confirmDelete?.let { thread ->
+        ConfirmThreadDialog(
+            title = if (thread.isStaff) "Let “${thread.title}” go?" else "Delete “${thread.title}”?",
+            body = if (thread.isStaff) {
+                "This one is staff: a Hermes profile with its own chat. Letting it go removes both, on the web as well."
+            } else {
+                "The chat and its Hermes session are deleted on the server, so it goes from the web dashboard as well."
+            },
+            action = if (thread.isStaff) "Let go" else "Delete",
+            onDismiss = { confirmDelete = null },
+            onConfirm = {
+                confirmDelete = null
+                viewModel.deleteThread(thread.id)
+            },
+        )
     }
 }
 
-private const val THREADS_REFRESH_MS = 20_000L
+/** Enough of a thread for the dialogs when the list has not caught up with a brand-new one. */
+private fun placeholderThread(id: String, title: String) = HermesThreadSummary(
+    id = id,
+    title = title.ifBlank { "New chat" },
+    kind = "chat",
+    perm = HermesPermission.ASK,
+    permId = HermesPermission.ASK.id,
+    busy = false,
+    pinned = false,
+    preview = "",
+    updatedMs = 0L,
+    pending = 0,
+)
 
 private fun openQuestion(state: HermesUiState): HermesItem.Clarify? =
     (state.items.lastOrNull { it is HermesItem.Clarify || it is HermesItem.User } as? HermesItem.Clarify)?.takeIf { it.open }
@@ -471,23 +509,12 @@ private fun headerStatus(state: HermesUiState): String {
     return when {
         live != null -> "Hermes · ${live.phase.ifBlank { "working" }}"
         state.reach == HermesReach.DOWN -> "Hermes is not reachable"
-        state.status != null -> listOfNotNull("Hermes", state.status.modelLabel).joinToString(" · ")
+        state.status != null -> listOfNotNull(
+            state.currentModel?.familyLabel ?: state.status.modelLabel,
+            state.mode.label,
+        ).joinToString(" · ")
         else -> "Connecting to Hermes…"
     }
-}
-
-private fun permissionColor(p: HermesPermission): Color = when (p) {
-    HermesPermission.CHAT -> TextSecondary
-    HermesPermission.LOOK -> ServerBrand
-    HermesPermission.ASK -> ServerWarn
-    HermesPermission.FULL -> ServerCritical
-}
-
-private fun permissionIcon(p: HermesPermission) = when (p) {
-    HermesPermission.CHAT -> AppIcons.Chat
-    HermesPermission.LOOK -> AppIcons.Eye
-    HermesPermission.ASK -> AppIcons.Key
-    HermesPermission.FULL -> AppIcons.Bolt
 }
 
 @Composable
@@ -527,7 +554,7 @@ private fun HermesItemView(
     onAnswer: (HermesItem.Clarify, String) -> Unit,
 ) {
     when (item) {
-        is HermesItem.User -> UserBubble(item.text)
+        is HermesItem.User -> HermesUserBubble(item)
         is HermesItem.Output -> OutputNote(item.text)
         is HermesItem.Assistant -> AssistantTurn(item)
         is HermesItem.Exec -> TerminalCard(item)
@@ -535,6 +562,24 @@ private fun HermesItemView(
         is HermesItem.Clarify -> QuestionCard(item, enabled = !state.busy, onAnswer = onAnswer)
         is HermesItem.Web -> WebRow(item)
         is HermesItem.Error -> BotBubble(identity = HermesIdentity, text = item.text, isError = true)
+    }
+}
+
+/** The person's message, with whatever they attached above it. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun HermesUserBubble(item: HermesItem.User) {
+    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
+        if (item.attachments.isNotEmpty()) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.padding(bottom = 4.dp),
+            ) {
+                item.attachments.forEach { AttachmentChip(it) }
+            }
+        }
+        if (item.text.isNotBlank()) UserBubble(item.text)
     }
 }
 
