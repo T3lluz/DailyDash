@@ -12,20 +12,26 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -42,27 +48,24 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.foundation.layout.width
 import com.macrotracker.ui.theme.Border
+import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.TextSecondary
+import com.macrotracker.ui.util.LastUpdatedText
 import com.macrotracker.ui.util.LocalTickersPaused
 import com.macrotracker.ui.util.rememberHaptics
-import com.macrotracker.ui.util.LastUpdatedText
 import java.time.Instant
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.material3.IconButton
-import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.foundation.layout.RowScope
 
 /** Default cap so expanded hubs stay on-screen instead of stretching the home list. */
 val WidgetScrollBoxMaxHeight = 340.dp
@@ -390,6 +393,42 @@ fun ChannelSheetHeader(
                 Text(subtitle, fontSize = 12.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             HubHeaderAction(Icons.Outlined.Close, "Close", onDismiss)
+        }
+    }
+}
+
+/** Error body shared by the hub cards: what failed, plus Retry in the hub's accent. */
+@Composable
+fun HubErrorState(
+    message: String,
+    accent: Color,
+    onRetry: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    val haptics = rememberHaptics()
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(Error.copy(alpha = 0.08f))
+            .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Outlined.ErrorOutline, contentDescription = null, tint = Error, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(10.dp))
+        Text(
+            message,
+            fontSize = 13.sp,
+            color = TextSecondary,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (onRetry != null) {
+            TextButton(onClick = { haptics.tick(); onRetry() }) {
+                Text("Retry", color = accent, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+            }
         }
     }
 }

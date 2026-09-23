@@ -112,7 +112,6 @@ import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.MacroMotion
-import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.Surface
 import com.macrotracker.ui.theme.SurfaceChrome
 import com.macrotracker.ui.theme.TextPrimary
@@ -179,6 +178,11 @@ fun YoutubeCard(viewModel: YouTubeViewModel = hiltViewModel()) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     var selectedChannelId by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedTabName by rememberSaveable { mutableStateOf(YtHubTab.FEED.name) }
+    LaunchedEffect(trackedChannels) {
+        if (selectedChannelId != null && trackedChannels.none { it.channelId == selectedChannelId }) {
+            selectedChannelId = null
+        }
+    }
     val selectedTab = YtHubTab.entries.find { it.name == selectedTabName } ?: YtHubTab.FEED
 
     val consentLauncher = rememberLauncherForActivityResult(
@@ -276,6 +280,7 @@ fun YoutubeCard(viewModel: YouTubeViewModel = hiltViewModel()) {
                         selectedTabName = YtHubTab.CHANNELS.name
                         haptics.toggleOn()
                     },
+                    onRetry = { viewModel.loadLatestVideos(forceRefresh = true) },
                     haptics = haptics,
                 )
                 WidgetExpandFooter(
@@ -349,10 +354,9 @@ fun YoutubeCard(viewModel: YouTubeViewModel = hiltViewModel()) {
                     Spacer(Modifier.height(14.dp))
 
                     val stateKey = when (youtubeState) {
-                        is YouTubeUiState.Loading -> -1
+                        is YouTubeUiState.Loading, YouTubeUiState.Idle -> -1
                         is YouTubeUiState.Error -> -2
                         is YouTubeUiState.NoChannels -> -3
-                        is YouTubeUiState.Idle -> -4
                         is YouTubeUiState.Success -> selectedTab.ordinal
                     }
                     WidgetStateSwitch(
@@ -372,27 +376,22 @@ fun YoutubeCard(viewModel: YouTubeViewModel = hiltViewModel()) {
                             key == -2 || youtubeState is YouTubeUiState.Error -> {
                                 val msg = (youtubeState as? YouTubeUiState.Error)?.message
                                     ?: "Something went wrong"
-                                ErrorState(
+                                HubErrorState(
                                     message = msg,
-                                    onRetry = {
-                                        haptics.tick()
-                                        viewModel.loadLatestVideos(forceRefresh = true)
-                                    },
+                                    accent = YtRed,
+                                    onRetry = { viewModel.loadLatestVideos(forceRefresh = true) },
                                 )
                             }
                             key == -3 || youtubeState is YouTubeUiState.NoChannels -> {
                                 NoChannelsPrompt(
                                     googleState = googleState,
                                     onOpenSettings = {
-                                        haptics.tick()
+                                        haptics.click()
                                         settingsStartTab = 1
                                         showSettings = true
                                     },
                                     onConnectGoogle = {
-                                        activity?.let { host ->
-                                            haptics.click()
-                                            viewModel.connectGoogle(host)
-                                        }
+                                        activity?.let { haptics.click(); viewModel.connectGoogle(it) }
                                     },
                                 )
                             }
@@ -402,8 +401,6 @@ fun YoutubeCard(viewModel: YouTubeViewModel = hiltViewModel()) {
                                     trackedChannels = trackedChannels,
                                     selectedChannelId = selectedChannelId,
                                     onChannelSelected = { selectedChannelId = it },
-                                    showChannelFilters = true,
-                                    previewCount = 0,
                                 )
                             }
                             selectedTab == YtHubTab.CHANNELS -> {
@@ -464,6 +461,7 @@ private fun YoutubeCollapsedGlance(
     selectedChannelId: String?,
     onChannelSelected: (String?) -> Unit,
     onOpenManage: () -> Unit,
+    onRetry: () -> Unit,
     haptics: HapticHelper,
 ) {
     when (youtubeState) {
@@ -527,24 +525,7 @@ private fun YoutubeCollapsedGlance(
             )
         }
         is YouTubeUiState.Error -> {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Error.copy(alpha = 0.08f))
-                    .padding(horizontal = 12.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Text("⚠", fontSize = 16.sp)
-                Text(
-                    youtubeState.message,
-                    fontSize = 12.sp,
-                    color = Error,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+            HubErrorState(message = youtubeState.message, accent = YtRed, onRetry = onRetry)
         }
     }
 }
@@ -962,7 +943,7 @@ private fun CompactChannelAvatar(
                 model = avatarRequest,
                 contentDescription = channel.title,
                 modifier = Modifier
-                    .size(34.dp)
+                    .size(36.dp)
                     .clip(CircleShape)
                     .border(borderWidth, borderColor, CircleShape),
                 contentScale = ContentScale.Crop,
@@ -970,7 +951,7 @@ private fun CompactChannelAvatar(
         } else {
             Box(
                 modifier = Modifier
-                    .size(34.dp)
+                    .size(36.dp)
                     .clip(CircleShape)
                     .border(borderWidth, borderColor, CircleShape)
                     .background(Border.copy(alpha = 0.5f)),
@@ -988,7 +969,7 @@ private fun CompactChannelAvatar(
         if (isSelected) {
             Box(
                 modifier = Modifier
-                    .size(34.dp)
+                    .size(36.dp)
                     .clip(CircleShape)
                     .background(YtRed.copy(alpha = 0.3f)),
                 contentAlignment = Alignment.Center,
@@ -1036,8 +1017,6 @@ private fun VideoFeed(
     trackedChannels: List<YoutubeChannel>,
     selectedChannelId: String?,
     onChannelSelected: (String?) -> Unit,
-    showChannelFilters: Boolean = true,
-    previewCount: Int = 0,
 ) {
     val context = LocalContext.current
     val haptics = rememberHaptics()
@@ -1053,9 +1032,7 @@ private fun VideoFeed(
     val displayedVideos = remember(videos, selectedChannelId) {
         if (selectedChannelId != null) videos.filter { it.channelId == selectedChannelId } else videos
     }
-    val feedVideos = remember(displayedVideos, previewCount) {
-        displayedVideos.drop(previewCount.coerceAtMost(displayedVideos.size))
-    }
+    val feedVideos = displayedVideos
     // "New" video count per channel — computed once, used by channel pills for badges
     val channelNewCountMap = remember(videos) {
         val cutoff = Instant.now().minus(24, ChronoUnit.HOURS)
@@ -1065,8 +1042,8 @@ private fun VideoFeed(
     }
 
     Column {
-        // ── Channel filter pills (expanded-only when compact filters are hidden) ──
-        if (showChannelFilters && trackedChannels.isNotEmpty()) {
+        // ── Channel filter pills ──
+        if (trackedChannels.isNotEmpty()) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1120,11 +1097,13 @@ private fun VideoFeed(
                             RoundedCornerShape(8.dp),
                         )
                         .clickable { haptics.tick(); groupByChannel = !groupByChannel }
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                        .height(32.dp)
+                        .padding(horizontal = 10.dp),
+                    contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         "By channel",
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         color = if (groupByChannel) YtRed else TextSecondary,
                         fontWeight = if (groupByChannel) FontWeight.SemiBold else FontWeight.Normal,
                     )
@@ -1146,12 +1125,12 @@ private fun VideoFeed(
                             .clip(RoundedCornerShape(8.dp))
                             .background(if (selected) Surface else Color.Transparent)
                             .clickable { haptics.tick(); layout = mode }
-                            .padding(horizontal = 8.dp, vertical = 5.dp),
+                            .size(width = 36.dp, height = 32.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
                             icon,
-                            contentDescription = mode.name,
+                            contentDescription = if (mode == YtLayout.LIST) "List view" else "Grid view",
                             tint = if (selected) YtRed else TextSecondary.copy(alpha = 0.5f),
                             modifier = Modifier.size(16.dp),
                         )
@@ -1162,36 +1141,17 @@ private fun VideoFeed(
 
         // ── Content ───────────────────────────────────────────────────────
         if (feedVideos.isEmpty()) {
-            if (previewCount > 0 && displayedVideos.isNotEmpty()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(YtRed.copy(alpha = 0.06f))
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Icon(Icons.Outlined.VideoLibrary, null, tint = YtRed.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
-                    Text(
-                        "Latest videos shown above — use filters to explore",
-                        color = TextSecondary,
-                        fontSize = 13.sp,
-                    )
-                }
-            } else {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(YtRed.copy(alpha = 0.06f))
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Icon(Icons.Outlined.VideoLibrary, null, tint = YtRed.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
-                    Text("No videos from this channel yet", color = TextSecondary, fontSize = 13.sp)
-                }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(YtRed.copy(alpha = 0.06f))
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(Icons.Outlined.VideoLibrary, null, tint = YtRed.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
+                Text("No videos from this channel yet", color = TextSecondary, fontSize = 13.sp)
             }
         } else {
             val doGrouping = groupByChannel && selectedChannelId == null && trackedChannels.size > 1
@@ -1274,37 +1234,6 @@ private fun VideoFeed(
                                 )
                             },
                         )
-                        if (hasMore) {
-                            ShowMoreButton(
-                                remaining = feedVideos.size - visibleCount,
-                                onClick = { haptics.tick(); visibleCount += YT_PAGE_SIZE },
-                            )
-                        }
-                    }
-                }
-                previewCount > 0 -> {
-                    val paged   = feedVideos.take(visibleCount)
-                    val hasMore = feedVideos.size > visibleCount
-
-                    WidgetScrollBox(
-                        maxHeight = 380.dp,
-                    ) {
-                        paged.forEachIndexed { idx, video ->
-                            key(video.videoId) {
-                                VideoCard(
-                                    video = video,
-                                    onClick = {
-                                        haptics.tick()
-                                        context.startActivity(
-                                            Intent(Intent.ACTION_VIEW, "https://www.youtube.com/watch?v=${video.videoId}".toUri())
-                                        )
-                                    },
-                                )
-                                if (idx < paged.lastIndex) {
-                                    HorizontalDivider(color = Border.copy(alpha = 0.18f))
-                                }
-                            }
-                        }
                         if (hasMore) {
                             ShowMoreButton(
                                 remaining = feedVideos.size - visibleCount,
@@ -1793,8 +1722,8 @@ private fun ChannelSectionHeader(channel: YoutubeChannel, videoCount: Int) {
         // Open channel on YouTube
         Box(
             modifier = Modifier
-                .size(22.dp)
-                .clip(RoundedCornerShape(6.dp))
+                .size(36.dp)
+                .clip(CircleShape)
                 .clickable {
                     haptics.tick()
                     context.startActivity(
@@ -1824,7 +1753,6 @@ private fun ChannelPill(
     newCount: Int = 0,
     onClick: () -> Unit = {},
 ) {
-    val context = LocalContext.current
     val bgColor by animateColorAsState(
         targetValue = if (isSelected) YtRed.copy(alpha = 0.15f) else Surface,
         animationSpec = MacroMotion.colorTween(200), label = "pill_bg",
@@ -1892,7 +1820,6 @@ private fun NoChannelsPrompt(
     onConnectGoogle: () -> Unit,
     compact: Boolean = false,
 ) {
-    val haptics = rememberHaptics()
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1929,12 +1856,7 @@ private fun NoChannelsPrompt(
         }
         if (!googleState.isConnected) {
             Button(
-                onClick = {
-                    if (!googleState.isBusy) {
-                        haptics.click()
-                        onConnectGoogle()
-                    }
-                },
+                onClick = onConnectGoogle,
                 enabled = !googleState.isBusy,
                 colors = ButtonDefaults.buttonColors(containerColor = YtRed),
                 shape = RoundedCornerShape(10.dp),
@@ -1951,12 +1873,12 @@ private fun NoChannelsPrompt(
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
-            TextButton(onClick = { haptics.click(); onOpenSettings() }) {
+            TextButton(onClick = onOpenSettings) {
                 Text("Search channels", color = TextSecondary, fontSize = 13.sp)
             }
         } else {
             Button(
-                onClick = { haptics.click(); onOpenSettings() },
+                onClick = onOpenSettings,
                 colors = ButtonDefaults.buttonColors(containerColor = YtRed),
                 shape = RoundedCornerShape(10.dp),
             ) {
@@ -2042,7 +1964,7 @@ private fun YouTubeGoogleAccountCard(
                 IconButton(
                     onClick = onSync,
                     enabled = !googleState.isBusy,
-                    modifier = Modifier.size(34.dp),
+                    modifier = Modifier.size(36.dp),
                 ) {
                     Icon(
                         Icons.Filled.Sync,
@@ -2054,7 +1976,7 @@ private fun YouTubeGoogleAccountCard(
                 IconButton(
                     onClick = onDisconnect,
                     enabled = !googleState.isBusy,
-                    modifier = Modifier.size(34.dp),
+                    modifier = Modifier.size(36.dp),
                 ) {
                     Icon(
                         Icons.Outlined.LinkOff,
@@ -2107,7 +2029,7 @@ private fun YouTubeGoogleAccountCard(
                 )
                 IconButton(
                     onClick = onDismissStatus,
-                    modifier = Modifier.size(28.dp),
+                    modifier = Modifier.size(36.dp),
                 ) {
                     Icon(
                         Icons.Filled.Close,
@@ -2118,15 +2040,6 @@ private fun YouTubeGoogleAccountCard(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun ErrorState(message: String, onRetry: () -> Unit) {
-    val haptics = rememberHaptics()
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("⚠ $message", fontSize = 13.sp, color = Error, modifier = Modifier.padding(horizontal = 12.dp))
-        TextButton(onClick = { haptics.tick(); onRetry() }) { Text("Retry", color = Primary) }
     }
 }
 
@@ -2338,8 +2251,8 @@ private fun SearchTab(
             }),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedContainerColor = Background, unfocusedContainerColor = Background,
-                focusedBorderColor = Primary, unfocusedBorderColor = Border,
-                focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary, cursorColor = Primary,
+                focusedBorderColor = YtRed, unfocusedBorderColor = Border,
+                focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary, cursorColor = YtRed,
             ),
         )
 
@@ -2480,10 +2393,9 @@ private fun SuggestionRow(
     onRemove: () -> Unit,
     onSelect: () -> Unit,
 ) {
-    val context = LocalContext.current
     val btnBg by animateColorAsState(
         targetValue = when {
-            justAdded -> Primary.copy(alpha = 0.2f)
+            justAdded -> YtRed.copy(alpha = 0.2f)
             isTracked -> Error.copy(alpha = 0.12f)
             else -> YtRed.copy(alpha = 0.12f)
         },
@@ -2538,7 +2450,7 @@ private fun SuggestionRow(
         Box(
             modifier = Modifier
                 .scale(btnScale)
-                .size(32.dp)
+                .size(36.dp)
                 .clip(CircleShape)
                 .background(btnBg)
                 .clickable(onClick = if (isTracked) onRemove else onAdd),
@@ -2559,9 +2471,13 @@ private fun SuggestionRow(
                         "remove" -> Icons.Filled.Close
                         else -> Icons.Filled.Add
                     },
-                    contentDescription = state,
+                    contentDescription = when (state) {
+                        "check" -> "Added"
+                        "remove" -> "Remove channel"
+                        else -> "Add channel"
+                    },
                     tint = when (state) {
-                        "check" -> Primary
+                        "check" -> YtRed
                         "remove" -> Error
                         else -> YtRed
                     },
@@ -2583,12 +2499,11 @@ private fun ChannelListRow(
     onToggle: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
     val buttonBg by animateColorAsState(
         targetValue = when {
-            justAdded -> Primary.copy(alpha = 0.2f)
+            justAdded -> YtRed.copy(alpha = 0.2f)
             isTracked -> Error.copy(alpha = 0.12f)
-            else      -> Primary.copy(alpha = 0.12f)
+            else      -> YtRed.copy(alpha = 0.12f)
         },
         animationSpec = MacroMotion.colorTween(300), label = "btn_bg",
     )
@@ -2616,7 +2531,7 @@ private fun ChannelListRow(
         Column(Modifier.weight(1f)) {
             Text(channel.title, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (isTracked) {
-                Text("Tracked", fontSize = 11.sp, color = Primary, fontWeight = FontWeight.Medium)
+                Text("Tracked", fontSize = 11.sp, color = YtRed, fontWeight = FontWeight.Medium)
             }
         }
         Spacer(Modifier.width(8.dp))
@@ -2645,11 +2560,15 @@ private fun ChannelListRow(
                         "remove" -> Icons.Filled.Close
                         else     -> Icons.Filled.Add
                     },
-                    contentDescription = iconState,
+                    contentDescription = when (iconState) {
+                        "check" -> "Added"
+                        "remove" -> "Remove channel"
+                        else -> "Add channel"
+                    },
                     tint = when (iconState) {
-                        "check"  -> Primary
+                        "check"  -> YtRed
                         "remove" -> Error
-                        else     -> Primary
+                        else     -> YtRed
                     },
                     modifier = Modifier.size(18.dp),
                 )
