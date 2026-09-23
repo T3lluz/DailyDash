@@ -111,7 +111,11 @@ com.macrotracker/
                               dot cores, then a light blur *only* at the cores. `Modifier.dottedFrost()`
                               is just the painted-dot fallback for surfaces with nothing to blur
                               (and for API < 31) — don't reach for it as the effect itself.
-    theme/                 ← Color, Theme, Animation (MacroMotion object — single source for all specs)
+    theme/                 ← Color, Theme, Animation (MacroMotion object — single source for all specs),
+                              AppIcons.kt — the app's only icon set (generated Lucide/Tabler ImageVectors).
+                              The Material icons dependency is gone: never import
+                              `androidx.compose.material.icons`. Text colours use `TextPrimary` /
+                              `TextSecondary` / `TextTertiary`, never `TextSecondary.copy(alpha = …)`
     util/                  ← HapticHelper (Compose-friendly performHapticFeedback wrapper, ui/util/Haptics.kt)
                               + LastUpdatedText composable + rememberRelativeTime (ui/util/LastUpdated.kt)
   widget/                  ← Glance-based home-screen widgets:
