@@ -1,5 +1,7 @@
 package com.macrotracker.data.server
 
+import kotlin.math.roundToInt
+
 /**
  * The shell side of the monitor.
  *
@@ -36,10 +38,10 @@ echo @@END
      */
     fun fastScript(hasSystemd: Boolean, hasDocker: Boolean): String = buildString {
         appendLine("echo @@TS; date +%s")
-        appendLine("echo @@STAT; grep '^cpu' /proc/stat 2>/dev/null")
+        appendLine("echo @@STAT; grep -E '^(cpu|procs_blocked)' /proc/stat 2>/dev/null")
         appendLine(
-            "echo @@MEM; grep -E '^(MemTotal|MemFree|MemAvailable|Buffers|Cached|SwapTotal|SwapFree):' " +
-                "/proc/meminfo 2>/dev/null",
+            "echo @@MEM; grep -E '^(MemTotal|MemFree|MemAvailable|Buffers|Cached|SwapTotal|SwapFree|" +
+                "SReclaimable|Shmem|Dirty):' /proc/meminfo 2>/dev/null",
         )
         appendLine("echo @@LOAD; cat /proc/loadavg 2>/dev/null")
         appendLine("echo @@UP; cat /proc/uptime 2>/dev/null")
@@ -49,7 +51,29 @@ echo @@END
             "echo @@TEMP; grep -H . /sys/class/thermal/thermal_zone*/type " +
                 "/sys/class/thermal/thermal_zone*/temp 2>/dev/null",
         )
-        appendLine("echo @@PROC; ps -eo pid,pcpu,pmem,comm --sort=-pcpu 2>/dev/null | head -n 9")
+        // hwmon names its drivers (k10temp, coretemp, nvme, amdgpu), which is what
+        // lets a reading be called "CPU" or "Disk" instead of acpitz or zone3.
+        appendLine(
+            "echo @@HWMON; grep -H . /sys/class/hwmon/hwmon*/name /sys/class/hwmon/hwmon*/temp1_input " +
+                "/sys/class/hwmon/hwmon*/temp1_label 2>/dev/null",
+        )
+        appendLine("echo @@PSI; grep -H '^some' /proc/pressure/cpu /proc/pressure/io /proc/pressure/memory 2>/dev/null")
+        // Whole disks only: partitions and device-mapper nodes repeat their parent's traffic.
+        appendLine(
+            "echo @@DISKIO; grep -E ' (nvme[0-9]+n[0-9]+|sd[a-z]+|vd[a-z]+|xvd[a-z]+|hd[a-z]+|mmcblk[0-9]+) ' " +
+                "/proc/diskstats 2>/dev/null",
+        )
+        // x86 lists a clock per core in cpuinfo; ARM only has cpufreq (in kHz).
+        appendLine(
+            "echo @@MHZ; { grep -i '^cpu MHz' /proc/cpuinfo 2>/dev/null || " +
+                "cat /sys/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_cur_freq 2>/dev/null; } | head -n 128",
+        )
+        appendLine(
+            "echo @@BAT; grep -H . " +
+                BATTERY_FILES.joinToString(" ") { "/sys/class/power_supply/BAT*/$it" } +
+                " 2>/dev/null",
+        )
+        appendLine("echo @@PROC; ps -eo pid,pcpu,pmem,rss,comm --sort=-pcpu 2>/dev/null | head -n 9")
         appendLine("echo @@WHO; who 2>/dev/null | head -n 8")
         if (hasSystemd) {
             appendLine(
@@ -62,6 +86,42 @@ echo @@END
             appendLine(
                 "echo @@DOCKER; docker ps -a --format " +
                     "'{{.Names}}|{{.State}}|{{.Status}}|{{.Image}}' 2>/dev/null | head -n 24",
+            )
+        }
+        appendLine("echo @@END")
+    }
+
+    private val BATTERY_FILES = listOf(
+        "capacity", "status", "cycle_count", "energy_full", "energy_full_design",
+        "charge_full", "charge_full_design", "power_now", "current_now", "voltage_now",
+    )
+
+    /**
+     * The detail lane, every 30 s and only while the full screen is open. `docker
+     * stats --no-stream` samples for about a second, which is fine twice a minute and
+     * not fine every five seconds.
+     */
+    fun detailScript(host: ServerHostProfile): String = buildString {
+        if (host.hasDocker) {
+            appendLine(
+                "echo @@DSTATS; docker stats --no-stream --format " +
+                    "'{{.Name}}|{{.CPUPerc}}|{{.MemUsage}}|{{.MemPerc}}' 2>/dev/null | head -n 80",
+            )
+        }
+        appendLine("echo @@MEMPROC; ps -eo pid,pcpu,pmem,rss,comm --sort=-rss 2>/dev/null | head -n 9")
+        appendLine("echo @@PORTS; ss -Htln 2>/dev/null | head -n 80")
+        if (host.hasSystemd) {
+            appendLine(
+                "echo @@RUNNING; systemctl list-units --type=service --state=running --no-legend --plain " +
+                    "--no-pager 2>/dev/null | wc -l",
+            )
+            // Needs the adm or systemd-journal group to see system units; without it the
+            // count covers only this user's own units, and the screen says nothing.
+            appendLine(
+                "echo @@JERRCOUNT; journalctl -p 3 --since '-1h' --no-pager -q -o cat 2>/dev/null | wc -l",
+            )
+            appendLine(
+                "echo @@JERRTAIL; journalctl -p 3 --since '-1h' --no-pager -q -o short 2>/dev/null | tail -n 4",
             )
         }
         appendLine("echo @@END")
@@ -196,6 +256,8 @@ echo @@END
         val cpuJiffies: List<LongArray>,
         val netRxBytes: Map<String, Long>,
         val netTxBytes: Map<String, Long>,
+        val diskReadBytes: Long? = null,
+        val diskWriteBytes: Long? = null,
     )
 
     data class FastResult(val snapshot: ServerSnapshot, val counters: RawCounters)
@@ -211,9 +273,14 @@ echo @@END
             }
 
         val netTotals = parseNetDev(s["NET"].orEmpty())
-        val counters = RawCounters(nowMs, cpuJiffies, netTotals.first, netTotals.second)
+        val disk = parseDiskStats(s["DISKIO"].orEmpty())
+        val counters = RawCounters(nowMs, cpuJiffies, netTotals.first, netTotals.second, disk?.first, disk?.second)
 
         val elapsedSec = previous?.let { (nowMs - it.takenAtMs) / 1000.0 }?.takeIf { it > 0.05 }
+        val blocked = s["STAT"].orEmpty()
+            .firstOrNull { it.startsWith("procs_blocked") }
+            ?.substringAfter(' ')?.trim()?.toIntOrNull()
+        val hwmon = parseHwmon(s["HWMON"].orEmpty())
 
         val snapshot = ServerSnapshot(
             takenAtMs = nowMs,
@@ -221,21 +288,194 @@ echo @@END
                 ?.trim()?.split(" ")?.firstOrNull()?.toDoubleOrNull()?.toLong(),
             cpu = previous?.let { cpuDelta(it.cpuJiffies, cpuJiffies) },
             memory = parseMeminfo(s["MEM"].orEmpty()),
-            load = parseLoadAvg(s["LOAD"].orEmpty().firstOrNull()),
+            load = parseLoadAvg(s["LOAD"].orEmpty().firstOrNull())?.let { load ->
+                if (blocked != null) load.copy(blockedProcs = blocked) else load
+            },
             network = if (previous != null && elapsedSec != null) {
                 networkDelta(previous, counters, elapsedSec)
             } else {
                 null
             },
             disks = parseDf(s["DF"].orEmpty()),
-            temperatures = parseTemperatures(s["TEMP"].orEmpty()),
+            // hwmon when the box has it, because it can say which reading is which.
+            temperatures = hwmon.ifEmpty { parseTemperatures(s["TEMP"].orEmpty()) },
             processes = parseProcesses(s["PROC"].orEmpty()),
             sessions = parseWho(s["WHO"].orEmpty()),
             failedUnits = parseFailedUnits(s["UNITS"].orEmpty()),
             systemState = s["SYSSTATE"].orEmpty().firstOrNull()?.trim()?.takeIf { it.isNotEmpty() },
             containers = parseDocker(s["DOCKER"].orEmpty()),
+            pressure = parsePressure(s["PSI"].orEmpty()),
+            diskIo = if (previous != null && elapsedSec != null) diskDelta(previous, counters, elapsedSec) else null,
+            cpuMhz = parseMhz(s["MHZ"].orEmpty()),
+            battery = parseBattery(s["BAT"].orEmpty()),
         )
         return FastResult(snapshot, counters)
+    }
+
+    /** Sectors read and written across whole disks, as bytes (a sector here is always 512). */
+    private fun parseDiskStats(lines: List<String>): Pair<Long, Long>? {
+        var read = 0L
+        var written = 0L
+        var any = false
+        lines.forEach { line ->
+            val f = line.trim().split(Regex("\\s+"))
+            if (f.size < 10) return@forEach
+            val r = f[5].toLongOrNull() ?: return@forEach
+            val w = f[9].toLongOrNull() ?: return@forEach
+            read += r
+            written += w
+            any = true
+        }
+        return if (any) read * 512 to written * 512 else null
+    }
+
+    private fun diskDelta(previous: RawCounters, current: RawCounters, elapsedSec: Double): DiskIoSample? {
+        val r0 = previous.diskReadBytes ?: return null
+        val w0 = previous.diskWriteBytes ?: return null
+        val r1 = current.diskReadBytes ?: return null
+        val w1 = current.diskWriteBytes ?: return null
+        return DiskIoSample(
+            readBytesPerSec = ((r1 - r0).coerceAtLeast(0) / elapsedSec).toLong(),
+            writeBytesPerSec = ((w1 - w0).coerceAtLeast(0) / elapsedSec).toLong(),
+            readTotalBytes = r1,
+            writeTotalBytes = w1,
+        )
+    }
+
+    /** `/proc/pressure/io:some avg10=1.19 avg60=…` → the avg10 per resource. */
+    private fun parsePressure(lines: List<String>): PressureSample? {
+        val values = mutableMapOf<String, Float>()
+        lines.forEach { line ->
+            val resource = line.substringBefore(':').substringAfterLast('/')
+            val avg10 = Regex("avg10=([0-9.]+)").find(line)?.groupValues?.get(1)?.toFloatOrNull() ?: return@forEach
+            values[resource] = avg10
+        }
+        if (values.isEmpty()) return null
+        return PressureSample(cpu = values["cpu"], io = values["io"], memory = values["memory"])
+    }
+
+    /** `cpu MHz : 1397.000` lines, or cpufreq's kHz, averaged across cores. */
+    private fun parseMhz(lines: List<String>): Int? {
+        val mhz = lines.mapNotNull { line ->
+            if (line.contains(':')) {
+                line.substringAfter(':').trim().toFloatOrNull()
+            } else {
+                line.trim().toFloatOrNull()?.let { it / 1000f } // scaling_cur_freq is in kHz
+            }
+        }.filter { it > 0f }
+        return if (mhz.isEmpty()) null else (mhz.sum() / mhz.size).roundToInt()
+    }
+
+    private fun parseBattery(lines: List<String>): BatterySample? {
+        val values = mutableMapOf<String, String>()
+        lines.forEach { line ->
+            val colon = line.indexOf(':')
+            if (colon <= 0) return@forEach
+            val path = line.substring(0, colon)
+            // First battery only: a laptop server has one, and two would need a UI of their own.
+            val battery = path.substringBeforeLast('/').substringAfterLast('/')
+            if (values.isNotEmpty() && values["_bat"] != battery) return@forEach
+            values["_bat"] = battery
+            values[path.substringAfterLast('/')] = line.substring(colon + 1).trim()
+        }
+        val percent = values["capacity"]?.toIntOrNull() ?: return null
+        fun num(key: String) = values[key]?.toLongOrNull()
+        val full = num("charge_full") ?: num("energy_full")
+        val design = num("charge_full_design") ?: num("energy_full_design")
+        val watts = num("power_now")?.let { it / 1_000_000f }
+            ?: num("current_now")?.let { amps -> num("voltage_now")?.let { volts -> amps * volts / 1e12f } }
+        return BatterySample(
+            percent = percent.coerceIn(0, 100),
+            status = values["status"].orEmpty(),
+            healthPercent = if (full != null && design != null && design > 0) (full * 100 / design).toInt() else null,
+            cycles = num("cycle_count")?.toInt()?.takeIf { it > 0 },
+            watts = watts?.takeIf { it > 0f },
+        )
+    }
+
+    /**
+     * `grep -H .` over hwmon gives `/…/hwmon4/name:k10temp`, `/…/hwmon4/temp1_input:52000`
+     * and sometimes `/…/hwmon4/temp1_label:Tctl`, which pair up by hwmon directory.
+     */
+    internal fun parseHwmon(lines: List<String>): List<TemperatureReading> {
+        val names = mutableMapOf<String, String>()
+        val labels = mutableMapOf<String, String>()
+        val temps = mutableMapOf<String, Long>()
+        lines.forEach { line ->
+            val colon = line.indexOf(':')
+            if (colon <= 0) return@forEach
+            val path = line.substring(0, colon)
+            val value = line.substring(colon + 1).trim()
+            val dir = path.substringBeforeLast('/')
+            when (path.substringAfterLast('/')) {
+                "name" -> names[dir] = value
+                "temp1_label" -> labels[dir] = value
+                "temp1_input" -> value.toLongOrNull()?.let { temps[dir] = it }
+            }
+        }
+        val seen = mutableMapOf<SensorKind, Int>()
+        return temps.entries
+            .mapNotNull { (dir, milli) ->
+                val celsius = milli / 1000f
+                if (celsius <= 0f || celsius > 150f) return@mapNotNull null
+                val driver = names[dir].orEmpty()
+                val kind = sensorKind(driver)
+                val n = (seen[kind] ?: 0) + 1
+                seen[kind] = n
+                val label = when (kind) {
+                    SensorKind.OTHER -> driver.ifBlank { dir.substringAfterLast('/') }
+                    else -> if (n > 1) "${kind.label} $n" else kind.label
+                }
+                TemperatureReading(label = label, celsius = celsius, kind = kind)
+            }
+            .sortedByDescending { it.celsius }
+    }
+
+    private fun sensorKind(driver: String): SensorKind {
+        val d = driver.lowercase()
+        return when {
+            d in setOf("k10temp", "coretemp", "zenpower", "cpu_thermal", "cpu-thermal", "soc_thermal", "x86_pkg_temp") ||
+                d.startsWith("cpu") -> SensorKind.CPU
+            d in setOf("amdgpu", "nouveau", "radeon", "i915", "xe") || d.startsWith("gpu") -> SensorKind.GPU
+            d == "nvme" || d == "drivetemp" || d.startsWith("nvme") -> SensorKind.DISK
+            d == "acpitz" || d.startsWith("pch_") || d.startsWith("nct") || d.startsWith("it87") -> SensorKind.BOARD
+            d.startsWith("iwlwifi") || d.startsWith("mt7") || d.startsWith("ath") -> SensorKind.WIFI
+            else -> SensorKind.OTHER
+        }
+    }
+
+    fun parseDetail(stdout: String, nowMs: Long): ServerDetail {
+        val s = sections(stdout)
+        val stats = s["DSTATS"].orEmpty().mapNotNull { line ->
+            val parts = line.split("|")
+            if (parts.size < 4) return@mapNotNull null
+            val name = parts[0].trim().ifEmpty { return@mapNotNull null }
+            name to ContainerStats(
+                cpuPercent = parts[1].trim().removeSuffix("%").toFloatOrNull() ?: 0f,
+                memoryUsage = parts[2].substringBefore("/").trim(),
+                memoryPercent = parts[3].trim().removeSuffix("%").toFloatOrNull(),
+            )
+        }.toMap()
+        val ports = s["PORTS"].orEmpty().mapNotNull { line ->
+            val f = line.trim().split(Regex("\\s+"))
+            // LISTEN 0 4096 0.0.0.0:22 0.0.0.0:*  — the local address is the fourth column.
+            val local = f.getOrNull(3) ?: return@mapNotNull null
+            val port = local.substringAfterLast(':').toIntOrNull() ?: return@mapNotNull null
+            ListeningPort(port = port, address = local.substringBeforeLast(':').substringBefore('%'))
+        }
+            // One entry per port, at its widest reach: open beats tailnet beats loopback.
+            .groupBy { it.port }
+            .map { (_, same) -> same.minBy { it.scope.ordinal } }
+            .sortedBy { it.port }
+        return ServerDetail(
+            fetchedAtMs = nowMs,
+            containerStats = stats,
+            memoryProcesses = parseProcesses(s["MEMPROC"].orEmpty()),
+            listening = ports,
+            runningServices = s["RUNNING"].orEmpty().firstOrNull()?.trim()?.toIntOrNull(),
+            journalErrors = s["JERRCOUNT"]?.firstOrNull()?.trim()?.toIntOrNull(),
+            journalTail = s["JERRTAIL"].orEmpty().map { it.trim() }.filter { it.isNotEmpty() }.takeLast(4),
+        )
     }
 
     /**
@@ -308,6 +548,9 @@ echo @@END
             cachedKb = cached,
             swapTotalKb = values["SwapTotal"] ?: 0,
             swapFreeKb = values["SwapFree"] ?: 0,
+            reclaimableKb = values["SReclaimable"] ?: 0,
+            shmemKb = values["Shmem"] ?: 0,
+            dirtyKb = values["Dirty"] ?: 0,
         )
     }
 
@@ -416,19 +659,23 @@ echo @@END
             .sortedByDescending { it.celsius }
     }
 
-    private fun parseProcesses(lines: List<String>): List<ProcessInfo> = lines
-        .filter { it.isNotBlank() }
-        .drop(1)
-        .mapNotNull { line ->
-            val parts = line.trim().split(Regex("\\s+"), limit = 4)
-            if (parts.size < 4) return@mapNotNull null
+    /** `PID %CPU %MEM RSS COMMAND`; an older four-column list (no RSS) still parses. */
+    private fun parseProcesses(lines: List<String>): List<ProcessInfo> {
+        val rows = lines.filter { it.isNotBlank() }
+        val hasRss = rows.firstOrNull()?.contains("RSS", ignoreCase = true) == true
+        val columns = if (hasRss) 5 else 4
+        return rows.drop(1).mapNotNull { line ->
+            val parts = line.trim().split(Regex("\\s+"), limit = columns)
+            if (parts.size < columns) return@mapNotNull null
             ProcessInfo(
                 pid = parts[0].toIntOrNull() ?: return@mapNotNull null,
                 cpuPercent = parts[1].toFloatOrNull() ?: 0f,
                 memPercent = parts[2].toFloatOrNull() ?: 0f,
-                command = parts[3].trim(),
+                rssKb = if (hasRss) parts[3].toLongOrNull() else null,
+                command = parts[columns - 1].trim(),
             )
         }
+    }
 
     private fun parseWho(lines: List<String>): List<LoginSession> = lines
         .filter { it.isNotBlank() }

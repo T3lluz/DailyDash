@@ -3,8 +3,11 @@ package com.macrotracker.ui.viewmodel
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.macrotracker.data.server.DashboardLink
+import com.macrotracker.data.server.DashboardLinkRepository
 import com.macrotracker.data.server.ServerAuthMode
 import com.macrotracker.data.server.ServerError
+import com.macrotracker.data.server.ServerFocus
 import com.macrotracker.data.server.ServerHostProfile
 import com.macrotracker.data.server.ServerMonitorRepository
 import com.macrotracker.data.server.ServerMonitorService
@@ -20,6 +23,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.macrotracker.data.chat.ServerAiHandoff
 import com.macrotracker.data.server.ServerAdvisory
@@ -45,6 +49,8 @@ sealed interface ServerTestUiState {
 class ServerViewModel @Inject constructor(
     private val serverAiHandoff: ServerAiHandoff,
     private val repository: ServerMonitorRepository,
+    private val dashboard: DashboardLinkRepository,
+    private val focus: ServerFocus,
     private val store: ServerStore,
     private val notifier: ServerNotifier,
     @ApplicationContext private val context: Context,
@@ -54,13 +60,32 @@ class ServerViewModel @Inject constructor(
     val profiles: StateFlow<List<ServerProfile>> = repository.profiles
     val settings: StateFlow<ServerNotificationSettings> = repository.settings
 
+    /** The t3lluz dashboard's view of its own machine; see [DashboardLinkRepository]. */
+    val dashboardLink: StateFlow<DashboardLink?> = dashboard.link
+
+    /**
+     * Keeps the dashboard link fresh while [intervalMs] ticks. Each file keeps its own
+     * clock in the repository, so calling this often costs nothing extra.
+     */
+    suspend fun followDashboard(intervalMs: Long) {
+        while (true) {
+            dashboard.refresh()
+            delay(intervalMs)
+        }
+    }
+
+    fun refreshDashboard() {
+        viewModelScope.launch { dashboard.refresh(force = true) }
+    }
+
     private val _testState = MutableStateFlow<ServerTestUiState>(ServerTestUiState.Idle)
     val testState: StateFlow<ServerTestUiState> = _testState
 
     /** Unique per ViewModel instance so two screens do not cancel each other's polling. */
     private val pollTag = "vm-${hashCode()}"
 
-    fun startPolling() = repository.acquire(pollTag)
+    /** [detailed] adds the slower lane (container usage, ports, the journal) for the full screen. */
+    fun startPolling(detailed: Boolean = false) = repository.acquire(pollTag, detailed)
 
     fun stopPolling() = repository.release(pollTag)
 
@@ -161,6 +186,28 @@ class ServerViewModel @Inject constructor(
             openingQuestion = ServerAiContext.openingQuestion(runtime, section),
         )
     }
+
+    /**
+     * The Ask action on a server notification: the advisory it was about when that is
+     * still raised, otherwise the server as a whole. Null when the server is not being
+     * watched in this process, and the caller opens the dashboard instead.
+     */
+    fun askAiFromNotification(serverId: String?, about: String): String? {
+        val runtime = serverId?.let { runtimes.value[it] }
+            ?: runtimes.value.values.firstOrNull { it.snapshot != null }
+            ?: return null
+        val advisory = runtime.advisories.firstOrNull { it.key == about }
+        return if (advisory != null) {
+            askAiAboutAdvisory(runtime.profile.id, advisory)
+        } else {
+            askAiAbout(runtime.profile.id, ServerAiSection.OVERVIEW)
+        }
+    }
+
+    fun focusServer(serverId: String?) = focus.request(serverId)
+
+    /** The server a notification asked the dashboard to open on, once. */
+    fun consumeFocus(): String? = focus.consume()
 
     fun askAiAboutAdvisory(serverId: String, advisory: ServerAdvisory): String? {
         val runtime = runtimes.value[serverId] ?: return null

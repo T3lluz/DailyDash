@@ -15,7 +15,8 @@ import androidx.compose.runtime.staticCompositionLocalOf
 val LocalTickersPaused = staticCompositionLocalOf { false }
 
 private val HOME_WIDGET_ITEM_KEYS = setOf(
-    "F1", "GITHUB", "YOUTUBE", "TWITCH", "WEATHER", "CALENDAR", "BODY_STATS", "PROGRESS", "QUICK_ADD",
+    "F1", "GITHUB", "SERVERS", "UPCOMING", "YOUTUBE", "TWITCH", "WEATHER", "CALENDAR", "BODY_STATS", "PROGRESS",
+    "QUICK_ADD",
 )
 
 /** Tab slide duration in [MacroMotion] — used to defer work until navigation finishes. */

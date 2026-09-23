@@ -185,4 +185,6 @@ dependencies {
     implementation(libs.jsch)
 
     testImplementation("junit:junit:4.13.2")
+    // Android's org.json is a stub on the JVM; the real one lets the bridge and dashboard parsers be tested.
+    testImplementation("org.json:json:20240303")
 }
