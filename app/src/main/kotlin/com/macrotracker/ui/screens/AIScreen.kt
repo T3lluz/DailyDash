@@ -92,6 +92,9 @@ import com.macrotracker.ui.screens.ai.rememberNearChatBottom
 import com.macrotracker.ui.screens.ai.DishSuggestion
 import com.macrotracker.ui.screens.ai.SmallActionChip
 import com.macrotracker.ui.screens.ai.SysopChatPane
+import com.macrotracker.ui.screens.ai.HermesChatPane
+import com.macrotracker.ui.screens.ai.HermesIdentity
+import com.macrotracker.ui.viewmodel.HermesViewModel
 import com.macrotracker.ui.screens.ai.TypingBubble
 import com.macrotracker.ui.screens.ai.UserBubble
 import com.macrotracker.ui.viewmodel.ChatViewModel
@@ -145,17 +148,29 @@ fun AIScreen(
     serverHandoffId: String? = null,
     viewModel: AiViewModel = hiltViewModel(),
     chatViewModel: ChatViewModel = hiltViewModel(),
+    hermesViewModel: HermesViewModel = hiltViewModel(),
 ) {
     val haptics = rememberHaptics()
     var selectedTab by rememberSaveable(initialTab) {
         mutableStateOf(initialTab ?: ChatBot.MACROS.id)
     }
+    val hermesChosen by hermesViewModel.usesHermes.collectAsState()
+    // A hand-off Hermes could not take goes to Sysop, and Sysop is then what is on screen.
+    var sysopForHandoff by rememberSaveable { mutableStateOf(false) }
+    val usesHermes = hermesChosen && !sysopForHandoff
 
-    // A hand-off from a server card opens its thread and switches to Sysop.
+    // A hand-off from a server card opens a thread on it in Tech support. Hermes gets it
+    // when it can be reached, since it can look at the server itself; otherwise Sysop.
     LaunchedEffect(serverHandoffId) {
         if (serverHandoffId != null) {
-            chatViewModel.openServerHandoff(serverHandoffId)
             selectedTab = ChatBot.SYSOP.id
+            if (hermesViewModel.usesHermes.value && hermesViewModel.awaitReady()) {
+                sysopForHandoff = false
+                hermesViewModel.openServerHandoff(serverHandoffId)
+            } else {
+                sysopForHandoff = hermesViewModel.usesHermes.value
+                chatViewModel.openServerHandoff(serverHandoffId)
+            }
         }
     }
 
@@ -170,7 +185,11 @@ fun AIScreen(
                 title = "AI",
                 trailing = {
                     BotAvatar(
-                        identity = if (selectedTab == ChatBot.SYSOP.id) SysopIdentity else ClankerIdentity,
+                        identity = when {
+                            selectedTab != ChatBot.SYSOP.id -> ClankerIdentity
+                            usesHermes -> HermesIdentity
+                            else -> SysopIdentity
+                        },
                         size = 44.dp,
                         live = false,
                     )
@@ -192,10 +211,19 @@ fun AIScreen(
         }
 
         Box(modifier = Modifier.weight(1f)) {
-            if (selectedTab == ChatBot.SYSOP.id) {
+            if (selectedTab == ChatBot.SYSOP.id && usesHermes) {
+                HermesChatPane(
+                    viewModel = hermesViewModel,
+                    onUsePhoneAi = { hermesViewModel.setUsesHermes(false) },
+                )
+            } else if (selectedTab == ChatBot.SYSOP.id) {
                 SysopChatPane(
                     viewModel = chatViewModel,
                     onNavigateToAiSettings = onNavigateToAiSettings,
+                    onUseHermes = {
+                        sysopForHandoff = false
+                        hermesViewModel.setUsesHermes(true)
+                    },
                 )
             } else {
                 MacrosChatPane(

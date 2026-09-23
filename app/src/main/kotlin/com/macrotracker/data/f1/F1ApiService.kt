@@ -486,6 +486,8 @@ class F1ApiServiceImpl @Inject constructor(
                     laps = meta.laps,
                     lapRecord = meta.lapRecord,
                     lapRecordHolder = meta.lapRecordHolder,
+                    lat = location?.get("lat")?.jsonPrimitive?.content?.toDoubleOrNull(),
+                    lon = location?.get("long")?.jsonPrimitive?.content?.toDoubleOrNull(),
                 )
             }
         } catch (e: Exception) {

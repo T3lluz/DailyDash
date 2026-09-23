@@ -15,6 +15,10 @@ object ServerAdvisories {
     private const val CRITICAL_MARGIN = 5f
     private const val TEMP_CRITICAL_MARGIN = 10f
     private const val FAILED_LOGIN_WARN = 50
+    private const val PSI_WARN = 25f
+    private const val PSI_CPU_WARN = 50f
+    private const val BATTERY_CRITICAL = 20
+    private const val BATTERY_WORN = 70
 
     fun build(
         connection: ServerConnectionState,
@@ -161,6 +165,47 @@ object ServerAdvisories {
                     severity = AdvisorySeverity.WARNING,
                     title = "Load ${trim(load.five)} on $cores cores",
                     detail = "1m ${trim(load.one)} · 5m ${trim(load.five)} · 15m ${trim(load.fifteen)}",
+                    category = AdvisoryCategory.RESOURCE,
+                )
+            }
+        }
+
+        // Pressure is usually zero, which is the point of it: a stall that stays up
+        // means work is queueing, whatever the utilisation figures say.
+        snapshot.pressure?.let { psi ->
+            listOf("I/O" to psi.io, "Memory" to psi.memory, "CPU" to psi.cpu).forEach { (name, value) ->
+                val threshold = if (name == "CPU") PSI_CPU_WARN else PSI_WARN
+                if (value != null && value >= threshold) {
+                    out += ServerAdvisory(
+                        key = "psi:${name.lowercase()}",
+                        severity = if (value >= threshold * 2) AdvisorySeverity.CRITICAL else AdvisorySeverity.WARNING,
+                        title = "$name stalls ${value.roundToInt()}% of the time",
+                        detail = "Tasks spent ${value.roundToInt()}% of the last 10 s waiting on ${name.lowercase()}.",
+                        category = AdvisoryCategory.RESOURCE,
+                    )
+                }
+            }
+        }
+
+        // A server running on its battery is a server whose power has gone.
+        snapshot.battery?.let { battery ->
+            if (battery.discharging) {
+                out += ServerAdvisory(
+                    key = "battery:discharging",
+                    severity = if (battery.percent <= BATTERY_CRITICAL) AdvisorySeverity.CRITICAL else AdvisorySeverity.WARNING,
+                    title = "On battery, ${battery.percent}% left",
+                    detail = "The mains supply looks to be off." +
+                        (battery.watts?.let { " Drawing %.1f W.".format(it) } ?: ""),
+                    category = AdvisoryCategory.RESOURCE,
+                )
+            }
+            battery.healthPercent?.takeIf { it < BATTERY_WORN }?.let { health ->
+                out += ServerAdvisory(
+                    key = "battery:health",
+                    severity = AdvisorySeverity.INFO,
+                    title = "Battery holds $health% of its design capacity",
+                    detail = battery.cycles?.let { "$it charge cycles. It will ride out less of a power cut." }
+                        ?: "It will ride out less of a power cut than it used to.",
                     category = AdvisoryCategory.RESOURCE,
                 )
             }

@@ -21,7 +21,7 @@ interface ServerMonitorRepository {
      * Starts polling on behalf of [tag] (the screen, the home card, the live
      * notification service). Polling runs while at least one tag is active.
      */
-    fun acquire(tag: String)
+    fun acquire(tag: String, detailed: Boolean = false)
     fun release(tag: String)
 
     /** True while any consumer is holding polling open. */
@@ -79,6 +79,8 @@ class ServerMonitorRepositoryImpl @Inject constructor(
 
     private val lock = Any()
     private val activeTags = mutableSetOf<String>()
+    /** Tags that asked for the detail lane: the full server screen, not the home card. */
+    private val detailedTags = mutableSetOf<String>()
     private val jobs = mutableMapOf<String, Job>()
 
     /** Set to force the next loop iteration of a server to re-run the slow lane. */
@@ -103,15 +105,23 @@ class ServerMonitorRepositoryImpl @Inject constructor(
         }
     }
 
-    override fun acquire(tag: String) {
-        synchronized(lock) { activeTags += tag }
+    override fun acquire(tag: String, detailed: Boolean) {
+        synchronized(lock) {
+            activeTags += tag
+            if (detailed) detailedTags += tag else detailedTags -= tag
+        }
         syncJobs()
     }
 
     override fun release(tag: String) {
-        synchronized(lock) { activeTags -= tag }
+        synchronized(lock) {
+            activeTags -= tag
+            detailedTags -= tag
+        }
         syncJobs()
     }
+
+    private fun detailWanted(): Boolean = synchronized(lock) { detailedTags.isNotEmpty() }
 
     override fun isActive(): Boolean = synchronized(lock) { activeTags.isNotEmpty() }
 
@@ -160,6 +170,7 @@ class ServerMonitorRepositoryImpl @Inject constructor(
         var counters: ServerProbe.RawCounters? = null
         var host: ServerHostProfile? = null
         var lastNewsMs = 0L
+        var lastDetailMs = 0L
         var consecutiveFailures = 0
 
         try {
@@ -174,6 +185,7 @@ class ServerMonitorRepositoryImpl @Inject constructor(
                         connection = active
                         counters = null
                         lastNewsMs = 0L
+                        lastDetailMs = 0L
 
                         val identified = ServerProbe.parseIdentify(
                             active.exec(ServerProbe.IDENTIFY_SCRIPT).stdout,
@@ -213,6 +225,23 @@ class ServerMonitorRepositoryImpl @Inject constructor(
                         null
                     }
 
+                    val detail = if (detailWanted() && now - lastDetailMs >= DETAIL_INTERVAL_MS) {
+                        lastDetailMs = now
+                        runCatching {
+                            ServerProbe.parseDetail(
+                                active.exec(ServerProbe.detailScript(resolvedHost), DETAIL_TIMEOUT_MS).stdout,
+                                now,
+                            )
+                        }.getOrNull()
+                    } else {
+                        null
+                    }
+
+                    val snapshot = fast.snapshot
+                    val hottest = snapshot.temperatures
+                        .filter { it.kind == SensorKind.CPU }
+                        .maxByOrNull { it.celsius }
+                        ?: snapshot.temperatures.firstOrNull()
                     val updated = updateRuntime(serverId) { runtime ->
                         val mergedNews = news ?: runtime.news
                         runtime.copy(
@@ -228,6 +257,22 @@ class ServerMonitorRepositoryImpl @Inject constructor(
                             memHistory = runtime.memHistory.appendCapped(fast.snapshot.memory?.usedPercent),
                             netRxHistory = runtime.netRxHistory.appendCapped(fast.snapshot.network?.rxBytesPerSec),
                             netTxHistory = runtime.netTxHistory.appendCapped(fast.snapshot.network?.txBytesPerSec),
+                            tempHistory = runtime.tempHistory.appendCapped(hottest?.celsius),
+                            diskReadHistory = runtime.diskReadHistory.appendCapped(snapshot.diskIo?.readBytesPerSec),
+                            diskWriteHistory = runtime.diskWriteHistory.appendCapped(snapshot.diskIo?.writeBytesPerSec),
+                            detail = detail ?: runtime.detail,
+                            samples = runtime.samples.appendCapped(
+                                ServerSample(
+                                    atMs = now,
+                                    cpu = snapshot.cpu?.totalPercent,
+                                    mem = snapshot.memory?.usedPercent,
+                                    temp = hottest?.celsius,
+                                    rx = snapshot.network?.rxBytesPerSec,
+                                    tx = snapshot.network?.txBytesPerSec,
+                                    read = snapshot.diskIo?.readBytesPerSec,
+                                    write = snapshot.diskIo?.writeBytesPerSec,
+                                ),
+                            ),
                             advisories = ServerAdvisories.build(
                                 connection = ServerConnectionState.Online(now),
                                 snapshot = fast.snapshot,
@@ -335,6 +380,9 @@ class ServerMonitorRepositoryImpl @Inject constructor(
         /** The slow lane costs a package-cache walk; 15 minutes is plenty. */
         const val NEWS_INTERVAL_MS = 15 * 60 * 1000L
         const val NEWS_TIMEOUT_MS = 45_000L
+        /** docker stats samples for about a second; twice a minute is plenty. */
+        const val DETAIL_INTERVAL_MS = 30_000L
+        const val DETAIL_TIMEOUT_MS = 20_000L
         const val MAX_BACKOFF_MS = 120_000L
         const val MIN_POLL_SECONDS = 2
         const val MAX_POLL_SECONDS = 300

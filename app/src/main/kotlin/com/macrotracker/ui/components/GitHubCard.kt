@@ -60,14 +60,14 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
-import java.time.Instant
-import java.time.temporal.ChronoUnit
+import kotlinx.coroutines.delay
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.macrotracker.R
 import com.macrotracker.data.github.GitHubActivity
 import com.macrotracker.data.github.GitHubCommit
+import com.macrotracker.data.github.GitHubContributions
 import com.macrotracker.data.github.GitHubIssue
 import com.macrotracker.data.github.GitHubLabel
 import com.macrotracker.data.github.GitHubNotification
@@ -79,7 +79,6 @@ import com.macrotracker.data.github.GitHubSnapshot
 import com.macrotracker.data.github.GitHubWorkflowRun
 import com.macrotracker.data.github.compactCount
 import com.macrotracker.data.github.isOpen
-import com.macrotracker.data.github.lastTouchedAt
 import com.macrotracker.data.github.openIssueCount
 import com.macrotracker.data.github.openPrCount
 import com.macrotracker.data.github.parseGitHubInstant
@@ -139,6 +138,8 @@ private data class GhHub(
     val unread: Int,
     val reviews: Int,
     val notificationsNeedReconnect: Boolean,
+    /** Account-wide, whichever repo is focused: the year belongs to the person. */
+    val contributions: GitHubContributions?,
 )
 
 private fun githubHub(
@@ -188,6 +189,7 @@ private fun githubHub(
         unread = notifications.count { it.unread },
         reviews = if (focused) pulls.count { it.reviewRequested } else data.reviewRequestedCount,
         notificationsNeedReconnect = data.notificationsNeedReconnect,
+        contributions = data.contributions,
     )
 }
 
@@ -612,7 +614,6 @@ private fun GitHubCollapsedGlance(
     val context = LocalContext.current
     val pulse = remember(hub) { collapsedPulse(hub) }
     val stats = remember(hub) { collapsedStats(hub) }
-    val recentRepos = remember(hub.repos) { hub.repos.take(3) }
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -640,6 +641,8 @@ private fun GitHubCollapsedGlance(
             }
         }
 
+        hub.contributions?.let { ContributionStrip(it, haptics) }
+
         if (pulse.isNotEmpty()) {
             Column(
                 modifier = Modifier
@@ -657,30 +660,6 @@ private fun GitHubCollapsedGlance(
                             context.startActivity(Intent(Intent.ACTION_VIEW, it.toUri()))
                         } ?: item.selectRepo?.let(onSelectRepo)
                     }
-                }
-            }
-        }
-
-        if (recentRepos.isNotEmpty()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                recentRepos.forEach { repo ->
-                    RecentRepoChip(
-                        repo = repo,
-                        selected = repo.fullName.equals(hub.selectedFullName, ignoreCase = true),
-                        onClick = {
-                            haptics.tick()
-                            onSelectRepo(
-                                if (repo.fullName.equals(hub.selectedFullName, ignoreCase = true)) ""
-                                else repo.fullName,
-                            )
-                        },
-                    )
                 }
             }
         }
@@ -947,6 +926,121 @@ private fun GlanceStat(
     }
 }
 
+/**
+ * The year at a glance, kept small: one line of words over the graph, the snake
+ * eating it. Tap a day for its count; the line goes back after a moment.
+ */
+@Composable
+private fun ContributionStrip(contributions: GitHubContributions, haptics: HapticHelper) {
+    var picked by remember { mutableStateOf<Pair<String, Int>?>(null) }
+    LaunchedEffect(picked) {
+        if (picked != null) {
+            delay(PICKED_DAY_MS)
+            picked = null
+        }
+    }
+    val streak = remember(contributions) { contributionStreakLine(contributions) }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(Sharp)
+            .background(GhSurface)
+            .padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 9.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val (date, count) = picked ?: (null to 0)
+            Text(
+                text = if (date != null) {
+                    "${pluralContributions(count)} on ${shortDay(date)}"
+                } else {
+                    "%,d".format(contributions.total) + " contributions this year"
+                },
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = if (date != null) TextPrimary else TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            if (streak != null && date == null) {
+                Text(
+                    streak.substringBefore(" · "),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = GhOpen,
+                    maxLines = 1,
+                )
+            }
+        }
+        GitHubContributionGraph(
+            contributions = contributions,
+            onDayTapped = { date, count ->
+                haptics.tick()
+                picked = date to count
+            },
+        )
+    }
+}
+
+/** The full year for the Account tab: month labels, both streaks and the key. */
+@Composable
+private fun ContributionYear(contributions: GitHubContributions) {
+    var picked by remember { mutableStateOf<Pair<String, Int>?>(null) }
+    val streak = remember(contributions) { contributionStreakLine(contributions) }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(Sharp)
+            .background(GhSurface)
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            contributionSummary(contributions),
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = TextPrimary,
+        )
+        GitHubContributionGraph(
+            contributions = contributions,
+            showMonths = true,
+            onDayTapped = { date, count -> picked = date to count },
+        )
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                picked?.let { (date, count) -> "${pluralContributions(count)} on ${shortDay(date)}" }
+                    ?: listOfNotNull(
+                        streak,
+                        contributions.restricted.takeIf { it > 0 }?.let { "$it private" },
+                    ).joinToString(" · ").ifBlank { "No streak yet" },
+                fontSize = 11.sp,
+                color = TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Text("less", fontSize = 10.sp, color = TextTertiary)
+            ContributionRamp.forEach { color ->
+                Box(Modifier.size(9.dp).clip(RoundedCornerShape(2.dp)).background(color))
+            }
+            Text("more", fontSize = 10.sp, color = TextTertiary)
+        }
+    }
+}
+
+private const val PICKED_DAY_MS = 2_600L
+
+private fun pluralContributions(n: Int): String = when (n) {
+    0 -> "No contributions"
+    1 -> "1 contribution"
+    else -> "$n contributions"
+}
+
+private fun shortDay(iso: String): String = runCatching {
+    java.time.LocalDate.parse(iso).format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM", java.util.Locale.ENGLISH))
+}.getOrDefault(iso)
+
 @Composable
 private fun PulseLine(item: GhPulse, onClick: () -> Unit) {
     Row(
@@ -983,51 +1077,6 @@ private fun PulseLine(item: GhPulse, onClick: () -> Unit) {
         }
         item.tag?.let { StatusTag(it, item.tagColor ?: GhAccent) }
         GhRelative(item.at)
-    }
-}
-
-@Composable
-private fun RecentRepoChip(
-    repo: GitHubRepo,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    val touched = remember(repo.pushedAt, repo.updatedAt) { repo.lastTouchedAt() }
-    val fresh = remember(touched) {
-        touched != null && ChronoUnit.HOURS.between(touched, Instant.now()) < 1
-    }
-    Row(
-        modifier = Modifier
-            .clip(Pill)
-            .background(if (selected) GhAccent.copy(alpha = 0.16f) else GhChip)
-            .clickable(onClick = onClick)
-            .heightIn(min = 32.dp)
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(7.dp)
-                .clip(CircleShape)
-                .background(
-                    when {
-                        selected -> GhAccent
-                        fresh -> GhOpen
-                        else -> GhDraft
-                    },
-                ),
-        )
-        Text(
-            repo.name,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = TextPrimary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.widthIn(max = 140.dp),
-        )
-        GhRelative(repo.pushedAt ?: repo.updatedAt)
     }
 }
 
@@ -1737,6 +1786,7 @@ private fun AccountTab(
             snapshot.user.bio?.takeIf { it.isNotBlank() }?.let {
                 Text(it, fontSize = 13.sp, color = TextSecondary)
             }
+            snapshot.contributions?.let { ContributionYear(it) }
             if (snapshot.notificationsNeedReconnect) {
                 Text(
                     "Disconnect and connect again to enable inbox notifications.",

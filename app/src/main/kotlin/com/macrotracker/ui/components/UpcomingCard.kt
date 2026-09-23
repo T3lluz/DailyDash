@@ -1,7 +1,6 @@
 package com.macrotracker.ui.components
 
 import android.text.format.DateFormat
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -51,14 +50,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -107,7 +102,6 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlin.math.min
 
 /*
  * Coming up — the t3lluz dashboard's timeline, on the phone.
@@ -139,7 +133,6 @@ private val SERVICE_BRAND = mapOf(
     "stremio" to Color(0xFF7B5CFF),
 )
 
-private val F1Marque = Color(0xFFE8002D)
 private val ScrimDark = Color(0xFF121212)
 private val SubText = Color(0xFFC9C9C9)
 private val DetailText = Color(0xFFD4D4D4)
@@ -765,34 +758,16 @@ private fun RestPoster(hint: String, info: CarouselItemDrawInfo) {
     }
 }
 
-/** The lap as the dashboard draws it: a faint kerb under the marque-red line, fitted to the card. */
+/** The lap as the dashboard draws it, through the same renderer as the F1 card; it paints once per weekend. */
 @Composable
 private fun CircuitMap(pathData: String, modifier: Modifier = Modifier) {
-    val path = remember(pathData) {
-        runCatching { PathParser().parsePathString(pathData).toPath() }.getOrNull()
-    } ?: return
-    val bounds = remember(path) { path.getBounds() }
-    Canvas(modifier = modifier) {
-        if (bounds.width <= 0f || bounds.height <= 0f) return@Canvas
-        val scale = min(size.width / bounds.width, size.height / bounds.height)
-        val dx = (size.width - bounds.width * scale) / 2f - bounds.left * scale
-        val dy = (size.height - bounds.height * scale) / 2f - bounds.top * scale
-        withTransform({
-            translate(dx, dy)
-            scale(scale, scale, pivot = Offset.Zero)
-        }) {
-            drawPath(
-                path,
-                color = Color(0xFFE4E4E4).copy(alpha = 0.06f),
-                style = Stroke(width = 6f, cap = StrokeCap.Round, join = StrokeJoin.Round),
-            )
-            drawPath(
-                path,
-                color = F1Marque,
-                style = Stroke(width = 1.7f, cap = StrokeCap.Round, join = StrokeJoin.Round),
-            )
-        }
-    }
+    val outline = remember(pathData) { circuitOutlineFromSvgPath("svg-${pathData.hashCode()}", pathData) } ?: return
+    F1CircuitMap(
+        outline = outline,
+        weight = CircuitMapWeight.MINI,
+        motion = CircuitMotion.PAINT_ONCE,
+        modifier = modifier,
+    )
 }
 
 private val SHORT_DAY = DateTimeFormatter.ofPattern("EEE d", Locale.ENGLISH)

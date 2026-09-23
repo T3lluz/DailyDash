@@ -75,6 +75,25 @@ class SettingsRepository @Inject constructor(
     )
     val dashboardServerUrl: StateFlow<String> = _dashboardServerUrl
 
+    /**
+     * Who answers in Tech support: Hermes on the dashboard server, or the AI provider
+     * set up on this phone. Hermes can look at the server itself; the phone's AI only
+     * sees what a server card hands it.
+     */
+    private val _techSupportBrain = MutableStateFlow(
+        prefs.getString(KEY_TECH_SUPPORT_BRAIN, TECH_SUPPORT_AUTO) ?: TECH_SUPPORT_AUTO,
+    )
+    /** [TECH_SUPPORT_AUTO] (Hermes whenever it can be reached), [TECH_SUPPORT_HERMES] or [TECH_SUPPORT_PHONE]. */
+    val techSupportBrain: StateFlow<String> = _techSupportBrain
+
+    /** Whether Hermes answered last time, so Tech support can open on the right bot before it asks again. */
+    private val _hermesLastReachable = MutableStateFlow(prefs.getBoolean(KEY_HERMES_LAST_REACHABLE, false))
+    val hermesLastReachable: StateFlow<Boolean> = _hermesLastReachable
+
+    /** What Hermes may do in a new thread started from the phone (a bridge permission id). */
+    private val _hermesPermission = MutableStateFlow(prefs.getString(KEY_HERMES_PERMISSION, "ask") ?: "ask")
+    val hermesPermission: StateFlow<String> = _hermesPermission
+
     private val _heartRateEnabled = MutableStateFlow(healthPrefs.getBoolean("heart_rate_enabled", true))
     val heartRateEnabled: StateFlow<Boolean> = _heartRateEnabled
 
@@ -237,6 +256,22 @@ class SettingsRepository @Inject constructor(
         _dashboardServerUrl.value = trimmed
     }
 
+    fun setTechSupportBrain(brain: String) {
+        prefs.edit { putString(KEY_TECH_SUPPORT_BRAIN, brain) }
+        _techSupportBrain.value = brain
+    }
+
+    fun setHermesLastReachable(reachable: Boolean) {
+        if (_hermesLastReachable.value == reachable) return
+        prefs.edit { putBoolean(KEY_HERMES_LAST_REACHABLE, reachable) }
+        _hermesLastReachable.value = reachable
+    }
+
+    fun setHermesPermission(id: String) {
+        prefs.edit { putString(KEY_HERMES_PERMISSION, id) }
+        _hermesPermission.value = id
+    }
+
     fun setCalendarEnabled(enabled: Boolean) {
         prefs.edit { putBoolean("calendar_enabled", enabled) }
         _calendarEnabled.value = enabled
@@ -290,6 +325,12 @@ class SettingsRepository @Inject constructor(
         const val KEY_GITHUB_TOKEN = "github_token"
         const val KEY_GITHUB_FOCUS_REPO = "github_focus_repo"
         const val KEY_DASHBOARD_SERVER_URL = "dashboard_server_url"
+        const val KEY_TECH_SUPPORT_BRAIN = "tech_support_brain"
+        const val KEY_HERMES_LAST_REACHABLE = "hermes_last_reachable"
+        const val KEY_HERMES_PERMISSION = "hermes_permission"
+        const val TECH_SUPPORT_AUTO = "auto"
+        const val TECH_SUPPORT_HERMES = "hermes"
+        const val TECH_SUPPORT_PHONE = "phone"
 
         const val DEFAULT_DASHBOARD_SERVER_URL = "https://t3lluz.com"
 

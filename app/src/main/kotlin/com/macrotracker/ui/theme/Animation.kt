@@ -90,10 +90,6 @@ object MacroMotion {
     fun <T> revealTween(durationMs: Int = REVEAL_MS): FiniteAnimationSpec<T> =
         tween(durationMs, easing = FastOutSlowInEasing)
 
-    /** Linear path/draw progress (circuit map) — named exception to FastOutSlowIn. */
-    fun <T> drawTween(durationMs: Int = 1200): FiniteAnimationSpec<T> =
-        tween(durationMs, easing = LinearEasing)
-
     /**
      * Soft pulse (typing dots, calm character marks). Always go through here —
      * never `infiniteRepeatable(tween(...))` at a call site.
@@ -130,6 +126,53 @@ object MacroMotion {
         val ms = (CAROUSEL_TRAVEL_MIN_MS + CAROUSEL_TRAVEL_PER_MS * kotlin.math.sqrt(far.toFloat()))
             .toInt().coerceAtMost(CAROUSEL_TRAVEL_MAX_MS)
         return tween(ms, easing = if (far > 2) CarouselJourneyEasing else CarouselStepEasing)
+    }
+
+    /**
+     * The F1 circuit painting itself, as the t3lluz dashboard does it: the marque line
+     * grows along the lap from the start/finish line with the car riding its head,
+     * both on one eased clock so the dot can never drift off the end of the line.
+     */
+    object CircuitPaint {
+        val Easing = CubicBezierEasing(0.42f, 0.02f, 0.22f, 1f)
+
+        /** Monaco and Spa are not the same lap: ~19 ms per box unit, held to 4–9 s. */
+        fun durationMs(lapUnits: Float): Long =
+            (lapUnits * MS_PER_UNIT).toLong().coerceIn(MIN_MS, MAX_MS)
+
+        /** The car fades in over the first 6% of the paint. */
+        const val CAR_FADE_IN = 0.06f
+
+        /** A pause after the map lands so the eye is on it before it starts. */
+        const val DELAY_ONCE_MS = 250L
+        const val DELAY_REPLAY_MS = 800L
+
+        /** The backdrop's car keeps lapping once painted, slowly and at half brightness. */
+        const val LAP_MS = 22_000L
+        const val LAP_DIM_AT = 0.08f
+        const val LAP_ALPHA = 0.5f
+
+        /** Share of the map that has to be on screen before a lap is started. */
+        const val VISIBLE_TO_PAINT = 0.15f
+
+        private const val MS_PER_UNIT = 19f
+        private const val MIN_MS = 4_000L
+        private const val MAX_MS = 9_000L
+    }
+
+    /**
+     * The contribution snake (Platane/snk's idea, as the t3lluz dashboard draws it):
+     * head plus four segments, one lap of the year in about 36 s, the per-cell step
+     * held between 46 and 120 ms so a thin year does not crawl nor a dense one blur.
+     */
+    object Snake {
+        const val LENGTH = 5
+        const val LAP_MS = 36_000L
+        const val STEP_SLOW_MS = 120L
+        const val STEP_FAST_MS = 46L
+        const val HOLD_MS = 900L
+        const val REGROW_MS = 760L
+        const val REST_MS = 420L
     }
 
     private const val CAROUSEL_TRAVEL_MIN_MS = 300

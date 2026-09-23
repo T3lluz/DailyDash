@@ -26,6 +26,7 @@ interface F1Repository {
 @Singleton
 class F1RepositoryImpl @Inject constructor(
     private val api: F1ApiService,
+    private val circuits: F1CircuitRepository,
     @ApplicationContext private val context: Context,
 ) : F1Repository {
 
@@ -37,7 +38,7 @@ class F1RepositoryImpl @Inject constructor(
         private const val KEY_FULL_SNAPSHOT = "f1_snapshot_json"
         private const val KEY_LEGACY_DRIVERS = "drivers_json"
         /** Bump when headshot/logo URL scheme changes so stale disk cache is discarded. */
-        private const val CACHE_VERSION = 4
+        private const val CACHE_VERSION = 5
         private const val KEY_CACHE_VERSION = "cache_version"
     }
 
@@ -144,7 +145,7 @@ class F1RepositoryImpl @Inject constructor(
                 val lastRace = lastRacePair.first
                 val lastRaceName = lastRacePair.second
                 val lastQuali = lastQualiDeferred.await()
-                val schedule = scheduleDeferred.await()
+                val schedule = withCircuitOutlines(scheduleDeferred.await())
 
                 val nextRace = schedule
                     .filter { runCatching { java.time.LocalDate.parse(it.raceDate).isAfter(java.time.LocalDate.now().minusDays(1)) }.getOrDefault(false) }
@@ -193,6 +194,25 @@ class F1RepositoryImpl @Inject constructor(
             Log.e(TAG, "F1 fetch failed: ${e.message}", e)
             cachedStandings?.let { Result.success(it) }
                 ?: Result.failure(e)
+        }
+    }
+
+    /**
+     * Attaches each round's circuit outline. Outlines are cached for good once
+     * matched, so after the first season load this costs no network at all; a
+     * round whose outline cannot be had yet keeps the one from the last snapshot.
+     */
+    private suspend fun withCircuitOutlines(schedule: List<RaceScheduleEntry>): List<RaceScheduleEntry> {
+        if (schedule.isEmpty()) return schedule
+        val found = runCatching { circuits.outlinesFor(schedule) }
+            .onFailure { Log.w(TAG, "Circuit outlines unavailable: ${it.message}") }
+            .getOrDefault(emptyMap())
+        val previous = cachedStandings?.schedule.orEmpty()
+            .mapNotNull { race -> race.outline?.let { race.circuitId to it } }
+            .toMap()
+        return schedule.map { race ->
+            val outline = found[race.circuitId] ?: previous[race.circuitId]
+            if (outline != null) race.copy(outline = outline) else race
         }
     }
 

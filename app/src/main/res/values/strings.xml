@@ -17,5 +17,8 @@
     <string name="server_channel_live">Live server stats</string>
     <string name="server_channel_live_desc">The ongoing notification that keeps live stats on your lock screen</string>
     <string name="server_live_stop">Stop</string>
+    <string name="server_live_next">Next server</string>
+    <string name="server_ask_hermes">Ask Hermes</string>
+    <string name="server_ask_ai">Ask AI</string>
 </resources>
 

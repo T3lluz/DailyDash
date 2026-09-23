@@ -3,7 +3,6 @@ package com.macrotracker.ui.components
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.core.graphics.toColorInt
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -19,11 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.*
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -528,48 +523,44 @@ private fun F1CollapsedWidget(data: F1Standings) {
     val localRaceTime = remember(next?.raceDate, next?.raceTime) {
         next?.let { formatLocalTime(it.raceDate, it.raceTime) }.orEmpty()
     }
-    val trackUrl = remember(next?.circuitId) { next?.circuitId?.let { getCircuitSvgUrl(it) } }
-    val context = LocalContext.current
+    val outline = next?.outline
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        // ── Next race — circuit map behind the race copy + live countdown ──
+        // ── Next race — the circuit painted behind the race copy + live countdown ──
         if (next != null) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = if (trackUrl != null) 196.dp else 0.dp)
+                    .heightIn(min = if (outline != null) 196.dp else 0.dp)
                     .clip(SharpShape),
             ) {
-                if (trackUrl != null) {
-                    val request = remember(trackUrl) {
-                        circuitMapRequest(context, trackUrl, width = 1200, height = 720)
+                if (outline != null) {
+                    // The lap is the panel's backdrop, as on the web: it paints when it
+                    // comes on screen, a dim car keeps lapping, and it paints again after
+                    // scrolling fully away. The left third fades out under the words.
+                    Box(modifier = Modifier.matchParentSize().padding(vertical = 4.dp)) {
+                        F1CircuitMap(
+                            outline = outline,
+                            weight = CircuitMapWeight.BACKDROP,
+                            motion = CircuitMotion.BACKDROP,
+                            alignment = Alignment.CenterEnd,
+                            fadeLeftEdge = true,
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .fillMaxHeight()
+                                .aspectRatio(outline.aspectRatio, matchHeightConstraintsFirst = true)
+                                .graphicsLayer { alpha = 0.62f },
+                        )
                     }
-                    SubcomposeAsyncImage(
-                        model = request,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .fillMaxHeight(0.72f)
-                            .fillMaxWidth(0.56f)
-                            .padding(end = 4.dp, top = 6.dp)
-                            .graphicsLayer { alpha = 0.5f },
-                        contentScale = ContentScale.Fit,
-                        alignment = Alignment.TopEnd,
-                    ) {
-                        when (painter.state) {
-                            is AsyncImagePainter.State.Success -> SubcomposeAsyncImageContent()
-                            else -> Unit
-                        }
-                    }
-                    // Keep the race copy and the countdown readable over the map.
+                    // Keep the race copy and the countdown readable over the lap.
                     Box(
                         modifier = Modifier
                             .matchParentSize()
                             .background(
                                 Brush.horizontalGradient(
-                                    0.0f to com.macrotracker.ui.theme.Surface.copy(alpha = 0.94f),
-                                    0.44f to com.macrotracker.ui.theme.Surface.copy(alpha = 0.68f),
-                                    0.72f to com.macrotracker.ui.theme.Surface.copy(alpha = 0.24f),
+                                    0.0f to com.macrotracker.ui.theme.Surface.copy(alpha = 0.9f),
+                                    0.4f to com.macrotracker.ui.theme.Surface.copy(alpha = 0.55f),
+                                    0.7f to com.macrotracker.ui.theme.Surface.copy(alpha = 0.1f),
                                     1.0f to Color.Transparent,
                                 ),
                             ),
@@ -579,8 +570,8 @@ private fun F1CollapsedWidget(data: F1Standings) {
                             .matchParentSize()
                             .background(
                                 Brush.verticalGradient(
-                                    0.5f to Color.Transparent,
-                                    1.0f to com.macrotracker.ui.theme.Surface.copy(alpha = 0.85f),
+                                    0.55f to Color.Transparent,
+                                    1.0f to com.macrotracker.ui.theme.Surface.copy(alpha = 0.8f),
                                 ),
                             ),
                     )
@@ -1158,61 +1149,11 @@ private fun CircuitStat(label: String, value: String) {
     }
 }
 
-// ── Track map URL mapping (official 2026 F1 CDN — force PNG for Coil) ─────────
-// Cloudinary `f_auto` content-negotiates AVIF/WebP based on Accept; Coil cannot
-// decode AVIF, which caused canvas fallbacks / inconsistent maps. Always pin f_png
-// and the official asset version ids from formula1.com race pages.
-private fun getCircuitSvgUrl(circuitId: String): String? {
-    val (version, slug) = when (circuitId) {
-        "albert_park" -> "1751632426" to "melbourne"
-        "shanghai" -> "1751632455" to "shanghai"
-        "suzuka" -> "1751632474" to "suzuka"
-        "miami" -> "1751632433" to "miami"
-        "villeneuve" -> "1751632441" to "montreal"
-        "monaco" -> "1751632437" to "montecarlo"
-        "catalunya" -> "1751632398" to "catalunya"
-        "red_bull_ring" -> "1751632470" to "spielberg"
-        "silverstone" -> "1751632458" to "silverstone"
-        "spa" -> "1751632465" to "spafrancorchamps"
-        "hungaroring" -> "1751632402" to "hungaroring"
-        "zandvoort" -> "1751632488" to "zandvoort"
-        "monza" -> "1751632445" to "monza"
-        "madring" -> "1756285390" to "madring"
-        "baku" -> "1751632392" to "baku"
-        "sepang" -> "1785158493" to "kualalumpur"
-        "marina_bay" -> "1751632462" to "singapore"
-        "americas", "austin" -> "1751632388" to "austin"
-        "rodriguez" -> "1751632430" to "mexicocity"
-        "interlagos" -> "1751632409" to "interlagos"
-        "vegas", "las_vegas" -> "1751632417" to "lasvegas"
-        "losail" -> "1751632421" to "lusail"
-        "yas_marina" -> "1751632483" to "yasmarinacircuit"
-        else -> return null
-    }
-    return "https://media.formula1.com/image/upload/f_png,c_fit,w_960/q_auto/v$version/common/f1/2026/track/2026track${slug}detailed.png"
-}
-
-private const val F1_MEDIA_UA =
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-
-private fun circuitMapRequest(context: android.content.Context, url: String, width: Int, height: Int): ImageRequest =
-    ImageRequest.Builder(context)
-        .data(url)
-        .size(width, height)
-        .crossfade(false)
-        .setHeader("User-Agent", F1_MEDIA_UA)
-        // Prefer PNG so Cloudinary does not swap in AVIF via Accept negotiation.
-        .setHeader("Accept", "image/png,image/*;q=0.8,*/*;q=0.5")
-        .memoryCachePolicy(CachePolicy.ENABLED)
-        .diskCachePolicy(CachePolicy.ENABLED)
-        .build()
-
 // ── Track Visualization ───────────────────────────────────────────────────────
+// The same outline the t3lluz dashboard paints (bacinger/f1-circuits, matched by
+// coordinates), drawn as a vector that paints its lap the first time it is seen.
 @Composable
-private fun TrackVisualization(circuitId: String, accentColor: Color, raceName: String) {
-    val context = LocalContext.current
-    val svgUrl = remember(circuitId) { getCircuitSvgUrl(circuitId) }
-
+private fun TrackVisualization(outline: CircuitOutline, accentColor: Color, raceName: String) {
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(modifier = Modifier.size(4.dp).clip(CircleShape).background(accentColor))
@@ -1223,86 +1164,31 @@ private fun TrackVisualization(circuitId: String, accentColor: Color, raceName: 
                 fontSize = 11.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
             )
-        }
-        Box(modifier = Modifier.fillMaxWidth().height(148.dp).clip(SharpShape).background(SurfaceChrome)) {
-            if (svgUrl != null) {
-                val request = remember(svgUrl) {
-                    circuitMapRequest(context, svgUrl, width = 960, height = 540)
-                }
-                SubcomposeAsyncImage(model = request, contentDescription = "$raceName circuit map", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit) {
-                    when (painter.state) {
-                        is AsyncImagePainter.State.Loading -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            LoadingSpinner(color = accentColor.copy(alpha = 0.6f))
-                        }
-                        is AsyncImagePainter.State.Error -> TrackFallbackCanvas(circuitId = circuitId, accentColor = accentColor, raceName = raceName)
-                        else -> SubcomposeAsyncImageContent()
-                    }
-                }
-            } else {
-                TrackFallbackCanvas(circuitId = circuitId, accentColor = accentColor, raceName = raceName)
+            outline.opened?.let {
+                Text("opened $it", color = TextTertiary, fontSize = 11.sp, maxLines = 1)
             }
         }
-    }
-}
-
-// ── TrackPoint / path data ─────────────────────────────────────────────────────
-private data class TrackPoint(val x: Float, val y: Float, val label: String? = null)
-
-private fun getTrackPath(circuitId: String): List<TrackPoint> = when (circuitId) {
-    "albert_park" -> listOf(TrackPoint(0.50f, 0.05f), TrackPoint(0.75f, 0.08f), TrackPoint(0.90f, 0.18f, "T1"), TrackPoint(0.92f, 0.35f), TrackPoint(0.85f, 0.50f, "T6"), TrackPoint(0.90f, 0.65f), TrackPoint(0.85f, 0.80f, "T11"), TrackPoint(0.70f, 0.90f), TrackPoint(0.50f, 0.93f), TrackPoint(0.30f, 0.90f), TrackPoint(0.15f, 0.75f), TrackPoint(0.10f, 0.55f, "T15"), TrackPoint(0.15f, 0.35f), TrackPoint(0.25f, 0.18f, "Hairpin"), TrackPoint(0.40f, 0.07f), TrackPoint(0.50f, 0.05f))
-    "monaco" -> listOf(TrackPoint(0.55f, 0.08f, "Sainte Dévote"), TrackPoint(0.70f, 0.12f), TrackPoint(0.78f, 0.25f, "Massenet"), TrackPoint(0.72f, 0.38f, "Casino"), TrackPoint(0.62f, 0.45f), TrackPoint(0.50f, 0.40f, "Mirabeau"), TrackPoint(0.42f, 0.50f, "Fairmont"), TrackPoint(0.30f, 0.55f), TrackPoint(0.20f, 0.65f, "Portier"), TrackPoint(0.18f, 0.78f), TrackPoint(0.25f, 0.88f, "Tunnel exit"), TrackPoint(0.40f, 0.92f), TrackPoint(0.55f, 0.88f, "Nouvelle"), TrackPoint(0.68f, 0.82f), TrackPoint(0.72f, 0.70f, "Rascasse"), TrackPoint(0.65f, 0.62f), TrackPoint(0.60f, 0.52f), TrackPoint(0.55f, 0.38f), TrackPoint(0.52f, 0.22f), TrackPoint(0.55f, 0.08f))
-    "silverstone" -> listOf(TrackPoint(0.50f, 0.08f, "Copse"), TrackPoint(0.72f, 0.10f), TrackPoint(0.88f, 0.20f, "Maggotts"), TrackPoint(0.90f, 0.38f, "Becketts"), TrackPoint(0.82f, 0.52f), TrackPoint(0.88f, 0.65f, "Chapel"), TrackPoint(0.82f, 0.78f), TrackPoint(0.70f, 0.88f), TrackPoint(0.55f, 0.92f, "Stowe"), TrackPoint(0.38f, 0.88f), TrackPoint(0.20f, 0.80f, "Vale"), TrackPoint(0.12f, 0.65f, "Club"), TrackPoint(0.14f, 0.48f), TrackPoint(0.22f, 0.32f, "Abbey"), TrackPoint(0.35f, 0.18f), TrackPoint(0.50f, 0.08f))
-    "monza" -> listOf(TrackPoint(0.50f, 0.06f), TrackPoint(0.68f, 0.08f), TrackPoint(0.82f, 0.14f), TrackPoint(0.88f, 0.28f), TrackPoint(0.80f, 0.42f), TrackPoint(0.85f, 0.56f), TrackPoint(0.78f, 0.70f), TrackPoint(0.65f, 0.82f), TrackPoint(0.60f, 0.70f), TrackPoint(0.55f, 0.82f), TrackPoint(0.45f, 0.88f), TrackPoint(0.30f, 0.82f), TrackPoint(0.20f, 0.70f), TrackPoint(0.15f, 0.55f), TrackPoint(0.18f, 0.40f), TrackPoint(0.25f, 0.26f), TrackPoint(0.35f, 0.14f), TrackPoint(0.50f, 0.06f))
-    "spa" -> listOf(TrackPoint(0.50f, 0.08f), TrackPoint(0.65f, 0.10f, "La Source"), TrackPoint(0.80f, 0.20f), TrackPoint(0.88f, 0.32f, "Raidillon"), TrackPoint(0.85f, 0.45f), TrackPoint(0.78f, 0.55f), TrackPoint(0.70f, 0.65f, "Les Combes"), TrackPoint(0.60f, 0.72f), TrackPoint(0.50f, 0.78f), TrackPoint(0.38f, 0.82f), TrackPoint(0.25f, 0.78f), TrackPoint(0.15f, 0.65f), TrackPoint(0.12f, 0.50f), TrackPoint(0.18f, 0.36f), TrackPoint(0.28f, 0.22f), TrackPoint(0.38f, 0.12f), TrackPoint(0.50f, 0.08f))
-    "suzuka" -> listOf(TrackPoint(0.50f, 0.06f), TrackPoint(0.65f, 0.08f), TrackPoint(0.80f, 0.14f, "T1"), TrackPoint(0.88f, 0.25f), TrackPoint(0.85f, 0.38f), TrackPoint(0.78f, 0.48f), TrackPoint(0.70f, 0.42f), TrackPoint(0.62f, 0.48f, "Hairpin"), TrackPoint(0.55f, 0.55f), TrackPoint(0.45f, 0.62f), TrackPoint(0.35f, 0.72f, "Spoon"), TrackPoint(0.25f, 0.80f), TrackPoint(0.18f, 0.70f, "130R"), TrackPoint(0.15f, 0.55f), TrackPoint(0.20f, 0.40f), TrackPoint(0.28f, 0.28f), TrackPoint(0.38f, 0.14f), TrackPoint(0.50f, 0.06f))
-    "baku" -> listOf(TrackPoint(0.50f, 0.06f), TrackPoint(0.68f, 0.06f), TrackPoint(0.85f, 0.10f), TrackPoint(0.92f, 0.22f), TrackPoint(0.90f, 0.38f), TrackPoint(0.85f, 0.52f), TrackPoint(0.80f, 0.62f), TrackPoint(0.72f, 0.72f), TrackPoint(0.62f, 0.80f), TrackPoint(0.50f, 0.88f), TrackPoint(0.38f, 0.80f), TrackPoint(0.28f, 0.72f), TrackPoint(0.18f, 0.58f), TrackPoint(0.12f, 0.42f), TrackPoint(0.15f, 0.26f), TrackPoint(0.26f, 0.14f), TrackPoint(0.38f, 0.08f), TrackPoint(0.50f, 0.06f))
-    "marina_bay" -> listOf(TrackPoint(0.48f, 0.07f), TrackPoint(0.62f, 0.06f), TrackPoint(0.78f, 0.10f), TrackPoint(0.88f, 0.20f), TrackPoint(0.90f, 0.35f), TrackPoint(0.85f, 0.50f), TrackPoint(0.88f, 0.64f), TrackPoint(0.80f, 0.76f), TrackPoint(0.68f, 0.85f), TrackPoint(0.52f, 0.90f), TrackPoint(0.36f, 0.85f), TrackPoint(0.22f, 0.76f), TrackPoint(0.14f, 0.62f), TrackPoint(0.12f, 0.46f), TrackPoint(0.18f, 0.30f), TrackPoint(0.30f, 0.18f), TrackPoint(0.42f, 0.10f), TrackPoint(0.48f, 0.07f))
-    "yas_marina" -> listOf(TrackPoint(0.50f, 0.08f), TrackPoint(0.65f, 0.06f), TrackPoint(0.80f, 0.12f), TrackPoint(0.90f, 0.24f), TrackPoint(0.88f, 0.40f), TrackPoint(0.80f, 0.52f), TrackPoint(0.85f, 0.65f), TrackPoint(0.80f, 0.78f), TrackPoint(0.65f, 0.88f), TrackPoint(0.50f, 0.92f), TrackPoint(0.35f, 0.88f), TrackPoint(0.20f, 0.78f), TrackPoint(0.12f, 0.62f), TrackPoint(0.14f, 0.45f), TrackPoint(0.20f, 0.30f), TrackPoint(0.32f, 0.16f), TrackPoint(0.44f, 0.09f), TrackPoint(0.50f, 0.08f))
-    "bahrain" -> listOf(TrackPoint(0.50f, 0.08f), TrackPoint(0.66f, 0.06f), TrackPoint(0.82f, 0.12f), TrackPoint(0.90f, 0.24f), TrackPoint(0.88f, 0.38f), TrackPoint(0.80f, 0.48f), TrackPoint(0.72f, 0.55f), TrackPoint(0.62f, 0.50f), TrackPoint(0.52f, 0.56f, "Hairpin"), TrackPoint(0.42f, 0.50f), TrackPoint(0.32f, 0.42f), TrackPoint(0.20f, 0.48f), TrackPoint(0.14f, 0.60f), TrackPoint(0.16f, 0.74f), TrackPoint(0.26f, 0.84f), TrackPoint(0.38f, 0.90f), TrackPoint(0.50f, 0.92f), TrackPoint(0.62f, 0.88f), TrackPoint(0.72f, 0.78f), TrackPoint(0.68f, 0.66f), TrackPoint(0.60f, 0.68f), TrackPoint(0.52f, 0.76f), TrackPoint(0.42f, 0.70f), TrackPoint(0.35f, 0.60f), TrackPoint(0.36f, 0.48f), TrackPoint(0.42f, 0.38f), TrackPoint(0.48f, 0.26f), TrackPoint(0.50f, 0.08f))
-    else -> listOf(TrackPoint(0.50f, 0.06f), TrackPoint(0.72f, 0.10f), TrackPoint(0.88f, 0.25f), TrackPoint(0.92f, 0.50f), TrackPoint(0.88f, 0.75f), TrackPoint(0.72f, 0.90f), TrackPoint(0.50f, 0.94f), TrackPoint(0.28f, 0.90f), TrackPoint(0.12f, 0.75f), TrackPoint(0.08f, 0.50f), TrackPoint(0.12f, 0.25f), TrackPoint(0.28f, 0.10f), TrackPoint(0.50f, 0.06f))
-}
-
-@Composable
-private fun TrackFallbackCanvas(circuitId: String, accentColor: Color, raceName: String) {
-    val trackPoints = remember(circuitId) { getTrackPath(circuitId) }
-    val drawProgress = remember { Animatable(0f) }
-    LaunchedEffect(circuitId) { drawProgress.snapTo(0f); drawProgress.animateTo(1f, MacroMotion.drawTween(1200)) }
-    val progress = drawProgress.value
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Canvas(modifier = Modifier.fillMaxSize()) { drawTrackPath(trackPoints, accentColor, progress, size) }
-        Text(raceName.uppercase(), modifier = Modifier.align(Alignment.Center), color = Color.White.copy(alpha = 0.06f), fontSize = 12.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp, textAlign = TextAlign.Center)
-    }
-}
-
-private fun DrawScope.drawTrackPath(points: List<TrackPoint>, accentColor: Color, progress: Float, canvasSize: Size) {
-    if (points.size < 2) return
-    val padding = 12f
-    val usableW = canvasSize.width - padding * 2
-    val usableH = canvasSize.height - padding * 2
-    fun tp(pt: TrackPoint) = Offset(padding + pt.x * usableW, padding + pt.y * usableH)
-    val path = Path()
-    path.moveTo(tp(points[0]).x, tp(points[0]).y)
-    val totalSegments = points.size - 1
-    val segmentsToShow = (totalSegments * progress).toInt()
-    val partialFraction = (totalSegments * progress) - segmentsToShow
-    for (i in 1..minOf(segmentsToShow, points.size - 1)) {
-        val prev = tp(points[i - 1]); val curr = tp(points[i])
-        path.cubicTo(prev.x + (curr.x - prev.x) * 0.4f, prev.y, prev.x + (curr.x - prev.x) * 0.6f, curr.y, curr.x, curr.y)
-    }
-    if (segmentsToShow < totalSegments && partialFraction > 0f) {
-        val i = segmentsToShow + 1
-        if (i < points.size) {
-            val prev = tp(points[i - 1]); val curr = tp(points[i])
-            path.lineTo(prev.x + (curr.x - prev.x) * partialFraction, prev.y + (curr.y - prev.y) * partialFraction)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(168.dp)
+                .clip(SharpShape)
+                .background(SurfaceChrome)
+                .padding(10.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            F1CircuitMap(
+                outline = outline,
+                weight = CircuitMapWeight.DETAIL,
+                motion = CircuitMotion.PAINT_ONCE,
+                contentDescription = "$raceName circuit map",
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .aspectRatio(outline.aspectRatio, matchHeightConstraintsFirst = true),
+            )
         }
-    }
-    drawPath(path, color = accentColor.copy(alpha = 0.25f), style = Stroke(width = 12f, cap = StrokeCap.Round, join = StrokeJoin.Round))
-    drawPath(path, color = accentColor, style = Stroke(width = 4f, cap = StrokeCap.Round, join = StrokeJoin.Round))
-    if (progress > 0.05f) {
-        val startPt = tp(points[0])
-        drawCircle(color = Color.White.copy(alpha = 0.9f), radius = 5f, center = startPt)
-        drawCircle(color = accentColor, radius = 3f, center = startPt)
     }
 }
 
@@ -1966,12 +1852,13 @@ private fun RaceSessionDetail(
         }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             race.laps?.let { CircuitStat("Laps", "$it") }
+            race.outline?.lengthMeters?.let { CircuitStat("Lap", "%.3f km".format(it / 1000f)) }
             race.lapRecord?.let { CircuitStat("Lap rec", it) }
             race.lapRecordHolder?.let { CircuitStat("Held by", it.split(" (").first()) }
         }
-        if (!race.circuitId.isNullOrBlank()) {
+        race.outline?.let { outline ->
             TrackVisualization(
-                circuitId = race.circuitId,
+                outline = outline,
                 accentColor = accentColor,
                 raceName = shortGP(race.raceName),
             )

@@ -18,6 +18,52 @@ data class GitHubSnapshot(
     val notificationsNeedReconnect: Boolean = false,
     val rateLimitRemaining: Int? = null,
     val rateLimitLimit: Int? = null,
+    /** A year of contributions, from GraphQL; null when the token could not read it. */
+    val contributions: GitHubContributions? = null,
+)
+
+/**
+ * The contribution calendar github.com draws on a profile: one entry per day of the
+ * last year, oldest first, with GitHub's own quartile level (0 none … 4 busiest).
+ */
+@Serializable
+data class GitHubContributions(
+    val total: Int,
+    val days: List<GitHubContributionDay>,
+    /** Contributions to private repos this token cannot itemise. */
+    val restricted: Int = 0,
+) {
+    /** Days in a row with at least one contribution, ending today (or yesterday, if today is still empty). */
+    val currentStreak: Int
+        get() {
+            var i = days.lastIndex
+            if (i >= 0 && days[i].count == 0) i-- // today is not over yet
+            var n = 0
+            while (i >= 0 && days[i].count > 0) {
+                n++
+                i--
+            }
+            return n
+        }
+
+    val longestStreak: Int
+        get() {
+            var best = 0
+            var run = 0
+            days.forEach { day ->
+                run = if (day.count > 0) run + 1 else 0
+                if (run > best) best = run
+            }
+            return best
+        }
+}
+
+@Serializable
+data class GitHubContributionDay(
+    /** `yyyy-MM-dd`. */
+    val date: String,
+    val count: Int,
+    val level: Int,
 )
 
 @Serializable

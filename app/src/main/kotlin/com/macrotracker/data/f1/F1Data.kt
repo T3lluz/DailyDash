@@ -94,6 +94,11 @@ data class RaceScheduleEntry(
     val laps: Int? = null,
     val lapRecord: String? = null,
     val lapRecordHolder: String? = null,
+    /** Where the circuit is, from Jolpica; the outline is matched on these, not on the name. */
+    val lat: Double? = null,
+    val lon: Double? = null,
+    /** The circuit drawn as a vector, the same outline the t3lluz dashboard paints. */
+    val outline: CircuitOutline? = null,
 )
 
 @Serializable

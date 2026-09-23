@@ -110,6 +110,12 @@ object ServerAiContext {
         appendLine("- Load (1/5/15): ${s?.load?.let { "${it.one} / ${it.five} / ${it.fifteen}" } ?: "unknown"}")
         val worstDisk = s?.disks?.maxByOrNull { it.usedPercent }
         appendLine("- Busiest filesystem: ${worstDisk?.let { "${it.mountPoint} at ${it.usedPercent.pct()}" } ?: "unknown"}")
+        s?.pressure?.let { p ->
+            appendLine("- Pressure stall, share of the last 10 s: cpu ${p.cpu.orDash()}, io ${p.io.orDash()}, memory ${p.memory.orDash()}")
+        }
+        s?.diskIo?.let { appendLine("- Disk I/O now: read ${formatRate(it.readBytesPerSec)}, write ${formatRate(it.writeBytesPerSec)}") }
+        s?.temperatures?.firstOrNull()?.let { appendLine("- Hottest sensor: ${it.label} ${it.celsius.toInt()}°C") }
+        s?.battery?.let { appendLine("- Battery: ${it.percent}% ${it.status}") }
     }
 
     private fun advisories(r: ServerRuntime): String = buildString {
@@ -150,10 +156,17 @@ object ServerAiContext {
         }
         appendLine("Memory:")
         appendLine("- total ${formatKb(m.totalKb)}, used ${formatKb(m.usedKb)} (${m.usedPercent.pct()}), available ${formatKb(m.availableKb)}")
-        appendLine("- buffers ${formatKb(m.buffersKb)}, cached ${formatKb(m.cachedKb)}, free ${formatKb(m.freeKb)}")
+        appendLine("- held by processes ${formatKb(m.appsKb)}, reclaimable cache ${formatKb(m.cacheKb)}, free ${formatKb(m.freeKb)}")
+        appendLine("- buffers ${formatKb(m.buffersKb)}, cached ${formatKb(m.cachedKb)}, shared ${formatKb(m.shmemKb)}, dirty ${formatKb(m.dirtyKb)}")
         appendLine("- swap: total ${formatKb(m.swapTotalKb)}, used ${formatKb(m.swapUsedKb)} (${m.swapUsedPercent.pct()})")
         if (r.memHistory.isNotEmpty()) {
             appendLine("Recent memory samples: ${r.memHistory.takeLast(20).joinToString(", ") { it.pct() }}")
+        }
+        r.detail?.memoryProcesses?.takeIf { it.isNotEmpty() }?.let { procs ->
+            appendLine("Largest processes by resident memory:")
+            procs.take(8).forEach {
+                appendLine("- pid ${it.pid}: ${it.rssKb?.let(::formatKb) ?: "?"} (${it.memPercent.pct()}) — ${it.command}")
+            }
         }
     }
 
@@ -168,6 +181,17 @@ object ServerAiContext {
         appendLine("- since boot: received ${formatBytes(n.rxTotalBytes)}, sent ${formatBytes(n.txTotalBytes)}")
         n.interfaces.forEach {
             appendLine("- ${it.name}: down ${formatRate(it.rxBytesPerSec)}, up ${formatRate(it.txBytesPerSec)}")
+        }
+        r.detail?.listening?.takeIf { it.isNotEmpty() }?.let { ports ->
+            appendLine(
+                "Listening TCP ports: " + ports.joinToString(", ") {
+                    when (it.scope) {
+                        PortScope.OPEN -> "${it.port}"
+                        PortScope.TAILNET -> "${it.port} (tailnet only)"
+                        PortScope.LOOPBACK -> "${it.port} (loopback)"
+                    }
+                },
+            )
         }
     }
 
@@ -191,6 +215,13 @@ object ServerAiContext {
         }
         appendLine("Temperatures:")
         temps.forEach { appendLine("- ${it.label}: ${it.celsius}°C") }
+        r.snapshot?.battery?.let { b ->
+            appendLine(
+                "Battery: ${b.percent}% ${b.status}" +
+                    (b.healthPercent?.let { ", holds $it% of design capacity" } ?: "") +
+                    (b.cycles?.let { ", $it cycles" } ?: ""),
+            )
+        }
     }
 
     private fun processes(r: ServerRuntime): String = buildString {
@@ -212,14 +243,21 @@ object ServerAiContext {
             return@buildString
         }
         appendLine("Docker containers:")
+        val stats = r.detail?.containerStats.orEmpty()
         containers.forEach {
-            appendLine("- ${it.name} (${it.image}): ${it.state} — ${it.status}")
+            val usage = stats[it.name]?.let { u -> ", cpu ${"%.1f".format(u.cpuPercent)}%, mem ${u.memoryUsage}" }.orEmpty()
+            appendLine("- ${it.name} (${it.image}): ${it.state} — ${it.status}$usage")
         }
     }
 
     private fun services(r: ServerRuntime): String = buildString {
         val failed = r.snapshot?.failedUnits.orEmpty()
         appendLine("systemd state: ${r.snapshot?.systemState ?: "unknown"}")
+        r.detail?.runningServices?.let { appendLine("Running services: $it") }
+        r.detail?.journalErrors?.let { n ->
+            appendLine("Journal errors (priority err or worse) in the last hour: $n")
+            r.detail.journalTail.forEach { appendLine("  $it") }
+        }
         if (failed.isEmpty()) {
             appendLine("Failed units: none")
             return@buildString
@@ -264,6 +302,7 @@ object ServerAiContext {
     // ── Formatting ──────────────────────────────────────────────────────────
 
     private fun Float.pct(): String = "${this.toInt()}%"
+    private fun Float?.orDash(): String = this?.let { "%.1f%%".format(it) } ?: "n/a"
     private fun String?.orUnknown(): String = this?.takeIf { it.isNotBlank() } ?: "unknown"
     private fun yesNo(value: Boolean?): String = when (value) {
         true -> "yes"

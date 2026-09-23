@@ -14,8 +14,10 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
@@ -53,7 +55,7 @@ class GitHubRepositoryImpl @Inject constructor(
         private const val KEY_SNAPSHOT = "snapshot_json"
         private const val KEY_FETCH_TIME = "fetch_time"
         private const val KEY_CACHE_USER = "cache_user"
-        private const val CACHE_VERSION = 3
+        private const val CACHE_VERSION = 4
         private const val KEY_CACHE_VERSION = "cache_version"
         private const val API = "https://api.github.com"
     }
@@ -155,6 +157,11 @@ class GitHubRepositoryImpl @Inject constructor(
         val notifDeferred = async {
             runCatching { fetchNotifications(token) }.getOrElse { emptyList<GitHubNotification>() to true }
         }
+        val contributionsDeferred = async {
+            runCatching { fetchContributions(token) }
+                .onFailure { Log.w(TAG, "Contribution calendar unavailable: ${it.message}") }
+                .getOrNull()
+        }
 
         val issuePage = issuesSearch.await()
         val prPage = prSearch.await()
@@ -211,7 +218,85 @@ class GitHubRepositoryImpl @Inject constructor(
             notificationsNeedReconnect = notifNeedReconnect,
             rateLimitRemaining = remaining,
             rateLimitLimit = limit,
+            contributions = contributionsDeferred.await() ?: cached?.contributions,
         )
+    }
+
+    /**
+     * The year of contributions, the way the profile page counts them. One GraphQL
+     * query, one point of the 5,000/hour budget — the same query the t3lluz
+     * dashboard's collector runs.
+     */
+    private fun fetchContributions(token: String): GitHubContributions? {
+        val query = """
+            query {
+              viewer {
+                contributionsCollection {
+                  restrictedContributionsCount
+                  contributionCalendar {
+                    totalContributions
+                    weeks { contributionDays { date contributionCount contributionLevel } }
+                  }
+                }
+              }
+            }
+        """.trimIndent()
+        val body = JSONObject().put("query", query).toString()
+            .toRequestBody("application/json; charset=utf-8".toMediaType())
+        val request = Request.Builder()
+            .url("$API/graphql")
+            .header("Authorization", "Bearer $token")
+            .header("User-Agent", "DailyDash/${BuildConfig.VERSION_NAME}")
+            .post(body)
+            .build()
+        okHttpClient.newCall(request).execute().use { response ->
+            if (response.code == 401) {
+                if (authClient.isConnected()) authClient.markDisconnected()
+                throw GitHubNeedsAuthException()
+            }
+            if (!response.isSuccessful) throw IOException("GitHub GraphQL HTTP ${response.code}")
+            return parseContributions(response.body?.string().orEmpty())
+        }
+    }
+
+    internal fun parseContributions(raw: String): GitHubContributions? {
+        val collection = JSONObject(raw)
+            .optJSONObject("data")
+            ?.optJSONObject("viewer")
+            ?.optJSONObject("contributionsCollection")
+            ?: return null
+        val calendar = collection.optJSONObject("contributionCalendar") ?: return null
+        val weeks = calendar.optJSONArray("weeks") ?: return null
+        val days = buildList {
+            for (w in 0 until weeks.length()) {
+                val week = weeks.optJSONObject(w)?.optJSONArray("contributionDays") ?: continue
+                for (d in 0 until week.length()) {
+                    val day = week.optJSONObject(d) ?: continue
+                    val date = day.optString("date").takeIf { it.length == 10 } ?: continue
+                    add(
+                        GitHubContributionDay(
+                            date = date,
+                            count = day.optInt("contributionCount", 0),
+                            level = contributionLevel(day.optString("contributionLevel")),
+                        ),
+                    )
+                }
+            }
+        }.sortedBy { it.date }
+        if (days.isEmpty()) return null
+        return GitHubContributions(
+            total = calendar.optInt("totalContributions", days.sumOf { it.count }),
+            days = days,
+            restricted = collection.optInt("restrictedContributionsCount", 0),
+        )
+    }
+
+    private fun contributionLevel(raw: String): Int = when (raw) {
+        "FIRST_QUARTILE" -> 1
+        "SECOND_QUARTILE" -> 2
+        "THIRD_QUARTILE" -> 3
+        "FOURTH_QUARTILE" -> 4
+        else -> 0
     }
 
     override suspend fun getRepoFocus(

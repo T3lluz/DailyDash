@@ -40,6 +40,8 @@ import com.macrotracker.ui.screens.onboarding.SplashOverlay
 import com.macrotracker.ui.viewmodel.AppUpdateViewModel
 import com.macrotracker.ui.viewmodel.OnboardingViewModel
 import com.macrotracker.ui.viewmodel.SettingsViewModel
+import com.macrotracker.ui.viewmodel.ServerViewModel
+import com.macrotracker.data.server.ServerIntentRequest
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
@@ -48,8 +50,8 @@ import kotlin.coroutines.cancellation.CancellationException
 @Composable
 fun MainScreen(
     onboardingViewModel: OnboardingViewModel = hiltViewModel(),
-    openServerDashboard: StateFlow<Boolean>? = null,
-    onServerDashboardOpened: () -> Unit = {},
+    serverRequest: StateFlow<ServerIntentRequest?>? = null,
+    onServerRequestHandled: () -> Unit = {},
 ) {
     val activity = LocalContext.current as ComponentActivity
     val appUpdateViewModel: AppUpdateViewModel = hiltViewModel(viewModelStoreOwner = activity)
@@ -117,16 +119,25 @@ fun MainScreen(
         }
     }
 
-    // Tapping a server alert should land on the dashboard, not just reopen the app.
-    val serverDashboardRequested by (openServerDashboard ?: remember { MutableStateFlow(false) })
-        .collectAsState()
-    LaunchedEffect(serverDashboardRequested, onboardingCompleted) {
-        if (serverDashboardRequested && onboardingCompleted) {
+    // Tapping a server notification lands on that server's dashboard; its Ask action
+    // opens Tech support on the problem instead, when there is an AI to ask.
+    val serverViewModel: ServerViewModel = hiltViewModel()
+    val pendingServerRequest by (serverRequest ?: remember { MutableStateFlow(null) }).collectAsState()
+    LaunchedEffect(pendingServerRequest, onboardingCompleted) {
+        val request = pendingServerRequest ?: return@LaunchedEffect
+        if (!onboardingCompleted) return@LaunchedEffect
+        val seed = request.askAbout?.takeIf { hasAiApiKey }?.let { about ->
+            serverViewModel.askAiFromNotification(request.serverId, about)
+        }
+        if (seed != null) {
+            navController.navigateToTab(Screen.AI.withSeed(seed), restoreState = false)
+        } else {
+            serverViewModel.focusServer(request.serverId)
             navController.navigate(SettingsRoutes.SERVER_DASHBOARD) {
                 launchSingleTop = true
             }
-            onServerDashboardOpened()
         }
+        onServerRequestHandled()
     }
 
     val onOnboardingComplete = remember(onboardingViewModel) {

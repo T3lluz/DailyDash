@@ -44,8 +44,29 @@ com.macrotracker/
                               WeatherRepository (met.no forecast) + ClothingAdvice, LocationProvider
     chat/                  ← AI tab chat: ChatRepository, AiChatClient, BotPrompts, ServerAiHandoff
                               (server dashboard → AI tab context hand-off, keyed by seed id)
+    hermes/                ← HermesClient: Tech support through Hermes on the dashboard server, via the
+                              bridge at `<dashboardServerUrl>/_api/ai/*` (status, threads, chat + watch SSE,
+                              stop, exec for approval cards, model). Threads live on the server, shared with
+                              the web dashboard. Send a thread's own `permId` back unchanged (it may be a CLI
+                              mode like `agent`)
     server/                ← server monitor: SSH probes (SshClient/ServerProbe), ServerMonitorService +
-                              ServerNotifier, encrypted ServerStore, ServerAdvisories
+                              ServerNotifier, encrypted ServerStore, ServerAdvisories.
+                              ServerProbe has three lanes: the fast script (every poll: /proc, df, hwmon
+                              temps, PSI, diskstats, cpu MHz, battery, ps with RSS), the detail script (every
+                              30 s, only while a `startPolling(detailed = true)` consumer holds it: docker
+                              stats, ps by RSS, `ss -tln`, running units, journal errors) and the news script
+                              (15 min: updates). Scripts are POSIX sh with no variables, every command guarded.
+                              DashboardLink: `_stats.json`, `_history.json` and the tiles in `index.html` from
+                              the dashboard server; it belongs to the SSH profile whose `hostname` matches
+                              `host.sys.host` (`DashboardLink.belongsTo`).
+                              Live notification: ServerMonitorService (specialUse FGS) → ServerLiveNotification
+                              (RemoteViews in DecoratedCustomViewStyle: native text in the Compat notification
+                              text appearances, pictures from ServerLiveGraphics). Graphics are drawn in dp at
+                              the screen density (capped at 2.5×, 2× before Android 12), RGB_565, light or dark
+                              with the system; keep them well under the 2 MB RemoteViews warning. Nothing is
+                              redrawn while the screen is off. Actions: Ask (opens Tech support on the worst
+                              advisory via `EXTRA_ASK_ABOUT`, also on alert notifications), Next server, Stop.
+                              A tapped notification opens the dashboard on its server through `ServerFocus`
     update/                ← GitHub Releases in-app updater (see "In-app updates")
     health/                ← HealthConnectRepository (read-only; lazy client; PERMISSIONS companion set);
                               reads: Steps, HeartRate, RestingHeartRate, OxygenSaturation,
@@ -60,14 +81,19 @@ com.macrotracker/
                               on its own). `readTodayStats()` throws only when every granted
                               metric failed, so the ViewModel can tell "empty" from "broken".
     f1/                    ← F1Repository via Ktor + OpenF1 API (https://api.openf1.org/v1/);
-                              15-min in-memory + SharedPrefs disk cache
+                              15-min in-memory + SharedPrefs disk cache. F1Circuits: circuit outlines from
+                              bacinger/f1-circuits matched by coordinates (nearest within ~25 km), folded into a
+                              0–100 box exactly as the dashboard's `f1_path()` does, cached per circuit for good
+                              and attached to each `RaceScheduleEntry.outline`
     youtube/               ← YouTubeRepository via RSS feeds + optional Google OAuth subscription
                               import (AuthorizationClient / youtube.readonly); tracked channels in SharedPrefs
     twitch/                ← TwitchRepository via Helix + Device Code OAuth (Custom Tabs →
                               twitch.tv/activate, scope `user:read:follows`);
                               imports followed channels; live streams with 60s cache + auto-refresh
     github/                ← GitHubRepository via REST (OkHttp); authenticated user dashboard
-                              (issues/PRs/activity/repos across every repo the account can see);
+                              (issues/PRs/activity/repos across every repo the account can see), plus one
+                              GraphQL query for the contribution calendar. ContributionSnake is a line-for-line
+                              port of the dashboard's `snkSolve()`; ContributionSnakeTest pins it to the JS output;
                               5-min memory + SharedPrefs disk cache; GitHubAuthClient Device Code
                               OAuth (Custom Tabs → github.com/login/device, scopes `repo read:user`);
                               leftover PAT / BuildConfig.GITHUB_TOKEN is an optional fallback
@@ -86,7 +112,11 @@ com.macrotracker/
     screens/               ← one file per tab screen (HomeScreen, HealthScreen, AIScreen,
                              SettingsScreen) + sub-screens (StatsScreen, HelpScreen, CameraScanScreen)
                              + onboarding/ (SplashScreen overlay, WelcomeScreen, PermissionsScreen, TutorialScreen)
-                             + ai/ (ChatKit.kt shared chat bubbles/header/composer + IME helpers, SysopChatPane)
+                             + ai/ (ChatKit.kt shared chat bubbles/header/composer + IME helpers, SysopChatPane,
+                             HermesChatPane; Tech support is Hermes when `HermesViewModel.usesHermes`: an explicit
+                             `techSupportBrain` choice, or in `auto` whenever Hermes answers, else Sysop)
+                             + server/ (the server screen's cards: hero, history, services wall, activity,
+                             compute, memory, network, storage, sensors, processes, containers, system)
                              + health/ (Health tab sections) + settings/ (category sub-screens)
     viewmodel/             ← one @HiltViewModel per screen; UI state as sealed classes via StateFlow;
                               includes OnboardingViewModel (manages onboardingCompleted + splashShown flags);
@@ -108,7 +138,13 @@ com.macrotracker/
                               `Modifier.subScreenBottomPadding()`. HomeWidgetShell.kt: card chrome shared by
                               every Home/Health card — `CardHeader`, `HubCardHeader` + `HubHeaderAction`,
                               `HubErrorState` (message + Retry), `WidgetPromptCard`, `ChannelSheetHeader`,
-                              expand/scroll-box helpers. DeviceCodePanel.kt: GitHub/Twitch device-code
+                              expand/scroll-box helpers. F1CircuitMap.kt: the dashboard's four-pass circuit
+                              (kerb, bed, marque line, car) that paints its lap on screen, with a
+                              `CircuitMapWeight` per place and `CircuitMotion` STILL / PAINT_ONCE / BACKDROP
+                              (replays, and keeps a dim car lapping). GitHubContributionGraph.kt: the year with
+                              the snake. ServerCharts.kt / ServerVitals.kt: 270° dials with an average notch,
+                              mirrored area charts, the scrubbable history chart, stacked meters, uptime bars,
+                              fact chips. DeviceCodePanel.kt: GitHub/Twitch device-code
                               sign-in (copyable code + equal-width Open / Cancel). DottedFrost.kt holds the
                               Cinema-Info glass chrome — use `Modifier.dottedGlass(hazeState, shape)`
                               on any frosted surface above a `hazeSource` (nav pill, AI composer).
@@ -169,6 +205,12 @@ Sub-screens (`SubScreenRoutes.STATS/HELP/WIDGETS/CAMERA_SCAN` and the `SettingsR
 **Tab switches must go through `navigateToTab(route)`** (pop to the start destination with `saveState`, `launchSingleTop`, `restoreState`). Never `navigate()` a tab route on top of another tab or a sub-screen — that tab's saved stack then ends in the other tab and the nav pill stops responding. (The one exception is finishing onboarding, which replaces the onboarding stack with Home.) The server dashboard → AI hand-off uses `navigateToTab(Screen.AI.withSeed(id), restoreState = false)` so the seed args beat the AI tab's saved state.
 
 Callers must not add haptics to components that already fire their own: `MacroButton`, `HubHeaderAction`, `HubErrorState`, `WidgetExpandBar`, `DeviceCodePanel`.
+
+### Decorative motion
+Two long-running animations mirror the t3lluz web dashboard and take their specs from `MacroMotion.CircuitPaint`
+and `MacroMotion.Snake`. Both run off a clock read only in the draw phase (a redraw per frame, never a
+recomposition), take frames only while on screen (`Modifier.trackOnScreen`) and the app is resumed
+(`rememberIsResumed`), and show their finished state when animations are off (`rememberReducedMotion`).
 
 ### Home Screen Widgets (draggable)
 Widget order and visibility are persisted as a single colon-and-comma encoded string in SharedPrefs:
@@ -245,7 +287,9 @@ Briefly tell the user:
 | Twitch | Helix (OkHttp) + Device Code (Custom Tabs) | `twitch.tv/activate` (no runtime redirect); imports follows; live board (60s cache) |
 | Weather | OkHttp (`WeatherRepository`) | met.no Locationforecast 2.0 (Yr symbol codes); clothing advice is local (`ClothingAdvice`) |
 | Health Connect | SDK | Read-only; lazy client; gracefully returns null if SDK unavailable |
-| GitHub (home card) | OkHttp (`GitHubRepository` + `GitHubAuthClient`) | Device Code OAuth (Custom Tabs → github.com/login/device); REST `/user`, search issues/PRs `involves:@me`, `/user/repos`, `/users/{login}/events`; scopes `repo read:user` |
+| GitHub (home card) | OkHttp (`GitHubRepository` + `GitHubAuthClient`) | Device Code OAuth (Custom Tabs → github.com/login/device); REST `/user`, search issues/PRs `involves:@me`, `/user/repos`, `/users/{login}/events`; GraphQL `contributionsCollection`; scopes `repo read:user` |
+| F1 circuits | OkHttp (`F1CircuitRepository`) | raw.githubusercontent.com/bacinger/f1-circuits: `f1-locations.json` (30-day cache) + one GeoJSON per circuit (kept for good) |
+| t3lluz dashboard | OkHttp (`UpcomingRepository`, `DashboardLinkRepository`, `HermesClient`) | Tailnet-only static JSON (`_stats.json`, `_history.json`, `_f1.json`, tiles in `index.html`) and the bridge under `/_api/ai/*` for Hermes |
 | GitHub Releases | OkHttp (`AppUpdateRepository`) | In-app APK updates + changelog |
 
 ### Compose Strong Skipping

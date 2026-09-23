@@ -115,7 +115,92 @@ data class ServerSnapshot(
     val failedUnits: List<SystemdUnit> = emptyList(),
     val systemState: String? = null,
     val containers: List<DockerContainer> = emptyList(),
+    /** Share of the last 10 s something waited on CPU, I/O or memory. Null on kernels without PSI. */
+    val pressure: PressureSample? = null,
+    /** Whole-disk throughput, differenced like the network. */
+    val diskIo: DiskIoSample? = null,
+    /** What the cores are clocked at right now, averaged. */
+    val cpuMhz: Int? = null,
+    val battery: BatterySample? = null,
 )
+
+/**
+ * Pressure stall information, `some avg10`. The number that says whether a machine is
+ * struggling: 90% CPU with no stall is a box doing its job, 40% with I/O stall is one grinding.
+ */
+data class PressureSample(val cpu: Float?, val io: Float?, val memory: Float?) {
+    val worst: Float get() = listOfNotNull(cpu, io, memory).maxOrNull() ?: 0f
+}
+
+/** Bytes per second read and written across whole disks (partitions would count twice). */
+data class DiskIoSample(
+    val readBytesPerSec: Long,
+    val writeBytesPerSec: Long,
+    val readTotalBytes: Long,
+    val writeTotalBytes: Long,
+)
+
+data class BatterySample(
+    val percent: Int,
+    /** `Charging`, `Discharging`, `Full`, `Not charging`. */
+    val status: String,
+    /** Full charge as a share of design capacity. */
+    val healthPercent: Int?,
+    val cycles: Int?,
+    val watts: Float?,
+) {
+    val discharging: Boolean get() = status.equals("Discharging", ignoreCase = true)
+    val charging: Boolean get() = status.equals("Charging", ignoreCase = true)
+}
+
+/**
+ * The slower lane, run only while the full server screen is open: `docker stats`
+ * samples for a second, and the memory-sorted process list and listening sockets
+ * are not worth reading every five seconds.
+ */
+data class ServerDetail(
+    val fetchedAtMs: Long,
+    /** Container name → live usage. */
+    val containerStats: Map<String, ContainerStats> = emptyMap(),
+    val memoryProcesses: List<ProcessInfo> = emptyList(),
+    val listening: List<ListeningPort> = emptyList(),
+    val runningServices: Int? = null,
+    /** Journal entries at priority err or worse in the last hour; null when the journal is unreadable. */
+    val journalErrors: Int? = null,
+    val journalTail: List<String> = emptyList(),
+)
+
+data class ContainerStats(
+    val cpuPercent: Float,
+    /** As docker prints it, e.g. `155.8MiB`. */
+    val memoryUsage: String,
+    val memoryPercent: Float?,
+)
+
+data class ListeningPort(val port: Int, val address: String, val protocol: String = "tcp") {
+    /** Who can reach it: anyone on the network, only the tailnet, or only the box itself. */
+    val scope: PortScope
+        get() {
+            val a = address.removePrefix("[").removeSuffix("]").lowercase()
+            return when {
+                a.startsWith("127.") || a == "::1" || a.startsWith("::ffff:127.") || a == "localhost" -> PortScope.LOOPBACK
+                // Tailscale hands out 100.64.0.0/10 and fd7a:115c:a1e0::/48.
+                isCgnat(a) || a.startsWith("fd7a:115c:a1e0") -> PortScope.TAILNET
+                else -> PortScope.OPEN
+            }
+        }
+
+    val localOnly: Boolean get() = scope == PortScope.LOOPBACK
+
+    private fun isCgnat(a: String): Boolean {
+        val parts = a.split('.')
+        if (parts.size != 4 || parts[0] != "100") return false
+        val second = parts[1].toIntOrNull() ?: return false
+        return second in 64..127
+    }
+}
+
+enum class PortScope { OPEN, TAILNET, LOOPBACK }
 
 /**
  * CPU utilisation, derived from the delta between two `/proc/stat` reads —
@@ -139,14 +224,31 @@ data class MemorySample(
     val cachedKb: Long,
     val swapTotalKb: Long,
     val swapFreeKb: Long,
+    val reclaimableKb: Long = 0,
+    val shmemKb: Long = 0,
+    val dirtyKb: Long = 0,
 ) {
     val usedKb: Long get() = (totalKb - availableKb).coerceAtLeast(0)
+
+    /** Page cache the kernel gives back on demand, htop's definition (shared memory is not reclaimable). */
+    val cacheKb: Long get() = (buffersKb + cachedKb + reclaimableKb - shmemKb).coerceAtLeast(0)
+
+    /** What processes actually hold: everything that is neither free nor reclaimable cache. */
+    val appsKb: Long get() = (totalKb - freeKb - cacheKb).coerceAtLeast(0)
     val usedPercent: Float get() = if (totalKb > 0) usedKb * 100f / totalKb else 0f
     val swapUsedKb: Long get() = (swapTotalKb - swapFreeKb).coerceAtLeast(0)
     val swapUsedPercent: Float get() = if (swapTotalKb > 0) swapUsedKb * 100f / swapTotalKb else 0f
 }
 
-data class LoadSample(val one: Float, val five: Float, val fifteen: Float, val runningProcs: Int, val totalProcs: Int)
+data class LoadSample(
+    val one: Float,
+    val five: Float,
+    val fifteen: Float,
+    val runningProcs: Int,
+    val totalProcs: Int,
+    /** Tasks stuck in uninterruptible sleep, almost always waiting on disk. */
+    val blockedProcs: Int = 0,
+)
 
 /** Bytes per second, already differenced against the previous sample. */
 data class NetworkSample(
@@ -169,9 +271,26 @@ data class DiskUsage(
     val usedPercent: Float get() = if (totalKb > 0) usedKb * 100f / totalKb else 0f
 }
 
-data class TemperatureReading(val label: String, val celsius: Float)
+data class TemperatureReading(val label: String, val celsius: Float, val kind: SensorKind = SensorKind.OTHER)
 
-data class ProcessInfo(val pid: Int, val cpuPercent: Float, val memPercent: Float, val command: String)
+/** What a sensor is measuring, from its hwmon driver name. */
+enum class SensorKind(val label: String) {
+    CPU("CPU"),
+    GPU("GPU"),
+    DISK("Disk"),
+    BOARD("Board"),
+    WIFI("Wi-Fi"),
+    OTHER("Sensor"),
+}
+
+data class ProcessInfo(
+    val pid: Int,
+    val cpuPercent: Float,
+    val memPercent: Float,
+    val command: String,
+    /** Resident memory, when ps could report it. */
+    val rssKb: Long? = null,
+)
 
 data class LoginSession(val user: String, val tty: String, val from: String, val since: String)
 
@@ -250,11 +369,34 @@ data class ServerRuntime(
     val memHistory: List<Float> = emptyList(),
     val netRxHistory: List<Long> = emptyList(),
     val netTxHistory: List<Long> = emptyList(),
+    /** The hottest CPU-ish sensor per sample. */
+    val tempHistory: List<Float> = emptyList(),
+    val diskReadHistory: List<Long> = emptyList(),
+    val diskWriteHistory: List<Long> = emptyList(),
+    /** Every reading per poll, aligned on one clock, for the history chart. */
+    val samples: List<ServerSample> = emptyList(),
+    val detail: ServerDetail? = null,
     val hostKeyFingerprint: String? = null,
     val lastErrorMs: Long = 0L,
 ) {
     val isOnline: Boolean get() = connection is ServerConnectionState.Online
 }
+
+/**
+ * One poll's readings on one timestamp. The per-metric histories above skip a poll that
+ * had no value, which is fine for a sparkline and wrong for a time axis; these keep the
+ * gap as a null so the chart can draw it as one.
+ */
+data class ServerSample(
+    val atMs: Long,
+    val cpu: Float?,
+    val mem: Float?,
+    val temp: Float?,
+    val rx: Long?,
+    val tx: Long?,
+    val read: Long?,
+    val write: Long?,
+)
 
 /** Alert thresholds. Defaults are deliberately quiet — a NAS at 80% RAM is normal. */
 @Serializable
