@@ -14,6 +14,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.macrotracker.MainActivity
 import com.macrotracker.R
+import com.macrotracker.data.local.SettingsRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -33,6 +34,7 @@ import kotlin.math.absoluteValue
 class ServerNotifier @Inject constructor(
     @ApplicationContext private val context: Context,
     private val store: ServerStore,
+    private val settings: SettingsRepository,
 ) {
     private val manager = NotificationManagerCompat.from(context)
 
@@ -151,6 +153,7 @@ class ServerNotifier @Inject constructor(
                 },
             )
             .setContentIntent(openServersIntent(runtime.profile.id))
+            .addAction(0, askLabel(), askIntent(runtime.profile.id, advisory.key))
             .setAutoCancel(true)
             .setOnlyAlertOnce(true)
             .build()
@@ -188,6 +191,36 @@ class ServerNotifier @Inject constructor(
         )
     }
 
+    /**
+     * Opens Tech support on [about] (an advisory key, or [ASK_OVERVIEW] for the server as
+     * a whole). Each server and question gets its own request code, or Android would
+     * hand every Ask button the extras of whichever was built last.
+     */
+    fun askIntent(serverId: String, about: String): PendingIntent {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra(EXTRA_OPEN_SERVERS, true)
+            putExtra(EXTRA_SERVER_ID, serverId)
+            putExtra(EXTRA_ASK_ABOUT, about)
+        }
+        return PendingIntent.getActivity(
+            context,
+            "ask:$serverId:$about".hashCode(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
+    /** "Ask Hermes" when Tech support will be Hermes, "Ask AI" when it will be the phone's own. */
+    fun askLabel(): String {
+        val hermes = when (settings.techSupportBrain.value) {
+            SettingsRepository.TECH_SUPPORT_HERMES -> true
+            SettingsRepository.TECH_SUPPORT_PHONE -> false
+            else -> settings.hermesLastReachable.value
+        }
+        return context.getString(if (hermes) R.string.server_ask_hermes else R.string.server_ask_ai)
+    }
+
     /** Drops every alert notification for a server (used when it is deleted). */
     fun clearFor(serverId: String) {
         posted.remove(serverId)?.forEach { key ->
@@ -210,6 +243,10 @@ class ServerNotifier @Inject constructor(
 
         const val EXTRA_OPEN_SERVERS = "open_servers"
         const val EXTRA_SERVER_ID = "server_id"
+        const val EXTRA_ASK_ABOUT = "ask_about"
+
+        /** [EXTRA_ASK_ABOUT] for a question about the whole server rather than one advisory. */
+        const val ASK_OVERVIEW = "overview"
 
         /** Live notification keeps a fixed id; alerts are offset above it. */
         const val LIVE_NOTIFICATION_ID = 8100

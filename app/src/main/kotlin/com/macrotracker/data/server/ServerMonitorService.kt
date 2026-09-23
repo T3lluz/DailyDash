@@ -1,6 +1,5 @@
 package com.macrotracker.data.server
 
-import android.app.PendingIntent
 import android.app.Service
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -9,20 +8,24 @@ import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
-import android.widget.RemoteViews
-import androidx.core.app.NotificationCompat
+import android.os.PowerManager
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
-import com.macrotracker.R
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
-import kotlin.math.roundToInt
 
 /**
  * Keeps the live server notification on screen.
@@ -45,16 +48,33 @@ class ServerMonitorService : Service() {
 
     @Inject lateinit var store: ServerStore
 
+    @Inject lateinit var dashboard: DashboardLinkRepository
+
     private val scope = CoroutineScope(SupervisorJob() + kotlinx.coroutines.Dispatchers.Main.immediate)
     private var collectJob: Job? = null
+    private var dashboardJob: Job? = null
     private var started = false
+    private val live by lazy { ServerLiveNotification(this, notifier) }
+
+    /**
+     * Whether anyone can see the notification. With the screen off the repository drops
+     * to its slower cadence and the notification is not redrawn at all — the bitmaps are
+     * the expensive part, and a lock screen that is off shows nothing.
+     */
+    private val screenOn = MutableStateFlow(true)
 
     /** Mirrors screen state into the repository's polling cadence. */
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
-                Intent.ACTION_SCREEN_ON -> repository.setBackgroundMode(false)
-                Intent.ACTION_SCREEN_OFF -> repository.setBackgroundMode(true)
+                Intent.ACTION_SCREEN_ON -> {
+                    repository.setBackgroundMode(false)
+                    screenOn.value = true
+                }
+                Intent.ACTION_SCREEN_OFF -> {
+                    repository.setBackgroundMode(true)
+                    screenOn.value = false
+                }
             }
         }
     }
@@ -64,6 +84,7 @@ class ServerMonitorService : Service() {
     override fun onCreate() {
         super.onCreate()
         notifier.ensureChannels()
+        screenOn.value = getSystemService(PowerManager::class.java)?.isInteractive ?: true
         registerReceiver(
             screenReceiver,
             IntentFilter().apply {
@@ -74,39 +95,85 @@ class ServerMonitorService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) {
-            store.updateSettings { it.copy(liveNotificationEnabled = false) }
-            stopSelf()
-            return START_NOT_STICKY
+        when (intent?.action) {
+            ACTION_STOP -> {
+                store.updateSettings { it.copy(liveNotificationEnabled = false) }
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            ServerLiveNotification.ACTION_NEXT_SERVER -> stepServer()
         }
 
         // Must post a notification within a few seconds of startForegroundService,
         // so go up with a placeholder before the first poll has any data.
         if (!started) {
-            startForegroundCompat(buildNotification(null))
+            startForegroundCompat(live.build(null, null, emptyList(), ServerMonitorService::class.java))
             started = true
             repository.acquire(TAG)
             observeRuntimes()
+            followDashboard()
         }
         return START_STICKY
     }
 
+    /** The Next server action: show the following enabled server, wrapping round. */
+    private fun stepServer() {
+        val enabled = store.profiles.value.filter { it.enabled }
+        if (enabled.size < 2) return
+        val current = store.settings.value.liveNotificationServerId
+        val index = enabled.indexOfFirst { it.id == current }
+        val next = enabled[(index + 1).mod(enabled.size)]
+        store.updateSettings { it.copy(liveNotificationServerId = next.id) }
+    }
+
+    /**
+     * Redraws when something the notification shows has changed: the selected server's
+     * runtime, the others' state, the dashboard link, or which server is selected.
+     */
     private fun observeRuntimes() {
         collectJob?.cancel()
         collectJob = scope.launch {
-            repository.runtimes.collectLatest { runtimes ->
-                val settings = store.settings.value
-                val selected = settings.liveNotificationServerId?.let { runtimes[it] }
+            combine(
+                repository.runtimes,
+                store.settings.map { it.liveNotificationServerId }.distinctUntilChanged(),
+                dashboard.link,
+                screenOn,
+            ) { runtimes, selectedId, link, visible ->
+                val selected = selectedId?.let { runtimes[it] }?.takeIf { it.profile.enabled }
                     ?: runtimes.values.firstOrNull { it.profile.enabled }
                     ?: runtimes.values.firstOrNull()
-                if (selected == null) {
-                    // Every server was deleted — nothing left to display.
-                    stopSelf()
-                    return@collectLatest
+                val others = runtimes.values.filter { it.profile.enabled && it.profile.id != selected?.profile?.id }
+                    .sortedBy { it.profile.position }
+                LiveFrame(selected, others, link?.takeIf { selected != null && it.belongsTo(selected.hostProfile?.hostname) }, visible)
+            }
+                .distinctUntilChanged()
+                .collectLatest { frame ->
+                    val selected = frame.selected
+                    if (selected == null) {
+                        // Every server was deleted — nothing left to display.
+                        stopSelf()
+                        return@collectLatest
+                    }
+                    if (!frame.visible) return@collectLatest
+                    val notification = withContext(Dispatchers.Default) {
+                        live.build(selected, frame.link, frame.others, ServerMonitorService::class.java)
+                    }
+                    runCatching {
+                        NotificationManagerCompat.from(this@ServerMonitorService)
+                            .notify(ServerNotifier.LIVE_NOTIFICATION_ID, notification)
+                    }
                 }
-                runCatching {
-                    NotificationManagerCompat.from(this@ServerMonitorService)
-                        .notify(ServerNotifier.LIVE_NOTIFICATION_ID, buildNotification(selected))
+        }
+    }
+
+    /** The dashboard's view of its own machine, for a server that is that machine; only while the screen is on. */
+    private fun followDashboard() {
+        dashboardJob?.cancel()
+        dashboardJob = scope.launch {
+            screenOn.collectLatest { on ->
+                while (on) {
+                    runCatching { dashboard.refresh() }
+                    delay(DASHBOARD_REFRESH_MS)
                 }
             }
         }
@@ -121,80 +188,9 @@ class ServerMonitorService : Service() {
         ServiceCompat.startForeground(this, ServerNotifier.LIVE_NOTIFICATION_ID, notification, type)
     }
 
-    private fun buildNotification(runtime: ServerRuntime?): android.app.Notification {
-        val collapsed = RemoteViews(packageName, R.layout.notification_server_live_collapsed)
-        val expanded = RemoteViews(packageName, R.layout.notification_server_live_expanded)
-
-        val title = runtime?.profile?.label ?: getString(R.string.server_channel_live)
-        val statusLine = statusLine(runtime)
-
-        collapsed.setTextViewText(R.id.server_live_title, title)
-        collapsed.setTextViewText(R.id.server_live_summary, statusLine)
-
-        expanded.setTextViewText(R.id.server_live_header, title)
-        expanded.setTextViewText(
-            R.id.server_live_subhead,
-            runtime?.let { it.profile.displayTarget + hostSuffix(it) } ?: "",
-        )
-        expanded.setTextViewText(R.id.server_live_footer, statusLine)
-
-        if (runtime != null) {
-            collapsed.setImageViewBitmap(
-                R.id.server_live_gauges,
-                ServerLiveGraphics.renderGaugeStrip(runtime),
-            )
-            expanded.setImageViewBitmap(R.id.server_live_panel, ServerLiveGraphics.renderPanel(runtime))
-        }
-
-        val stopIntent = PendingIntent.getService(
-            this,
-            0,
-            Intent(this, ServerMonitorService::class.java).setAction(ACTION_STOP),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-
-        return NotificationCompat.Builder(this, ServerNotifier.CHANNEL_LIVE)
-            .setSmallIcon(R.drawable.ic_server_live)
-            .setCustomContentView(collapsed)
-            .setCustomBigContentView(expanded)
-            .setStyle(NotificationCompat.DecoratedCustomViewStyle())
-            .setOngoing(true)
-            .setSilent(true)
-            .setShowWhen(false)
-            .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setContentIntent(notifier.openServersIntent(runtime?.profile?.id))
-            .addAction(0, getString(R.string.server_live_stop), stopIntent)
-            .build()
-    }
-
-    private fun statusLine(runtime: ServerRuntime?): String {
-        if (runtime == null) return "Starting…"
-        return when (val connection = runtime.connection) {
-            is ServerConnectionState.Offline -> connection.reason.message
-            is ServerConnectionState.Connecting -> "Connecting…"
-            else -> {
-                val snapshot = runtime.snapshot ?: return "Waiting for first sample…"
-                buildList {
-                    snapshot.cpu?.let { add("CPU ${it.totalPercent.roundToInt()}%") }
-                    snapshot.memory?.let { add("RAM ${it.usedPercent.roundToInt()}%") }
-                    snapshot.disks.maxByOrNull { it.usedPercent }?.let {
-                        add("${it.mountPoint} ${it.usedPercent.roundToInt()}%")
-                    }
-                    snapshot.network?.let { add("↓${formatRate(it.rxBytesPerSec)}") }
-                }.joinToString(" · ").ifBlank { "Collecting…" }
-            }
-        }
-    }
-
-    private fun hostSuffix(runtime: ServerRuntime): String {
-        val pretty = runtime.hostProfile?.prettyName.orEmpty()
-        return if (pretty.isBlank()) "" else "  ·  $pretty"
-    }
-
     override fun onDestroy() {
         collectJob?.cancel()
+        dashboardJob?.cancel()
         scope.cancel()
         repository.release(TAG)
         repository.setBackgroundMode(false)
@@ -205,9 +201,18 @@ class ServerMonitorService : Service() {
         super.onDestroy()
     }
 
+    /** Everything one redraw depends on; equal frames are not drawn twice. */
+    private data class LiveFrame(
+        val selected: ServerRuntime?,
+        val others: List<ServerRuntime>,
+        val link: DashboardLink?,
+        val visible: Boolean,
+    )
+
     companion object {
         private const val TAG = "live-notification"
-        const val ACTION_STOP = "com.macrotracker.server.STOP_LIVE"
+        const val ACTION_STOP = ServerLiveNotification.ACTION_STOP
+        private const val DASHBOARD_REFRESH_MS = 60_000L
 
         fun start(context: Context) {
             val intent = Intent(context, ServerMonitorService::class.java)

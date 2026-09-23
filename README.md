@@ -26,16 +26,16 @@ Updates install from inside the app. When a new release is out, DailyDash downlo
 | | Feature | What you get | Setup |
 | :---: | --- | --- | --- |
 | <img src="docs/integrations/nutrition.svg" width="20" alt="" /> | **Nutrition** | Calories and protein against daily goals, Quick Add, 7/14/30-day trends | None |
-| <img src="docs/integrations/ai.svg" width="20" alt="" /> | **AI** | Log a meal by describing it or scanning its label, and chat with two built-in bots: **Clanker** for nutrition and **Sysop** for servers | Claude subscription or your own API key |
+| <img src="docs/integrations/ai.svg" width="20" alt="" /> | **AI** | Log a meal by describing it or scanning its label, and chat about your servers in **Tech support**: **Hermes** on your t3lluz server, which can look around for itself and asks before changing anything, or **Sysop** on this phone's AI | Claude subscription or your own API key; Hermes needs the dashboard server on Tailscale |
 | <img src="docs/integrations/health-connect.svg" width="20" alt="" /> | **Health** | Activity rings, today vs. yesterday, workouts from the last month | [Health Connect](https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata) |
 | <img src="docs/integrations/weather.svg" width="20" alt="" /> | **Weather** | Local forecast, sunrise and sunset, what to wear | Location permission |
 | <img src="docs/integrations/calendar.svg" width="20" alt="" /> | **Calendar** | Today's upcoming events | Calendar permission |
 | <img src="docs/integrations/calendar.svg" width="20" alt="" /> | **Coming up** | Episodes, films and F1 sessions on one swipeable timeline, from your t3lluz dashboard | Dashboard server in **Settings → Connections**, on Tailscale |
-| <img src="docs/integrations/f1.svg" width="20" alt="" /> | **Formula 1** | Next race countdown, standings, latest results, season schedule | None |
-| <img src="docs/integrations/github.svg" width="20" alt="" /> | **GitHub** | Your issues, PRs, activity, and repos | Connect GitHub |
+| <img src="docs/integrations/f1.svg" width="20" alt="" /> | **Formula 1** | Next race countdown over its circuit, which paints its own lap, plus standings, latest results and the season schedule | None |
+| <img src="docs/integrations/github.svg" width="20" alt="" /> | **GitHub** | Your issues, PRs, activity and repos, and a year of contributions with a snake eating it | Connect GitHub |
 | <img src="docs/integrations/youtube.svg" width="20" alt="" /> | **YouTube** | Newest videos from channels you follow | None, or Connect Google to import subscriptions |
 | <img src="docs/integrations/twitch.svg" width="20" alt="" /> | **Twitch** | Who's live right now from channels you follow | Connect Twitch |
-| <img src="docs/integrations/servers.svg" width="20" alt="" /> | **Servers** | Live CPU, memory, disk, network, temperatures, systemd services, Docker containers, and pending updates, plus alerts and an ongoing notification | SSH login, with nothing to install on the server |
+| <img src="docs/integrations/servers.svg" width="20" alt="" /> | **Servers** | Live CPU, memory, disk, network and disk I/O, every temperature sensor, pressure stall, battery, containers with their usage, listening ports, systemd and the journal, pending updates, alerts, and an ongoing notification that leads with whatever matters right now and expands to dials, history, network and every core, with an Ask button that opens Tech support on the problem. A server running the t3lluz dashboard also gets a day of history, service uptime, and what is playing or downloading | SSH login, with nothing to install on the server |
 | <img src="docs/integrations/widgets.svg" width="20" alt="" /> | **Home-screen widgets** | Dashboard, Nutrition, Health, Weather, Calendar, F1 Next Race, F1 Standings, F1 Schedule | Long-press your home screen |
 
 ### <img src="docs/integrations/health-connect.svg" width="20" alt="" /> Health metrics
@@ -59,11 +59,12 @@ Choose a provider in **Settings → AI**. Meal estimates show a confidence level
 - Health Connect data is read on the phone and never uploaded.
 - AI requests go only to the provider you pick. They contain your message, plus a server's readings when you tap the ✨ on a server card.
 - Server passwords and SSH keys are encrypted with the Android Keystore. Monitoring only reads stats and never changes anything on your servers.
+- Hermes chats live on your own server, in the dashboard's bridge, so the web dashboard shows the same threads. Hermes changes nothing on the server until you tap an approval card, unless you give a thread Full access.
 - There's no DailyDash account, analytics, or tracking.
 
 ## Data sources
 
-[MET Norway / Yr](https://api.met.no/) (weather) · [Jolpica](https://github.com/jolpica/jolpica-f1) and [OpenF1](https://openf1.org/) (F1) · YouTube RSS and Data API · Twitch Helix · GitHub REST · SSH to your own servers · Android Health Connect and Calendar
+[MET Norway / Yr](https://api.met.no/) (weather) · [Jolpica](https://github.com/jolpica/jolpica-f1), [OpenF1](https://openf1.org/) and [bacinger/f1-circuits](https://github.com/bacinger/f1-circuits) (F1) · YouTube RSS and Data API · Twitch Helix · GitHub REST and GraphQL · SSH to your own servers · your t3lluz dashboard and its Hermes bridge · Android Health Connect and Calendar
 
 ---
 

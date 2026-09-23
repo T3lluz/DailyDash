@@ -2,19 +2,17 @@
 <!--
   Collapsed row for the live server notification.
 
-  Kept to a single text line plus a graphics strip: with
-  DecoratedCustomViewStyle the system owns the header chrome and only leaves
-  about 48dp of content height here.
+  DecoratedCustomViewStyle leaves as little as 48dp of content height here, so it is
+  two lines of native text beside one small bitmap of dials. The text uses the
+  notification text appearances so it follows the shade's own light or dark theme;
+  only the dials are drawn, because RemoteViews cannot draw an arc.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
-    android:gravity="center_vertical"
-    android:paddingStart="4dp"
-    android:paddingEnd="8dp"
-    android:paddingTop="2dp"
-    android:paddingBottom="2dp">
+    android:gravity="center_vertical">
 
     <LinearLayout
         android:layout_width="0dp"
@@ -24,27 +22,26 @@
 
         <TextView
             android:id="@+id/server_live_title"
+            style="@style/TextAppearance.Compat.Notification.Title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:maxLines="1"
-            android:ellipsize="end"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:textColor="?android:attr/textColorPrimary" />
+            android:ellipsize="end" />
 
         <TextView
             android:id="@+id/server_live_summary"
+            style="@style/TextAppearance.Compat.Notification.Line2"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:maxLines="1"
-            android:ellipsize="end"
-            android:textSize="12sp"
-            android:textColor="?android:attr/textColorSecondary" />
+            android:ellipsize="end" />
     </LinearLayout>
 
     <ImageView
         android:id="@+id/server_live_gauges"
-        android:layout_width="112dp"
+        android:clipToOutline="true"
+        tools:targetApi="31"
+        android:layout_width="136dp"
         android:layout_height="40dp"
         android:layout_marginStart="8dp"
         android:scaleType="fitCenter"
