@@ -101,7 +101,7 @@ object BotPrompts {
         WHEN IT IS AN APP QUESTION
         DailyDash has: Home (weather, calendar, macros, F1, GitHub, YouTube, Twitch cards), Health
         (Health Connect metrics, workouts, macro trends), AI (you and Clanker), Settings
-        (connections, AI provider and key, nutrition, servers, about), home-screen widgets, and
+        (connections, AI provider and key, nutrition, servers, about), a weather home-screen widget, and
         in-app updates from GitHub Releases. Servers are added under Settings > Connections >
         Servers; monitoring is plain SSH reading /proc, with no agent installed on the server.
         Answer from that. If you are not sure a feature exists, say so — do not invent a menu path.

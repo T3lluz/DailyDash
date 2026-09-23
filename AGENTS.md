@@ -25,7 +25,7 @@ GITHUB_TOKEN=...           # optional PAT fallback if OAuth Client ID is not set
 ```
 **GitHub Releases:** `.github/workflows/build-apk.yml` writes the same keys from repo Actions secrets into `local.properties` before `assembleRelease`. Required for Twitch in published APKs: `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`. Required for GitHub Connect in published APKs: Actions secret `GH_OAUTH_CLIENT_ID` (OAuth App Client ID — **not** a PAT and **not** the automatic Actions `GITHUB_TOKEN`; GitHub forbids secrets named `GITHUB_*`). CI writes it as `GITHUB_CLIENT_ID` in `local.properties`. Optional mirrors of local keys: `GEMINI_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `YOUTUBE_API_KEY`. YouTube **Connect Google** does not use BuildConfig keys — it needs Google Cloud Console (YouTube Data API v3 + Android OAuth client for package `com.macrotracker` + `tester.jks` SHA-1); CI already signs releases with `app/tester.jks`.
 
-At runtime, Settings lets the user pick **Gemini**, **OpenAI**, **OpenRouter**, or **Claude**. Gemini / OpenAI / OpenRouter need a pasted API key. Claude can **Connect** with Claude Code's public OAuth (Pro / Max / Team / Enterprise — same login T3 Code uses via `claude auth login`) so usage comes from the Claude.ai subscription; an `sk-ant-…` key remains an optional fallback. For OpenRouter, Settings also shows a curated cheap-model picker with list prices. Stored keys take priority over build-time keys; a Claude OAuth session wins over a stored Anthropic key. `NutritionAiRepository` / widget insights / chat (`data/chat/AiChatClient`) all route through `AiApiClient` based on `SettingsRepository.aiProvider` (`AiCredentialResolver` + `ClaudeAuthClient`).
+At runtime, Settings lets the user pick **Gemini**, **OpenAI**, **OpenRouter**, or **Claude**. Gemini / OpenAI / OpenRouter need a pasted API key. Claude can **Connect** with Claude Code's public OAuth (Pro / Max / Team / Enterprise — same login T3 Code uses via `claude auth login`) so usage comes from the Claude.ai subscription; an `sk-ant-…` key remains an optional fallback. For OpenRouter, Settings also shows a curated cheap-model picker with list prices. Stored keys take priority over build-time keys; a Claude OAuth session wins over a stored Anthropic key. `NutritionAiRepository` / chat (`data/chat/AiChatClient`) all route through `AiApiClient` based on `SettingsRepository.aiProvider` (`AiCredentialResolver` + `ClaudeAuthClient`).
 
 ## Architecture Overview
 ```
@@ -60,7 +60,7 @@ com.macrotracker/
                               on its own). `readTodayStats()` throws only when every granted
                               metric failed, so the ViewModel can tell "empty" from "broken".
     f1/                    ← F1Repository via Ktor + OpenF1 API (https://api.openf1.org/v1/);
-                              15-min in-memory + SharedPrefs disk cache; F1RepositoryEntryPoint for widgets
+                              15-min in-memory + SharedPrefs disk cache
     youtube/               ← YouTubeRepository via RSS feeds + optional Google OAuth subscription
                               import (AuthorizationClient / youtube.readonly); tracked channels in SharedPrefs
     twitch/                ← TwitchRepository via Helix + Device Code OAuth (Custom Tabs →
@@ -73,7 +73,7 @@ com.macrotracker/
                               leftover PAT / BuildConfig.GITHUB_TOKEN is an optional fallback
     calendar/              ← CalendarRepository (READ_CALENDAR permission). All-day instances are stored
                               at UTC midnight — always convert with `calendarLocalDateTime(millis, allDay, zone)`
-                              (shared with DashboardWidgetDataProvider) so they land on the right day
+                              so they land on the right day
   di/
     AppModule.kt           ← all @Provides (DB, DAO, OkHttpClient, KtorClient);
                               @Binds abstract modules for F1, YouTube, Twitch, and GitHub interface → impl
@@ -118,26 +118,22 @@ com.macrotracker/
                               `TextSecondary` / `TextTertiary`, never `TextSecondary.copy(alpha = …)`
     util/                  ← HapticHelper (Compose-friendly performHapticFeedback wrapper, ui/util/Haptics.kt)
                               + LastUpdatedText composable + rememberRelativeTime (ui/util/LastUpdated.kt)
-  widget/                  ← Glance-based home-screen widgets:
-                              DashboardWidget, MacrosWidget, HealthWidget, WeatherWidget, CalendarWidget,
-                              F1CountdownWidget, F1StandingsWidget, F1ScheduleWidget (+ *Receiver.kt for each);
-                              WidgetComponents.kt (shared Glance composables — `WidgetTitleBar`,
-                              `WidgetStateMessage`, `SectionLabel`, `String.clip` — + WidgetSizes grid constants);
-                              DashboardWidgetDataProvider (reads DB/Health Connect/Weather directly — no Hilt);
-                              F1WidgetDataProvider (15-min memory+disk cache);
-                              RefreshWidgetAction / RefreshF1WidgetAction (Glance ActionCallbacks);
-                              WidgetUpdater + WidgetRefreshWorker;
-                              F1WidgetColors.kt (F1Clr token class + teamColorProvider/podiumColor helpers);
-                              F1WidgetStatus.kt (`F1WidgetHeader` + statusTagText/f1WidgetEmptyMessage);
-                              F1WidgetFormat.kt (race-name / session label + local-time formatting);
-                              DashboardWidgetData.kt (DashboardWidgetData snapshot + HourlyForecast + CalendarEvent)
+  widget/                  ← The one Glance home-screen widget, weather (fixed 5×3):
+                              WeatherWidget + WeatherWidgetReceiver;
+                              WidgetComponents.kt (`WidgetHeader`, `WidgetStateMessage`, `WScale`/`WidgetClr`
+                              tokens, `WEATHER_WIDGET_PREVIEW_SIZE`);
+                              WeatherWidgetDataProvider (reads the cached forecast directly — no Hilt);
+                              WeatherWidgetData.kt (WeatherWidgetData snapshot + HourlyForecast + WidgetSourceState);
+                              WeatherWidgetPreview (real render for the widget picker + in-app Widgets screen);
+                              RefreshWidgetAction (Glance ActionCallback); WidgetUpdater + WidgetRefreshWorker;
+                              WidgetStateProvider (is a widget placed?)
   util/                    ← HapticUtils (raw VibrationEffect-based haptics, used outside Compose)
 ```
 
 ## Key Patterns
 
 ### Dependency Injection
-Hilt throughout. `AppModule.kt` is the only `@Provides` module. Concrete implementations are bound to interfaces via separate abstract `@Binds` modules (`F1DataModule`, `YouTubeDataModule`, `TwitchDataModule`, `GitHubDataModule`). **Glance widgets cannot receive injected deps normally** — they use `EntryPointAccessors`, e.g. `F1RepositoryEntryPoint`.
+Hilt throughout. `AppModule.kt` is the only `@Provides` module. Concrete implementations are bound to interfaces via separate abstract `@Binds` modules (`F1DataModule`, `YouTubeDataModule`, `TwitchDataModule`, `GitHubDataModule`). **Glance widgets cannot receive injected deps normally** — they use `EntryPointAccessors`, e.g. `WidgetEntryPoint`.
 
 ### UI State
 Each screen's ViewModel exposes sealed-class state via `StateFlow`. Example pattern from `HomeViewModel`:
@@ -182,12 +178,12 @@ The **Health screen** uses the same draggable pattern with a separate key (`heal
 ```
 `DAILY_HEALTH` is the hero Daily Health card (Apple-style activity rings + dynamic today metrics). **`ACTIVITIES`** lists the **last month** of workouts synced through Health Connect (Garmin Connect, Google Fit, Samsung Health, Strava, and others): type, source, duration, distance, pace, heart rate, elevation, and a GPS route map when the session includes one. A featured hero card sits above three compact rows, with **Show N more** revealing the rest in a scroll box. GPS is read up front only for the newest `EAGER_ROUTE_COUNT` sessions; the rest resolve through `HealthViewModel.onActivityExpanded()` when a row is opened (`routeResolved` gates the "Loading map…" placeholder). `WEEK_AT_A_GLANCE` is the Macro Trends widget (7/14/30-day nutrition chart + per-day food logs), moved from the former History tab.
 
-### App Widgets (Glance)
-All Glance widgets are refreshed together via `WidgetUpdater.updateAllWidgets(context)` (call from the app) or `WidgetRefreshWorker` (periodic WorkManager task, 30-min interval, requires network). F1 widgets share a disk/memory cache through `F1WidgetDataProvider`. Full widget list: `DashboardWidget`, `MacrosWidget`, `HealthWidget`, `WeatherWidget`, `CalendarWidget`, `F1CountdownWidget`, `F1StandingsWidget`, `F1ScheduleWidget`.
+### App Widget (Glance)
+The only home-screen widget is **`WeatherWidget`** (fixed 5×3, `SizeMode.Single`). It is refreshed via `WidgetUpdater.updateAllWidgets(context)` (call from the app when weather changes) or `WidgetRefreshWorker` (periodic WorkManager task, 15-min interval, no network constraint). `WeatherWidgetDataProvider` reads the forecast the app caches in the `daily_dash_weather_cache` SharedPrefs without Hilt (use `EntryPointAccessors` / `WidgetEntryPoint` when an injected dependency is needed).
 
-`DashboardWidgetDataProvider` reads Room, Health Connect, weather cache, and calendar directly without Hilt (same no-injection pattern as `F1WidgetDataProvider` — use `EntryPointAccessors` when an interface is needed). `WidgetComponents.kt` houses all shared Glance composables and the `WidgetSizes` grid-constant object (cell formula: `74×n − 2 dp`; min 2×2, max 5×3).
+**Previews are the widget itself.** `WeatherWidgetPreview.render()` composes `WeatherRoot(data, preview = true)` into `RemoteViews` through `GlanceRemoteViews` — using the cached forecast, or sample data when there is none. It feeds the in-app Widgets screen and, on Android 15+, `AppWidgetManager.setWidgetPreview` for the launcher picker (`publish()`, self-throttled to 30 min; the system rate-limits it). Preview hosts can't show a collection, so `preview = true` swaps the hourly `LazyColumn` for a plain `Column`. Older launchers and the pin dialog use the static `drawable-nodpi/widget_preview_weather.png` — a capture of the real widget; re-capture it whenever the widget layout changes, never hand-draw it.
 
-F1 widget theming goes through `F1WidgetColors.kt`: instantiate `F1Clr` for the palette, call `teamColorProvider(hex)` to parse a team hex string into a Glance `ColorProvider`, and `podiumColor(position, c)` for gold/silver/bronze medal colours. Every widget header goes through `WidgetTitleBar` (weighted title so the refresh button never falls off-edge); F1 widgets wrap it in `F1WidgetHeader`, which adds the last-updated / stale / syncing tag from `statusTagText`, with `f1WidgetEmptyMessage` for the empty state. Glance text does ellipsize, but a wrap-content `Text` in a `Row` still pushes later siblings off-edge — weight it or `String.clip` it. The dashboard widget snapshot type is `DashboardWidgetData` in `DashboardWidgetData.kt` (also contains `HourlyForecast` and widget-layer `CalendarEvent`).
+Glance text does ellipsize, but a wrap-content `Text` in a `Row` still pushes later siblings off-edge — weight it or clip it.
 
 ### In-app updates (GitHub Releases)
 Sideload/tester path — not Play Core. CI publishes `DailyDash-{versionName}-vc{versionCode}.apk` on master merges. `AppUpdateRepository` polls GitHub while foregrounded; `AppUpdateDialog` downloads + `PackageInstaller` self-updates; `UpdateInstallActivity` relaunches `MainActivity` with `EXTRA_RELAUNCHED_AFTER_UPDATE` / `EXTRA_SHOW_WHATS_NEW`. `PackageReplacedReceiver` posts a tap-to-open notification if relaunch is blocked. Post-update, `WhatsNewDialog` shows once (notes cached at download time, enriched from `/releases`). Soft-snooze is 12h (`Later`); Settings badge deep-links to About + opens the update dialog. Key files: `data/update/*`, `ui/components/AppUpdateDialog.kt`, `WhatsNewDialog.kt`, `AppUpdateViewModel`, `.github/scripts/package-release.sh`.
@@ -256,6 +252,6 @@ Strong skipping is the Compose compiler default on Kotlin 2.x, so there is no fl
 - `ui/viewmodel/DashboardViewModel.kt` — per-metric Health Connect states (today/yesterday) consumed by `HealthScreen`
 - `ui/components/BodyStats.kt` — `HealthMetricUiState` data class + `calculatePercentageChange()`
 - `widget/WidgetUpdater.kt` + `WidgetRefreshWorker.kt` — widget update strategy
-- `widget/WidgetComponents.kt` — shared Glance composables + `WidgetSizes` grid constants
+- `widget/WidgetComponents.kt` + `WeatherWidgetPreview.kt` — Glance chrome and how previews are rendered
 - `ui/screens/onboarding/` — multi-step onboarding flow (SplashScreen overlay + 3 nav-routed screens)
 

@@ -84,7 +84,7 @@ private val PAGES = listOf(
         tips = listOf(
             "Weather requires location permission",
             "Connect YouTube, Twitch and GitHub in Settings → Connections",
-            "Add Android home-screen widgets from Settings → Widgets",
+            "Add the weather widget to your home screen from Settings → Widgets",
         ),
     ),
     TutorialPage(
@@ -143,7 +143,7 @@ private val PAGES = listOf(
         title = "You're Ready to Go 🎉",
         body = "DailyDash is your one-stop daily companion. No account needed, your food logs stay on your device, and you control exactly what you see.",
         tips = listOf(
-            "Add home-screen widgets for instant macro stats",
+            "Add the weather widget to see the forecast at a glance",
             "Tap Help in Settings any time you need a refresher",
         ),
     ),

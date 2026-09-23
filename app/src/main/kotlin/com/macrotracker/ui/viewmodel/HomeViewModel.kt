@@ -22,7 +22,6 @@ import com.macrotracker.data.remote.ClothingAdvisor
 import com.macrotracker.data.remote.LocationProvider
 import com.macrotracker.data.remote.WeatherInfo
 import com.macrotracker.data.remote.WeatherRepository
-import com.macrotracker.widget.WidgetStateProvider
 import com.macrotracker.widget.WidgetUpdater
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -131,9 +130,8 @@ class HomeViewModel @Inject constructor(
     private var loadDataJob: Job? = null
     private var lastLoadDataMs = 0L
 
-    /** Coalesced widget refresh — skips entirely when no Glance widgets are installed. */
+    /** Coalesced weather widget refresh (also refreshes the widget picker's preview). */
     private fun scheduleWidgetUpdate(immediate: Boolean = false) {
-        if (!WidgetStateProvider.hasAnyWidget(appContext)) return
         widgetUpdateJob?.cancel()
         widgetUpdateJob = viewModelScope.launch {
             if (!immediate) delay(800)
@@ -276,7 +274,6 @@ class HomeViewModel @Inject constructor(
         f1DataJob?.cancel()
         f1DataJob = viewModelScope.launch {
             loadF1DataInternal(forceRefresh)
-            scheduleWidgetUpdate()
         }
     }
 
@@ -305,7 +302,6 @@ class HomeViewModel @Inject constructor(
     fun loadHealthConnect(silent: Boolean = false) {
         viewModelScope.launch {
             loadHealthConnectInternal(silent)
-            scheduleWidgetUpdate()
         }
     }
 
@@ -347,7 +343,6 @@ class HomeViewModel @Inject constructor(
     fun loadCalendar(hasPermission: Boolean) {
         viewModelScope.launch {
             loadCalendarInternal(hasPermission)
-            scheduleWidgetUpdate()
         }
     }
 
@@ -514,7 +509,6 @@ class HomeViewModel @Inject constructor(
             )
             repository.saveLog(log)
             loadData(force = true)
-            scheduleWidgetUpdate(immediate = true)
         }
     }
 }

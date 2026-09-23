@@ -6,9 +6,14 @@ import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.macrotracker.data.update.PackageReplacedReceiver
+import com.macrotracker.widget.WeatherWidgetPreview
 import com.macrotracker.widget.WidgetRefreshWorker
 import com.macrotracker.widget.WidgetStateProvider
 import dagger.hilt.android.HiltAndroidApp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
@@ -27,6 +32,10 @@ class DailyDashApp : Application(), ImageLoaderFactory {
         if (WidgetStateProvider.hasAnyWidget(this)) {
             WidgetRefreshWorker.enqueuePeriodicRefresh(this)
             // Periodic worker covers freshness; skip an immediate full refresh on every cold start.
+        }
+        // Give the launcher's widget picker a real render of the weather widget (Android 15+).
+        CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
+            WeatherWidgetPreview.publish(this@DailyDashApp)
         }
     }
 
