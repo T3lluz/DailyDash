@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -32,6 +33,8 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.macrotracker.data.remote.TempUnit
 import com.macrotracker.data.remote.WindUnit
+import com.macrotracker.ui.components.SubScreenHeader
+import com.macrotracker.ui.components.subScreenBottomPadding
 import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.screens.health.HealthMetric
 import com.macrotracker.ui.screens.health.iconRes
@@ -93,11 +96,12 @@ fun ConnectionsSettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Background)
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp)
-            .padding(bottom = 120.dp),
+            .subScreenBottomPadding(),
     ) {
-        SettingsSubScreenHeader(
+        SubScreenHeader(
             title = "Connections",
             subtitle = "Services linked to DailyDash",
             onNavigateBack = onNavigateBack,

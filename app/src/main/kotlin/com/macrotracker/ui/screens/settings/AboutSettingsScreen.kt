@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -44,6 +45,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.macrotracker.data.update.AppReleaseNotes
 import com.macrotracker.data.update.AppUpdateUiState
+import com.macrotracker.ui.components.SubScreenHeader
+import com.macrotracker.ui.components.subScreenBottomPadding
 import com.macrotracker.ui.components.ButtonVariant
 import com.macrotracker.ui.components.MacroButton
 import com.macrotracker.ui.components.MacroCard
@@ -80,11 +83,12 @@ fun AboutSettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Background)
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp)
-            .padding(bottom = 120.dp),
+            .subScreenBottomPadding(),
     ) {
-        SettingsSubScreenHeader(
+        SubScreenHeader(
             title = "About",
             subtitle = "Version, updates, and release notes",
             onNavigateBack = onNavigateBack,

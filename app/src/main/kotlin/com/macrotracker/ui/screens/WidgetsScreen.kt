@@ -5,18 +5,23 @@ import android.content.ComponentName
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -24,20 +29,19 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.SportsMotorsports
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Widgets
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -46,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -56,10 +61,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.macrotracker.R
+import com.macrotracker.ui.components.SubScreenHeader
 import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
-import com.macrotracker.ui.theme.HeaderColor
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.CalendarBrand
 import com.macrotracker.ui.theme.Error
@@ -187,6 +192,8 @@ private val F1_WIDGETS = listOf(
     ),
 )
 
+private val ALL_WIDGETS = CORE_WIDGETS + F1_WIDGETS
+
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -205,40 +212,28 @@ fun WidgetsScreen(
     // Track which widgets have just been pinned (for brief success feedback)
     val recentlyPinned = remember { mutableStateOf(setOf<String>()) }
 
-    // ── Live counts of placed widget instances (refreshes on every resume) ──
     var placedCounts by remember { mutableStateOf(mapOf<Class<*>, Int>()) }
-    var refreshTick by remember { mutableIntStateOf(0) }
-
-    // Refresh placed-counts every time we resume (covers both in-app pin and
-    // widgets added/removed via Android picker while the screen was backgrounded)
-    LaunchedEffect(lifecycleOwner) {
-        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            // Small delay lets the widget manager update after a pin request
-            delay(300)
-            val counts = mutableMapOf<Class<*>, Int>()
-            (CORE_WIDGETS + F1_WIDGETS).forEach { widget ->
-                val ids = appWidgetManager.getAppWidgetIds(
-                    ComponentName(context, widget.receiverClass)
-                )
-                counts[widget.receiverClass] = ids.size
-            }
-            placedCounts = counts
-            refreshTick++
+    fun refreshPlacedCounts() {
+        placedCounts = ALL_WIDGETS.associate { widget ->
+            widget.receiverClass to appWidgetManager.getAppWidgetIds(
+                ComponentName(context, widget.receiverClass)
+            ).size
         }
     }
 
-    // Also refresh after in-app pin action with a longer delay
+    // Covers widgets added/removed through the launcher picker while backgrounded;
+    // the short delay lets AppWidgetManager catch up after a pin request.
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            delay(300)
+            refreshPlacedCounts()
+        }
+    }
+
     LaunchedEffect(recentlyPinned.value) {
         if (recentlyPinned.value.isNotEmpty()) {
             delay(1500)
-            val counts = mutableMapOf<Class<*>, Int>()
-            (CORE_WIDGETS + F1_WIDGETS).forEach { widget ->
-                val ids = appWidgetManager.getAppWidgetIds(
-                    ComponentName(context, widget.receiverClass)
-                )
-                counts[widget.receiverClass] = ids.size
-            }
-            placedCounts = counts
+            refreshPlacedCounts()
         }
     }
 
@@ -249,49 +244,16 @@ fun WidgetsScreen(
             .fillMaxSize()
             .background(Background),
     ) {
-        // ── Top bar ──────────────────────────────────────────────────────
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp)
-                .padding(top = 36.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = {
-                haptics.click()
-                onNavigateBack()
-            }) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                    contentDescription = "Back",
-                    tint = TextPrimary,
-                )
-            }
-            Spacer(modifier = Modifier.width(4.dp))
-            Icon(
-                imageVector = Icons.Outlined.Widgets,
-                contentDescription = null,
-                tint = Primary,
-                modifier = Modifier.size(24.dp),
-            )
-            Spacer(modifier = Modifier.width(10.dp))
-            Column {
-                Text(
-                    text = "Widgets",
-                    fontSize = 24.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = HeaderColor,
-                )
-                Text(
-                    text = if (totalPlaced > 0)
-                        "$totalPlaced active · ${CORE_WIDGETS.size + F1_WIDGETS.size} available"
-                    else
-                        "${CORE_WIDGETS.size + F1_WIDGETS.size} widgets available",
-                    fontSize = 12.sp,
-                    color = TextSecondary,
-                )
-            }
-        }
+        SubScreenHeader(
+            title = "Widgets",
+            subtitle = if (totalPlaced > 0) {
+                "$totalPlaced active · ${ALL_WIDGETS.size} available"
+            } else {
+                "${ALL_WIDGETS.size} widgets available"
+            },
+            onNavigateBack = onNavigateBack,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
 
         // ── Info banner if pin not supported ─────────────────────────────
         AnimatedVisibility(
@@ -309,7 +271,7 @@ fun WidgetsScreen(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Icon(
-                    androidx.compose.material.icons.Icons.Default.Info,
+                    Icons.Default.Info,
                     contentDescription = "Info",
                     tint = TextSecondary,
                     modifier = Modifier.size(16.dp)
@@ -326,10 +288,12 @@ fun WidgetsScreen(
 
         // ── Widget list ──────────────────────────────────────────────────
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(0.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                end = 16.dp,
+                bottom = 24.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+            ),
         ) {
             // DailyDash section
             item {
@@ -337,7 +301,7 @@ fun WidgetsScreen(
                 WidgetSectionHeader(
                     title = "DailyDash",
                     subtitle = "Nutrition · Health · Weather · Calendar",
-                    icon = androidx.compose.material.icons.Icons.Outlined.Widgets,
+                    icon = Icons.Outlined.Widgets,
                     accentColor = Primary,
                     delayMs = 50L,
                     widgetCount = CORE_WIDGETS.size,
@@ -373,7 +337,7 @@ fun WidgetsScreen(
                 WidgetSectionHeader(
                     title = "Formula 1",
                     subtitle = "Race countdown · Standings · Schedule",
-                    icon = androidx.compose.material.icons.Icons.Default.SportsMotorsports,
+                    icon = Icons.Default.SportsMotorsports,
                     accentColor = F1_RED,
                     delayMs = 350L,
                     widgetCount = F1_WIDGETS.size,
@@ -400,8 +364,6 @@ fun WidgetsScreen(
                     },
                 )
             }
-
-            item { Spacer(modifier = Modifier.height(120.dp)) }
         }
     }
 }
@@ -412,7 +374,7 @@ fun WidgetsScreen(
 private fun WidgetSectionHeader(
     title: String,
     subtitle: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     accentColor: Color,
     delayMs: Long = 0L,
     widgetCount: Int = 0,
@@ -459,8 +421,7 @@ private fun WidgetSectionHeader(
             Box(
                 modifier = Modifier
                     .background(
-                        if (placedCount > 0) accentColor.copy(alpha = 0.15f)
-                        else accentColor.copy(alpha = 0.15f),
+                        accentColor.copy(alpha = 0.15f),
                         RoundedCornerShape(8.dp),
                     )
                     .border(1.dp, accentColor.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
@@ -638,17 +599,17 @@ private fun WidgetCard(
         // ── Add button ───────────────────────────────────────────────────
         if (pinSupported) {
             val showPlaced = isAlreadyPlaced || isPinned
-            androidx.compose.material3.Button(
+            Button(
                 onClick = onAddToHomeScreen,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(10.dp),
-                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                colors = ButtonDefaults.buttonColors(
                     containerColor = if (showPlaced) Success.copy(alpha = 0.15f)
                                      else info.accentColor,
                     contentColor   = if (showPlaced) Success else Color.White,
                 ),
                 border = if (showPlaced)
-                    androidx.compose.foundation.BorderStroke(
+                    BorderStroke(
                         1.dp, Success.copy(alpha = 0.5f),
                     ) else null,
             ) {

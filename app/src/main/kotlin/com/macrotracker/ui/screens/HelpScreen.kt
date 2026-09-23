@@ -1,6 +1,7 @@
 package com.macrotracker.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -32,11 +33,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.macrotracker.ui.components.ButtonVariant
-import com.macrotracker.ui.components.MacroButton
 import com.macrotracker.ui.components.MacroCard
-import com.macrotracker.ui.components.ScreenHeader
-import com.macrotracker.ui.components.ScreenHeaderSpacer
+import com.macrotracker.ui.components.SubScreenHeader
+import com.macrotracker.ui.components.subScreenBottomPadding
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.Primary
@@ -129,15 +128,15 @@ fun HelpScreen(
             .fillMaxSize()
             .background(Background)
             .verticalScroll(rememberScrollState())
-            .padding(16.dp)
-            .padding(bottom = 120.dp),
+            .padding(horizontal = 16.dp)
+            .subScreenBottomPadding(),
     ) {
-        ScreenHeaderSpacer()
-        ScreenHeader(
+        SubScreenHeader(
             title = "Help & How-To",
             subtitle = "Get started in minutes",
+            onNavigateBack = onNavigateBack,
         )
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         // Quick Start card
         MacroCard(delayMs = 60) {
@@ -161,7 +160,7 @@ fun HelpScreen(
                             .size(34.dp)
                             .background(Background, RoundedCornerShape(10.dp)),
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+                        verticalArrangement = Arrangement.Center,
                     ) {
                         Icon(step.icon, contentDescription = null, tint = Primary, modifier = Modifier.size(18.dp))
                     }
@@ -198,16 +197,5 @@ fun HelpScreen(
                 }
             }
         }
-
-        MacroButton(
-            text = "← Back",
-            onClick = onNavigateBack,
-            variant = ButtonVariant.SECONDARY,
-            modifier = Modifier.padding(top = 8.dp),
-        )
     }
 }
-
-
-
-
