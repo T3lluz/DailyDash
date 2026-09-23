@@ -54,6 +54,8 @@ import com.macrotracker.ui.components.MacroButton
 import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
+import com.macrotracker.ui.theme.BorderStrong
+import com.macrotracker.ui.theme.SurfaceElevated
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.Success
@@ -560,7 +562,8 @@ private fun AiProviderToggle(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(9.dp))
-                                .background(if (isSelected) Primary else Color.Transparent)
+                                .background(if (isSelected) SurfaceElevated else Color.Transparent)
+                                .border(1.dp, if (isSelected) BorderStrong else Color.Transparent, RoundedCornerShape(9.dp))
                                 .clickable { onSelect(provider) }
                                 .padding(vertical = 10.dp, horizontal = 2.dp),
                             contentAlignment = Alignment.Center,
@@ -569,7 +572,7 @@ private fun AiProviderToggle(
                                 text = provider.displayName,
                                 fontSize = 12.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) Color.White else TextSecondary,
+                                color = if (isSelected) TextPrimary else TextSecondary,
                                 maxLines = 1,
                             )
                         }

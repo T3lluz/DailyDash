@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens
 
+import com.macrotracker.ui.theme.NutritionProtein
+import com.macrotracker.ui.theme.NutritionCalories
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -92,7 +94,6 @@ import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.Primary
-import com.macrotracker.ui.theme.PrimaryVariant
 import com.macrotracker.ui.theme.chipFill
 import com.macrotracker.ui.theme.Secondary
 import com.macrotracker.ui.theme.Surface
@@ -783,8 +784,8 @@ private fun ResultPhase(
                 // Per serving
                 Text("PER SERVING", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary, modifier = Modifier.padding(bottom = 10.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    MacroPill("${summary.caloriesPerServing}", "kcal", PrimaryVariant, Modifier.weight(1f))
-                    MacroPill("${summary.proteinPerServing}g", "protein", Color(0xFF1A5E5A), Modifier.weight(1f))
+                    MacroPill("${summary.caloriesPerServing}", "kcal", NutritionCalories, Modifier.weight(1f))
+                    MacroPill("${summary.proteinPerServing}g", "protein", NutritionProtein, Modifier.weight(1f))
                 }
 
                 // Package meta
@@ -1016,17 +1017,18 @@ private fun ResultPhase(
 }
 
 @Composable
-private fun MacroPill(value: String, label: String, bgColor: Color, modifier: Modifier = Modifier) {
+private fun MacroPill(value: String, label: String, accent: Color, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
-            .background(bgColor)
+            .background(accent.chipFill())
+            .border(1.dp, accent.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
             .padding(14.dp),
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(value, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            Text(label, fontSize = 12.sp, color = Color.White.copy(alpha = 0.7f))
+            Text(value, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = accent)
+            Text(label, fontSize = 12.sp, color = TextSecondary)
         }
     }
 }

@@ -106,6 +106,7 @@ import com.macrotracker.ui.viewmodel.GitHubRepoFocusUiState
 import com.macrotracker.ui.viewmodel.GitHubUiState
 import com.macrotracker.ui.viewmodel.GitHubViewModel
 import com.macrotracker.ui.theme.AppIcons
+import com.macrotracker.ui.theme.TextTertiary
 
 private val GhAccent = Color(0xFF58A6FF)
 private val GhOpen = Color(0xFF3FB950)
@@ -302,7 +303,7 @@ fun GitHubCard(
                     Icon(
                         AppIcons.ExternalLink,
                         contentDescription = "Open GitHub",
-                        tint = TextSecondary.copy(alpha = 0.55f),
+                        tint = TextTertiary,
                         modifier = Modifier.size(16.dp),
                     )
                 }
@@ -528,7 +529,7 @@ private fun GhTabChip(
     onClick: () -> Unit,
 ) {
     val fg by animateColorAsState(
-        if (active) TextPrimary else TextSecondary.copy(alpha = 0.75f),
+        if (active) TextPrimary else TextTertiary,
         MacroMotion.colorTween(160),
         label = "ghTabFg",
     )
@@ -793,7 +794,7 @@ private fun collapsedStats(hub: GhHub): List<GhStat> {
         selected != null -> GhStat(
             compactCount(selected.stars),
             "Stars",
-            Color(0xFFE3B341),
+            GhReview,
             R.drawable.ic_gh_star,
         )
         else -> GhStat("${hub.activity.size}", "Events", TextSecondary, R.drawable.ic_gh_commit)
@@ -1566,7 +1567,7 @@ private fun RepoDetail(
             if (!repo.language.isNullOrBlank()) {
                 MetaChip(dotColor = languageColor(repo.language), text = repo.language)
             }
-            MetaChip(icon = AppIcons.Star, text = compactCount(repo.stars), color = Color(0xFFE3B341))
+            MetaChip(icon = AppIcons.Star, text = compactCount(repo.stars), color = GhReview)
             MetaChip(icon = AppIcons.GitFork, text = compactCount(repo.forks))
             repo.defaultBranch?.let { MetaChip(text = it) }
             repo.license?.takeIf { it != "NOASSERTION" }?.let { MetaChip(text = it) }
@@ -2182,7 +2183,7 @@ private fun RepoRow(repo: GitHubRepo, onClick: () -> Unit) {
             Icon(
                 AppIcons.ExternalLink,
                 contentDescription = "Open on GitHub",
-                tint = TextSecondary.copy(alpha = 0.55f),
+                tint = TextTertiary,
                 modifier = Modifier
                     .size(16.dp)
                     .clickable {
@@ -2206,7 +2207,7 @@ private fun RepoRow(repo: GitHubRepo, onClick: () -> Unit) {
             if (!repo.language.isNullOrBlank()) {
                 MetaChip(dotColor = languageColor(repo.language), text = repo.language)
             }
-            MetaChip(icon = AppIcons.Star, text = compactCount(repo.stars), color = Color(0xFFE3B341))
+            MetaChip(icon = AppIcons.Star, text = compactCount(repo.stars), color = GhReview)
             MetaChip(icon = AppIcons.GitFork, text = compactCount(repo.forks))
             Spacer(Modifier.weight(1f))
             GhRelative(repo.pushedAt)
@@ -2256,7 +2257,7 @@ private fun MetaChip(
             text,
             fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold,
-            color = TextPrimary.copy(alpha = 0.88f),
+            color = TextPrimary,
             maxLines = 1,
         )
     }
@@ -2375,7 +2376,7 @@ private fun GhAvatar(url: String?, name: String, size: Dp = 22.dp) {
 private fun GhRelative(iso: String?) {
     val instant = remember(iso) { parseGitHubInstant(iso) } ?: return
     val text = rememberRelativeTime(instant)
-    Text(text, fontSize = 11.sp, color = TextSecondary.copy(alpha = 0.85f))
+    Text(text, fontSize = 11.sp, color = TextSecondary)
 }
 
 @Composable

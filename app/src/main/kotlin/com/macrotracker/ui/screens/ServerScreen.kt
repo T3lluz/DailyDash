@@ -83,6 +83,7 @@ import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.ServerViewModel
 import kotlin.math.roundToInt
 import com.macrotracker.ui.theme.AppIcons
+import com.macrotracker.ui.theme.TextTertiary
 
 /**
  * The full server dashboard.
@@ -259,7 +260,7 @@ private fun ServerEmptyState(onNavigateToSettings: () -> Unit) {
         Icon(
             AppIcons.Server,
             contentDescription = null,
-            tint = TextSecondary.copy(alpha = 0.5f),
+            tint = TextTertiary,
             modifier = Modifier.size(56.dp),
         )
         Spacer(modifier = Modifier.height(16.dp))
@@ -425,7 +426,7 @@ private fun ServerIdentityCard(runtime: ServerRuntime, onAskAi: (() -> Unit)? = 
             Spacer(modifier = Modifier.height(10.dp))
             Text(
                 text = "host key $fingerprint",
-                color = TextSecondary.copy(alpha = 0.55f),
+                color = TextTertiary,
                 fontSize = 9.sp,
                 fontFamily = FontFamily.Monospace,
                 maxLines = 1,
@@ -752,7 +753,7 @@ private fun ServerStorageCard(runtime: ServerRuntime, onAskAi: (() -> Unit)? = n
             Text(
                 text = "${formatKb(disk.usedKb)} of ${formatKb(disk.totalKb)} · " +
                     "${formatKb(disk.availableKb)} free · ${disk.filesystem}",
-                color = TextSecondary.copy(alpha = 0.8f),
+                color = TextTertiary,
                 fontSize = 10.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -1031,7 +1032,7 @@ private fun ServerUpdatesCard(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = "Checked ${relativeSeconds(news.fetchedAtMs)} ago",
-                color = TextSecondary.copy(alpha = 0.7f),
+                color = TextTertiary,
                 fontSize = 10.sp,
                 modifier = Modifier.weight(1f),
             )

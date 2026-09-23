@@ -97,6 +97,8 @@ import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.Primary
+import com.macrotracker.ui.theme.BorderStrong
+import com.macrotracker.ui.theme.SurfaceElevated
 import com.macrotracker.ui.theme.Surface
 import com.macrotracker.ui.theme.SurfaceChrome
 import com.macrotracker.ui.theme.TextPrimary
@@ -114,6 +116,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import com.macrotracker.ui.theme.AppIcons
+import com.macrotracker.ui.theme.TextTertiary
 
 private val YtRed      = Color(0xFFFF0000)
 private val YtDark     = Color(0xFF0F0F0F)
@@ -278,7 +281,7 @@ fun YoutubeCard(viewModel: YouTubeViewModel = hiltViewModel()) {
                             AppIcons.ExternalLink
                         },
                         contentDescription = if (expanded) "Manage channels" else "Open YouTube",
-                        tint = TextSecondary.copy(alpha = if (expanded) 0.85f else 0.55f),
+                        tint = TextSecondary,
                         modifier = Modifier.size(if (expanded) 18.dp else 16.dp),
                     )
                 }
@@ -800,7 +803,7 @@ private fun CompactVideoFeed(
                     Text(
                         "Tap avatar to clear",
                         fontSize = 9.sp,
-                        color = TextSecondary.copy(alpha = 0.5f),
+                        color = TextTertiary,
                     )
                 }
             }
@@ -1135,7 +1138,7 @@ private fun VideoFeed(
             Text(
                 "${displayedVideos.size} video${if (displayedVideos.size != 1) "s" else ""}",
                 fontSize = 11.sp,
-                color = TextSecondary.copy(alpha = 0.55f),
+                color = TextTertiary,
                 modifier = Modifier.weight(1f),
             )
             // "By channel" grouping toggle — only when all channels are visible and more than one exist
@@ -1182,7 +1185,7 @@ private fun VideoFeed(
                         Icon(
                             icon,
                             contentDescription = mode.name,
-                            tint = if (selected) YtRed else TextSecondary.copy(alpha = 0.5f),
+                            tint = if (selected) YtRed else TextTertiary,
                             modifier = Modifier.size(16.dp),
                         )
                     }
@@ -1433,7 +1436,7 @@ private fun ShowMoreButton(remaining: Int, onClick: () -> Unit) {
                 Text(
                     "· $remaining left",
                     fontSize = 10.sp,
-                    color = TextSecondary.copy(alpha = 0.45f),
+                    color = TextTertiary,
                 )
             }
         }
@@ -1526,7 +1529,7 @@ private fun VideoCard(video: YoutubeVideo, onClick: () -> Unit) {
             Text(
                 videoMetaLine(video, includeChannel = false),
                 fontSize = 11.sp,
-                color = TextSecondary.copy(alpha = 0.85f),
+                color = TextSecondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -1754,7 +1757,7 @@ private fun VideoGridItem(
             Text(
                 videoMetaLine(video, includeChannel = false),
                 fontSize = 10.sp,
-                color = TextSecondary.copy(alpha = 0.85f),
+                color = TextSecondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth(),
@@ -1837,7 +1840,7 @@ private fun ChannelSectionHeader(channel: YoutubeChannel, videoCount: Int) {
             Icon(
                 AppIcons.ExternalLink,
                 contentDescription = "Open channel",
-                tint = TextSecondary.copy(alpha = 0.45f),
+                tint = TextTertiary,
                 modifier = Modifier.size(13.dp),
             )
         }
@@ -2077,7 +2080,7 @@ private fun YouTubeGoogleAccountCard(
                     Icon(
                         AppIcons.Refresh,
                         contentDescription = "Sync subscriptions",
-                        tint = if (googleState.isBusy) TextSecondary.copy(alpha = 0.4f) else TextSecondary,
+                        tint = if (googleState.isBusy) TextTertiary else TextSecondary,
                         modifier = Modifier.size(18.dp),
                     )
                 }
@@ -2089,7 +2092,7 @@ private fun YouTubeGoogleAccountCard(
                     Icon(
                         AppIcons.LinkOff,
                         contentDescription = "Disconnect Google",
-                        tint = if (googleState.isBusy) TextSecondary.copy(alpha = 0.4f) else Error.copy(alpha = 0.85f),
+                        tint = if (googleState.isBusy) TextTertiary else Error.copy(alpha = 0.85f),
                         modifier = Modifier.size(18.dp),
                     )
                 }
@@ -2223,18 +2226,19 @@ private fun YouTubeSettingsSheet(
                     val selected = activeTab == i
                     Box(
                         modifier = Modifier.weight(1f).clip(RoundedCornerShape(12.dp))
-                            .background(if (selected) Primary else Color.Transparent)
+                            .background(if (selected) SurfaceElevated else Color.Transparent)
+                            .border(1.dp, if (selected) BorderStrong else Color.Transparent, RoundedCornerShape(12.dp))
                             .clickable { haptics.tick(); activeTab = i; if (i != 1) viewModel.clearChannelSearch() }
                             .padding(vertical = 9.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(tab.label, fontSize = 11.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (selected) Color.White else TextSecondary)
+                                color = if (selected) TextPrimary else TextSecondary)
                             if (tab.badge > 0) {
                                 Spacer(Modifier.width(3.dp))
-                                Box(modifier = Modifier.clip(CircleShape).background(if (selected) Color.White.copy(alpha = 0.25f) else Border).padding(horizontal = 4.dp, vertical = 1.dp)) {
-                                    Text("${tab.badge}", fontSize = 9.sp, color = if (selected) Color.White else TextSecondary, fontWeight = FontWeight.Bold)
+                                Box(modifier = Modifier.clip(CircleShape).background(if (selected) BorderStrong else Border).padding(horizontal = 4.dp, vertical = 1.dp)) {
+                                    Text("${tab.badge}", fontSize = 9.sp, color = if (selected) TextPrimary else TextSecondary, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -2486,7 +2490,7 @@ private fun SearchTab(
                     Text(
                         "${s.channels.size} channel${if (s.channels.size != 1) "s" else ""} found",
                         fontSize = 11.sp,
-                        color = TextSecondary.copy(alpha = 0.6f),
+                        color = TextTertiary,
                         modifier = Modifier.padding(bottom = 6.dp),
                     )
                     s.channels.forEach { channel ->

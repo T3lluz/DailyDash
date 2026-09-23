@@ -159,7 +159,7 @@ fun WidgetExpandChevron(
         Icon(
             imageVector = AppIcons.ChevronDown,
             contentDescription = if (expanded) "Collapse" else "Expand",
-            tint = accentColor.copy(alpha = if (expanded) 0.75f else 0.55f),
+            tint = accentColor,
             modifier = Modifier.size(22.dp).rotate(rotation),
         )
     }

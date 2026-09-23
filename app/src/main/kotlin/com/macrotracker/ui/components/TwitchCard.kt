@@ -103,6 +103,7 @@ import java.time.Instant
 import java.time.format.DateTimeParseException
 import java.util.Locale
 import com.macrotracker.ui.theme.AppIcons
+import com.macrotracker.ui.theme.TextTertiary
 
 private val TwPurple = Color(0xFF9146FF)
 private val TwPurpleDeep = Color(0xFF5C16C5)
@@ -260,7 +261,7 @@ fun TwitchCard(viewModel: TwitchViewModel = hiltViewModel()) {
                             AppIcons.ExternalLink
                         },
                         contentDescription = if (expanded) "Manage channels" else "Open Twitch",
-                        tint = TextSecondary.copy(alpha = if (expanded) 0.85f else 0.55f),
+                        tint = TextSecondary,
                         modifier = Modifier.size(if (expanded) 18.dp else 16.dp),
                     )
                 }
@@ -1170,7 +1171,7 @@ private fun TwitchChannelsHub(
                             Icon(
                                 AppIcons.Delete,
                                 contentDescription = "Remove",
-                                tint = TextSecondary.copy(alpha = 0.7f),
+                                tint = TextTertiary,
                                 modifier = Modifier.size(18.dp),
                             )
                         }
@@ -1420,7 +1421,7 @@ private fun TwitchAccountCard(
                         Icon(
                             AppIcons.Refresh,
                             contentDescription = "Sync follows",
-                            tint = if (authState.isBusy) TextSecondary.copy(alpha = 0.4f) else TextSecondary,
+                            tint = if (authState.isBusy) TextTertiary else TextSecondary,
                             modifier = Modifier.size(18.dp),
                         )
                     }
@@ -1432,7 +1433,7 @@ private fun TwitchAccountCard(
                         Icon(
                             AppIcons.LinkOff,
                             contentDescription = "Disconnect Twitch",
-                            tint = if (authState.isBusy) TextSecondary.copy(alpha = 0.4f) else Error.copy(alpha = 0.85f),
+                            tint = if (authState.isBusy) TextTertiary else Error.copy(alpha = 0.85f),
                             modifier = Modifier.size(18.dp),
                         )
                     }

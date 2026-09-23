@@ -71,6 +71,7 @@ import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.ServerTestUiState
 import com.macrotracker.ui.viewmodel.ServerViewModel
 import com.macrotracker.ui.theme.AppIcons
+import com.macrotracker.ui.theme.TextTertiary
 
 /**
  * Server configuration: hosts, credentials, alert thresholds and the live
@@ -438,7 +439,7 @@ fun ServersSettingsScreen(
             Text(
                 "Load is judged per core, so the same threshold works on a 2-core VPS and a " +
                     "32-core box.",
-                color = TextSecondary.copy(alpha = 0.8f),
+                color = TextTertiary,
                 fontSize = 11.sp,
                 lineHeight = 15.sp,
             )
@@ -650,7 +651,7 @@ private fun ServerEditorCard(
 
         Text(
             "Credentials are encrypted with an Android Keystore key and never leave the phone.",
-            color = TextSecondary.copy(alpha = 0.8f),
+            color = TextTertiary,
             fontSize = 11.sp,
             lineHeight = 15.sp,
             modifier = Modifier.padding(bottom = 10.dp),
@@ -683,7 +684,7 @@ private fun ServerEditorCard(
                 )
                 Text(
                     text = testState.fingerprint,
-                    color = TextSecondary.copy(alpha = 0.75f),
+                    color = TextTertiary,
                     fontSize = 9.sp,
                     fontFamily = FontFamily.Monospace,
                     modifier = Modifier.padding(top = 4.dp),
@@ -693,7 +694,7 @@ private fun ServerEditorCard(
                 Text(
                     "Check this fingerprint matches `ssh-keyscan` on the server if you are on an " +
                         "untrusted network.",
-                    color = TextSecondary.copy(alpha = 0.7f),
+                    color = TextTertiary,
                     fontSize = 10.sp,
                     lineHeight = 14.sp,
                 )

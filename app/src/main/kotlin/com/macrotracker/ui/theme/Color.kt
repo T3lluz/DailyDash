@@ -1,6 +1,7 @@
 package com.macrotracker.ui.theme
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 
 /**
  * Cursor Dark Anysphere — values from Cursor's
@@ -40,6 +41,13 @@ val SelectedFill = Color(0xFFE4E4E4).copy(alpha = 0.10f)
 
 /** Tinted chip / badge fill behind accent-coloured text. */
 fun Color.chipFill(): Color = copy(alpha = 0.14f)
+
+/**
+ * Text colour for content drawn on a solid fill of this colour. Light accents
+ * (the Cursor blue, amber, pastel calendar colours) need dark text; white on
+ * them drops below 3:1. 0.2 is where white and [OnAccent] contrast break even.
+ */
+fun Color.contentColorOn(): Color = if (luminance() > 0.2f) OnAccent else Color.White
 
 // Semantic alias for screen-level headers — keeps every screen in sync
 val HeaderColor = TextPrimary

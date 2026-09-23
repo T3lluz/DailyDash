@@ -40,6 +40,7 @@ import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.LocalTickersPaused
 import kotlin.math.roundToInt
+import com.macrotracker.ui.theme.TextTertiary
 
 /**
  * The drawing primitives for the server screen.
@@ -152,7 +153,7 @@ fun ServerRingGauge(
         if (caption != null) {
             Text(
                 text = caption,
-                color = TextSecondary.copy(alpha = 0.75f),
+                color = TextTertiary,
                 fontSize = 10.sp,
                 maxLines = 1,
             )

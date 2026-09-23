@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens
 
+import com.macrotracker.ui.theme.OnAccent
+import com.macrotracker.ui.theme.contentColorOn
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import androidx.compose.animation.AnimatedVisibility
@@ -540,7 +542,7 @@ private fun WidgetCard(
                         Icon(
                             imageVector = AppIcons.CheckCircle,
                             contentDescription = null,
-                            tint = Color.White,
+                            tint = OnAccent,
                             modifier = Modifier.size(12.dp),
                         )
                         Spacer(modifier = Modifier.width(4.dp))
@@ -548,7 +550,7 @@ private fun WidgetCard(
                             text = if (instanceCount > 1) "Active × $instanceCount" else "Active",
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White,
+                            color = OnAccent,
                         )
                     }
                 }
@@ -638,7 +640,7 @@ private fun WidgetCard(
                 colors = androidx.compose.material3.ButtonDefaults.buttonColors(
                     containerColor = if (showPlaced) Success.copy(alpha = 0.15f)
                                      else info.accentColor,
-                    contentColor   = if (showPlaced) Success else Color.White,
+                    contentColor   = if (showPlaced) Success else info.accentColor.contentColorOn(),
                 ),
                 border = if (showPlaced)
                     androidx.compose.foundation.BorderStroke(

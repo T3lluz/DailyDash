@@ -32,6 +32,9 @@ import com.macrotracker.ui.screens.health.HealthMetric
 import com.macrotracker.ui.screens.health.iconRes
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
+import com.macrotracker.ui.theme.CalendarBrand
+import com.macrotracker.ui.theme.HealthConnectBrand
+import com.macrotracker.ui.theme.WeatherBrand
 import com.macrotracker.ui.theme.ServerBrand
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
@@ -107,7 +110,7 @@ fun ConnectionsSettingsScreen(
                 name = "Health Connect",
                 description = "Steps, heart rate, sleep, workouts & active calories",
                 connected = healthConnectAvailable,
-                iconTint = Color(0xFFEF5350),
+                iconTint = HealthConnectBrand,
                 enabled = masterHealthConnectEnabled,
                 onToggle = {
                     haptics.tick()
@@ -207,7 +210,7 @@ fun ConnectionsSettingsScreen(
                 name = "Weather Data",
                 description = "Location-based weather via Yr.no",
                 connected = weatherConnected,
-                iconTint = Color(0xFF42A5F5),
+                iconTint = WeatherBrand,
                 enabled = masterWeatherEnabled,
                 onToggle = {
                     haptics.tick()
@@ -264,7 +267,7 @@ fun ConnectionsSettingsScreen(
                 name = "Google Calendar",
                 description = "Today's events & schedule on dashboard",
                 connected = calendarConnected,
-                iconTint = Color(0xFF4285F4),
+                iconTint = CalendarBrand,
                 enabled = masterCalendarEnabled,
                 onToggle = { enabled ->
                     haptics.tick()

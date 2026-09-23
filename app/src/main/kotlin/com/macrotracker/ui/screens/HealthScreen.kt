@@ -768,7 +768,8 @@ private fun MacroTrendsSection(
                     Box(
                         modifier = Modifier
                             .clip(CircleShape)
-                            .background(if (isActive) barColor else Background)
+                            .background(if (isActive) barColor.copy(alpha = 0.18f) else Background)
+                            .border(1.dp, if (isActive) barColor.copy(alpha = 0.45f) else Border, CircleShape)
                             .clickable {
                                 haptics.tick()
                                 onRangeDaysSelected(option)
@@ -779,7 +780,7 @@ private fun MacroTrendsSection(
                             "${option}d",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = if (isActive) Color.White else TextSecondary,
+                            color = if (isActive) barColor else TextSecondary,
                         )
                     }
                 }

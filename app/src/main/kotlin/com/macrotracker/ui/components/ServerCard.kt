@@ -51,6 +51,7 @@ import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.ServerViewModel
 import kotlin.math.roundToInt
 import com.macrotracker.ui.theme.AppIcons
+import com.macrotracker.ui.theme.TextTertiary
 
 /**
  * Home-screen server widget.
@@ -293,7 +294,7 @@ private fun MiniMeter(
         if (caption != null) {
             Text(
                 text = caption,
-                color = TextSecondary.copy(alpha = 0.7f),
+                color = TextTertiary,
                 fontSize = 9.sp,
                 fontFamily = FontFamily.Monospace,
                 maxLines = 1,

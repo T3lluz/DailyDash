@@ -1,5 +1,6 @@
 package com.macrotracker.ui.components
 
+import com.macrotracker.ui.theme.contentColorOn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -48,6 +49,7 @@ import com.macrotracker.ui.util.LastUpdatedText
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.CalendarUiState
 import com.macrotracker.ui.theme.AppIcons
+import com.macrotracker.ui.theme.TextTertiary
 
 private val CalendarAccent = CalendarBrand
 
@@ -188,7 +190,7 @@ fun CalendarCard(
                             WidgetExpandSection(visible = expanded && allVisibleEvents.size > 1) {
                                 Column {
                                     Spacer(modifier = Modifier.height(12.dp))
-                                    HorizontalDivider(color = TextSecondary.copy(alpha = 0.1f))
+                                    HorizontalDivider(color = Border)
                                     Spacer(modifier = Modifier.height(12.dp))
 
                                     allVisibleEvents.drop(1).take(2).forEachIndexed { index, event ->
@@ -201,7 +203,7 @@ fun CalendarCard(
                                         Text(
                                             text = "+${allVisibleEvents.size - 3} more events · Tap icon for full list",
                                             fontSize = 11.sp,
-                                            color = TextSecondary.copy(alpha = 0.7f),
+                                            color = TextTertiary,
                                             modifier = Modifier.padding(start = 22.dp)
                                         )
                                     }
@@ -403,7 +405,7 @@ private fun EventTile(
                         text = "NOW",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White,
+                        color = eventColor.contentColorOn(),
                         modifier = Modifier
                             .background(eventColor, RoundedCornerShape(4.dp))
                             .padding(horizontal = 6.dp, vertical = 2.dp),

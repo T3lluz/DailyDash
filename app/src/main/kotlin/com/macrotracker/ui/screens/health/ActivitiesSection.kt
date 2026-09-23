@@ -72,6 +72,7 @@ import java.time.Duration
 import java.util.Locale
 import kotlin.math.roundToInt
 import com.macrotracker.ui.theme.AppIcons
+import com.macrotracker.ui.theme.TextTertiary
 
 /** Rows shown before the list asks to be expanded. */
 private const val CollapsedRowCount = 3
@@ -232,7 +233,7 @@ private fun ActivitiesList(
             "${rest.size}",
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
-            color = TextSecondary.copy(alpha = 0.8f),
+            color = TextTertiary,
         )
     }
 

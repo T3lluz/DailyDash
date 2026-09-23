@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens
 
+import com.macrotracker.ui.theme.BorderStrong
+import com.macrotracker.ui.theme.SurfaceElevated
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -135,6 +137,7 @@ import java.io.File
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 import com.macrotracker.ui.theme.AppIcons
+import com.macrotracker.ui.theme.TextTertiary
 
 /** Pill nav = 64dp + 8dp bottom pad; keep a little air above it. */
 private val PillNavClearance = 80.dp
@@ -694,7 +697,7 @@ private fun SuggestionStrip(
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.8.sp,
-            color = TextSecondary.copy(alpha = 0.8f),
+            color = TextTertiary,
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp),
         )
         LazyRow(
@@ -826,7 +829,7 @@ private fun EstimateCard(
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 0.8.sp,
-                    color = TextSecondary.copy(alpha = 0.8f),
+                    color = TextTertiary,
                     modifier = Modifier.weight(1f),
                 )
                 Text(
@@ -860,11 +863,12 @@ private fun EstimateCard(
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         textAlign = TextAlign.Center,
-                        color = if (selected) Color.White else TextSecondary,
+                        color = if (selected) TextPrimary else TextSecondary,
                         modifier = Modifier
                             .weight(1f)
                             .clip(PillShape)
-                            .background(if (selected) Primary else Color.Transparent)
+                            .background(if (selected) SurfaceElevated else Color.Transparent)
+                            .border(1.dp, if (selected) BorderStrong else Color.Transparent, PillShape)
                             .clickable { portion = option }
                             .padding(vertical = 7.dp),
                     )

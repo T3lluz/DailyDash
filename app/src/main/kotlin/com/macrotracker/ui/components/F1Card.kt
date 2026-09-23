@@ -237,7 +237,7 @@ private fun TeamLogo(url: String?, teamName: String, modifier: Modifier = Modifi
     SubcomposeAsyncImage(model = request, contentDescription = teamName, modifier = modifier, contentScale = contentScale) {
         when (painter.state) {
             is AsyncImagePainter.State.Loading -> Box(modifier = Modifier.matchParentSize(), contentAlignment = Alignment.Center) {
-                LoadingSpinner(color = TextSecondary.copy(alpha = 0.4f), size = LoadingSpec.SizeInline)
+                LoadingSpinner(color = TextTertiary, size = LoadingSpec.SizeInline)
             }
             is AsyncImagePainter.State.Error -> Box(modifier = Modifier.matchParentSize(), contentAlignment = Alignment.Center) {
                 Text(
@@ -489,7 +489,7 @@ fun F1Card(
                         tabs.forEach { tab ->
                             val active = selectedTab == tab
                             val fg by animateColorAsState(
-                                if (active) TextPrimary else TextSecondary.copy(alpha = 0.75f),
+                                if (active) TextPrimary else TextTertiary,
                                 MacroMotion.colorTween(160),
                                 label = "f1TabFg",
                             )
@@ -1107,7 +1107,7 @@ private fun CompactNextRace(
                             is AsyncImagePainter.State.Error ->
                                 Text(
                                     "TRACK",
-                                    color = TextSecondary.copy(alpha = 0.4f),
+                                    color = TextTertiary,
                                     fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold,
                                 )
@@ -1238,7 +1238,7 @@ private fun CountdownBlock(value: String, label: String, color: Color) {
 private fun CountdownColon() {
     Text(
         ":",
-        color = TextSecondary.copy(alpha = 0.45f),
+        color = TextTertiary,
         style = F1CountdownHeroStyle.copy(fontSize = 28.sp, letterSpacing = 0.sp),
         modifier = Modifier.padding(top = 2.dp),
     )
@@ -1254,7 +1254,7 @@ private fun CountdownUnit(value: String, unit: String, color: Color) {
 
 @Composable
 private fun CountdownSep() {
-    Text("·", color = TextSecondary.copy(alpha = 0.4f), fontSize = 13.sp)
+    Text("·", color = TextTertiary, fontSize = 13.sp)
 }
 
 // ── Shared circuit stat ───────────────────────────────────────────────────────
@@ -1326,7 +1326,7 @@ private fun TrackVisualization(circuitId: String, accentColor: Color, raceName: 
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(modifier = Modifier.size(4.dp).clip(CircleShape).background(accentColor))
             Text("Circuit", color = TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
-            Text("· $raceName", color = TextSecondary.copy(alpha = 0.7f), fontSize = 11.sp)
+            Text("· $raceName", color = TextTertiary, fontSize = 11.sp)
         }
         Box(modifier = Modifier.fillMaxWidth().height(148.dp).clip(RoundedCornerShape(12.dp)).background(SurfaceChrome)) {
             if (svgUrl != null) {
@@ -2019,7 +2019,7 @@ fun RaceScheduleList(schedule: List<RaceScheduleEntry>) {
                                 else -> "${days}d"
                             },
                             color = when {
-                                past -> TextSecondary.copy(alpha = 0.55f)
+                                past -> TextTertiary
                                 days <= 7L -> F1Red
                                 else -> TextSecondary
                             },
@@ -2029,7 +2029,7 @@ fun RaceScheduleList(schedule: List<RaceScheduleEntry>) {
                         Icon(
                             if (isExp) AppIcons.ChevronUp else AppIcons.ChevronDown,
                             null,
-                            tint = TextSecondary.copy(alpha = 0.4f),
+                            tint = TextTertiary,
                             modifier = Modifier.size(16.dp),
                         )
                     }
@@ -2076,7 +2076,7 @@ private fun RaceSessionDetail(
     ) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(race.circuitName, color = TextSecondary, fontSize = 12.sp)
-            Text(getLocalTimezone(), color = TextSecondary.copy(alpha = 0.55f), fontSize = 11.sp)
+            Text(getLocalTimezone(), color = TextTertiary, fontSize = 11.sp)
         }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             race.laps?.let { CircuitStat("Laps", "$it") }
@@ -2113,7 +2113,7 @@ private fun SessionRow(label: String, date: String, time: String?, color: Color,
                 fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal,
             )
             if (utcTimeStr.isNotEmpty() && localTimeStr.isNotEmpty()) {
-                Text("$utcTimeStr UTC", color = TextSecondary.copy(alpha = 0.45f), fontSize = 10.sp)
+                Text("$utcTimeStr UTC", color = TextTertiary, fontSize = 10.sp)
             }
         }
     }
@@ -2345,7 +2345,7 @@ private fun RaceResultRow(r: RaceResult) {
     ) {
         Text(
             "${r.position}",
-            color = if (isPoints) TextPrimary else TextSecondary.copy(alpha = 0.55f),
+            color = if (isPoints) TextPrimary else TextTertiary,
             fontWeight = FontWeight.SemiBold,
             fontSize = 13.sp,
             modifier = Modifier.width(26.dp),
@@ -2383,7 +2383,7 @@ private fun RaceResultRow(r: RaceResult) {
         Column(horizontalAlignment = Alignment.End) {
             Text(
                 r.time ?: r.status ?: "+?",
-                color = if (r.time != null) TextPrimary else TextSecondary.copy(alpha = 0.55f),
+                color = if (r.time != null) TextPrimary else TextTertiary,
                 fontSize = 12.sp,
             )
             if (r.points > 0) {
@@ -2485,11 +2485,11 @@ private fun PodiumDriver(result: RaceResult, pos: Int, stepHeight: androidx.comp
                 fontSize = 12.sp,
             )
             if (delta != null && delta != 0) {
-                Text("·", color = TextSecondary.copy(alpha = 0.5f), fontSize = 11.sp)
+                Text("·", color = TextTertiary, fontSize = 11.sp)
                 PositionsDeltaChip(delta)
             }
             if (result.fastestLap) {
-                Text("·", color = TextSecondary.copy(alpha = 0.5f), fontSize = 11.sp)
+                Text("·", color = TextTertiary, fontSize = 11.sp)
                 Text("FL", color = FL_Purple, fontSize = 11.sp, fontWeight = FontWeight.Medium)
             }
         }
@@ -2509,7 +2509,7 @@ private fun PodiumDriver(result: RaceResult, pos: Int, stepHeight: androidx.comp
         ) {
             Text(
                 "P$pos",
-                color = TextPrimary.copy(alpha = 0.9f),
+                color = TextPrimary,
                 fontWeight = FontWeight.Bold,
                 fontSize = if (pos == 1) 14.sp else 12.sp,
                 modifier = Modifier.padding(top = 8.dp),
