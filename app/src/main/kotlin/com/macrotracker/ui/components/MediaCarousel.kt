@@ -1,11 +1,14 @@
 package com.macrotracker.ui.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.carousel.CarouselDefaults
@@ -28,6 +31,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.util.rememberHaptics
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -46,11 +50,15 @@ interface MediaItemLook {
 
     /** Left edge of the visible part of the item, in px from the item's own left edge. */
     fun visibleLeft(): Float
+
+    /** Width of the visible part, in px; the whole item when it is open. */
+    fun visibleWidth(): Float
 }
 
 private object OpenLook : MediaItemLook {
     override fun openness(): Float = 1f
     override fun visibleLeft(): Float = 0f
+    override fun visibleWidth(): Float = Float.MAX_VALUE
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -62,10 +70,64 @@ private class CarouselLook(private val info: CarouselItemDrawInfo) : MediaItemLo
     }
 
     override fun visibleLeft(): Float = info.maskRect.left
+
+    override fun visibleWidth(): Float = info.maskRect.width
 }
 
 /** Text arrives once an item is mostly open, so a peek never shows a squeezed line. */
 fun MediaItemLook.textAlpha(): Float = ((openness() - 0.45f) / 0.55f).coerceIn(0f, 1f)
+
+/** The opposite of [textAlpha]: what a peek shows in place of the words, gone once the item opens. */
+fun MediaItemLook.peekAlpha(): Float = ((0.55f - openness()) / 0.4f).coerceIn(0f, 1f)
+
+/**
+ * Centres an overlay in the visible part of a masked item, so a peek shows all of it.
+ * The overlay should sit at the item's start edge (`Alignment.CenterStart`).
+ */
+fun Modifier.centerInVisible(look: MediaItemLook): Modifier = graphicsLayer {
+    val visible = look.visibleWidth().takeIf { it < Float.MAX_VALUE } ?: size.width
+    translationX = look.visibleLeft() + ((visible - size.width) / 2f).coerceAtLeast(0f)
+}
+
+/**
+ * What a peek shows: a round picture (a creator, a channel) in the middle of the sliver,
+ * fading out as the item opens and its own words take over.
+ */
+@Composable
+fun PeekAvatar(
+    look: MediaItemLook,
+    url: String?,
+    fallback: String,
+    ring: androidx.compose.ui.graphics.Color,
+    modifier: Modifier = Modifier,
+    size: Dp = 30.dp,
+) {
+    Box(
+        modifier = modifier
+            .centerInVisible(look)
+            .graphicsLayer { alpha = look.peekAlpha() }
+            .size(size)
+            .clip(androidx.compose.foundation.shape.CircleShape)
+            .background(ring.copy(alpha = 0.35f))
+            .border(1.5.dp, ring, androidx.compose.foundation.shape.CircleShape),
+        contentAlignment = androidx.compose.ui.Alignment.Center,
+    ) {
+        androidx.compose.material3.Text(
+            fallback.trim().take(1).uppercase(),
+            color = androidx.compose.ui.graphics.Color.White,
+            fontSize = 13.sp,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+        )
+        if (!url.isNullOrBlank()) {
+            coil.compose.AsyncImage(
+                model = url,
+                contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier.fillMaxSize().clip(androidx.compose.foundation.shape.CircleShape),
+            )
+        }
+    }
+}
 
 /** Keeps an overlay pinned to the visible part of a masked item. */
 fun Modifier.followVisible(look: MediaItemLook, inset: Float = 0f): Modifier =

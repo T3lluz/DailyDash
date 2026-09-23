@@ -95,6 +95,19 @@ com.macrotracker/
                               Tech support on the worst advisory via `EXTRA_ASK_ABOUT` (also on alert
                               notifications). A tapped notification opens the dashboard on its server through
                               `ServerFocus`
+    phone/                 ← Phone hub: this phone on the t3lluz dashboard (its top-bar phone button) and the
+                              dashboard's commands on this phone, over the bridge's `/_api/phone/...` with a token
+                              from PhoneHubPrefs (the first phone to report pairs; another waits to be accepted).
+                              PhoneHub (bound in DailyDashApp) holds a link while the app is in front or
+                              PhoneNotificationListener is bound: `/live?phone=<token>` for command cues, a
+                              PhoneSnapshot report every 30 s in front / 3 min behind and on battery, media or
+                              torch changes. PhoneHubWorker reports every 15 min otherwise. The listener mirrors
+                              notifications (not this app's, summaries, ongoing media/progress or secret ones) and
+                              runs dismiss / reply (the app's own RemoteInput action) / media. Commands: ring
+                              (PhoneRinger, alarm stream at full, restored after), torch, open-url (a notification
+                              when the app is not in front: Android blocks background activity starts), clipboard,
+                              note, volume, refresh. PhoneShareActivity is "Send to desk" in the share sheet.
+                              Location is the weather cache's, never a fresh fix. Settings: Connections → Phone hub
     update/                ← GitHub Releases in-app updater (see "In-app updates")
     health/                ← HealthConnectRepository (read-only; lazy client; PERMISSIONS companion set);
                               reads: Steps, HeartRate, RestingHeartRate, OxygenSaturation,
@@ -188,8 +201,11 @@ com.macrotracker/
                               fences, diffs); `breaks`/`streaming` for chat. MarkdownParserTest pins it.
                               WeatherForecast.kt: the opened weather card (one "now" panel, HourlyTimeline with
                               its temperature curve, a day per row with a range bar that unfolds that day's
-                              `DailyForecast.steps`). CalendarStrip.kt: the calendar card (summary line, week
-                              strip, events in MediaCarousel, agenda). MediaCarousel.kt: the M3 multi-browse carousel the
+                              `DailyForecast.steps`). CalendarStrip.kt: the calendar card (summary line, a day
+                              strip to the last busy day within `CalendarRepository.WINDOW_DAYS`, events in
+                              MediaCarousel, agenda). A peek never shows a badge or words: it shows who
+                              (`PeekAvatar`, the creator's picture) or when (the calendar's date column), faded
+                              with `peekAlpha`; badges and words come in with `textAlpha`. MediaCarousel.kt: the M3 multi-browse carousel the
                               collapsed YouTube and Twitch cards use (`MediaItemLook` read in draw/layer blocks
                               only; tap a peek to bring it in). F1CircuitMap.kt: the dashboard's four-pass circuit
                               (kerb, bed, marque line, car) that paints its lap on screen, with a
