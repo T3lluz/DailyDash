@@ -49,77 +49,6 @@ import com.macrotracker.ui.components.calculatePercentageChange
 import java.text.DecimalFormat
 import kotlin.math.abs
 
-/** Large featured metric — use for sleep hours, resting HR, etc. */
-@Composable
-fun HealthHeroMetric(
-    label: String,
-    value: String,
-    unit: String? = null,
-    subtitle: String? = null,
-    accent: Color,
-    modifier: Modifier = Modifier,
-    percentageChange: Double? = null,
-    @DrawableRes iconRes: Int? = null,
-) {
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(Background)
-            .border(1.dp, Border, RoundedCornerShape(14.dp))
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            if (iconRes != null) {
-                Icon(
-                    painter = painterResource(iconRes),
-                    contentDescription = null,
-                    tint = accent,
-                    modifier = Modifier.size(14.dp),
-                )
-            }
-            Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary)
-        }
-        Spacer(modifier = Modifier.height(4.dp))
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(
-                value,
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold,
-                color = accent,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (!unit.isNullOrBlank()) {
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    unit,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = TextSecondary,
-                    modifier = Modifier.padding(bottom = 5.dp),
-                )
-            }
-        }
-        if (subtitle != null || percentageChange != null) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (subtitle != null) {
-                    Text(subtitle, fontSize = 12.sp, color = TextSecondary, maxLines = 1)
-                }
-                if (percentageChange != null) {
-                    HealthPercentageChange(percentageChange)
-                }
-            }
-        }
-    }
-}
-
 @Composable
 fun HealthStatCard(
     modifier: Modifier = Modifier,
@@ -245,31 +174,6 @@ fun HealthPercentageChange(percentage: Double) {
             color = color,
             maxLines = 1,
         )
-    }
-}
-
-@Composable
-fun HealthMiniStat(
-    label: String,
-    value: String,
-    tint: Color,
-    modifier: Modifier = Modifier,
-    subtitle: String? = null,
-) {
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(Background)
-            .border(1.dp, Border.copy(alpha = 0.7f), RoundedCornerShape(14.dp))
-            .padding(horizontal = 10.dp, vertical = 10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(value, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = tint, maxLines = 1)
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(label, fontSize = 10.sp, color = TextSecondary, maxLines = 1)
-        if (subtitle != null) {
-            Text(subtitle, fontSize = 10.sp, color = tint.copy(alpha = 0.85f), fontWeight = FontWeight.Medium)
-        }
     }
 }
 

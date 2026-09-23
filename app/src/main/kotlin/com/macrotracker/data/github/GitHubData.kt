@@ -178,8 +178,6 @@ fun GitHubPullRequest.statusKey(): String = when {
 fun GitHubSnapshot.openIssueCount(): Int = issueTotal.takeIf { it > 0 } ?: issues.count { it.isOpen }
 fun GitHubSnapshot.openPrCount(): Int = pullTotal.takeIf { it > 0 } ?: pullRequests.count { it.isOpen || it.draft }
 
-fun GitHubActivity.isPush(): Boolean = type == "PushEvent"
-
 fun GitHubRepo.lastTouchedAt(): Instant? {
     val pushed = parseGitHubInstant(pushedAt)
     val updated = parseGitHubInstant(updatedAt)

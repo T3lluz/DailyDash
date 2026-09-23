@@ -20,13 +20,6 @@ import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
-data class CalendarInfo(
-    val id: Long,
-    val name: String,
-    val color: Int,
-    val accountName: String
-)
-
 data class CalendarEvent(
     val id: Long,
     val title: String,
@@ -110,49 +103,6 @@ class CalendarRepository @Inject constructor(
         return ContextCompat.checkSelfPermission(
             context, PERMISSION,
         ) == PackageManager.PERMISSION_GRANTED
-    }
-
-    /**
-     * Get all available calendars on the device.
-     */
-    suspend fun getAvailableCalendars(): List<CalendarInfo> = withContext(Dispatchers.IO) {
-        if (!hasPermission()) return@withContext emptyList()
-
-        val projection = arrayOf(
-            CalendarContract.Calendars._ID,
-            CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,
-            CalendarContract.Calendars.CALENDAR_COLOR,
-            CalendarContract.Calendars.ACCOUNT_NAME
-        )
-
-        val calendars = mutableListOf<CalendarInfo>()
-        var cursor: Cursor? = null
-        try {
-            cursor = context.contentResolver.query(
-                CalendarContract.Calendars.CONTENT_URI,
-                projection,
-                null,
-                null,
-                "${CalendarContract.Calendars.CALENDAR_DISPLAY_NAME} ASC"
-            )
-            cursor?.let {
-                while (it.moveToNext()) {
-                    calendars.add(
-                        CalendarInfo(
-                            id = it.getLong(0),
-                            name = it.getString(1) ?: "Unknown",
-                            color = it.getInt(2),
-                            accountName = it.getString(3) ?: ""
-                        )
-                    )
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to query calendars", e)
-        } finally {
-            cursor?.close()
-        }
-        calendars
     }
 
     /**

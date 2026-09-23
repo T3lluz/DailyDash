@@ -73,7 +73,6 @@ private val SprintPink = Color(0xFFE879B8)
 private val FL_Purple  = Color(0xFFA855F7)
 private val RowSurface = com.macrotracker.ui.theme.Surface
 private val Hairline   = com.macrotracker.ui.theme.Border
-private val LabAmber   = Color(0xFFF0A500)
 private val SharpShape = RoundedCornerShape(6.dp)
 
 /** Shared meta chip style so NEXT / round / SPRINT share one baseline. */
@@ -1898,16 +1897,6 @@ private fun SectionHeader(title: String) {
         fontWeight = FontWeight.Medium,
         modifier = Modifier.padding(top = 2.dp, bottom = 2.dp),
     )
-}
-
-@Composable
-private fun LeaderStatBlock(label: String, value: String, accent: Color, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.padding(vertical = 2.dp),
-    ) {
-        Text(label, color = TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Medium)
-        Text(value, color = accent, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
 }
 
 // ── Race schedule ─────────────────────────────────────────────────────────────

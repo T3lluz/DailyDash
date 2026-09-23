@@ -22,7 +22,6 @@ val Secondary = Color(0xFF3FA266)
 val Error = Color(0xFFE34671)
 val TextPrimary = Color(0xFFE4E4E4)
 val TextSecondary = Color(0xFF8C8C8C)
-val TextPlaceholder = Color(0xFF616161)
 val Border = Color(0xFF2A2A2A)
 val Success = Color(0xFF3FA266)
 
@@ -37,8 +36,6 @@ val GlassDot = Color(0xFFE4E4E4).copy(alpha = 0.07f)
 /** Health activity maps and inset wells — named, not one-off hex. */
 val MapSurface = SurfaceChrome
 val MapWell = Color(0xFF121212)
-val MapStart = Color(0xFF34D399)
-val MapFinish = Color(0xFFFB7185)
 
 /**
  * Health metric accents — one palette for rings, chips, stat cards and charts.
@@ -58,11 +55,9 @@ val HealthDistance = Color(0xFF32ADE6)
 val HealthEnergy = Color(0xFFFFD60A)
 val HealthProtein = Color(0xFF32D74B)
 val HealthActivity = Color(0xFF34D399)
-val HealthRecovery = Color(0xFF26C6DA)
 
 /** Nutrition accents — calories and protein, wherever either is charted. */
 val NutritionCalories = Color(0xFFFF9800)
-val NutritionProtein = Secondary
 
 /** Single-brand chrome for cards that represent an outside service. */
 val CalendarBrand = Color(0xFF4285F4)

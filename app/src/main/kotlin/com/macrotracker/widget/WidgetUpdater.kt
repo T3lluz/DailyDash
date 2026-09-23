@@ -93,17 +93,6 @@ object WidgetUpdater {
         }
     }
 
-    /**
-     * Quick update for a single widget type after it's first placed.
-     * Pre-warms data cache, then renders only that widget.
-     */
-    suspend fun warmAndUpdate(context: Context, widgetClass: Class<out androidx.glance.appwidget.GlanceAppWidget>) {
-        DashboardWidgetDataProvider.preWarm(context)
-        withContext(Dispatchers.Main) {
-            widgetClass.getDeclaredConstructor().newInstance().updateAll(context)
-        }
-    }
-
     // ── Internal helpers ──────────────────────────────────────────
 
     private suspend fun updatePlacedDashboardWidgets(context: Context) {

@@ -647,27 +647,3 @@ private fun signedPct(value: Double): String {
     val sign = if (value >= 0) "+" else ""
     return "$sign${String.format(Locale.US, "%.0f", value)}%"
 }
-
-// Back-compat aliases
-@Composable
-fun DailyGoalRings(
-    outerProgress: Float,
-    middleProgress: Float,
-    innerProgress: Float,
-    outerColor: Color,
-    middleColor: Color,
-    innerColor: Color,
-    modifier: Modifier = Modifier,
-) {
-    ConcentricGoalRings(outerProgress, middleProgress, innerProgress, modifier)
-}
-
-@Composable
-fun AppleActivityRings(
-    moveProgress: Float,
-    exerciseProgress: Float,
-    standProgress: Float,
-    modifier: Modifier = Modifier,
-) {
-    ConcentricGoalRings(standProgress, exerciseProgress, moveProgress, modifier)
-}

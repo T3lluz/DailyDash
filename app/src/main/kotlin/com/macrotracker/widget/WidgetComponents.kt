@@ -64,12 +64,6 @@ object WidgetSizes {
     /** Standard: all 8 slots from 2×2 to 5×3 */
     val ALL = setOf(SIZE_2x2, SIZE_3x2, SIZE_4x2, SIZE_5x2, SIZE_2x3, SIZE_3x3, SIZE_4x3, SIZE_5x3)
 
-    /** Tiny-capable widgets (2×2 start) */
-    val SMALL_WIDGET = ALL
-    /** Wider-start widgets that look bad at 2×2 — start from 3×2 */
-    val WIDE_WIDGET  = setOf(SIZE_3x2, SIZE_4x2, SIZE_5x2, SIZE_3x3, SIZE_4x3, SIZE_5x3)
-    /** Dashboard: starts fine at 2×2 too */
-    val DASH_WIDGET  = ALL
     /** F1 countdown: 2×2 capable */
     val F1_SMALL     = ALL
     /** F1 schedule/standings: list-heavy, start from 3×2 */
@@ -384,24 +378,6 @@ fun WidgetHeader(
 // ─────────────────────────────────────────────────────────────────
 //  NO DATA PLACEHOLDER
 // ─────────────────────────────────────────────────────────────────
-
-@Composable
-fun NoDataPlaceholder(iconRes: Int, message: String, c: WidgetClr, sc: WScale) {
-    Column(
-        GlanceModifier.fillMaxWidth().fillMaxHeight().padding(sc.pad),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Image(
-            provider = ImageProvider(iconRes),
-            contentDescription = null,
-            modifier = GlanceModifier.size(24.dp),
-            colorFilter = ColorFilter.tint(c.sub)
-        )
-        Spacer(GlanceModifier.height(sc.spaceSm))
-        Text(message, style = TextStyle(fontSize = sc.fsm, color = c.sub), maxLines = 2)
-    }
-}
 
 /**
  * The one non-success panel for every DailyDash widget.

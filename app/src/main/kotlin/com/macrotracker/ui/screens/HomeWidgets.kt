@@ -1,6 +1,5 @@
 package com.macrotracker.ui.screens
 
-import android.Manifest
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -31,7 +30,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -40,7 +38,6 @@ import androidx.compose.ui.unit.sp
 import com.macrotracker.ui.components.BodyStats
 import com.macrotracker.ui.components.ButtonVariant
 import com.macrotracker.ui.components.CalendarCard
-import com.macrotracker.ui.components.ContentSkeleton
 import com.macrotracker.ui.components.F1Card
 import com.macrotracker.ui.components.GitHubCard
 import com.macrotracker.ui.components.HealthMetricUiState
@@ -59,7 +56,6 @@ import com.macrotracker.ui.components.WidgetPlaceholderCard
 import com.macrotracker.ui.components.TwitchCard
 import com.macrotracker.ui.components.YoutubeCard
 import com.macrotracker.ui.theme.Background
-import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.HealthHeartRate
 import com.macrotracker.ui.theme.HealthMove

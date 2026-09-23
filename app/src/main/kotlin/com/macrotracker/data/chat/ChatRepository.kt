@@ -62,8 +62,6 @@ class ChatRepository @Inject constructor(
         dao.touchThread(threadId, title.take(TITLE_MAX_CHARS), System.currentTimeMillis())
     }
 
-    suspend fun clearThread(threadId: String) = dao.deleteMessagesFor(threadId)
-
     suspend fun deleteThread(threadId: String) {
         dao.deleteMessagesFor(threadId)
         dao.deleteThread(threadId)

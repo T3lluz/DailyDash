@@ -36,7 +36,6 @@ import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.screens.health.HealthMetric
 import com.macrotracker.ui.screens.health.iconRes
 import com.macrotracker.ui.theme.Background
-import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.ServerBrand
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary

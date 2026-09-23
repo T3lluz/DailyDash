@@ -79,9 +79,6 @@ class HealthViewModel @Inject constructor(
     private val _healthHistory = MutableStateFlow<List<DailyHealthStats>>(emptyList())
     val healthHistory: StateFlow<List<DailyHealthStats>> = _healthHistory
 
-    private val _previousWeekHistory = MutableStateFlow<List<DailyHealthStats>>(emptyList())
-    val previousWeekHistory: StateFlow<List<DailyHealthStats>> = _previousWeekHistory
-
     private val _weekInsights = MutableStateFlow<WeekHealthInsights?>(null)
     val weekInsights: StateFlow<WeekHealthInsights?> = _weekInsights
 
@@ -201,10 +198,10 @@ class HealthViewModel @Inject constructor(
         }
     }
 
-    private fun getWeekRange(weeksBack: Int = _weeksBack.value): Pair<LocalDate, LocalDate> {
+    private fun getWeekRange(): Pair<LocalDate, LocalDate> {
         val today = LocalDate.now()
         val startDay = _weekStartDay.value
-        var start = today.minusWeeks(weeksBack.toLong())
+        var start = today.minusWeeks(_weeksBack.value.toLong())
         while (start.dayOfWeek != startDay) {
             start = start.minusDays(1)
         }
@@ -213,17 +210,10 @@ class HealthViewModel @Inject constructor(
     }
 
     private suspend fun loadWeekHistory() {
-        coroutineScope {
-            val (start, end) = getWeekRange()
-            val (prevStart, prevEnd) = getWeekRange(_weeksBack.value + 1)
-            val currentDeferred = async { healthConnectRepository.readHistoryStatsBetween(start, end) }
-            val previousDeferred = async { healthConnectRepository.readHistoryStatsBetween(prevStart, prevEnd) }
-            val current = currentDeferred.await()
-            val previous = previousDeferred.await()
-            _healthHistory.value = current
-            _previousWeekHistory.value = previous
-            _weekInsights.value = computeWeekInsights(current, previous)
-        }
+        val (start, end) = getWeekRange()
+        val current = healthConnectRepository.readHistoryStatsBetween(start, end)
+        _healthHistory.value = current
+        _weekInsights.value = computeWeekInsights(current)
     }
 
     fun loadData() {

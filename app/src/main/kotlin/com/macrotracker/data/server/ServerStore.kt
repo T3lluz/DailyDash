@@ -113,8 +113,6 @@ class ServerStore @Inject constructor(
     fun keyPassphrase(id: String): String =
         ServerCrypto.decrypt(prefs.getString(passphraseKey(id), null)).orEmpty()
 
-    fun hasSecret(id: String): Boolean = !prefs.getString(secretKey(id), null).isNullOrEmpty()
-
     // ── Host keys (trust on first use) ──────────────────────────────────
 
     fun knownHostKey(id: String): String? = prefs.getString(hostKeyKey(id), null)

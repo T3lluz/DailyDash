@@ -264,15 +264,6 @@ class AppUpdateRepository @Inject constructor(
         }
     }
 
-    internal fun parseLatestRelease(json: String): AppUpdateInfo? {
-        val root = JSONObject(json)
-        if (root.optBoolean("draft", false) || root.optBoolean("prerelease", false)) {
-            return null
-        }
-        return parseReleaseObject(root)
-            ?.takeIf { it.apkDownloadUrl.isNotBlank() && it.versionCode > currentVersionCode() }
-    }
-
     internal fun parseReleaseList(json: String): List<AppReleaseNotes> {
         val arr = JSONArray(json)
         val out = mutableListOf<AppReleaseNotes>()

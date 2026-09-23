@@ -134,13 +134,6 @@ class AppUpdateViewModel @Inject constructor(
         )
     }
 
-    /**
-     * Startup check: quiet unless a newer build exists that the user hasn't dismissed.
-     */
-    fun checkOnLaunch() {
-        startListening()
-    }
-
     /** Manual check from Settings — always hits the network and clears soft snooze. */
     fun checkFromSettings() {
         repository.clearDismissed()

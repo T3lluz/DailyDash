@@ -38,12 +38,6 @@ object WidgetStateProvider {
     fun isInstalled(context: Context, type: WidgetType): Boolean =
         countInstalled(context, type) > 0
 
-    /** Whether at least one instance of the given receiver class is placed. */
-    fun isInstalledByClass(context: Context, receiverClass: Class<*>): Boolean {
-        val manager = AppWidgetManager.getInstance(context) ?: return false
-        return manager.getAppWidgetIds(ComponentName(context, receiverClass)).size > 0
-    }
-
     /** Whether ANY non-F1 dashboard widget is placed. */
     fun hasAnyDashboardWidget(context: Context): Boolean =
         isInstalled(context, WidgetType.DASHBOARD) ||
@@ -61,10 +55,6 @@ object WidgetStateProvider {
     /** Whether ANY widget (F1 or dashboard) is placed. */
     fun hasAnyWidget(context: Context): Boolean =
         hasAnyDashboardWidget(context) || hasAnyF1Widget(context)
-
-    /** Total number of widget instances across all types. */
-    fun totalInstalled(context: Context): Int =
-        WidgetType.entries.sumOf { countInstalled(context, it) }
 
     /** Returns a map of all widget types to their installed count. */
     fun snapshot(context: Context): Map<WidgetType, Int> =

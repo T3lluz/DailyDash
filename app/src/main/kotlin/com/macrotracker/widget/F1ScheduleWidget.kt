@@ -2,7 +2,6 @@ package com.macrotracker.widget
 
 import android.content.Context
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
@@ -415,27 +414,6 @@ private fun HeroSessionChip(session: SessionRow, c: F1Clr, modifier: GlanceModif
     }
 }
 
-// ——— COUNTDOWN BLOCK ——————————————————————————————————————————————————————————————————————————————————————
-@Composable
-private fun CountdownBlock(d: F1WidgetData, c: F1Clr, sc: WScale, compact: Boolean) {
-    val main = when {
-        d.daysUntil > 0 -> d.daysUntil.toString()
-        d.hoursUntil >= 0 -> "${d.hoursUntil}:${d.minutesUntil.toString().padStart(2, '0')}"
-        else -> d.round?.toString() ?: "—"
-    }
-    Box(GlanceModifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(main, style = TextStyle(fontWeight = FontWeight.Bold, fontSize = 28.sp, color = c.text), maxLines = 1)
-    }
-}
-
-// ——— SPRINT BADGE ————————————————————————————————————————————————————————————————————————————————————————
-@Composable
-private fun SprintBadge(c: F1Clr, sc: WScale) {
-    Box(GlanceModifier.cornerRadius(3.dp).background(c.card).padding(horizontal = 5.dp, vertical = 1.dp)) {
-        Text("SPRINT", style = TextStyle(fontWeight = FontWeight.Bold, fontSize = sc.fxs, color = c.text))
-    }
-}
-
 // ——— RACE ROW ————————————————————————————————————————————————————————————————————————————————————————————
 @Composable
 private fun RaceRow(
@@ -610,7 +588,3 @@ private fun fmtShortDate(dateStr: String?): String {
         LocalDate.parse(dateStr).format(DateTimeFormatter.ofPattern("EEE d"))
     } catch (_: Exception) { dateStr.take(5) }
 }
-
-private fun fmtLongDate(dateStr: String): String = try {
-    LocalDate.parse(dateStr).format(DateTimeFormatter.ofPattern("EEE d MMM"))
-} catch (_: Exception) { dateStr }
