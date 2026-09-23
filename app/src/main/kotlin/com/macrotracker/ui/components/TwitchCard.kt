@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -23,7 +24,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -62,6 +62,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -546,10 +547,13 @@ private fun CompactLiveFeed(
                         onChannelSelected(null)
                     },
                 )
+                // Every chip here is a channel that is on air, so every one gets the dot,
+                // the same as on the live board.
                 streams.distinctBy { it.userId }.forEach { stream ->
                     LiveFilterChip(
                         label = stream.userName,
                         selected = selectedChannelId == stream.userId,
+                        live = true,
                         onClick = {
                             haptics.tick()
                             onChannelSelected(
@@ -560,84 +564,117 @@ private fun CompactLiveFeed(
                 }
             }
         }
-        LazyRow(
-            modifier = Modifier
-                .fillMaxWidth()
-                .nestedScroll(rememberWidgetCrossAxisScrollLock()),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            items(filtered, key = { it.userId }) { stream ->
-                CompactLiveTile(
-                    stream = stream,
-                    onClick = {
-                        haptics.click()
-                        openUrl(context, stream.channelUrl)
-                    },
-                )
-            }
+        MediaCarousel(
+            items = filtered,
+            resetKey = selectedChannelId,
+            onOpen = { stream ->
+                haptics.click()
+                openUrl(context, stream.channelUrl)
+            },
+        ) { stream, look ->
+            LiveCarouselItem(stream = stream, look = look)
         }
     }
 }
 
+/** One stream on the collapsed strip: the preview, on-air badge, and who and what once it opens. */
 @Composable
-private fun CompactLiveTile(stream: TwitchStream, onClick: () -> Unit) {
+private fun LiveCarouselItem(stream: TwitchStream, look: MediaItemLook) {
     val context = LocalContext.current
-    Column(
-        modifier = Modifier
-            .width(WidgetCompactTileWidth)
-            .clip(TwSharp)
-            .background(TwCardBg)
-            .clickable(onClick = onClick),
-    ) {
-        Box {
-            AsyncImage(
-                model = ImageRequest.Builder(context)
-                    .data(stream.thumbnail(336, 189))
-                    .crossfade(true)
-                    .memoryCachePolicy(CachePolicy.ENABLED)
-                    .diskCachePolicy(CachePolicy.DISABLED) // previews go stale fast
-                    .build(),
-                contentDescription = stream.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
-                    .background(TwSurface),
-            )
-            LiveBadge(
-                viewers = stream.viewerCount,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(6.dp),
-            )
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .height(28.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f)),
-                        ),
+    val shadow = remember {
+        androidx.compose.ui.graphics.Shadow(color = Color.Black.copy(alpha = 0.8f), blurRadius = 6f)
+    }
+    Box(modifier = Modifier.fillMaxSize().background(TwCardBg)) {
+        AsyncImage(
+            model = ImageRequest.Builder(context)
+                .data(stream.thumbnail(640, 360))
+                .crossfade(true)
+                .memoryCachePolicy(CachePolicy.ENABLED)
+                .diskCachePolicy(CachePolicy.DISABLED) // previews go stale fast
+                .build(),
+            contentDescription = stream.title,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { alpha = 0.45f + 0.55f * look.openness() },
+        )
+        // Open: darken only the bottom, where the words sit. Peek: a wash, so a sliver reads as a tile.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer { alpha = look.openness() }
+                .background(
+                    Brush.verticalGradient(
+                        0f to Color.Transparent,
+                        0.45f to Color.Transparent,
+                        0.75f to Color.Black.copy(alpha = 0.55f),
+                        1f to Color.Black.copy(alpha = 0.88f),
                     ),
+                ),
+        )
+        Box(
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer { alpha = 1f - look.openness() }
+                .background(Color.Black.copy(alpha = 0.35f)),
+        )
+        Row(
+            modifier = Modifier
+                .followVisible(look)
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            LiveBadge(viewers = stream.viewerCount)
+            Text(
+                formatLiveFor(stream.startedAt),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                maxLines = 1,
+                modifier = Modifier
+                    .graphicsLayer { alpha = look.textAlpha() }
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
             )
         }
-        Column(modifier = Modifier.padding(8.dp)) {
-            Text(
-                stream.userName,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                stream.title.ifBlank { stream.gameName }.ifBlank { "Live" },
-                fontSize = 11.sp,
-                color = TextSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .followVisible(look)
+                .graphicsLayer { alpha = look.textAlpha() }
+                .padding(horizontal = 10.dp, vertical = 9.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (stream.profileImageUrl.isNotBlank()) {
+                AsyncImage(
+                    model = stream.profileImageUrl,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .border(1.dp, TwPurple.copy(alpha = 0.7f), CircleShape),
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    stream.userName,
+                    style = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold, shadow = shadow),
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    listOf(stream.gameName, stream.title).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { "Live" },
+                    style = androidx.compose.ui.text.TextStyle(fontSize = 11.sp, shadow = shadow),
+                    color = Color.White.copy(alpha = 0.82f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }

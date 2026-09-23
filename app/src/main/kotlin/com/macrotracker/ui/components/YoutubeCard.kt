@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -35,7 +36,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -74,6 +74,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -767,6 +768,7 @@ private fun CompactVideoFeed(
         } else {
             CompactVideoStrip(
                 videos = displayedVideos,
+                resetKey = selectedChannelId,
                 onVideoClick = { video ->
                     haptics.tick()
                     context.startActivity(
@@ -784,121 +786,115 @@ private fun CompactVideoFeed(
 @Composable
 private fun CompactVideoStrip(
     videos: List<YoutubeVideo>,
+    resetKey: Any?,
     onVideoClick: (YoutubeVideo) -> Unit,
 ) {
-    LazyRow(
-        modifier = Modifier
-            .fillMaxWidth()
-            .nestedScroll(rememberWidgetCrossAxisScrollLock()),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        items(videos, key = { it.videoId }) { video ->
-            CompactVideoTile(
-                video = video,
-                modifier = Modifier.width(WidgetCompactTileWidth),
-                onClick = { onVideoClick(video) },
-            )
-        }
+    MediaCarousel(
+        items = videos,
+        resetKey = resetKey,
+        onOpen = onVideoClick,
+    ) { video, look ->
+        VideoCarouselItem(video = video, look = look)
     }
 }
 
+/** One video on the collapsed strip: the thumbnail, and its title and channel once it opens. */
 @Composable
-private fun CompactVideoTile(
-    video: YoutubeVideo,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-) {
+private fun VideoCarouselItem(video: YoutubeVideo, look: MediaItemLook) {
     val density = LocalDensity.current
-    val thumbWidthPx = with(density) { 320.dp.roundToPx() }
-    val thumbHeightPx = with(density) { 180.dp.roundToPx() }
     val thumbRequest = rememberYoutubeThumbnailRequest(
         url = video.thumbnailUrl,
-        widthPx = thumbWidthPx,
-        heightPx = thumbHeightPx,
+        widthPx = with(density) { 320.dp.roundToPx() },
+        heightPx = with(density) { 180.dp.roundToPx() },
     )
     val isNew = remember(video.publishedAt) {
         runCatching {
             Instant.parse(video.publishedAt).isAfter(Instant.now().minus(24, ChronoUnit.HOURS))
         }.getOrDefault(false)
     }
+    val shadow = remember {
+        androidx.compose.ui.graphics.Shadow(color = Color.Black.copy(alpha = 0.8f), blurRadius = 6f)
+    }
 
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(YtCardBg.copy(alpha = 0.88f))
-            .border(0.5.dp, YtHairline.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick),
-    ) {
-        Box(
+    Box(modifier = Modifier.fillMaxSize().background(YtDark)) {
+        AsyncImage(
+            model = thumbRequest,
+            contentDescription = video.title,
+            contentScale = ContentScale.Crop,
             modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-                .background(YtDark),
-        ) {
-            AsyncImage(
-                model = thumbRequest,
-                contentDescription = video.title,
-                modifier = Modifier.matchParentSize(),
-                contentScale = ContentScale.Crop,
-            )
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .background(
-                        Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.35f))),
+                .fillMaxSize()
+                .graphicsLayer { alpha = 0.45f + 0.55f * look.openness() },
+        )
+        Box(
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer { alpha = look.openness() }
+                .background(
+                    Brush.verticalGradient(
+                        0f to Color.Transparent,
+                        0.4f to Color.Transparent,
+                        0.72f to Color.Black.copy(alpha = 0.55f),
+                        1f to Color.Black.copy(alpha = 0.9f),
                     ),
-            )
+                ),
+        )
+        Box(
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer { alpha = 1f - look.openness() }
+                .background(Color.Black.copy(alpha = 0.35f)),
+        )
+        if (isNew) {
             Box(
                 modifier = Modifier
-                    .size(24.dp)
-                    .align(Alignment.Center)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.55f)),
-                contentAlignment = Alignment.Center,
+                    .followVisible(look)
+                    .padding(8.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(YtRed)
+                    .padding(horizontal = 5.dp, vertical = 2.dp),
             ) {
-                Icon(AppIcons.Play, null, tint = Color.White, modifier = Modifier.size(14.dp))
-            }
-            if (isNew) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(5.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(YtRed)
-                        .padding(horizontal = 5.dp, vertical = 2.dp),
-                ) {
-                    Text("NEW", fontSize = 8.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                }
+                Text("NEW", fontSize = 9.sp, color = Color.White, fontWeight = FontWeight.Bold)
             }
         }
-        // Min-height caption: IntrinsicSize.Max equalizes sibling tiles without clipping text.
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(8.dp)
+                .graphicsLayer { alpha = look.textAlpha() }
+                .size(26.dp)
+                .clip(CircleShape)
+                .background(Color.Black.copy(alpha = 0.55f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(AppIcons.Play, null, tint = Color.White, modifier = Modifier.size(14.dp))
+        }
         Column(
             modifier = Modifier
+                .align(Alignment.BottomStart)
                 .fillMaxWidth()
-                .heightIn(min = YT_COMPACT_CAPTION_MIN_HEIGHT)
-                .wrapContentHeight(Alignment.Top)
-                .padding(horizontal = 7.dp, vertical = 7.dp),
-            verticalArrangement = Arrangement.spacedBy(3.dp),
+                .followVisible(look)
+                .graphicsLayer { alpha = look.textAlpha() }
+                .padding(horizontal = 10.dp, vertical = 9.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(
                 video.title,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = TextPrimary,
-                minLines = 2,
+                style = androidx.compose.ui.text.TextStyle(
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    lineHeight = 16.sp,
+                    shadow = shadow,
+                ),
+                color = Color.White,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                lineHeight = 15.sp,
-                modifier = Modifier.fillMaxWidth(),
             )
             Text(
                 videoMetaLine(video, includeChannel = true),
-                fontSize = 9.sp,
-                color = TextSecondary,
-                maxLines = 2,
+                style = androidx.compose.ui.text.TextStyle(fontSize = 10.sp, shadow = shadow),
+                color = Color.White.copy(alpha = 0.8f),
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                lineHeight = 12.sp,
-                modifier = Modifier.fillMaxWidth(),
             )
         }
     }
@@ -973,12 +969,6 @@ private fun CompactChannelAvatar(
 
 private const val YT_INITIAL_PAGE = 4
 private const val YT_PAGE_SIZE    = 5
-/**
- * Min caption block under thumbnails.
- * Sized for 2 title lines + a YouTube-style meta line (channel · views · time)
- * so text is never clipped at default font scale.
- */
-private val YT_COMPACT_CAPTION_MIN_HEIGHT = 68.dp
 /** Grid captions also reserve a second meta line (channel + views/time). */
 private val YT_GRID_CAPTION_MIN_HEIGHT = 82.dp
 
