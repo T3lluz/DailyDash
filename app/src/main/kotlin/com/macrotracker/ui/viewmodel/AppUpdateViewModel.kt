@@ -1,39 +1,70 @@
 package com.macrotracker.ui.viewmodel
 
+import android.content.Context
+import android.content.Intent
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.macrotracker.data.update.AppReleaseNotes
 import com.macrotracker.data.update.AppUpdateInfo
+import com.macrotracker.data.update.AppUpdateInstaller
+import com.macrotracker.data.update.AppUpdateNotifier
 import com.macrotracker.data.update.AppUpdateRepository
 import com.macrotracker.data.update.AppUpdateUiState
 import com.macrotracker.data.update.WhatsNewInfo
+import com.macrotracker.data.update.info
+import com.macrotracker.data.update.inProgress
 import com.macrotracker.data.update.updateAvailable
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.io.File
 import javax.inject.Inject
 
+/**
+ * The in-app updater as the screens see it: what GitHub has, and where this phone is with
+ * installing it. The install itself belongs to [AppUpdateInstaller], which outlives this
+ * view model, so the sheet always shows the step the update is actually on.
+ */
 @HiltViewModel
 class AppUpdateViewModel @Inject constructor(
     private val repository: AppUpdateRepository,
+    private val installer: AppUpdateInstaller,
+    @param:ApplicationContext private val context: Context,
 ) : ViewModel() {
 
     companion object {
         private const val TAG = "AppUpdateVM"
     }
 
-    private val _state = MutableStateFlow<AppUpdateUiState>(AppUpdateUiState.Idle)
-    val state: StateFlow<AppUpdateUiState> = _state.asStateFlow()
+    /** What the last look at GitHub found; the install phase is laid over it. */
+    private val check = MutableStateFlow<AppUpdateUiState>(AppUpdateUiState.Idle)
+    private val canInstall = MutableStateFlow(repository.canInstallPackages())
+
+    val state: StateFlow<AppUpdateUiState> = combine(check, installer.phase, canInstall) { found, phase, allowed ->
+        when (phase) {
+            is AppUpdateInstaller.Phase.Downloading ->
+                AppUpdateUiState.Downloading(phase.info, phase.progress, phase.downloaded, phase.total)
+            is AppUpdateInstaller.Phase.Installing ->
+                AppUpdateUiState.Installing(phase.info, phase.awaitingConfirmation)
+            is AppUpdateInstaller.Phase.Ready ->
+                AppUpdateUiState.ReadyToInstall(phase.info, phase.apkPath, phase.note)
+            is AppUpdateInstaller.Phase.Failed ->
+                AppUpdateUiState.Error(phase.message, phase.info)
+            AppUpdateInstaller.Phase.Idle ->
+                if (found is AppUpdateUiState.Available && !allowed) AppUpdateUiState.NeedsPermission(found.info) else found
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, AppUpdateUiState.Idle)
 
     private val _showDialog = MutableStateFlow(false)
     val showDialog: StateFlow<Boolean> = _showDialog.asStateFlow()
@@ -47,20 +78,35 @@ class AppUpdateViewModel @Inject constructor(
     private val _releaseNotesLoading = MutableStateFlow(false)
     val releaseNotesLoading: StateFlow<Boolean> = _releaseNotesLoading.asStateFlow()
 
+    private val _notifyEnabled = MutableStateFlow(repository.notifyEnabled())
+    val notifyEnabled: StateFlow<Boolean> = _notifyEnabled.asStateFlow()
+
     /** True when a newer APK is available (drives Settings tab badge). */
-    val updateAvailable: StateFlow<Boolean> = _state
+    val updateAvailable: StateFlow<Boolean> = state
         .map { it.updateAvailable }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    init {
+        // Android's prompt closed, or the install failed, while the sheet was away: bring
+        // it back with Install on it rather than leave the update stranded half done.
+        viewModelScope.launch {
+            installer.phase.collect { phase ->
+                if (phase is AppUpdateInstaller.Phase.Ready || phase is AppUpdateInstaller.Phase.Failed) {
+                    _showDialog.value = true
+                }
+            }
+        }
+    }
 
     val currentVersionName: String get() = repository.currentVersionName()
     val currentVersionCode: Int get() = repository.currentVersionCode()
 
     private var checkJob: Job? = null
-    private var downloadJob: Job? = null
     private var listenJob: Job? = null
     private var releaseNotesJob: Job? = null
-    private var pendingInstallPath: String? = null
-    private var pendingDownloadAfterPermission: AppUpdateInfo? = null
+
+    /** Set when Update was tapped before Android allowed installs; picked up on return. */
+    private var pendingAfterPermission: AppUpdateInfo? = null
     private var listeningStarted = false
     private var postUpdateHandled = false
 
@@ -72,21 +118,13 @@ class AppUpdateViewModel @Inject constructor(
     fun startListening() {
         if (listeningStarted) return
         listeningStarted = true
-        checkForUpdate(
-            showDialogIfAvailable = true,
-            forceNetwork = true,
-            quiet = true,
-        )
+        checkForUpdate(showDialogIfAvailable = true, forceNetwork = true, quiet = true)
         loadReleaseNotes()
         listenJob?.cancel()
         listenJob = viewModelScope.launch {
             while (isActive) {
                 delay(AppUpdateRepository.FOREGROUND_POLL_INTERVAL_MS)
-                checkForUpdate(
-                    showDialogIfAvailable = true,
-                    forceNetwork = true,
-                    quiet = true,
-                )
+                checkForUpdate(showDialogIfAvailable = true, forceNetwork = true, quiet = true)
             }
         }
     }
@@ -104,6 +142,8 @@ class AppUpdateViewModel @Inject constructor(
         if (postUpdateHandled && !forceFromIntent) return _whatsNew.value != null
         postUpdateHandled = true
         val info = repository.consumePostUpdateWhatsNew(forceFromIntent) ?: return false
+        installer.reset()
+        check.value = AppUpdateUiState.UpToDate
         _whatsNew.value = info
         // Prefer live notes from GitHub when the offline cache was a placeholder.
         viewModelScope.launch {
@@ -124,24 +164,26 @@ class AppUpdateViewModel @Inject constructor(
         _whatsNew.value = null
     }
 
-    /** Re-check when the activity resumes (throttled). Also resumes a stalled download. */
+    /**
+     * Back in the foreground: Android's install permission may have just been granted, in
+     * which case the update that was waiting on it starts now. Then a throttled re-check.
+     */
     fun checkOnResume() {
-        maybeResumeDownloadAfterPermission()
-        checkForUpdate(
-            showDialogIfAvailable = true,
-            forceNetwork = false,
-            quiet = true,
-        )
+        canInstall.value = repository.canInstallPackages()
+        pendingAfterPermission?.let { pending ->
+            if (canInstall.value) {
+                pendingAfterPermission = null
+                _showDialog.value = true
+                installer.start(pending)
+            }
+        }
+        checkForUpdate(showDialogIfAvailable = true, forceNetwork = false, quiet = true)
     }
 
     /** Manual check from Settings — always hits the network and clears soft snooze. */
     fun checkFromSettings() {
         repository.clearDismissed()
-        checkForUpdate(
-            showDialogIfAvailable = true,
-            forceNetwork = true,
-            quiet = false,
-        )
+        checkForUpdate(showDialogIfAvailable = true, forceNetwork = true, quiet = false)
         loadReleaseNotes(force = true)
     }
 
@@ -152,6 +194,8 @@ class AppUpdateViewModel @Inject constructor(
             _releaseNotesLoading.value = true
             try {
                 _releaseNotes.value = repository.listReleaseNotes()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to load release notes", e)
             } finally {
@@ -160,136 +204,112 @@ class AppUpdateViewModel @Inject constructor(
         }
     }
 
-    private fun checkForUpdate(
-        showDialogIfAvailable: Boolean,
-        forceNetwork: Boolean,
-        quiet: Boolean,
-    ) {
+    private fun checkForUpdate(showDialogIfAvailable: Boolean, forceNetwork: Boolean, quiet: Boolean) {
         if (!forceNetwork && !repository.shouldAutoCheck()) return
-        // Don't interrupt an active download / install flow with a re-check.
-        if (_state.value is AppUpdateUiState.Downloading ||
-            _state.value is AppUpdateUiState.ReadyToInstall
-        ) {
-            return
-        }
+        // Never interrupt an update that is on its way in.
+        if (state.value.inProgress || state.value is AppUpdateUiState.ReadyToInstall) return
         checkJob?.cancel()
         checkJob = viewModelScope.launch {
-            if (!quiet) {
-                _state.value = AppUpdateUiState.Checking
-            }
+            if (!quiet) check.value = AppUpdateUiState.Checking
             try {
                 val info = repository.checkForUpdate()
                 if (info == null) {
-                    if (_state.value !is AppUpdateUiState.Available &&
-                        _state.value !is AppUpdateUiState.Downloading &&
-                        _state.value !is AppUpdateUiState.ReadyToInstall
-                    ) {
-                        _state.value = AppUpdateUiState.UpToDate
-                    }
+                    check.value = AppUpdateUiState.UpToDate
                     return@launch
                 }
-                _state.value = AppUpdateUiState.Available(info)
+                check.value = AppUpdateUiState.Available(info)
                 // Prompt when a newer build is available and not soft-snoozed.
                 // Soft-snooze expires after [AppUpdateRepository.SNOOZE_DURATION_MS].
-                if (showDialogIfAvailable &&
-                    !repository.isDismissed(info.versionCode) &&
-                    !_showDialog.value
-                ) {
-                    _showDialog.value = true
+                if (showDialogIfAvailable && !repository.isDismissed(info.versionCode) && !_showDialog.value) {
+                    showSheetFor(info)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Update check failed", e)
                 // Only surface errors for explicit user-initiated checks.
                 if (!quiet) {
-                    _state.value = AppUpdateUiState.Error(
+                    check.value = AppUpdateUiState.Error(
                         e.message?.takeIf { it.isNotBlank() } ?: "Could not check for updates",
                     )
+                } else if (check.value is AppUpdateUiState.Checking) {
+                    check.value = AppUpdateUiState.Idle
                 }
             }
         }
     }
 
+    private fun showSheetFor(info: AppUpdateInfo) {
+        _showDialog.value = true
+        // Seen in the app, so the background check need not announce it as well.
+        repository.markAnnounced(info.versionCode)
+        AppUpdateNotifier.cancelAvailable(context)
+    }
+
+    /**
+     * Hides the sheet. A download or install carries on; "Later" on an offer snoozes it
+     * for [AppUpdateRepository.SNOOZE_DURATION_MS].
+     */
     fun dismissDialog(snooze: Boolean = true) {
-        val available = (_state.value as? AppUpdateUiState.Available)?.info
-            ?: (_state.value as? AppUpdateUiState.Downloading)?.info
-            ?: (_state.value as? AppUpdateUiState.ReadyToInstall)?.info
-        if (snooze && available != null) {
-            repository.dismiss(available.versionCode)
-        }
-        pendingDownloadAfterPermission = null
+        val current = state.value
+        if (snooze && !current.inProgress) current.info?.let { repository.dismiss(it.versionCode) }
+        if (current is AppUpdateUiState.Error && current.info != null) installer.reset()
+        pendingAfterPermission = null
         _showDialog.value = false
     }
 
     fun openDialog() {
-        if (_state.value.updateAvailable) {
-            _showDialog.value = true
-        }
+        if (state.value.updateAvailable) _showDialog.value = true
     }
 
-    fun startDownload(info: AppUpdateInfo = requiredAvailableInfo()) {
-        if (!repository.canInstallPackages()) {
-            // Caller should send user to install-unknown-apps settings first.
-            pendingDownloadAfterPermission = info
-            _state.value = AppUpdateUiState.Available(info)
-            _showDialog.value = true
-            return
-        }
-        pendingDownloadAfterPermission = null
-        downloadJob?.cancel()
-        downloadJob = viewModelScope.launch {
-            _state.value = AppUpdateUiState.Downloading(info, 0f)
-            _showDialog.value = true
-            try {
-                val file = repository.downloadApk(info) { progress ->
-                    _state.value = AppUpdateUiState.Downloading(info, progress)
+    /**
+     * From the update notification: show the sheet, and with [start] begin at once. The
+     * process may be fresh, so the build is looked up first when there is none yet.
+     */
+    fun openFromNotification(start: Boolean) {
+        AppUpdateNotifier.cancelAvailable(context)
+        viewModelScope.launch {
+            if (!state.value.updateAvailable) {
+                try {
+                    repository.checkForUpdate()?.let { check.value = AppUpdateUiState.Available(it) }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    check.value = AppUpdateUiState.Error(e.message ?: "Could not check for updates")
                 }
-                pendingInstallPath = file.absolutePath
-                _state.value = AppUpdateUiState.ReadyToInstall(info, file.absolutePath)
-                // Kick off the system installer immediately after download.
-                installDownloaded()
-            } catch (e: Exception) {
-                Log.e(TAG, "Download failed", e)
-                _state.value = AppUpdateUiState.Error(
-                    e.message?.takeIf { it.isNotBlank() } ?: "Download failed",
-                )
             }
+            val info = state.value.info ?: return@launch
+            repository.markAnnounced(info.versionCode)
+            _showDialog.value = true
+            if (start && state.value is AppUpdateUiState.Available) update(info)
         }
     }
 
-    private fun maybeResumeDownloadAfterPermission() {
-        val pending = pendingDownloadAfterPermission ?: return
-        if (!repository.canInstallPackages()) return
-        pendingDownloadAfterPermission = null
-        startDownload(pending)
+    /**
+     * Starts the update. Returns Android's "install unknown apps" screen when DailyDash is
+     * not allowed yet; the update then starts by itself on return, once it is.
+     */
+    fun update(info: AppUpdateInfo): Intent? {
+        canInstall.value = repository.canInstallPackages()
+        if (!canInstall.value) {
+            pendingAfterPermission = info
+            return repository.installPermissionSettingsIntent()
+        }
+        pendingAfterPermission = null
+        installer.start(info)
+        return null
     }
 
-    fun canInstallPackages(): Boolean = repository.canInstallPackages()
+    fun cancelDownload() = installer.cancelDownload()
 
-    fun installPermissionSettingsIntent() = repository.installPermissionSettingsIntent()
+    fun retryInstall() = installer.retryInstall()
 
-    fun installDownloaded() {
-        val path = pendingInstallPath
-            ?: (_state.value as? AppUpdateUiState.ReadyToInstall)?.apkPath
-            ?: return
-        try {
-            val info = (_state.value as? AppUpdateUiState.ReadyToInstall)?.info
-            if (info != null) repository.cacheWhatsNew(info)
-            repository.installApk(File(path))
-        } catch (e: Exception) {
-            Log.e(TAG, "Install launch failed", e)
-            _state.value = AppUpdateUiState.Error(
-                e.message?.takeIf { it.isNotBlank() } ?: "Could not open installer",
-            )
-        }
-    }
+    /** Brings Android's install prompt back if it was left behind. */
+    fun reopenInstallPrompt(): Boolean = installer.reopenConfirmation()
 
-    private fun requiredAvailableInfo(): AppUpdateInfo {
-        return when (val s = _state.value) {
-            is AppUpdateUiState.Available -> s.info
-            is AppUpdateUiState.Downloading -> s.info
-            is AppUpdateUiState.ReadyToInstall -> s.info
-            else -> error("No update available")
-        }
+    fun setNotifyEnabled(enabled: Boolean) {
+        repository.setNotifyEnabled(enabled)
+        _notifyEnabled.value = enabled
     }
 
     override fun onCleared() {

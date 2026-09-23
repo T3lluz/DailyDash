@@ -40,6 +40,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.macrotracker.data.update.AppReleaseNotes
 import com.macrotracker.data.update.AppUpdateUiState
+import com.macrotracker.data.update.info
+import com.macrotracker.data.update.updateAvailable
 import com.macrotracker.ui.components.SubScreenHeader
 import com.macrotracker.ui.components.subScreenBottomPadding
 import com.macrotracker.ui.components.ButtonVariant
@@ -67,6 +69,7 @@ fun AboutSettingsScreen(
     val updateState by appUpdateViewModel.state.collectAsState()
     val releaseNotes by appUpdateViewModel.releaseNotes.collectAsState()
     val releaseNotesLoading by appUpdateViewModel.releaseNotesLoading.collectAsState()
+    val notifyEnabled by appUpdateViewModel.notifyEnabled.collectAsState()
     var showAllReleaseNotes by remember { mutableStateOf(false) }
     val haptics = rememberHaptics()
     val context = LocalContext.current
@@ -118,118 +121,93 @@ fun AboutSettingsScreen(
                 }
             }
 
+            // One line for where the update is; the sheet has the rest and opens from the button.
+            val (line, lineColor) = when (val s = updateState) {
+                is AppUpdateUiState.Idle ->
+                    "Checks GitHub Releases, installs in-app, then reopens with What's new." to TextSecondary
+                is AppUpdateUiState.Checking -> "Checking for updates…" to TextSecondary
+                is AppUpdateUiState.UpToDate -> "You're on the latest build." to Success
+                is AppUpdateUiState.Available ->
+                    "Update available: ${s.info.versionName} (build ${s.info.versionCode})" to Primary
+                is AppUpdateUiState.NeedsPermission ->
+                    "${s.info.versionName} is ready. Android needs to allow installs from DailyDash first." to Primary
+                is AppUpdateUiState.Downloading ->
+                    "Downloading ${s.info.versionName}…${s.progress?.let { " ${(it * 100).toInt()}%" } ?: ""}" to TextSecondary
+                is AppUpdateUiState.Installing ->
+                    (if (s.awaitingConfirmation) "Tap Install in Android's prompt" else "Installing ${s.info.versionName}…") to TextSecondary
+                is AppUpdateUiState.ReadyToInstall ->
+                    (s.note ?: "${s.info.versionName} is downloaded and ready to install") to Success
+                is AppUpdateUiState.Error -> s.message to Error
+            }
+            Text(
+                text = line,
+                fontSize = 12.sp,
+                color = lineColor,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
             when (val s = updateState) {
-                is AppUpdateUiState.Idle -> {
-                    Text(
-                        text = "Checks GitHub Releases automatically, installs in-app, then reopens with What's new.",
-                        fontSize = 12.sp,
-                        color = TextSecondary,
-                        modifier = Modifier.padding(bottom = 10.dp),
-                    )
-                }
-                is AppUpdateUiState.Checking -> {
-                    Text(
-                        text = "Checking for updates…",
-                        fontSize = 12.sp,
-                        color = TextSecondary,
-                        modifier = Modifier.padding(bottom = 10.dp),
-                    )
-                }
-                is AppUpdateUiState.UpToDate -> {
-                    Text(
-                        text = "You're on the latest build.",
-                        fontSize = 12.sp,
-                        color = Success,
-                        modifier = Modifier.padding(bottom = 10.dp),
-                    )
-                }
-                is AppUpdateUiState.Available -> {
-                    Text(
-                        text = "Update available: ${s.info.versionName} (build ${s.info.versionCode})",
-                        fontSize = 12.sp,
-                        color = Primary,
-                        modifier = Modifier.padding(bottom = 10.dp),
-                    )
-                }
-                is AppUpdateUiState.Downloading -> {
-                    Text(
-                        text = "Downloading ${s.info.versionName}… ${(s.progress * 100).toInt()}%",
-                        fontSize = 12.sp,
-                        color = TextSecondary,
-                        modifier = Modifier.padding(bottom = 8.dp),
-                    )
-                    LinearProgressIndicator(
-                        progress = { s.progress },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 10.dp),
-                        color = Primary,
-                    )
-                }
-                is AppUpdateUiState.ReadyToInstall -> {
-                    Text(
-                        text = "Ready to install ${s.info.versionName}",
-                        fontSize = 12.sp,
-                        color = Success,
-                        modifier = Modifier.padding(bottom = 10.dp),
-                    )
-                }
-                is AppUpdateUiState.Error -> {
-                    Text(
-                        text = s.message,
-                        fontSize = 12.sp,
-                        color = Error,
-                        modifier = Modifier.padding(bottom = 10.dp),
-                    )
-                }
+                is AppUpdateUiState.Downloading -> LinearProgressIndicator(
+                    progress = { s.progress ?: 0f },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 10.dp),
+                    color = Primary,
+                )
+                is AppUpdateUiState.Installing -> LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 10.dp),
+                    color = Primary,
+                )
+                else -> Unit
             }
 
-            when (val s = updateState) {
-                is AppUpdateUiState.Available -> {
-                    MacroButton(
-                        text = "Update to ${s.info.versionName}",
-                        onClick = {
-                            haptics.confirm()
-                            if (appUpdateViewModel.canInstallPackages()) {
-                                appUpdateViewModel.startDownload(s.info)
-                            } else {
-                                context.startActivity(appUpdateViewModel.installPermissionSettingsIntent())
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                is AppUpdateUiState.ReadyToInstall -> {
-                    MacroButton(
-                        text = "Install update",
-                        onClick = {
-                            haptics.confirm()
-                            appUpdateViewModel.installDownloaded()
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                is AppUpdateUiState.Downloading -> {
-                    MacroButton(
-                        text = "Downloading…",
-                        onClick = {},
-                        enabled = false,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                else -> {
-                    MacroButton(
-                        text = if (updateState is AppUpdateUiState.Checking) "Checking…" else "Check for updates",
-                        onClick = {
-                            haptics.click()
-                            appUpdateViewModel.checkFromSettings()
-                        },
-                        enabled = updateState !is AppUpdateUiState.Checking,
-                        modifier = Modifier.fillMaxWidth(),
-                        variant = ButtonVariant.SECONDARY,
-                    )
-                }
+            if (updateState.updateAvailable) {
+                MacroButton(
+                    text = when (val s = updateState) {
+                        is AppUpdateUiState.Downloading, is AppUpdateUiState.Installing -> "Show progress"
+                        is AppUpdateUiState.ReadyToInstall -> "Install update"
+                        is AppUpdateUiState.Error -> "Try again"
+                        else -> "Update to ${s.info?.versionName.orEmpty()}"
+                    },
+                    onClick = {
+                        when (val s = updateState) {
+                            is AppUpdateUiState.ReadyToInstall -> appUpdateViewModel.retryInstall()
+                            is AppUpdateUiState.Available, is AppUpdateUiState.NeedsPermission, is AppUpdateUiState.Error ->
+                                s.info?.let { info ->
+                                    appUpdateViewModel.update(info)?.let { runCatching { context.startActivity(it) } }
+                                }
+                            else -> Unit
+                        }
+                        appUpdateViewModel.openDialog()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                MacroButton(
+                    text = if (updateState is AppUpdateUiState.Checking) "Checking…" else "Check for updates",
+                    onClick = { appUpdateViewModel.checkFromSettings() },
+                    enabled = updateState !is AppUpdateUiState.Checking,
+                    modifier = Modifier.fillMaxWidth(),
+                    variant = ButtonVariant.SECONDARY,
+                )
             }
+            Spacer(modifier = Modifier.height(6.dp))
+            MetricToggleRow(
+                name = "Tell me when a build is out",
+                enabled = notifyEnabled,
+                icon = AppIcons.Bell,
+                onCheckedChange = { enabled ->
+                    haptics.tick()
+                    appUpdateViewModel.setNotifyEnabled(enabled)
+                },
+            )
+            Text(
+                text = "Checks every few hours, even with the app closed, and posts a notification you can update from.",
+                fontSize = 11.sp,
+                color = TextSecondary,
+                modifier = Modifier.padding(top = 2.dp),
+            )
 
             Spacer(modifier = Modifier.height(14.dp))
             HorizontalDivider(color = Border.copy(alpha = 0.6f))

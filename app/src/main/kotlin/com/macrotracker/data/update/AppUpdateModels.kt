@@ -43,12 +43,43 @@ sealed class AppUpdateUiState {
     data object Checking : AppUpdateUiState()
     data object UpToDate : AppUpdateUiState()
     data class Available(val info: AppUpdateInfo) : AppUpdateUiState()
-    data class Downloading(val info: AppUpdateInfo, val progress: Float) : AppUpdateUiState()
-    data class ReadyToInstall(val info: AppUpdateInfo, val apkPath: String) : AppUpdateUiState()
-    data class Error(val message: String) : AppUpdateUiState()
+
+    /** A newer build, but Android has not let DailyDash install apps yet. */
+    data class NeedsPermission(val info: AppUpdateInfo) : AppUpdateUiState()
+
+    /** [progress] is null when the size is unknown; the bar then runs indeterminate. */
+    data class Downloading(
+        val info: AppUpdateInfo,
+        val progress: Float?,
+        val downloadedBytes: Long,
+        val totalBytes: Long?,
+    ) : AppUpdateUiState()
+
+    /** Handed to Android: it installs and DailyDash restarts, or it puts its own prompt up first. */
+    data class Installing(val info: AppUpdateInfo, val awaitingConfirmation: Boolean) : AppUpdateUiState()
+
+    /** Downloaded, not installed yet: Android's prompt was closed, or the install failed ([note]). */
+    data class ReadyToInstall(val info: AppUpdateInfo, val apkPath: String, val note: String? = null) : AppUpdateUiState()
+
+    /** [info] is set when the failure was the update itself, so it can be tried again. */
+    data class Error(val message: String, val info: AppUpdateInfo? = null) : AppUpdateUiState()
 }
 
+/** The build this state is about, if it is about one. */
+val AppUpdateUiState.info: AppUpdateInfo?
+    get() = when (this) {
+        is AppUpdateUiState.Available -> info
+        is AppUpdateUiState.NeedsPermission -> info
+        is AppUpdateUiState.Downloading -> info
+        is AppUpdateUiState.Installing -> info
+        is AppUpdateUiState.ReadyToInstall -> info
+        is AppUpdateUiState.Error -> info
+        else -> null
+    }
+
 val AppUpdateUiState.updateAvailable: Boolean
-    get() = this is AppUpdateUiState.Available ||
-        this is AppUpdateUiState.Downloading ||
-        this is AppUpdateUiState.ReadyToInstall
+    get() = info != null
+
+/** A download or install is under way; the sheet shows progress, not choices. */
+val AppUpdateUiState.inProgress: Boolean
+    get() = this is AppUpdateUiState.Downloading || this is AppUpdateUiState.Installing
