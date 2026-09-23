@@ -1,28 +1,20 @@
 <resources>
   <!-- Widget colors (dark) — Cursor Dark Anysphere -->
-  <color name="widget_surface">#181818</color>
-  <color name="widget_on_surface">#E4E4E4</color>
-  <color name="widget_subtitle">#8C8C8C</color>
   <color name="widget_calorie">#FFB4AB</color>
   <color name="widget_protein">#A5D6A7</color>
   <color name="widget_fat">#FFB74D</color>
   <color name="widget_carb">#90CAF9</color>
   <color name="widget_track_bg">#2A2A2A</color>
-  <color name="widget_health">#90CAF9</color>
   <color name="widget_weather">#FFB74D</color>
   <color name="widget_calendar">#CE93D8</color>
-  <color name="widget_card_bg">#1A1A1A</color>
   <color name="widget_steps">#90CAF9</color>
   <color name="widget_sleep">#CE93D8</color>
   <color name="widget_heart">#EF9A9A</color>
-  <color name="widget_accent">#2A2A2A</color>
-  <color name="widget_on_accent">#E4E4E4</color>
   <color name="widget_primary">#81A1C1</color>
   <color name="widget_secondary">#8C8C8C</color>
 
   <!-- F1 widget colors — Cursor chrome, F1 accents -->
   <color name="f1_red">#FF1E3C</color>
-  <color name="f1_dark">#141414</color>
   <color name="f1_surface">#141414</color>
   <color name="f1_card">#1A1A1A</color>
   <color name="f1_card_alt">#181818</color>
