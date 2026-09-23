@@ -20,6 +20,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.remember
+import com.macrotracker.ui.components.WidgetConfig
+import com.macrotracker.ui.components.WidgetEditor
+import com.macrotracker.ui.components.draggableWidgetItems
+import com.macrotracker.ui.components.encodeWidgetConfig
+import com.macrotracker.ui.components.parseWidgetConfig
+import com.macrotracker.ui.components.rememberDraggableWidgetListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -119,6 +127,10 @@ fun ServerScreen(
     LaunchedEffect(Unit) { viewModel.followDashboard(DASHBOARD_REFRESH_MS) }
     val dashboardLink by viewModel.dashboardLink.collectAsState()
 
+    val sectionOrder by viewModel.sectionOrder.collectAsState()
+    val sections = remember(sectionOrder) { parseWidgetConfig(sectionOrder, ServerSections) }
+    var editing by rememberSaveable { mutableStateOf(false) }
+
     var selectedId by rememberSaveable { mutableStateOf(initialServerId) }
     // A tapped notification names the server it was about.
     LaunchedEffect(Unit) { viewModel.consumeFocus()?.let { selectedId = it } }
@@ -136,6 +148,22 @@ fun ServerScreen(
             onNavigateBack = onNavigateBack,
             modifier = Modifier.padding(horizontal = 16.dp),
             trailing = {
+                if (profiles.isNotEmpty()) {
+                    IconButton(
+                        onClick = {
+                            haptics.tick()
+                            editing = !editing
+                        },
+                        modifier = Modifier.size(40.dp),
+                    ) {
+                        Icon(
+                            if (editing) AppIcons.Check else AppIcons.Edit,
+                            contentDescription = if (editing) "Done" else "Edit sections",
+                            tint = if (editing) Primary else TextSecondary,
+                            modifier = Modifier.size(21.dp),
+                        )
+                    }
+                }
                 IconButton(onClick = onNavigateToSettings, modifier = Modifier.size(40.dp)) {
                     Icon(
                         AppIcons.Settings,
@@ -206,7 +234,33 @@ fun ServerScreen(
 
         val link = dashboardLink?.takeIf { it.belongsTo(runtime.hostProfile?.hostname) }
 
+        // Only what this server can fill: advisories when there are some, the dashboard's
+        // sections when it runs the dashboard. A hidden or empty section keeps its place.
+        val available = remember(runtime, link) {
+            buildSet {
+                add(SECTION_OVERVIEW)
+                if (runtime.advisories.isNotEmpty() || link?.alerts?.isNotEmpty() == true) add(SECTION_ADVISORIES)
+                if (link != null && (link.activity.nowPlaying != null || link.activity.downloads.isNotEmpty())) add(SECTION_ACTIVITY)
+                add(SECTION_HISTORY)
+                if (link != null && link.services.isNotEmpty()) add(SECTION_SERVICES)
+                addAll(listOf(SECTION_COMPUTE, SECTION_MEMORY, SECTION_NETWORK, SECTION_STORAGE, SECTION_SENSORS))
+                addAll(listOf(SECTION_PROCESSES, SECTION_CONTAINERS, SECTION_SYSTEM, SECTION_UPDATES))
+                if (runtime.snapshot?.sessions?.isNotEmpty() == true) add(SECTION_SESSIONS)
+            }
+        }
+        val shown = remember(sections, available) { sections.filter { it.isVisible && it.id in available } }
+        val listState = rememberLazyListState()
+        val dragState = rememberDraggableWidgetListState(
+            items = shown,
+            lazyListState = listState,
+            itemKey = { it.id },
+            onReorder = { reordered -> viewModel.updateSectionOrder(encodeWidgetConfig(mergeReordered(sections, reordered))) },
+            haptics = haptics,
+        )
+
         LazyColumn(
+            state = listState,
+            userScrollEnabled = !dragState.isDragActive,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
@@ -214,10 +268,30 @@ fun ServerScreen(
                 bottom = 24.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
             ),
         ) {
-            item(key = "hero") { ServerHeroCard(runtime, link, ask(ServerAiSection.OVERVIEW)) }
-            if (runtime.advisories.isNotEmpty() || link?.alerts?.isNotEmpty() == true) {
-                item(key = "advisories") {
-                    ServerAdvisoriesCard(
+            if (editing) {
+                item(key = "editor") {
+                    WidgetEditor(
+                        configs = sections,
+                        onConfigsChanged = { viewModel.updateSectionOrder(encodeWidgetConfig(it)) },
+                        onClose = { editing = false },
+                    )
+                    Text(
+                        "Advisories, Happening now, Services and Logged in only show when there is something in them.",
+                        color = TextTertiary,
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
+                    )
+                }
+                return@LazyColumn
+            }
+            draggableWidgetItems(
+                state = dragState,
+                itemKey = { it.id },
+                haptics = haptics,
+            ) { _, section, _ ->
+                when (section.id) {
+                    SECTION_OVERVIEW -> ServerHeroCard(runtime, link, ask(ServerAiSection.OVERVIEW))
+                    SECTION_ADVISORIES -> ServerAdvisoriesCard(
                         runtime = runtime,
                         link = link,
                         onTrustHostKey = { viewModel.trustNewHostKey(runtime.profile.id) },
@@ -229,35 +303,82 @@ fun ServerScreen(
                             }
                         },
                     )
+                    SECTION_ACTIVITY -> link?.let { ServerActivityCard(it) }
+                    SECTION_HISTORY -> ServerHistoryCard(runtime, link)
+                    SECTION_SERVICES -> link?.let { ServicesWallCard(it, ask(ServerAiSection.OVERVIEW)) }
+                    SECTION_COMPUTE -> ComputeCard(runtime, ask(ServerAiSection.COMPUTE))
+                    SECTION_MEMORY -> MemoryCard(runtime, ask(ServerAiSection.MEMORY))
+                    SECTION_NETWORK -> NetworkCard(runtime, ask(ServerAiSection.NETWORK))
+                    SECTION_STORAGE -> StorageCard(runtime, ask(ServerAiSection.STORAGE))
+                    SECTION_SENSORS -> SensorsCard(runtime, ask(ServerAiSection.THERMAL))
+                    SECTION_PROCESSES -> ProcessesCard(runtime, ask(ServerAiSection.PROCESSES))
+                    SECTION_CONTAINERS -> ContainersCard(runtime, ask(ServerAiSection.DOCKER))
+                    SECTION_SYSTEM -> SystemCard(runtime, ask(ServerAiSection.SERVICES))
+                    SECTION_UPDATES -> ServerUpdatesCard(
+                        runtime = runtime,
+                        onRefresh = { viewModel.refreshNews(runtime.profile.id) },
+                        onAskAi = ask(ServerAiSection.UPDATES),
+                    )
+                    SECTION_SESSIONS -> ServerSessionsCard(runtime, ask(ServerAiSection.SESSIONS))
                 }
             }
-            if (link != null) {
-                item(key = "activity") { ServerActivityCard(link) }
-            }
-            item(key = "history") { ServerHistoryCard(runtime, link) }
-            if (link != null && link.services.isNotEmpty()) {
-                item(key = "services-wall") { ServicesWallCard(link, ask(ServerAiSection.OVERVIEW)) }
-            }
-            item(key = "compute") { ComputeCard(runtime, ask(ServerAiSection.COMPUTE)) }
-            item(key = "memory") { MemoryCard(runtime, ask(ServerAiSection.MEMORY)) }
-            item(key = "network") { NetworkCard(runtime, ask(ServerAiSection.NETWORK)) }
-            item(key = "storage") { StorageCard(runtime, ask(ServerAiSection.STORAGE)) }
-            item(key = "sensors") { SensorsCard(runtime, ask(ServerAiSection.THERMAL)) }
-            item(key = "processes") { ProcessesCard(runtime, ask(ServerAiSection.PROCESSES)) }
-            item(key = "docker") { ContainersCard(runtime, ask(ServerAiSection.DOCKER)) }
-            item(key = "system") { SystemCard(runtime, ask(ServerAiSection.SERVICES)) }
-            item(key = "updates") {
-                ServerUpdatesCard(
-                    runtime = runtime,
-                    onRefresh = { viewModel.refreshNews(runtime.profile.id) },
-                    onAskAi = ask(ServerAiSection.UPDATES),
-                )
-            }
-            if (runtime.snapshot?.sessions?.isNotEmpty() == true) {
-                item(key = "sessions") { ServerSessionsCard(runtime, ask(ServerAiSection.SESSIONS)) }
+            if (shown.isEmpty()) {
+                item(key = "all-hidden") {
+                    Text(
+                        "Every section is switched off. Tap the pencil to bring some back.",
+                        color = TextSecondary,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(vertical = 24.dp),
+                    )
+                }
             }
         }
     }
+}
+
+private const val SECTION_OVERVIEW = "OVERVIEW"
+private const val SECTION_ADVISORIES = "ADVISORIES"
+private const val SECTION_ACTIVITY = "ACTIVITY"
+private const val SECTION_HISTORY = "HISTORY"
+private const val SECTION_SERVICES = "SERVICES"
+private const val SECTION_COMPUTE = "COMPUTE"
+private const val SECTION_MEMORY = "MEMORY"
+private const val SECTION_NETWORK = "NETWORK"
+private const val SECTION_STORAGE = "STORAGE"
+private const val SECTION_SENSORS = "SENSORS"
+private const val SECTION_PROCESSES = "PROCESSES"
+private const val SECTION_CONTAINERS = "CONTAINERS"
+private const val SECTION_SYSTEM = "SYSTEM"
+private const val SECTION_UPDATES = "UPDATES"
+private const val SECTION_SESSIONS = "SESSIONS"
+
+/** The server screen's sections in their built-in order, for the pencil editor. */
+private val ServerSections = listOf(
+    Triple(SECTION_OVERVIEW, "Overview", AppIcons.Dashboard),
+    Triple(SECTION_ADVISORIES, "Advisories", AppIcons.Warning),
+    Triple(SECTION_ACTIVITY, "Happening now", AppIcons.Play),
+    Triple(SECTION_HISTORY, "History", AppIcons.ChartLine),
+    Triple(SECTION_SERVICES, "Services", AppIcons.Activity),
+    Triple(SECTION_COMPUTE, "Compute", AppIcons.Cpu),
+    Triple(SECTION_MEMORY, "Memory", AppIcons.ChartPie),
+    Triple(SECTION_NETWORK, "Network", AppIcons.Link),
+    Triple(SECTION_STORAGE, "Storage", AppIcons.HardDrive),
+    Triple(SECTION_SENSORS, "Sensors & power", AppIcons.Flame),
+    Triple(SECTION_PROCESSES, "Top processes", AppIcons.Terminal),
+    Triple(SECTION_CONTAINERS, "Containers", AppIcons.Blocks),
+    Triple(SECTION_SYSTEM, "System", AppIcons.Server),
+    Triple(SECTION_UPDATES, "Updates & news", AppIcons.Download),
+    Triple(SECTION_SESSIONS, "Logged in", AppIcons.Account),
+)
+
+/**
+ * Puts a drag's new order back into the full list. Sections that were hidden, or had
+ * nothing to show, keep their own slots instead of all piling up at the end.
+ */
+private fun mergeReordered(all: List<WidgetConfig>, reordered: List<WidgetConfig>): List<WidgetConfig> {
+    val moved = reordered.map { it.id }.toSet()
+    val next = reordered.iterator()
+    return all.map { if (it.id in moved && next.hasNext()) next.next() else it }
 }
 
 @Composable

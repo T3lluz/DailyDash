@@ -561,7 +561,7 @@ private fun EventPoster(event: UpcomingEvent, past: Boolean, info: CarouselItemD
                     .padding(vertical = 14.dp, horizontal = 18.dp)
                     .graphicsLayer {
                         val p = info.openness()
-                        alpha = 0.5f + 0.42f * p
+                        alpha = 0.7f + 0.3f * p
                         scaleX = 0.84f + 0.08f * p
                         scaleY = scaleX
                     },
@@ -758,14 +758,18 @@ private fun RestPoster(hint: String, info: CarouselItemDrawInfo) {
     }
 }
 
-/** The lap as the dashboard draws it, through the same renderer as the F1 card; it paints once per weekend. */
+/**
+ * The lap as the dashboard draws it, through the same renderer as the F1 card. It is
+ * drawn finished and red from the start: a strip of cards that swipe past is no place
+ * for a lap to paint itself in.
+ */
 @Composable
 private fun CircuitMap(pathData: String, modifier: Modifier = Modifier) {
     val outline = remember(pathData) { circuitOutlineFromSvgPath("svg-${pathData.hashCode()}", pathData) } ?: return
     F1CircuitMap(
         outline = outline,
         weight = CircuitMapWeight.MINI,
-        motion = CircuitMotion.PAINT_ONCE,
+        motion = CircuitMotion.STILL,
         modifier = modifier,
     )
 }

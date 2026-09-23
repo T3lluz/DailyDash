@@ -17,17 +17,80 @@ data class HermesStatus(
     val modelLabel: String?,
     val version: String?,
     val models: List<HermesModelOption>,
+    /** What each signed-in CLI lets a thread do, keyed by source (`claude`, `cursor`, `opencode`). */
+    val modes: Map<String, List<HermesMode>> = emptyMap(),
+    /** Context window last asked for, in tokens; 0 is the model's own default. */
+    val window: Int = 0,
+    /** Hermes thinks through this machine's brains rather than its own endpoint. */
+    val linked: Boolean = false,
 ) {
     val ready: Boolean get() = up && api
 }
 
+/**
+ * One row of the bridge's model list. Every family (Claude Opus, Codex 5.3, …) ships one
+ * row per depth and modifier, so the list runs to several hundred; the picker shows
+ * families and the composer's depth chip picks the row within one.
+ */
 data class HermesModelOption(
     val id: String,
     val label: String,
     val group: String,
     val note: String?,
     val current: Boolean,
+    val family: String = id,
+    val familyLabel: String = label,
+    /** `off`, `min`, `low`, `med`, `high`, `xhigh`, `max`, or blank for the CLI's own default. */
+    val effort: String = "",
+    val fast: Boolean = false,
+    val think: Boolean = false,
+    /** OpenCode's own price of zero. */
+    val free: Boolean = false,
+    /** `claude`, `cursor`, `opencode`; blank for Hermes' own endpoint. */
+    val source: String = "",
+    val ctxDefault: Int = 0,
+    val ctxMax: Int = 0,
+    val contexts: List<Int> = emptyList(),
 )
+
+/** A mode a CLI offers (Plan, Ask, Agent, Accept edits, …) and what it lets Hermes do. */
+data class HermesMode(
+    val id: String,
+    val label: String,
+    /** `chat`, `read`, `ask` or `write`. */
+    val kind: String,
+    val cap: String,
+    val desc: String,
+) {
+    val permission: HermesPermission get() = when (kind) {
+        "chat" -> HermesPermission.CHAT
+        "read" -> HermesPermission.LOOK
+        "write" -> HermesPermission.FULL
+        else -> HermesPermission.ASK
+    }
+}
+
+/** A slash command Hermes itself answers, from `/ai/commands`. */
+data class HermesCommand(
+    val name: String,
+    val desc: String,
+    val args: String,
+    val group: String,
+    val aliases: List<String>,
+)
+
+/** A file handed to Hermes with a question, as `/ai/upload` stored it. */
+data class HermesAttachment(
+    val id: String,
+    val name: String,
+    val mime: String,
+    /** `image` or `file`. */
+    val kind: String,
+    val size: Long,
+    val url: String?,
+) {
+    val isImage: Boolean get() = kind == "image" || mime.startsWith("image/")
+}
 
 /**
  * What Hermes may do in a thread. The ids are the bridge's own; the web calls these
@@ -63,7 +126,12 @@ data class HermesThreadSummary(
     val updatedMs: Long,
     /** Approval cards or questions still waiting on someone. */
     val pending: Int,
-)
+    /** The model this chat last used; opening it puts Hermes back on it, as the web does. */
+    val model: String = "",
+) {
+    /** A standing Hermes profile (an "employee") rather than a conversation. */
+    val isStaff: Boolean get() = kind == "employee"
+}
 
 data class HermesTool(val name: String, val state: String, val preview: String) {
     val failed: Boolean get() = state == "failed"
@@ -91,7 +159,11 @@ data class HermesAskCommand(
 sealed interface HermesItem {
     val key: String
 
-    data class User(override val key: String, val text: String) : HermesItem
+    data class User(
+        override val key: String,
+        val text: String,
+        val attachments: List<HermesAttachment> = emptyList(),
+    ) : HermesItem
 
     /** Command output or an answer handed back to Hermes; drawn as a note, not a bubble. */
     data class Output(override val key: String, val text: String) : HermesItem

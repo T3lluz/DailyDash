@@ -220,6 +220,9 @@ class HomeViewModel @Inject constructor(
     private var lastRefreshMs = 0L
     private val loadedWidgetIds = mutableSetOf<String>()
 
+    /** Cards whose first load is running right now, so a scroll does not start it twice. */
+    private val loadingWidgetIds = mutableSetOf<String>()
+
     fun refreshAll(
         hasLocationPermission: Boolean,
         hasCalendarPermission: Boolean,
@@ -227,10 +230,26 @@ class HomeViewModel @Inject constructor(
         widgetIds: Set<String> = emptySet(),
     ) {
         val now = System.currentTimeMillis()
-        val pendingWidgets = if (force) widgetIds else widgetIds - loadedWidgetIds
+        val pendingWidgets = if (force) widgetIds else widgetIds - loadedWidgetIds - loadingWidgetIds
         // Throttle full refreshes, but always allow first-time loads for newly visible widgets.
         if (!force && pendingWidgets.isEmpty() && lastRefreshMs > 0 && now - lastRefreshMs < 30_000L) return
-        if (refreshJob?.isActive == true && !force && pendingWidgets.isEmpty()) return
+
+        if (refreshJob?.isActive == true && !force) {
+            if (pendingWidgets.isEmpty()) return
+            // Cards that scrolled into view mid-refresh load on their own. Cancelling the
+            // running batch threw away half-done work, such as F1's first circuit download,
+            // and the cancelled cards then waited for the next scroll to try again.
+            viewModelScope.launch {
+                try {
+                    loadWidgets(pendingWidgets, hasLocationPermission, hasCalendarPermission, force = false)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(TAG, "Loading ${pendingWidgets.joinToString()} failed: ${e.message}", e)
+                }
+            }
+            return
+        }
 
         val widgetsToLoad = if (force || pendingWidgets.isEmpty()) widgetIds else pendingWidgets
 
@@ -238,34 +257,50 @@ class HomeViewModel @Inject constructor(
         refreshJob = viewModelScope.launch {
             if (force) _isRefreshing.value = true
             try {
-                coroutineScope {
-                    val jobs = mutableListOf(
-                        async { loadDataInternal() },
-                    )
-                    if ("WEATHER" in widgetsToLoad) {
-                        jobs += async { loadWeatherInternal(hasLocationPermission, forceRefresh = force) }
-                    }
-                    if ("BODY_STATS" in widgetsToLoad) {
-                        jobs += async { loadHealthConnectInternal(silent = true, forceRefresh = force) }
-                    }
-                    if ("CALENDAR" in widgetsToLoad) {
-                        jobs += async { loadCalendarInternal(hasCalendarPermission, forceRefresh = force) }
-                    }
-                    if ("F1" in widgetsToLoad) {
-                        jobs += async { loadF1DataInternal(forceRefresh = force) }
-                    }
-                    awaitAll(*jobs.toTypedArray())
-                }
-                loadedWidgetIds += widgetsToLoad
+                loadWidgets(widgetsToLoad, hasLocationPermission, hasCalendarPermission, force, includeLogs = true)
                 lastRefreshMs = System.currentTimeMillis()
                 lastLoadDataMs = lastRefreshMs
                 // One coalesced widget update after the batch — not per-widget mid-flight.
                 scheduleWidgetUpdate(immediate = force)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "refreshAll failed: ${e.message}", e)
             } finally {
                 _isRefreshing.value = false
             }
+        }
+    }
+
+    private suspend fun loadWidgets(
+        ids: Set<String>,
+        hasLocationPermission: Boolean,
+        hasCalendarPermission: Boolean,
+        force: Boolean,
+        includeLogs: Boolean = false,
+    ) {
+        loadingWidgetIds += ids
+        try {
+            coroutineScope {
+                val jobs = mutableListOf<kotlinx.coroutines.Deferred<Unit>>()
+                if (includeLogs) jobs += async { loadDataInternal() }
+                if ("WEATHER" in ids) {
+                    jobs += async { loadWeatherInternal(hasLocationPermission, forceRefresh = force) }
+                }
+                if ("BODY_STATS" in ids) {
+                    jobs += async { loadHealthConnectInternal(silent = true, forceRefresh = force) }
+                }
+                if ("CALENDAR" in ids) {
+                    jobs += async { loadCalendarInternal(hasCalendarPermission, forceRefresh = force) }
+                }
+                if ("F1" in ids) {
+                    jobs += async { loadF1DataInternal(forceRefresh = force) }
+                }
+                jobs.awaitAll()
+            }
+            loadedWidgetIds += ids
+        } finally {
+            loadingWidgetIds -= ids
         }
     }
 

@@ -5,6 +5,7 @@ import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
+import com.macrotracker.data.update.AppUpdateWorker
 import com.macrotracker.data.update.PackageReplacedReceiver
 import com.macrotracker.widget.WeatherWidgetPreview
 import com.macrotracker.widget.WidgetRefreshWorker
@@ -29,6 +30,8 @@ class DailyDashApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         PackageReplacedReceiver.ensureChannel(this)
+        // Every few hours, even with the app closed: a new build shows up as a notification.
+        AppUpdateWorker.schedule(this)
         if (WidgetStateProvider.hasAnyWidget(this)) {
             WidgetRefreshWorker.enqueuePeriodicRefresh(this)
             // Periodic worker covers freshness; skip an immediate full refresh on every cold start.

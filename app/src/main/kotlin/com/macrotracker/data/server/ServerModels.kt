@@ -422,6 +422,12 @@ data class ServerNotificationSettings(
     val updatesEnabled: Boolean = true,
     val liveNotificationEnabled: Boolean = false,
     val liveNotificationServerId: String? = null,
+    /**
+     * Whether the live notification opens onto the full panel. Android expands whichever
+     * notification is on top of the shade, so the panel only comes up when asked for;
+     * otherwise it stays the compact row, plus its actions when opened.
+     */
+    val liveNotificationDetailed: Boolean = false,
     val startOnBoot: Boolean = false,
     /** Foreground refresh cadence in seconds. */
     val pollSeconds: Int = 5,

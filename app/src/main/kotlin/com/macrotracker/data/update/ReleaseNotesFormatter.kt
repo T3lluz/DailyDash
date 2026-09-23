@@ -40,6 +40,17 @@ object ReleaseNotesFormatter {
         val versionCode: Int?,
     )
 
+    /** The first change in [formatted] notes, as plain text for a notification line. */
+    fun headline(formatted: String): String? =
+        formatted.lines()
+            .map { it.trim() }
+            .firstOrNull { it.startsWith("- ") || it.startsWith("* ") }
+            ?.drop(2)
+            ?.replace(Regex("""\[(.+?)]\([^)]*\)"""), "$1")
+            ?.replace("**", "")
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+
     fun parseMeta(raw: String): ParsedMeta {
         for (line in raw.replace("\r\n", "\n").lines()) {
             val match = metaComment.matchEntire(line.trim()) ?: continue

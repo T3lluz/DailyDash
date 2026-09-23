@@ -26,7 +26,9 @@ import com.macrotracker.BuildConfig
 import com.macrotracker.data.remote.AiProvider
 import com.macrotracker.data.update.AppUpdateUiState
 import com.macrotracker.data.update.UpdateInstallActivity
-import com.macrotracker.ui.components.AppUpdateDialog
+import com.macrotracker.ui.components.AppUpdateSheet
+import com.macrotracker.data.update.AppUpdateNotifier
+import com.macrotracker.data.update.updateAvailable
 import com.macrotracker.ui.components.PillNavigationBar
 import com.macrotracker.ui.components.WhatsNewDialog
 import com.macrotracker.ui.navigation.DailyDashNavHost
@@ -96,8 +98,20 @@ fun MainScreen(
         return true
     }
 
+    /** The update notification: its tap opens the sheet, its Update action starts too. */
+    fun consumeUpdateIntent() {
+        val intent = activity.intent ?: return
+        val start = intent.getBooleanExtra(AppUpdateNotifier.EXTRA_START_UPDATE, false)
+        val show = start || intent.getBooleanExtra(AppUpdateNotifier.EXTRA_SHOW_UPDATE, false)
+        if (!show) return
+        intent.removeExtra(AppUpdateNotifier.EXTRA_START_UPDATE)
+        intent.removeExtra(AppUpdateNotifier.EXTRA_SHOW_UPDATE)
+        appUpdateViewModel.openFromNotification(start)
+    }
+
     // Skip splash after an in-app update / version bump so What's New feels instant.
     LaunchedEffect(Unit) {
+        consumeUpdateIntent()
         val force = consumePostUpdateIntent()
         val showWhatsNew = appUpdateViewModel.willShowWhatsNew(force)
         if (showWhatsNew && !splashShown) {
@@ -166,6 +180,7 @@ fun MainScreen(
                     onboardingViewModel.markSplashShown()
                     appUpdateViewModel.handlePostUpdateLaunch(forceFromIntent = true)
                 }
+                consumeUpdateIntent()
                 appUpdateViewModel.checkOnResume()
             }
         }
@@ -200,28 +215,19 @@ fun MainScreen(
             )
         }
 
-        if (showUpdateDialog &&
-            (updateState is AppUpdateUiState.Available ||
-                updateState is AppUpdateUiState.Downloading ||
-                updateState is AppUpdateUiState.ReadyToInstall)
-        ) {
-            val needsPermission = !appUpdateViewModel.canInstallPackages()
-            AppUpdateDialog(
+        if (showUpdateDialog && updateState.updateAvailable) {
+            AppUpdateSheet(
                 state = updateState,
                 currentVersionName = appUpdateViewModel.currentVersionName,
                 onDismiss = { appUpdateViewModel.dismissDialog(snooze = true) },
                 onUpdate = { info ->
-                    if (appUpdateViewModel.canInstallPackages()) {
-                        appUpdateViewModel.startDownload(info)
-                    } else {
-                        context.startActivity(appUpdateViewModel.installPermissionSettingsIntent())
+                    appUpdateViewModel.update(info)?.let { permission ->
+                        runCatching { context.startActivity(permission) }
                     }
                 },
-                onInstall = { appUpdateViewModel.installDownloaded() },
-                onOpenInstallPermission = {
-                    context.startActivity(appUpdateViewModel.installPermissionSettingsIntent())
-                },
-                needsInstallPermission = needsPermission,
+                onCancelDownload = { appUpdateViewModel.cancelDownload() },
+                onRetryInstall = { appUpdateViewModel.retryInstall() },
+                onReopenPrompt = { appUpdateViewModel.reopenInstallPrompt() },
             )
         }
     }

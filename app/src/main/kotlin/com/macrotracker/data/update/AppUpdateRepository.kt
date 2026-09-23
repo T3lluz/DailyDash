@@ -14,6 +14,7 @@ import androidx.core.net.toUri
 import com.macrotracker.BuildConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -48,6 +49,8 @@ class AppUpdateRepository @Inject constructor(
         private const val KEY_CACHED_WHATS_NEW_VERSION_NAME = "cached_whats_new_version_name"
         private const val KEY_CACHED_WHATS_NEW_NOTES = "cached_whats_new_notes"
         private const val KEY_BACKOFF_UNTIL_MS = "backoff_until_ms"
+        private const val KEY_NOTIFY_ENABLED = "notify_enabled"
+        private const val KEY_ANNOUNCED_VERSION_CODE = "announced_version_code"
 
         /** Soft snooze: "Later" hides the prompt for this long, then re-prompts. */
         const val SNOOZE_DURATION_MS = 12L * 60L * 60L * 1000L
@@ -145,6 +148,7 @@ class AppUpdateRepository @Inject constructor(
         clearDismissed()
         clearDownloadedApks()
         PackageReplacedReceiver.cancelOpenPrompt(context)
+        AppUpdateNotifier.cancelAvailable(context)
 
         val cachedCode = prefs.getInt(KEY_CACHED_WHATS_NEW_VERSION_CODE, -1)
         val notes = if (cachedCode == current) {
@@ -361,19 +365,34 @@ class AppUpdateRepository @Inject constructor(
         )
     }
 
+    /** The finished download for [info], when one is already on disk from an earlier try. */
+    fun downloadedApk(info: AppUpdateInfo): File? {
+        val file = apkFileFor(info)
+        if (!file.isFile || file.length() < 1_000L) return null
+        val expected = info.apkBytes
+        return file.takeIf { expected == null || expected <= 0L || it.length() == expected }
+    }
+
+    private fun apkFileFor(info: AppUpdateInfo) =
+        File(updatesDir, "DailyDash-${info.versionName}-vc${info.versionCode}.apk")
+
     /**
-     * Downloads the APK to cache. [onProgress] reports 0f..1f when content length is known.
+     * Downloads the APK to cache. [onProgress] gets bytes so far and the total when the
+     * server says it. The bytes land in a `.part` file that only becomes the APK once it is
+     * whole, so a cancelled or broken download can never be mistaken for a finished one.
+     * Cancelling the caller stops the download between reads.
      */
     suspend fun downloadApk(
         info: AppUpdateInfo,
-        onProgress: (Float) -> Unit,
+        onProgress: (downloaded: Long, total: Long?) -> Unit,
     ): File = withContext(Dispatchers.IO) {
         if (info.apkDownloadUrl.isBlank()) {
             throw IOException("No APK download URL for ${info.versionName}")
         }
         cacheWhatsNew(info)
-        updatesDir.listFiles()?.forEach { it.delete() }
-        val outFile = File(updatesDir, "DailyDash-${info.versionName}-vc${info.versionCode}.apk")
+        val outFile = apkFileFor(info)
+        updatesDir.listFiles()?.forEach { if (it != outFile) it.delete() }
+        val partFile = File(updatesDir, outFile.name + ".part")
 
         val request = Request.Builder()
             .url(info.apkDownloadUrl)
@@ -381,36 +400,66 @@ class AppUpdateRepository @Inject constructor(
             .get()
             .build()
 
-        downloadClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
-                throw IOException("Download failed HTTP ${response.code}")
-            }
-            val body = response.body ?: throw IOException("Empty download body")
-            val total = body.contentLength().takeIf { it > 0 } ?: info.apkBytes ?: -1L
-            body.byteStream().use { input ->
-                outFile.outputStream().use { output ->
-                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                    var readTotal = 0L
-                    while (true) {
-                        val read = input.read(buffer)
-                        if (read == -1) break
-                        output.write(buffer, 0, read)
-                        readTotal += read
-                        if (total > 0) {
-                            onProgress((readTotal.toFloat() / total.toFloat()).coerceIn(0f, 1f))
+        val call = downloadClient.newCall(request)
+        val cancelOnAbort = coroutineContext[kotlinx.coroutines.Job]?.invokeOnCompletion { cause ->
+            if (cause != null) call.cancel()
+        }
+        try {
+            call.execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw IOException("Download failed (HTTP ${response.code})")
+                }
+                val body = response.body ?: throw IOException("Empty download body")
+                val total = body.contentLength().takeIf { it > 0 } ?: info.apkBytes?.takeIf { it > 0 }
+                body.byteStream().use { input ->
+                    partFile.outputStream().use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        var readTotal = 0L
+                        onProgress(0L, total)
+                        while (true) {
+                            ensureActive()
+                            val read = input.read(buffer)
+                            if (read == -1) break
+                            output.write(buffer, 0, read)
+                            readTotal += read
+                            onProgress(readTotal, total)
                         }
+                        output.flush()
                     }
-                    output.flush()
+                }
+                if (total != null && partFile.length() != total) {
+                    throw IOException("The download stopped short (${partFile.length()} of $total bytes)")
                 }
             }
-        }
-
-        if (!outFile.exists() || outFile.length() < 1_000L) {
+            if (partFile.length() < 1_000L) throw IOException("Downloaded APK is missing or too small")
             outFile.delete()
-            throw IOException("Downloaded APK is missing or too small")
+            if (!partFile.renameTo(outFile)) throw IOException("Could not save the download")
+            outFile
+        } catch (e: Exception) {
+            partFile.delete()
+            throw e
+        } finally {
+            cancelOnAbort?.dispose()
         }
-        onProgress(1f)
-        outFile
+    }
+
+    // ── Background checks ──────────────────────────────────────────────────
+
+    /** Whether the background check may post a notification when a build lands. */
+    fun notifyEnabled(): Boolean = prefs.getBoolean(KEY_NOTIFY_ENABLED, true)
+
+    fun setNotifyEnabled(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_NOTIFY_ENABLED, enabled) }
+    }
+
+    /**
+     * True once [versionCode] has been put in front of the person, by the in-app sheet or a
+     * notification, so the background check does not announce it twice.
+     */
+    fun wasAnnounced(versionCode: Int): Boolean = prefs.getInt(KEY_ANNOUNCED_VERSION_CODE, -1) >= versionCode
+
+    fun markAnnounced(versionCode: Int) {
+        if (!wasAnnounced(versionCode)) prefs.edit { putInt(KEY_ANNOUNCED_VERSION_CODE, versionCode) }
     }
 
     fun canInstallPackages(): Boolean =

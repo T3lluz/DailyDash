@@ -105,11 +105,11 @@ val BotBubbleShape =
 val UserBubbleShape =
     RoundedCornerShape(topStart = 18.dp, topEnd = 6.dp, bottomEnd = 18.dp, bottomStart = 18.dp)
 val ChatPillShape = RoundedCornerShape(999.dp)
-private val ComposerShape = RoundedCornerShape(22.dp)
+internal val ComposerShape = RoundedCornerShape(22.dp)
 private val ComposerSendShape = RoundedCornerShape(999.dp)
 
 /** Pill nav = 64dp + 8dp bottom pad; keep a little air above it. */
-private val PillNavClearance = 80.dp
+internal val PillNavClearance = 80.dp
 
 // ── Scrolling ────────────────────────────────────────────────────────────────
 

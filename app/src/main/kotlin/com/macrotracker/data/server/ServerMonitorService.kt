@@ -102,6 +102,8 @@ class ServerMonitorService : Service() {
                 return START_NOT_STICKY
             }
             ServerLiveNotification.ACTION_NEXT_SERVER -> stepServer()
+            ServerLiveNotification.ACTION_TOGGLE_DETAIL ->
+                store.updateSettings { it.copy(liveNotificationDetailed = !it.liveNotificationDetailed) }
         }
 
         // Must post a notification within a few seconds of startForegroundService,
@@ -138,13 +140,20 @@ class ServerMonitorService : Service() {
                 store.settings.map { it.liveNotificationServerId }.distinctUntilChanged(),
                 dashboard.link,
                 screenOn,
-            ) { runtimes, selectedId, link, visible ->
+                store.settings.map { it.liveNotificationDetailed }.distinctUntilChanged(),
+            ) { runtimes, selectedId, link, visible, detailed ->
                 val selected = selectedId?.let { runtimes[it] }?.takeIf { it.profile.enabled }
                     ?: runtimes.values.firstOrNull { it.profile.enabled }
                     ?: runtimes.values.firstOrNull()
                 val others = runtimes.values.filter { it.profile.enabled && it.profile.id != selected?.profile?.id }
                     .sortedBy { it.profile.position }
-                LiveFrame(selected, others, link?.takeIf { selected != null && it.belongsTo(selected.hostProfile?.hostname) }, visible)
+                LiveFrame(
+                    selected,
+                    others,
+                    link?.takeIf { selected != null && it.belongsTo(selected.hostProfile?.hostname) },
+                    visible,
+                    detailed,
+                )
             }
                 .distinctUntilChanged()
                 .collectLatest { frame ->
@@ -156,7 +165,7 @@ class ServerMonitorService : Service() {
                     }
                     if (!frame.visible) return@collectLatest
                     val notification = withContext(Dispatchers.Default) {
-                        live.build(selected, frame.link, frame.others, ServerMonitorService::class.java)
+                        live.build(selected, frame.link, frame.others, ServerMonitorService::class.java, frame.detailed)
                     }
                     runCatching {
                         NotificationManagerCompat.from(this@ServerMonitorService)
@@ -207,6 +216,7 @@ class ServerMonitorService : Service() {
         val others: List<ServerRuntime>,
         val link: DashboardLink?,
         val visible: Boolean,
+        val detailed: Boolean,
     )
 
     companion object {

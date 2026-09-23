@@ -8,7 +8,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import android.widget.Toast
 import com.macrotracker.MainActivity
 
 /**
@@ -45,38 +44,44 @@ class UpdateInstallActivity : Activity() {
         when (status) {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
                 val confirmIntent = intent.confirmationIntent()
+                // The sheet in the app says "tap Install in Android's prompt" from here on,
+                // so no toast: the prompt and the sheet already say it.
+                UpdateInstallEvents.post(UpdateInstallEvents.Event.AwaitingUser(confirmIntent))
                 if (confirmIntent != null) {
-                    // Keep this activity alive until confirmation is shown.
                     // Android's silent-update throttle (often ~1h) can force this path
                     // even for same-package self-updates.
                     confirmIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     runCatching { startActivity(confirmIntent) }
-                        .onSuccess {
-                            Log.i(TAG, "Opened install confirmation UI")
-                            // Android throttles silent self-updates; a one-tap confirm is expected
-                            // when installing again within roughly an hour.
-                            toast("Tap Install to finish the update")
-                        }
+                        .onSuccess { Log.i(TAG, "Opened install confirmation UI") }
                         .onFailure {
                             Log.e(TAG, "Failed to open install confirmation", it)
-                            toast("Could not open the update confirmation screen.")
+                            UpdateInstallEvents.post(
+                                UpdateInstallEvents.Event.Failed(status, "Android's install prompt would not open"),
+                            )
                         }
                 } else {
                     Log.e(TAG, "PENDING_USER_ACTION without confirmation intent")
-                    toast("Update needs confirmation, but the system installer UI was missing.")
+                    UpdateInstallEvents.post(
+                        UpdateInstallEvents.Event.Failed(status, "Android asked to confirm but sent no prompt"),
+                    )
                 }
                 finish()
             }
             PackageInstaller.STATUS_SUCCESS -> {
                 Log.i(TAG, "Update installed successfully — relaunching DailyDash")
+                UpdateInstallEvents.post(UpdateInstallEvents.Event.Success)
                 relaunchApp()
                 // Delay finish so the launch intent is delivered before we tear down.
                 Handler(Looper.getMainLooper()).postDelayed({ finish() }, 250L)
             }
+            PackageInstaller.STATUS_FAILURE_ABORTED -> {
+                Log.i(TAG, "Update install cancelled from Android's prompt")
+                UpdateInstallEvents.post(UpdateInstallEvents.Event.Aborted)
+                finish()
+            }
             else -> {
                 Log.e(TAG, "Update install failed status=$status message=$message")
-                val detail = message.ifBlank { "status $status" }
-                toast("Update install failed: $detail")
+                UpdateInstallEvents.post(UpdateInstallEvents.Event.Failed(status, failureText(status, message)))
                 finish()
             }
         }
@@ -100,8 +105,14 @@ class UpdateInstallActivity : Activity() {
             .onFailure { Log.e(TAG, "Failed to relaunch after update", it) }
     }
 
-    private fun toast(text: String) {
-        Toast.makeText(applicationContext, text, Toast.LENGTH_LONG).show()
+    /** PackageInstaller's messages are for developers; say what happened instead. */
+    private fun failureText(status: Int, message: String): String = when (status) {
+        PackageInstaller.STATUS_FAILURE_BLOCKED -> "Android blocked the install"
+        PackageInstaller.STATUS_FAILURE_CONFLICT -> "It clashes with the installed app"
+        PackageInstaller.STATUS_FAILURE_INCOMPATIBLE -> "This phone cannot run that build"
+        PackageInstaller.STATUS_FAILURE_INVALID -> "The download was not a valid app"
+        PackageInstaller.STATUS_FAILURE_STORAGE -> "Not enough storage to install it"
+        else -> message.ifBlank { "Android reported status $status" }
     }
 
     private fun Intent.confirmationIntent(): Intent? {

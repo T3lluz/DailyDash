@@ -67,20 +67,7 @@ class HermesClient @Inject constructor(
     }
 
     suspend fun status(): HermesStatus = withContext(Dispatchers.IO) {
-        val root = JSONObject(get("/ai/status"))
-        val h = root.optJSONObject("hermes") ?: JSONObject()
-        val models = root.optJSONArray("models")?.let(::parseModels).orEmpty()
-        val model = h.optString("model")
-        HermesStatus(
-            up = h.optBoolean("up"),
-            api = h.optBoolean("api"),
-            model = model,
-            modelLabel = models.firstOrNull { it.current }?.label
-                ?: models.firstOrNull { it.id == model }?.label
-                ?: prettyModel(model),
-            version = h.optString("version").takeIf { it.isNotBlank() },
-            models = models,
-        )
+        parseStatus(JSONObject(get("/ai/status")))
     }
 
     suspend fun threads(): List<HermesThreadSummary> = withContext(Dispatchers.IO) {
@@ -93,8 +80,8 @@ class HermesClient @Inject constructor(
         HermesThread(summary = parseSummary(o), items = parseItems(o.optJSONArray("msgs") ?: JSONArray()))
     }
 
-    suspend fun createThread(perm: HermesPermission, title: String = ""): HermesThreadSummary = withContext(Dispatchers.IO) {
-        val body = JSONObject().put("perm", perm.id).put("title", title).put("web", true)
+    suspend fun createThread(permId: String, title: String = ""): HermesThreadSummary = withContext(Dispatchers.IO) {
+        val body = JSONObject().put("perm", permId).put("title", title).put("web", true)
         parseSummary(JSONObject(send("POST", "/ai/threads", body)))
     }
 
@@ -102,9 +89,92 @@ class HermesClient @Inject constructor(
         send("DELETE", "/ai/threads/${enc(id)}", null)
     }
 
-    suspend fun setPermission(id: String, perm: HermesPermission): Unit = withContext(Dispatchers.IO) {
-        send("PATCH", "/ai/threads/${enc(id)}", JSONObject().put("perm", perm.id))
+    /** A mode id from the current brain's CLI (`plan`, `agent`, `acceptEdits`, …) or a plain level. */
+    suspend fun setMode(id: String, mode: String): Unit = withContext(Dispatchers.IO) {
+        send("PATCH", "/ai/threads/${enc(id)}", JSONObject().put("perm", mode))
     }
+
+    suspend fun rename(id: String, title: String): HermesThreadSummary = withContext(Dispatchers.IO) {
+        parseSummary(JSONObject(send("PATCH", "/ai/threads/${enc(id)}", JSONObject().put("title", title))))
+    }
+
+    suspend fun setPinned(id: String, pinned: Boolean): Unit = withContext(Dispatchers.IO) {
+        send("PATCH", "/ai/threads/${enc(id)}", JSONObject().put("pinned", pinned))
+    }
+
+    /** Remembers the model this chat used, so opening it later puts Hermes back on it. */
+    suspend fun setThreadModel(id: String, model: String): Unit = withContext(Dispatchers.IO) {
+        send("PATCH", "/ai/threads/${enc(id)}", JSONObject().put("model", model))
+    }
+
+    /** Empties a chat on both sides: the transcript here and Hermes' session. */
+    suspend fun clear(id: String): Unit = withContext(Dispatchers.IO) {
+        send("POST", "/ai/threads/${enc(id)}/clear", JSONObject())
+    }
+
+    /** The slash commands Hermes answers itself; the page keeps a few of its own. */
+    suspend fun commands(): List<HermesCommand> = withContext(Dispatchers.IO) {
+        val arr = JSONObject(get("/ai/commands")).optJSONArray("commands") ?: JSONArray()
+        (0 until arr.length()).mapNotNull { i ->
+            val o = arr.optJSONObject(i) ?: return@mapNotNull null
+            val name = o.optString("name").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            HermesCommand(
+                name = name,
+                desc = o.optString("desc"),
+                args = o.optString("args"),
+                group = o.optString("group").ifBlank { "Hermes" },
+                aliases = o.optJSONArray("aliases")?.let { a -> (0 until a.length()).map { a.optString(it) } }.orEmpty(),
+            )
+        }
+    }
+
+    /** Hands a file to the bridge, which keeps it for Hermes to read. */
+    suspend fun upload(name: String, mime: String, bytes: ByteArray): HermesAttachment = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+            .put("name", name)
+            .put("mime", mime)
+            .put("data", android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP))
+        parseAttachment(JSONObject(send("POST", "/ai/upload", body)))
+            ?: throw HermesException("The bridge did not keep the file")
+    }
+
+    /** How much of a thread the model keeps; the family's own default when [tokens] is 0. */
+    suspend fun setWindow(tokens: Int): HermesStatus = withContext(Dispatchers.IO) {
+        parseStatus(JSONObject(send("POST", "/ai/model", JSONObject().put("window", tokens))))
+    }
+
+    /**
+     * The bridge's own change feed: `threads` when the list moved, `status` when the model
+     * did, `title` when a chat was named. The web redraws off the same stream, so a chat
+     * started on the desk shows up here at once instead of on the next poll.
+     */
+    fun live(): Flow<JSONObject> = callbackFlow {
+        val callRef = AtomicReference<Call?>(null)
+        val job = launch(Dispatchers.IO) {
+            try {
+                val call = streamClient.newCall(
+                    Request.Builder().url(api("/live")).header("Accept", "text/event-stream").get().build(),
+                )
+                callRef.set(call)
+                call.execute().use { response ->
+                    if (!response.isSuccessful) throw HermesException("The bridge answered ${response.code}", response.code)
+                    val source = response.body?.source() ?: throw HermesException("Empty stream")
+                    while (true) {
+                        val line = source.readUtf8Line() ?: break
+                        if (!line.startsWith("data:")) continue
+                        runCatching { JSONObject(line.removePrefix("data:").trim()) }.getOrNull()?.let { trySend(it) }
+                    }
+                }
+                close()
+            } catch (e: Exception) {
+                close(e)
+            }
+        }
+        awaitClose {
+            callRef.get()?.cancel()
+            job.cancel()
+        }
+    }.flowOn(Dispatchers.IO)
 
     suspend fun stop(id: String): Unit = withContext(Dispatchers.IO) {
         send("POST", "/ai/stop", JSONObject().put("thread", id))
@@ -118,8 +188,8 @@ class HermesClient @Inject constructor(
     }
 
     /** Hermes' own model setting: one value the web and the phone both read. */
-    suspend fun setModel(id: String): Unit = withContext(Dispatchers.IO) {
-        send("POST", "/ai/model", JSONObject().put("id", id))
+    suspend fun setModel(id: String): HermesStatus = withContext(Dispatchers.IO) {
+        parseStatus(JSONObject(send("POST", "/ai/model", JSONObject().put("id", id))))
     }
 
     /**
@@ -133,6 +203,7 @@ class HermesClient @Inject constructor(
         context: String?,
         output: Boolean = false,
         clarifyId: String? = null,
+        attachments: List<HermesAttachment> = emptyList(),
     ): Flow<HermesEvent> {
         val body = JSONObject()
             .put("thread", threadId)
@@ -141,6 +212,16 @@ class HermesClient @Inject constructor(
             .put("perm", permId)
             .put("web", true)
         if (!context.isNullOrBlank()) body.put("context", context)
+        if (attachments.isNotEmpty()) {
+            body.put(
+                "attachments",
+                JSONArray().apply {
+                    attachments.forEach { a ->
+                        put(JSONObject().put("id", a.id).put("name", a.name).put("mime", a.mime).put("kind", a.kind))
+                    }
+                },
+            )
+        }
         if (clarifyId != null) body.put("clarify", JSONObject().put("id", clarifyId).put("answer", prompt).put("skip", false))
         return stream(
             Request.Builder()
@@ -233,15 +314,74 @@ class HermesClient @Inject constructor(
             return id.substringAfter(':').removePrefix("cursor-").replace('-', ' ').replace('@', ' ')
         }
 
+        internal fun parseStatus(root: JSONObject): HermesStatus {
+            val h = root.optJSONObject("hermes") ?: JSONObject()
+            val models = root.optJSONArray("models")?.let(::parseModels).orEmpty()
+            val model = h.optString("model")
+            val modes = root.optJSONObject("modes")?.let { o ->
+                o.keys().asSequence().associateWith { key ->
+                    val arr = o.optJSONArray(key) ?: JSONArray()
+                    (0 until arr.length()).mapNotNull { i ->
+                        val m = arr.optJSONObject(i) ?: return@mapNotNull null
+                        val id = m.optString("id").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                        HermesMode(
+                            id = id,
+                            label = m.optString("label").ifBlank { id },
+                            kind = m.optString("kind").ifBlank { "ask" },
+                            cap = m.optString("cap"),
+                            desc = m.optString("desc"),
+                        )
+                    }
+                }
+            }.orEmpty()
+            return HermesStatus(
+                up = h.optBoolean("up"),
+                api = h.optBoolean("api"),
+                model = model,
+                modelLabel = models.firstOrNull { it.current }?.familyLabel
+                    ?: models.firstOrNull { it.id == model }?.familyLabel
+                    ?: prettyModel(model),
+                version = h.optString("version").takeIf { it.isNotBlank() },
+                models = models,
+                modes = modes,
+                window = root.optInt("window"),
+                linked = h.optBoolean("linked"),
+            )
+        }
+
         internal fun parseModels(arr: JSONArray): List<HermesModelOption> = (0 until arr.length()).mapNotNull { i ->
             val o = arr.optJSONObject(i) ?: return@mapNotNull null
             val id = o.optString("id").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val label = o.optString("label").ifBlank { id }
             HermesModelOption(
                 id = id,
-                label = o.optString("label").ifBlank { id },
+                label = label,
                 group = o.optString("group").ifBlank { id.substringBefore(':') },
                 note = o.optString("note").takeIf { it.isNotBlank() },
                 current = o.optBoolean("current"),
+                // The bridge drops empty modifiers so a 400-row list stays small.
+                family = o.optString("family").ifBlank { id },
+                familyLabel = o.optString("familyLabel").ifBlank { label },
+                effort = o.optString("effort"),
+                fast = o.optBoolean("fast"),
+                think = o.optBoolean("think"),
+                free = o.optBoolean("free"),
+                source = o.optString("source"),
+                ctxDefault = o.optInt("ctxDefault"),
+                ctxMax = o.optInt("ctxMax"),
+                contexts = o.optJSONArray("contexts")?.let { a -> (0 until a.length()).map { a.optInt(it) }.filter { it > 0 } }.orEmpty(),
+            )
+        }
+
+        internal fun parseAttachment(o: JSONObject): HermesAttachment? {
+            val id = o.optString("id").takeIf { it.isNotBlank() } ?: return null
+            return HermesAttachment(
+                id = id,
+                name = o.optString("name").ifBlank { "file" },
+                mime = o.optString("mime"),
+                kind = o.optString("kind").ifBlank { "file" },
+                size = o.optLong("size"),
+                url = o.optString("url").takeIf { it.isNotBlank() },
             )
         }
 
@@ -256,6 +396,7 @@ class HermesClient @Inject constructor(
             preview = o.optString("preview"),
             updatedMs = o.optLong("updated"),
             pending = o.optInt("pending"),
+            model = o.optString("model"),
         )
 
         internal fun parseItems(msgs: JSONArray): List<HermesItem> =
@@ -268,7 +409,8 @@ class HermesClient @Inject constructor(
                 "user" -> {
                     // A duty round's prompt is long; the transcript shows its short label instead.
                     val shown = m.optString("say").takeIf { it.isNotBlank() && m.optString("tag") == "round" }
-                    HermesItem.User(key, shown ?: m.optString("text"))
+                    val atts = m.optJSONArray("atts")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it)?.let(::parseAttachment) } }
+                    HermesItem.User(key, shown ?: m.optString("text"), atts.orEmpty())
                 }
                 "output" -> HermesItem.Output(key, m.optString("text"))
                 "assistant" -> HermesItem.Assistant(

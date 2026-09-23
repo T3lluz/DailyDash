@@ -4,8 +4,10 @@ import android.content.Context
 import android.util.Log
 import androidx.core.content.edit
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.decodeFromString
@@ -63,14 +65,17 @@ class F1RepositoryImpl @Inject constructor(
         val now = System.currentTimeMillis()
         val currentYear = Year.now().value
 
+        val cached = cachedStandings
         val cacheValid = !forceRefresh &&
-            cachedStandings != null &&
+            cached != null &&
             cachedYear == currentYear &&
             lastFetchTime > 0L &&
-            (now - lastFetchTime) < CACHE_DURATION
+            (now - lastFetchTime) < CACHE_DURATION &&
+            // A snapshot from before circuits were matched has no coordinates to match them on.
+            !(cached.schedule.isNotEmpty() && cached.schedule.all { it.lat == null })
 
         if (cacheValid) {
-            return@withLock Result.success(cachedStandings!!)
+            return@withLock Result.success(withMissingOutlines(cached))
         }
 
         return@withLock try {
@@ -183,6 +188,9 @@ class F1RepositoryImpl @Inject constructor(
                     return@coroutineScope Result.failure(Exception("No F1 data available"))
                 }
 
+                // The per-feed catches above also catch a cancellation, so a load cut short
+                // looks like a season with no schedule. Never cache that.
+                ensureActive()
                 cachedStandings = result
                 lastFetchTime = now
                 cachedYear = currentYear
@@ -190,6 +198,8 @@ class F1RepositoryImpl @Inject constructor(
 
                 Result.success(result)
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "F1 fetch failed: ${e.message}", e)
             cachedStandings?.let { Result.success(it) }
@@ -198,15 +208,38 @@ class F1RepositoryImpl @Inject constructor(
     }
 
     /**
+     * A snapshot served from cache can still be missing circuits: an older build cached
+     * it, or the load that made it was cut short. Outlines already worked out come off
+     * disk at once; the rest are fetched once and remembered, misses included.
+     */
+    private suspend fun withMissingOutlines(standings: F1Standings): F1Standings {
+        if (standings.schedule.none { it.outline == null && it.lat != null }) return standings
+        val schedule = withCircuitOutlines(standings.schedule)
+        if (schedule == standings.schedule) return standings
+        val filled = standings.copy(schedule = schedule)
+        cachedStandings = filled
+        persistDiskCache(filled, lastFetchTime, cachedYear)
+        return filled
+    }
+
+    /**
      * Attaches each round's circuit outline. Outlines are cached for good once
      * matched, so after the first season load this costs no network at all; a
      * round whose outline cannot be had yet keeps the one from the last snapshot.
+     *
+     * A cancelled caller cancels this too. Swallowing that used to cache the season
+     * with no circuits at all for the next fifteen minutes.
      */
     private suspend fun withCircuitOutlines(schedule: List<RaceScheduleEntry>): List<RaceScheduleEntry> {
         if (schedule.isEmpty()) return schedule
-        val found = runCatching { circuits.outlinesFor(schedule) }
-            .onFailure { Log.w(TAG, "Circuit outlines unavailable: ${it.message}") }
-            .getOrDefault(emptyMap())
+        val found = try {
+            circuits.outlinesFor(schedule)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Circuit outlines unavailable: ${e.message}")
+            emptyMap()
+        }
         val previous = cachedStandings?.schedule.orEmpty()
             .mapNotNull { race -> race.outline?.let { race.circuitId to it } }
             .toMap()

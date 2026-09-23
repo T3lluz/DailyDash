@@ -51,9 +51,10 @@ fun liveHeadline(runtime: ServerRuntime, link: DashboardLink?): LiveHeadline? {
  * It follows the server rather than sitting still: the status-bar icon, the accent and
  * the header's summary change with how the machine is doing; the collapsed line leads
  * with whatever matters most right now; and expanded it shows the dials, ten minutes of
- * history, the network, every core, the facts line and the other servers. Its actions
- * are the useful next steps — ask Tech support about the problem, step to the next
- * server, stop.
+ * history, the network, every core, the facts line and the other servers. That panel
+ * is behind More, because Android opens whichever notification sits on top of the shade.
+ * Its actions are the useful next steps — ask Tech support about the problem, step to
+ * the next server, stop.
  */
 class ServerLiveNotification(private val context: Context, private val notifier: ServerNotifier) {
 
@@ -62,6 +63,8 @@ class ServerLiveNotification(private val context: Context, private val notifier:
         link: DashboardLink?,
         others: List<ServerRuntime>,
         serviceClass: Class<*>,
+        /** The full panel when opened; otherwise opening it shows the compact row and the actions. */
+        detailed: Boolean = false,
     ): Notification {
         val spec = ServerLiveGraphics.specFor(context)
         val collapsed = RemoteViews(context.packageName, R.layout.notification_server_live_collapsed)
@@ -106,7 +109,10 @@ class ServerLiveNotification(private val context: Context, private val notifier:
 
         if (runtime != null) {
             collapsed.setImageViewBitmap(R.id.server_live_gauges, ServerLiveGraphics.renderStrip(runtime, link, spec))
-            expanded.setImageViewBitmap(R.id.server_live_panel, ServerLiveGraphics.renderPanel(runtime, link, spec))
+            // The panel is the heaviest bitmap here; it is only drawn when it will be shown.
+            if (detailed) {
+                expanded.setImageViewBitmap(R.id.server_live_panel, ServerLiveGraphics.renderPanel(runtime, link, spec))
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 collapsed.setViewOutlinePreferredRadius(
                     R.id.server_live_gauges, ServerLiveGraphics.CORNER_DP * 0.75f, TypedValue.COMPLEX_UNIT_DIP,
@@ -125,8 +131,13 @@ class ServerLiveNotification(private val context: Context, private val notifier:
             .setColor(accent(headline))
             .setSubText(subText(runtime, link, others))
             .setCustomContentView(collapsed)
-            .setCustomBigContentView(expanded)
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
+        // SystemUI always opens the notification at the top of the shade, and a foreground
+        // service's channel cannot be turned down far enough to stop that. So the opened
+        // view is the compact row plus the actions unless the full panel was asked for,
+        // with More / Less to switch; the style builds that view from the content view.
+        if (detailed) builder.setCustomBigContentView(expanded)
+        builder
             .setOngoing(true)
             .setSilent(true)
             .setOnlyAlertOnce(true)
@@ -139,13 +150,22 @@ class ServerLiveNotification(private val context: Context, private val notifier:
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setContentIntent(notifier.openServersIntent(runtime?.profile?.id))
 
-        if (runtime?.snapshot != null || runtime?.connection is ServerConnectionState.Offline) {
+        // The shade shows three actions at most. More / Less always; then Ask on the
+        // compact view, and Next server on the panel, which is where the fleet is listed.
+        if (runtime != null) {
+            builder.addAction(
+                0,
+                context.getString(if (detailed) R.string.server_live_less else R.string.server_live_more),
+                serviceIntent(serviceClass, ACTION_TOGGLE_DETAIL, 2),
+            )
+        }
+        val canAsk = runtime?.snapshot != null || runtime?.connection is ServerConnectionState.Offline
+        if (detailed && others.isNotEmpty()) {
+            builder.addAction(0, context.getString(R.string.server_live_next), serviceIntent(serviceClass, ACTION_NEXT_SERVER, 1))
+        } else if (canAsk) {
             val about = runtime.advisories.firstOrNull { it.severity != AdvisorySeverity.INFO }?.key
                 ?: ServerNotifier.ASK_OVERVIEW
             builder.addAction(0, notifier.askLabel(), notifier.askIntent(runtime.profile.id, about))
-        }
-        if (others.isNotEmpty()) {
-            builder.addAction(0, context.getString(R.string.server_live_next), serviceIntent(serviceClass, ACTION_NEXT_SERVER, 1))
         }
         builder.addAction(0, context.getString(R.string.server_live_stop), serviceIntent(serviceClass, ACTION_STOP, 0))
         return builder.build()
@@ -217,6 +237,7 @@ class ServerLiveNotification(private val context: Context, private val notifier:
     companion object {
         const val ACTION_STOP = "com.macrotracker.server.STOP_LIVE"
         const val ACTION_NEXT_SERVER = "com.macrotracker.server.NEXT_SERVER"
+        const val ACTION_TOGGLE_DETAIL = "com.macrotracker.server.TOGGLE_DETAIL"
 
         private const val CRIT = 0xFFE34671.toInt()
         private const val WARN = 0xFFE29A2F.toInt()
