@@ -17,16 +17,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.Bolt
-import androidx.compose.material.icons.outlined.Dns
-import androidx.compose.material.icons.outlined.Memory
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Storage
-import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -92,6 +82,8 @@ import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.ServerViewModel
 import kotlin.math.roundToInt
+import com.macrotracker.ui.theme.AppIcons
+import com.macrotracker.ui.theme.TextTertiary
 
 /**
  * The full server dashboard.
@@ -136,7 +128,7 @@ fun ServerScreen(
             leading = {
                 IconButton(onClick = onNavigateBack, modifier = Modifier.size(40.dp)) {
                     Icon(
-                        Icons.AutoMirrored.Outlined.ArrowBack,
+                        AppIcons.ArrowBack,
                         contentDescription = "Back",
                         tint = Primary,
                         modifier = Modifier.size(24.dp),
@@ -146,7 +138,7 @@ fun ServerScreen(
             trailing = {
                 IconButton(onClick = onNavigateToSettings, modifier = Modifier.size(40.dp)) {
                     Icon(
-                        Icons.Outlined.Settings,
+                        AppIcons.Settings,
                         contentDescription = "Server settings",
                         tint = TextSecondary,
                         modifier = Modifier.size(22.dp),
@@ -266,9 +258,9 @@ private fun ServerEmptyState(onNavigateToSettings: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
-            Icons.Outlined.Dns,
+            AppIcons.Server,
             contentDescription = null,
-            tint = TextSecondary.copy(alpha = 0.5f),
+            tint = TextTertiary,
             modifier = Modifier.size(56.dp),
         )
         Spacer(modifier = Modifier.height(16.dp))
@@ -292,7 +284,7 @@ private fun ServerEmptyState(onNavigateToSettings: () -> Unit) {
             onClick = onNavigateToSettings,
             colors = ButtonDefaults.buttonColors(containerColor = Primary),
         ) {
-            Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+            Icon(AppIcons.Add, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
             Text("Add a server")
         }
@@ -434,7 +426,7 @@ private fun ServerIdentityCard(runtime: ServerRuntime, onAskAi: (() -> Unit)? = 
             Spacer(modifier = Modifier.height(10.dp))
             Text(
                 text = "host key $fingerprint",
-                color = TextSecondary.copy(alpha = 0.55f),
+                color = TextTertiary,
                 fontSize = 9.sp,
                 fontFamily = FontFamily.Monospace,
                 maxLines = 1,
@@ -458,7 +450,7 @@ private fun ServerAdvisoriesCard(
     ) {
         SectionHeader(
             title = "Advisories",
-            icon = Icons.Outlined.Bolt,
+            icon = AppIcons.Bolt,
             accent = if (critical > 0) ServerCritical else ServerWarn,
             trailing = "${runtime.advisories.size}",
             onAskAi = onAskAi,
@@ -538,7 +530,7 @@ private fun ServerComputeCard(runtime: ServerRuntime, onAskAi: (() -> Unit)? = n
     MacroCard(delayMs = 80) {
         SectionHeader(
             title = "Compute",
-            icon = Icons.Outlined.Memory,
+            icon = AppIcons.Cpu,
             accent = ServerCpu,
             trailing = runtime.hostProfile?.cpuModel?.takeIf { it.isNotBlank() },
             onAskAi = onAskAi,
@@ -615,7 +607,7 @@ private fun ServerMemoryCard(runtime: ServerRuntime, onAskAi: (() -> Unit)? = nu
     MacroCard(delayMs = 100) {
         SectionHeader(
             title = "Memory",
-            icon = Icons.Outlined.Memory,
+            icon = AppIcons.Cpu,
             accent = ServerMemory,
             trailing = formatKb(mem.totalKb),
             onAskAi = onAskAi,
@@ -657,7 +649,7 @@ private fun ServerNetworkCard(runtime: ServerRuntime, onAskAi: (() -> Unit)? = n
         val net = runtime.snapshot?.network
         SectionHeader(
             title = "Network",
-            icon = Icons.Outlined.SwapVert,
+            icon = AppIcons.SwapVertical,
             accent = ServerNetRx,
             trailing = net?.let { "${it.interfaces.size} if" },
             onAskAi = onAskAi,
@@ -731,7 +723,7 @@ private fun ServerStorageCard(runtime: ServerRuntime, onAskAi: (() -> Unit)? = n
     MacroCard(delayMs = 140) {
         SectionHeader(
             title = "Storage",
-            icon = Icons.Outlined.Storage,
+            icon = AppIcons.HardDrive,
             accent = ServerDisk,
             trailing = "${disks.size} mounts",
             onAskAi = onAskAi,
@@ -761,7 +753,7 @@ private fun ServerStorageCard(runtime: ServerRuntime, onAskAi: (() -> Unit)? = n
             Text(
                 text = "${formatKb(disk.usedKb)} of ${formatKb(disk.totalKb)} · " +
                     "${formatKb(disk.availableKb)} free · ${disk.filesystem}",
-                color = TextSecondary.copy(alpha = 0.8f),
+                color = TextTertiary,
                 fontSize = 10.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -774,7 +766,7 @@ private fun ServerStorageCard(runtime: ServerRuntime, onAskAi: (() -> Unit)? = n
 private fun ServerThermalCard(runtime: ServerRuntime, onAskAi: (() -> Unit)? = null) {
     val temps = runtime.snapshot?.temperatures.orEmpty()
     MacroCard(delayMs = 150) {
-        SectionHeader(title = "Thermals", icon = Icons.Outlined.Bolt, accent = ServerThermal)
+        SectionHeader(title = "Thermals", icon = AppIcons.Bolt, accent = ServerThermal)
         temps.take(6).forEach { reading ->
             Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
@@ -806,7 +798,7 @@ private fun ServerThermalCard(runtime: ServerRuntime, onAskAi: (() -> Unit)? = n
 private fun ServerProcessCard(runtime: ServerRuntime, onAskAi: (() -> Unit)? = null) {
     val processes = runtime.snapshot?.processes.orEmpty()
     MacroCard(delayMs = 160) {
-        SectionHeader(title = "Top processes", icon = Icons.Outlined.Memory, accent = ServerCpu)
+        SectionHeader(title = "Top processes", icon = AppIcons.Cpu, accent = ServerCpu)
         if (processes.isEmpty()) {
             Text(
                 "No process list — this server's ps does not support the portable output format.",
@@ -867,7 +859,7 @@ private fun ServerDockerCard(runtime: ServerRuntime, onAskAi: (() -> Unit)? = nu
     MacroCard(delayMs = 170) {
         SectionHeader(
             title = "Containers",
-            icon = Icons.Outlined.Storage,
+            icon = AppIcons.HardDrive,
             accent = ServerDisk,
             trailing = "$running/${containers.size} up",
             onAskAi = onAskAi,
@@ -920,7 +912,7 @@ private fun ServerServicesCard(runtime: ServerRuntime, onAskAi: (() -> Unit)? = 
     MacroCard(delayMs = 180) {
         SectionHeader(
             title = "Services",
-            icon = Icons.Outlined.Settings,
+            icon = AppIcons.Settings,
             accent = if (units.isEmpty()) ServerGood else ServerCritical,
             trailing = state,
             onAskAi = onAskAi,
@@ -980,7 +972,7 @@ private fun ServerUpdatesCard(
     MacroCard(delayMs = 190) {
         SectionHeader(
             title = "Updates & news",
-            icon = Icons.Outlined.Bolt,
+            icon = AppIcons.Bolt,
             accent = ServerWarn,
             trailing = runtime.hostProfile?.packageManager?.label,
             onAskAi = onAskAi,
@@ -1040,7 +1032,7 @@ private fun ServerUpdatesCard(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = "Checked ${relativeSeconds(news.fetchedAtMs)} ago",
-                color = TextSecondary.copy(alpha = 0.7f),
+                color = TextTertiary,
                 fontSize = 10.sp,
                 modifier = Modifier.weight(1f),
             )
@@ -1067,7 +1059,7 @@ private fun ServerSessionsCard(runtime: ServerRuntime, onAskAi: (() -> Unit)? = 
     MacroCard(delayMs = 200) {
         SectionHeader(
             title = "Logged in",
-            icon = Icons.Outlined.Dns,
+            icon = AppIcons.Server,
             accent = ServerMemory,
             trailing = "${sessions.size}",
             onAskAi = onAskAi,
@@ -1135,7 +1127,7 @@ private fun AskAiButton(accent: Color, onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            imageVector = Icons.Outlined.AutoAwesome,
+            imageVector = AppIcons.Sparkles,
             contentDescription = "Ask the AI about this",
             tint = accent,
             modifier = Modifier.size(14.dp),

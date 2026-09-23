@@ -19,19 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.DirectionsBike
-import androidx.compose.material.icons.automirrored.filled.DirectionsRun
-import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.FitnessCenter
-import androidx.compose.material.icons.filled.Hiking
-import androidx.compose.material.icons.filled.Pool
-import androidx.compose.material.icons.filled.SelfImprovement
-import androidx.compose.material.icons.filled.SportsScore
-import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -84,6 +71,8 @@ import com.macrotracker.ui.viewmodel.ActivitiesUiState
 import java.time.Duration
 import java.util.Locale
 import kotlin.math.roundToInt
+import com.macrotracker.ui.theme.AppIcons
+import com.macrotracker.ui.theme.TextTertiary
 
 /** Rows shown before the list asks to be expanded. */
 private const val CollapsedRowCount = 3
@@ -104,7 +93,7 @@ fun ActivitiesSection(
             modifier = Modifier.padding(bottom = 12.dp),
         ) {
             Icon(
-                Icons.Outlined.FavoriteBorder,
+                AppIcons.Heart,
                 contentDescription = null,
                 tint = HealthActivity,
                 modifier = Modifier.size(18.dp),
@@ -244,7 +233,7 @@ private fun ActivitiesList(
             "${rest.size}",
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
-            color = TextSecondary.copy(alpha = 0.8f),
+            color = TextTertiary,
         )
     }
 
@@ -305,7 +294,7 @@ private fun ShowMoreRow(expanded: Boolean, hiddenCount: Int, onClick: () -> Unit
         )
         Spacer(modifier = Modifier.width(4.dp))
         Icon(
-            imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+            imageVector = if (expanded) AppIcons.ChevronUp else AppIcons.ChevronDown,
             contentDescription = null,
             tint = Primary,
             modifier = Modifier.size(18.dp),
@@ -607,24 +596,24 @@ internal fun activityAccent(type: Int): Color = when (type) {
 }
 
 internal fun activityIcon(type: Int): ImageVector = when (type) {
-    ExerciseSessionRecord.EXERCISE_TYPE_WALKING -> Icons.AutoMirrored.Filled.DirectionsWalk
+    ExerciseSessionRecord.EXERCISE_TYPE_WALKING -> AppIcons.Walk
     ExerciseSessionRecord.EXERCISE_TYPE_RUNNING,
     ExerciseSessionRecord.EXERCISE_TYPE_RUNNING_TREADMILL,
-    -> Icons.AutoMirrored.Filled.DirectionsRun
+    -> AppIcons.Run
     ExerciseSessionRecord.EXERCISE_TYPE_BIKING,
     ExerciseSessionRecord.EXERCISE_TYPE_BIKING_STATIONARY,
-    -> Icons.AutoMirrored.Filled.DirectionsBike
-    ExerciseSessionRecord.EXERCISE_TYPE_HIKING -> Icons.Filled.Hiking
+    -> AppIcons.Bike
+    ExerciseSessionRecord.EXERCISE_TYPE_HIKING -> AppIcons.Mountain
     ExerciseSessionRecord.EXERCISE_TYPE_SWIMMING_OPEN_WATER,
     ExerciseSessionRecord.EXERCISE_TYPE_SWIMMING_POOL,
-    -> Icons.Filled.Pool
+    -> AppIcons.Swim
     ExerciseSessionRecord.EXERCISE_TYPE_STRENGTH_TRAINING,
     ExerciseSessionRecord.EXERCISE_TYPE_WEIGHTLIFTING,
     ExerciseSessionRecord.EXERCISE_TYPE_CALISTHENICS,
-    -> Icons.Filled.FitnessCenter
+    -> AppIcons.Dumbbell
     ExerciseSessionRecord.EXERCISE_TYPE_YOGA,
     ExerciseSessionRecord.EXERCISE_TYPE_PILATES,
     ExerciseSessionRecord.EXERCISE_TYPE_STRETCHING,
-    -> Icons.Filled.SelfImprovement
-    else -> Icons.Filled.SportsScore
+    -> AppIcons.Yoga
+    else -> AppIcons.Activity
 }

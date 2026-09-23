@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens
 
+import com.macrotracker.ui.theme.BorderStrong
+import com.macrotracker.ui.theme.SurfaceElevated
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -49,18 +51,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.CameraAlt
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.DeleteSweep
-import androidx.compose.material.icons.outlined.PhotoLibrary
-import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Restaurant
-import androidx.compose.material.icons.outlined.Terminal
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -146,6 +136,8 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
+import com.macrotracker.ui.theme.AppIcons
+import com.macrotracker.ui.theme.TextTertiary
 
 /** Pill nav = 64dp + 8dp bottom pad; keep a little air above it. */
 private val PillNavClearance = 80.dp
@@ -173,7 +165,7 @@ private suspend fun LazyListState.followChatBottom() {
 private val ClankerIdentity = BotIdentity(
     name = "Clanker",
     accent = Primary,
-    avatarRes = R.drawable.ic_clanker,
+    avatarIcon = AppIcons.Bot,
     composerHint = "Describe a meal…",
 )
 
@@ -226,8 +218,8 @@ fun AIScreen(
             Spacer(modifier = Modifier.height(12.dp))
             SegmentedTabs(
                 tabs = listOf(
-                    SegmentedTab(ChatBot.MACROS.id, "Macros", Icons.Outlined.Restaurant, Primary),
-                    SegmentedTab(ChatBot.SYSOP.id, "Tech support", Icons.Outlined.Terminal, ServerBrand),
+                    SegmentedTab(ChatBot.MACROS.id, "Macros", AppIcons.Restaurant, Primary),
+                    SegmentedTab(ChatBot.SYSOP.id, "Tech support", AppIcons.Terminal, ServerBrand),
                 ),
                 selectedKey = selectedTab,
                 onSelect = {
@@ -472,7 +464,7 @@ private fun MacrosChatPane(
                                     ) {
                                         message.retryQuery?.let { query ->
                                             SmallActionChip(
-                                                icon = Icons.Outlined.Refresh,
+                                                icon = AppIcons.Refresh,
                                                 label = "Retry",
                                                 onClick = {
                                                     haptics.click()
@@ -483,7 +475,7 @@ private fun MacrosChatPane(
                                         }
                                         if (message.showSettingsCta) {
                                             SmallActionChip(
-                                                icon = Icons.Outlined.Settings,
+                                                icon = AppIcons.Settings,
                                                 label = "AI settings",
                                                 onClick = {
                                                     haptics.click()
@@ -650,15 +642,15 @@ private fun AiChatHeader(
             modifier = Modifier.padding(top = 14.dp),
         ) {
             ChatHeaderAction(
-                icon = Icons.Outlined.CameraAlt,
+                icon = AppIcons.Camera,
                 label = "Scan label",
                 emphasized = true,
                 onClick = onCameraScan,
             )
             if (loading) {
-                ChatHeaderAction(icon = Icons.Outlined.Close, label = "Stop", onClick = onCancel)
+                ChatHeaderAction(icon = AppIcons.Close, label = "Stop", onClick = onCancel)
             } else if (canClear) {
-                ChatHeaderAction(icon = Icons.Outlined.DeleteSweep, label = "New chat", onClick = onClear)
+                ChatHeaderAction(icon = AppIcons.NewChat, label = "New chat", onClick = onClear)
             }
         }
     }
@@ -681,12 +673,11 @@ private fun ClankerAvatar(size: Dp, live: Boolean, modifier: Modifier = Modifier
             .padding(size * 0.08f),
         contentAlignment = Alignment.Center,
     ) {
-        Image(
-            painter = painterResource(R.drawable.ic_clanker),
+        Icon(
+            imageVector = AppIcons.Bot,
             contentDescription = "Clanker",
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(CircleShape),
+            tint = Primary,
+            modifier = Modifier.fillMaxSize(0.62f),
         )
     }
 }
@@ -706,7 +697,7 @@ private fun SuggestionStrip(
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.8.sp,
-            color = TextSecondary.copy(alpha = 0.8f),
+            color = TextTertiary,
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp),
         )
         LazyRow(
@@ -838,7 +829,7 @@ private fun EstimateCard(
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 0.8.sp,
-                    color = TextSecondary.copy(alpha = 0.8f),
+                    color = TextTertiary,
                     modifier = Modifier.weight(1f),
                 )
                 Text(
@@ -872,11 +863,12 @@ private fun EstimateCard(
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         textAlign = TextAlign.Center,
-                        color = if (selected) Color.White else TextSecondary,
+                        color = if (selected) TextPrimary else TextSecondary,
                         modifier = Modifier
                             .weight(1f)
                             .clip(PillShape)
-                            .background(if (selected) Primary else Color.Transparent)
+                            .background(if (selected) SurfaceElevated else Color.Transparent)
+                            .border(1.dp, if (selected) BorderStrong else Color.Transparent, PillShape)
                             .clickable { portion = option }
                             .padding(vertical = 7.dp),
                     )
@@ -930,7 +922,7 @@ private fun EstimateCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    Icons.Outlined.CheckCircle,
+                    AppIcons.CheckCircle,
                     contentDescription = null,
                     tint = Secondary,
                     modifier = Modifier.size(16.dp),
@@ -1047,7 +1039,7 @@ private fun MealPhotoButton(
             modifier = Modifier.size(40.dp),
         ) {
             Icon(
-                imageVector = Icons.Outlined.Add,
+                imageVector = AppIcons.Add,
                 contentDescription = "Add meal photo",
                 tint = if (enabled) TextPrimary else TextSecondary,
                 modifier = Modifier.size(22.dp),
@@ -1065,7 +1057,7 @@ private fun MealPhotoButton(
                     onTakePhoto()
                 },
                 leadingIcon = {
-                    Icon(Icons.Outlined.CameraAlt, contentDescription = null, tint = Primary)
+                    Icon(AppIcons.Camera, contentDescription = null, tint = Primary)
                 },
             )
             DropdownMenuItem(
@@ -1075,7 +1067,7 @@ private fun MealPhotoButton(
                     onAddPhoto()
                 },
                 leadingIcon = {
-                    Icon(Icons.Outlined.PhotoLibrary, contentDescription = null, tint = Primary)
+                    Icon(AppIcons.Images, contentDescription = null, tint = Primary)
                 },
             )
         }

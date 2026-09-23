@@ -14,11 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -35,20 +31,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.macrotracker.ui.components.MacroCard
-import com.macrotracker.ui.theme.Background
+import com.macrotracker.ui.theme.BorderStrong
+import com.macrotracker.ui.theme.SurfaceChrome
+import com.macrotracker.ui.theme.SurfaceElevated
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.HeaderColor
-import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.Success
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
+import com.macrotracker.ui.theme.TextTertiary
 import com.macrotracker.ui.util.rememberHaptics
+import com.macrotracker.ui.theme.AppIcons
 
 data class SettingsCategoryItem(
     val icon: ImageVector,
     val title: String,
     val summary: String,
-    val iconTint: Color = Primary,
+    val iconTint: Color = TextPrimary,
     val onClick: () -> Unit,
 )
 
@@ -73,7 +72,7 @@ fun SettingsSubScreenHeader(
             modifier = Modifier.size(40.dp),
         ) {
             Icon(
-                imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                imageVector = AppIcons.ArrowBack,
                 contentDescription = "Back",
                 tint = TextPrimary,
             )
@@ -121,7 +120,7 @@ fun SettingsCategoryGroup(
             Text(
                 text = description,
                 fontSize = 12.sp,
-                color = TextSecondary.copy(alpha = 0.85f),
+                color = TextSecondary,
                 lineHeight = 16.sp,
                 modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
             )
@@ -138,7 +137,7 @@ fun SettingsCategoryGroup(
             )
             if (index < items.lastIndex) {
                 HorizontalDivider(
-                    color = Border.copy(alpha = 0.35f),
+                    color = Border,
                     modifier = Modifier.padding(vertical = 2.dp),
                 )
             }
@@ -151,7 +150,7 @@ fun SettingsCategoryRow(
     icon: ImageVector,
     title: String,
     summary: String,
-    iconTint: Color = Primary,
+    iconTint: Color = TextPrimary,
     onClick: () -> Unit,
 ) {
     val haptics = rememberHaptics()
@@ -168,16 +167,17 @@ fun SettingsCategoryRow(
     ) {
         Box(
             modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(iconTint.copy(alpha = 0.14f)),
+                .size(38.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(SurfaceElevated)
+                .border(1.dp, Border, RoundedCornerShape(10.dp)),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 tint = iconTint,
-                modifier = Modifier.size(22.dp),
+                modifier = Modifier.size(20.dp),
             )
         }
         Spacer(modifier = Modifier.width(14.dp))
@@ -199,10 +199,10 @@ fun SettingsCategoryRow(
             }
         }
         Icon(
-            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            imageVector = AppIcons.ChevronRight,
             contentDescription = null,
-            tint = TextSecondary,
-            modifier = Modifier.size(22.dp),
+            tint = TextTertiary,
+            modifier = Modifier.size(20.dp),
         )
     }
 }
@@ -216,8 +216,8 @@ fun <T> SettingsSegmentedToggle(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Background, RoundedCornerShape(12.dp))
-            .border(1.dp, Border.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+            .background(SurfaceChrome, RoundedCornerShape(12.dp))
+            .border(1.dp, Border, RoundedCornerShape(12.dp))
             .padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -227,7 +227,8 @@ fun <T> SettingsSegmentedToggle(
                 modifier = Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(9.dp))
-                    .background(if (isSelected) Primary else Color.Transparent)
+                    .background(if (isSelected) SurfaceElevated else Color.Transparent)
+                    .border(1.dp, if (isSelected) BorderStrong else Color.Transparent, RoundedCornerShape(9.dp))
                     .clickable { onSelect(value) }
                     .padding(vertical = 10.dp, horizontal = 2.dp),
                 contentAlignment = Alignment.Center,
@@ -236,7 +237,7 @@ fun <T> SettingsSegmentedToggle(
                     text = label,
                     fontSize = 13.sp,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                    color = if (isSelected) Color.White else TextSecondary,
+                    color = if (isSelected) TextPrimary else TextSecondary,
                     maxLines = 1,
                 )
             }
@@ -257,7 +258,8 @@ fun ConnectionRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Background, RoundedCornerShape(10.dp))
+            .background(SurfaceChrome, RoundedCornerShape(10.dp))
+            .border(1.dp, Border, RoundedCornerShape(10.dp))
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

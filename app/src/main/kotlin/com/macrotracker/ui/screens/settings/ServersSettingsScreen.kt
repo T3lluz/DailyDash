@@ -20,12 +20,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Dns
-import androidx.compose.material.icons.outlined.Visibility
-import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -76,6 +70,8 @@ import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.ServerTestUiState
 import com.macrotracker.ui.viewmodel.ServerViewModel
+import com.macrotracker.ui.theme.AppIcons
+import com.macrotracker.ui.theme.TextTertiary
 
 /**
  * Server configuration: hosts, credentials, alert thresholds and the live
@@ -136,7 +132,7 @@ fun ServersSettingsScreen(
         MacroCard(delayMs = 40) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    Icons.Outlined.Dns,
+                    AppIcons.Server,
                     contentDescription = null,
                     tint = Primary,
                     modifier = Modifier.size(20.dp),
@@ -207,7 +203,7 @@ fun ServersSettingsScreen(
                 colors = ButtonDefaults.buttonColors(containerColor = Primary),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(AppIcons.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Add server")
             }
@@ -443,7 +439,7 @@ fun ServersSettingsScreen(
             Text(
                 "Load is judged per core, so the same threshold works on a 2-core VPS and a " +
                     "32-core box.",
-                color = TextSecondary.copy(alpha = 0.8f),
+                color = TextTertiary,
                 fontSize = 11.sp,
                 lineHeight = 15.sp,
             )
@@ -624,9 +620,9 @@ private fun ServerEditorCard(
                     IconButton(onClick = { revealSecret = !revealSecret }) {
                         Icon(
                             imageVector = if (revealSecret) {
-                                Icons.Outlined.VisibilityOff
+                                AppIcons.EyeOff
                             } else {
-                                Icons.Outlined.Visibility
+                                AppIcons.Eye
                             },
                             contentDescription = if (revealSecret) "Hide password" else "Show password",
                             tint = TextSecondary,
@@ -655,7 +651,7 @@ private fun ServerEditorCard(
 
         Text(
             "Credentials are encrypted with an Android Keystore key and never leave the phone.",
-            color = TextSecondary.copy(alpha = 0.8f),
+            color = TextTertiary,
             fontSize = 11.sp,
             lineHeight = 15.sp,
             modifier = Modifier.padding(bottom = 10.dp),
@@ -688,7 +684,7 @@ private fun ServerEditorCard(
                 )
                 Text(
                     text = testState.fingerprint,
-                    color = TextSecondary.copy(alpha = 0.75f),
+                    color = TextTertiary,
                     fontSize = 9.sp,
                     fontFamily = FontFamily.Monospace,
                     modifier = Modifier.padding(top = 4.dp),
@@ -698,7 +694,7 @@ private fun ServerEditorCard(
                 Text(
                     "Check this fingerprint matches `ssh-keyscan` on the server if you are on an " +
                         "untrusted network.",
-                    color = TextSecondary.copy(alpha = 0.7f),
+                    color = TextTertiary,
                     fontSize = 10.sp,
                     lineHeight = 14.sp,
                 )
@@ -763,7 +759,7 @@ private fun ServerEditorCard(
                     modifier = Modifier.weight(1f),
                 ) {
                     Icon(
-                        Icons.Outlined.Delete,
+                        AppIcons.Delete,
                         contentDescription = null,
                         tint = ServerCritical,
                         modifier = Modifier.size(16.dp),

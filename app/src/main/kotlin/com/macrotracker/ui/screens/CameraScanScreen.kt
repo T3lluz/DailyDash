@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens
 
+import com.macrotracker.ui.theme.NutritionProtein
+import com.macrotracker.ui.theme.NutritionCalories
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -46,11 +48,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.FlashOff
-import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -97,7 +94,7 @@ import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.Primary
-import com.macrotracker.ui.theme.PrimaryVariant
+import com.macrotracker.ui.theme.chipFill
 import com.macrotracker.ui.theme.Secondary
 import com.macrotracker.ui.theme.Surface
 import com.macrotracker.ui.theme.TextPrimary
@@ -107,6 +104,7 @@ import com.macrotracker.ui.viewmodel.CameraScanViewModel
 import com.macrotracker.ui.viewmodel.LogSummary
 import com.macrotracker.ui.viewmodel.ScanPhase
 import java.io.ByteArrayOutputStream
+import com.macrotracker.ui.theme.AppIcons
 
 @Composable
 fun CameraScanScreen(
@@ -469,7 +467,7 @@ private fun CameraPhase(
                         .size(40.dp)
                         .background(Color.Black.copy(alpha = 0.5f), CircleShape),
                 ) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                    Icon(AppIcons.Close, contentDescription = "Close", tint = Color.White)
                 }
                 Text(
                     "Scan Nutrition Label",
@@ -495,7 +493,7 @@ private fun CameraPhase(
                         ),
                 ) {
                     Icon(
-                        imageVector = if (torchEnabled) Icons.Default.FlashOn else Icons.Default.FlashOff,
+                        imageVector = if (torchEnabled) AppIcons.Bolt else AppIcons.BoltOff,
                         contentDescription = if (torchEnabled) "Turn flash off" else "Turn flash on",
                         tint = if (hasFlash) Color.White else Color.White.copy(alpha = 0.35f),
                     )
@@ -674,11 +672,20 @@ private fun ClankerCoachCard(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Image(
-            painter = painterResource(R.drawable.ic_clanker),
-            contentDescription = "Clanker",
-            modifier = Modifier.size(avatar),
-        )
+        Box(
+            modifier = Modifier
+                .size(avatar)
+                .clip(CircleShape)
+                .background(Primary.chipFill()),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = AppIcons.Bot,
+                contentDescription = "Clanker",
+                tint = Primary,
+                modifier = Modifier.size(avatar * 0.6f),
+            )
+        }
         Spacer(modifier = Modifier.width(10.dp))
         Box(
             modifier = Modifier
@@ -777,8 +784,8 @@ private fun ResultPhase(
                 // Per serving
                 Text("PER SERVING", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary, modifier = Modifier.padding(bottom = 10.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    MacroPill("${summary.caloriesPerServing}", "kcal", PrimaryVariant, Modifier.weight(1f))
-                    MacroPill("${summary.proteinPerServing}g", "protein", Color(0xFF1A5E5A), Modifier.weight(1f))
+                    MacroPill("${summary.caloriesPerServing}", "kcal", NutritionCalories, Modifier.weight(1f))
+                    MacroPill("${summary.proteinPerServing}g", "protein", NutritionProtein, Modifier.weight(1f))
                 }
 
                 // Package meta
@@ -856,7 +863,7 @@ private fun ResultPhase(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(unitEaten, fontSize = 15.sp, color = Primary, fontWeight = FontWeight.Medium)
-                            Icon(Icons.Default.ArrowDropDown, contentDescription = "Select unit", tint = Primary)
+                            Icon(AppIcons.ChevronDown, contentDescription = "Select unit", tint = Primary)
                         }
                         
                         DropdownMenu(
@@ -1010,17 +1017,18 @@ private fun ResultPhase(
 }
 
 @Composable
-private fun MacroPill(value: String, label: String, bgColor: Color, modifier: Modifier = Modifier) {
+private fun MacroPill(value: String, label: String, accent: Color, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
-            .background(bgColor)
+            .background(accent.chipFill())
+            .border(1.dp, accent.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
             .padding(14.dp),
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(value, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            Text(label, fontSize = 12.sp, color = Color.White.copy(alpha = 0.7f))
+            Text(value, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = accent)
+            Text(label, fontSize = 12.sp, color = TextSecondary)
         }
     }
 }

@@ -21,11 +21,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.ArrowDownward
-import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -59,6 +54,7 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle as JavaTextStyle
 import java.util.Locale
 import kotlin.math.abs
+import com.macrotracker.ui.theme.AppIcons
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -140,7 +136,7 @@ fun HealthTrendsSection(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onPreviousWeek, enabled = weeksBack < 2, modifier = Modifier.size(28.dp)) {
                         Icon(
-                            Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                            AppIcons.ChevronLeft,
                             contentDescription = "Previous week",
                             tint = if (weeksBack < 2) Primary else Border,
                         )
@@ -168,7 +164,7 @@ fun HealthTrendsSection(
                     }
                     IconButton(onClick = onNextWeek, enabled = weeksBack > 0, modifier = Modifier.size(28.dp)) {
                         Icon(
-                            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            AppIcons.ChevronRight,
                             contentDescription = "Next week",
                             tint = if (weeksBack > 0) Primary else Border,
                         )
@@ -333,7 +329,7 @@ fun HealthTrendsSection(
                             val up = diff >= 0
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
-                                    if (up) Icons.Outlined.ArrowUpward else Icons.Outlined.ArrowDownward,
+                                    if (up) AppIcons.ArrowUp else AppIcons.ArrowDown,
                                     contentDescription = null,
                                     tint = if (up) Success else Error,
                                     modifier = Modifier.size(14.dp),

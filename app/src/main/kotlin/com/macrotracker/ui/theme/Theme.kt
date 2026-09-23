@@ -7,24 +7,52 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
+/**
+ * Every role is set explicitly: Material's defaults are purple-tinted, and
+ * menus, sheets, dialogs, switches and chips read the container roles.
+ */
 private val DarkColorScheme = darkColorScheme(
     primary = Primary,
-    secondary = Secondary,
-    background = Background,
-    surface = Surface,
-    error = Error,
     onPrimary = OnAccent,
-    onSecondary = TextPrimary,
+    primaryContainer = Color(0xFF26313D),
+    onPrimaryContainer = Color(0xFFD3E1F0),
+    inversePrimary = PrimaryVariant,
+    secondary = Secondary,
+    onSecondary = OnAccent,
+    secondaryContainer = SurfaceElevated,
+    onSecondaryContainer = TextPrimary,
+    tertiary = Primary,
+    onTertiary = OnAccent,
+    tertiaryContainer = Color(0xFF26313D),
+    onTertiaryContainer = Color(0xFFD3E1F0),
+    background = Background,
     onBackground = TextPrimary,
+    surface = Surface,
     onSurface = TextPrimary,
-    onError = TextPrimary,
-    outline = Border,
-    surfaceVariant = Surface,
+    surfaceVariant = SurfaceElevated,
     onSurfaceVariant = TextSecondary,
+    surfaceTint = Color.Transparent,
+    surfaceDim = SurfaceChrome,
+    surfaceBright = Color(0xFF2C2C2C),
+    surfaceContainerLowest = MapWell,
+    surfaceContainerLow = Color(0xFF1B1B1B),
+    surfaceContainer = Surface,
+    surfaceContainerHigh = Color(0xFF232323),
+    surfaceContainerHighest = SurfaceElevated,
+    inverseSurface = TextPrimary,
+    inverseOnSurface = Background,
+    error = Error,
+    onError = OnAccent,
+    errorContainer = Color(0xFF3B1A25),
+    onErrorContainer = Color(0xFFFFB3C4),
+    outline = BorderStrong,
+    outlineVariant = Border,
+    scrim = Color.Black,
 )
 
 private val AppTypography = Typography(

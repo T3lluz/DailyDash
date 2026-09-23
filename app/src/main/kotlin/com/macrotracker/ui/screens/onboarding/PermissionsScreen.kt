@@ -28,14 +28,6 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.outlined.AddCircleOutline
-import androidx.compose.material.icons.outlined.CameraAlt
-import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material.icons.outlined.LocationOn
-import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -62,6 +54,7 @@ import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.macrotracker.ui.theme.AppIcons
 
 private data class PermissionItem(
     val key: String,
@@ -75,35 +68,35 @@ private val PERMISSION_ITEMS = listOf(
     PermissionItem(
         key = "notifications",
         permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.POST_NOTIFICATIONS else null,
-        icon = Icons.Outlined.Notifications,
+        icon = AppIcons.Bell,
         title = "Notifications",
         description = "Get daily reminders to log your meals and stay on track with your goals.",
     ),
     PermissionItem(
         key = "camera",
         permission = Manifest.permission.CAMERA,
-        icon = Icons.Outlined.CameraAlt,
+        icon = AppIcons.Camera,
         title = "Camera",
         description = "Scan nutrition labels to auto-fill macro data instantly.",
     ),
     PermissionItem(
         key = "location",
         permission = Manifest.permission.ACCESS_FINE_LOCATION,
-        icon = Icons.Outlined.LocationOn,
+        icon = AppIcons.MapPin,
         title = "Location",
         description = "Show local weather conditions on your home dashboard.",
     ),
     PermissionItem(
         key = "calendar",
         permission = Manifest.permission.READ_CALENDAR,
-        icon = Icons.Outlined.CalendarMonth,
+        icon = AppIcons.CalendarDays,
         title = "Calendar",
         description = "Display your upcoming events alongside your nutrition data.",
     ),
     PermissionItem(
         key = "health",
         permission = null,
-        icon = Icons.Outlined.FavoriteBorder,
+        icon = AppIcons.Heart,
         title = "Health Connect",
         description = "Sync steps, heart rate, sleep, workouts and more. Connect in Settings after setup.",
     ),
@@ -285,7 +278,7 @@ private fun PermissionRow(
         }
         Spacer(modifier = Modifier.width(12.dp))
         Icon(
-            imageVector = if (granted || item.permission == null) Icons.Filled.CheckCircle else Icons.Outlined.AddCircleOutline,
+            imageVector = if (granted || item.permission == null) AppIcons.CheckCircleFilled else AppIcons.AddCircle,
             contentDescription = if (granted) "Granted" else "Tap to grant",
             tint = when {
                 granted -> Success

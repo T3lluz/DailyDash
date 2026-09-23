@@ -20,6 +20,7 @@ import androidx.glance.layout.Box
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
 import androidx.glance.layout.fillMaxHeight
+import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
@@ -230,16 +231,16 @@ private fun Dp.scale(f: Float): Dp = (value * f).dp
 private fun TextUnit.scale(f: Float): TextUnit = (value * f).sp
 
 // ─────────────────────────────────────────────────────────────────
-//  COLOUR TOKENS  (shared with F1 palette)
+//  COLOUR TOKENS  (Cursor Dark, shared with F1 palette)
 // ─────────────────────────────────────────────────────────────────
 class WidgetClr {
-    val bg: ColorProvider        = ColorProvider(R.color.f1_surface)
-    val card: ColorProvider      = ColorProvider(R.color.f1_card)
-    val cardAlt: ColorProvider   = ColorProvider(R.color.f1_card_alt)
-    val text: ColorProvider      = ColorProvider(R.color.f1_text)
-    val sub: ColorProvider       = ColorProvider(R.color.f1_sub)
-    val pill: ColorProvider      = ColorProvider(R.color.f1_pill)
-    val divider: ColorProvider   = ColorProvider(R.color.f1_divider)
+    val bg: ColorProvider        = ColorProvider(R.color.widget_bg)
+    val card: ColorProvider      = ColorProvider(R.color.widget_card)
+    val cardAlt: ColorProvider   = ColorProvider(R.color.widget_card_alt)
+    val text: ColorProvider      = ColorProvider(R.color.widget_text)
+    val sub: ColorProvider       = ColorProvider(R.color.widget_sub)
+    val pill: ColorProvider      = ColorProvider(R.color.widget_pill)
+    val divider: ColorProvider   = ColorProvider(R.color.widget_divider)
     val cal: ColorProvider       = ColorProvider(R.color.widget_calorie)
     val pro: ColorProvider       = ColorProvider(R.color.widget_protein)
     val fat: ColorProvider       = ColorProvider(R.color.widget_fat)
@@ -251,9 +252,10 @@ class WidgetClr {
     val weather: ColorProvider   = ColorProvider(R.color.widget_weather)
     val event: ColorProvider     = ColorProvider(R.color.widget_calendar)
     val primary: ColorProvider   = ColorProvider(R.color.widget_primary)
-    val secondary: ColorProvider = ColorProvider(R.color.widget_secondary)
-    val accent: ColorProvider    = ColorProvider(R.color.f1_red)
-    val gold: ColorProvider      = ColorProvider(R.color.f1_gold)
+    val secondary: ColorProvider = ColorProvider(R.color.widget_sub)
+    val accent: ColorProvider    = ColorProvider(R.color.widget_primary)
+    val error: ColorProvider     = ColorProvider(R.color.widget_error)
+    val gold: ColorProvider      = ColorProvider(R.color.widget_warn)
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -376,7 +378,12 @@ fun WidgetHeader(
                 .padding(sc.btnPad),
             contentAlignment = Alignment.Center,
         ) {
-            Text("↻", style = TextStyle(fontSize = sc.fmd, fontWeight = FontWeight.Bold, color = c.sub))
+            Image(
+                provider = ImageProvider(R.drawable.ic_refresh),
+                contentDescription = "Refresh",
+                modifier = GlanceModifier.fillMaxSize(),
+                colorFilter = ColorFilter.tint(c.sub),
+            )
         }
     }
 }
@@ -427,7 +434,7 @@ fun WidgetStateMessage(
         WidgetSourceState.UNAVAILABLE ->
             Triple("$subject unavailable", "No provider on this device", c.sub)
         WidgetSourceState.ERROR ->
-            Triple("Couldn't read $subject", "Tap to retry in the app", c.accent)
+            Triple("Couldn't read $subject", "Tap to retry in the app", c.error)
         WidgetSourceState.OK ->
             Triple(emptyMessage, "", c.sub)
     }

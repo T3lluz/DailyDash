@@ -36,6 +36,10 @@ import androidx.glance.text.TextStyle
 import com.macrotracker.MainActivity
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import androidx.glance.Image
+import androidx.glance.ImageProvider
+import androidx.glance.ColorFilter
+import com.macrotracker.R
 
 /**
  * F1 Countdown Widget
@@ -132,7 +136,14 @@ private fun CdHeader(title: String, data: F1WidgetData, c: F1Clr, sc: WScale) {
             GlanceModifier.width(sc.btnSize).height(sc.btnSize).cornerRadius(sc.btnCorner)
                 .background(c.card).clickable(actionRunCallback<RefreshF1WidgetAction>()).padding(sc.btnPad),
             contentAlignment = Alignment.Center,
-        ) { Text("↻", style = TextStyle(fontSize = sc.fmd, fontWeight = FontWeight.Bold, color = c.sub)) }
+        ) {
+            Image(
+                provider = ImageProvider(R.drawable.ic_refresh),
+                contentDescription = "Refresh",
+                modifier = GlanceModifier.fillMaxSize(),
+                colorFilter = ColorFilter.tint(c.sub),
+            )
+        }
     }
 }
 

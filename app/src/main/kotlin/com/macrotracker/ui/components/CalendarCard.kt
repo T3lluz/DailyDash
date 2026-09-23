@@ -1,5 +1,6 @@
 package com.macrotracker.ui.components
 
+import com.macrotracker.ui.theme.contentColorOn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,15 +17,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.EventNote
-import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.CalendarToday
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.ExpandLess
-import androidx.compose.material.icons.outlined.Link
-import androidx.compose.material.icons.outlined.LocationOn
-import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -56,6 +48,8 @@ import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.LastUpdatedText
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.CalendarUiState
+import com.macrotracker.ui.theme.AppIcons
+import com.macrotracker.ui.theme.TextTertiary
 
 private val CalendarAccent = CalendarBrand
 
@@ -73,7 +67,7 @@ fun CalendarCard(
     if (!isVisible) {
         WidgetPlaceholderCard(
             title = "Calendar",
-            icon = Icons.Outlined.CalendarMonth,
+            icon = AppIcons.CalendarDays,
             accent = CalendarAccent,
         )
         return
@@ -109,7 +103,7 @@ fun CalendarCard(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Icon(
-                                Icons.Outlined.CalendarToday,
+                                AppIcons.Calendar,
                                 contentDescription = null,
                                 tint = CalendarAccent,
                                 modifier = Modifier.size(20.dp),
@@ -142,7 +136,7 @@ fun CalendarCard(
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
-                                        if (events.isNotEmpty()) Icons.Outlined.CalendarMonth else Icons.AutoMirrored.Outlined.EventNote,
+                                        if (events.isNotEmpty()) AppIcons.CalendarDays else AppIcons.NotepadText,
                                         contentDescription = null,
                                         tint = CalendarAccent,
                                         modifier = Modifier.size(22.dp),
@@ -165,7 +159,7 @@ fun CalendarCard(
                                     )
                                     IconButton(onClick = { showDetails = true }, modifier = Modifier.size(36.dp)) {
                                         Icon(
-                                            imageVector = Icons.AutoMirrored.Outlined.EventNote,
+                                            imageVector = AppIcons.NotepadText,
                                             contentDescription = "Full View",
                                             tint = TextSecondary,
                                             modifier = Modifier.size(18.dp)
@@ -196,7 +190,7 @@ fun CalendarCard(
                             WidgetExpandSection(visible = expanded && allVisibleEvents.size > 1) {
                                 Column {
                                     Spacer(modifier = Modifier.height(12.dp))
-                                    HorizontalDivider(color = TextSecondary.copy(alpha = 0.1f))
+                                    HorizontalDivider(color = Border)
                                     Spacer(modifier = Modifier.height(12.dp))
 
                                     allVisibleEvents.drop(1).take(2).forEachIndexed { index, event ->
@@ -209,7 +203,7 @@ fun CalendarCard(
                                         Text(
                                             text = "+${allVisibleEvents.size - 3} more events · Tap icon for full list",
                                             fontSize = 11.sp,
-                                            color = TextSecondary.copy(alpha = 0.7f),
+                                            color = TextTertiary,
                                             modifier = Modifier.padding(start = 22.dp)
                                         )
                                     }
@@ -278,7 +272,7 @@ fun CalendarCard(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = Icons.Outlined.CalendarToday,
+                                imageVector = AppIcons.Calendar,
                                 contentDescription = null,
                                 tint = CalendarAccent,
                                 modifier = Modifier.size(16.dp)
@@ -332,7 +326,7 @@ private fun CalendarDetailsDialog(
                         color = TextPrimary
                     )
                     IconButton(onClick = onDismiss) {
-                        Icon(Icons.Outlined.Close, contentDescription = "Close", tint = TextSecondary)
+                        Icon(AppIcons.Close, contentDescription = "Close", tint = TextSecondary)
                     }
                 }
 
@@ -411,7 +405,7 @@ private fun EventTile(
                         text = "NOW",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White,
+                        color = eventColor.contentColorOn(),
                         modifier = Modifier
                             .background(eventColor, RoundedCornerShape(4.dp))
                             .padding(horizontal = 6.dp, vertical = 2.dp),
@@ -421,11 +415,11 @@ private fun EventTile(
             
             Spacer(modifier = Modifier.height(4.dp))
 
-            InfoTag(icon = Icons.Outlined.Schedule, text = event.formattedDateAndTime, color = TextSecondary)
+            InfoTag(icon = AppIcons.Clock, text = event.formattedDateAndTime, color = TextSecondary)
 
             if (event.location.isNotBlank()) {
                 Spacer(modifier = Modifier.height(4.dp))
-                InfoTag(icon = Icons.Outlined.LocationOn, text = event.location, color = TextSecondary)
+                InfoTag(icon = AppIcons.MapPin, text = event.location, color = TextSecondary)
             }
 
             val link = event.meetingLink
@@ -437,7 +431,7 @@ private fun EventTile(
                     else -> "Join Meeting"
                 }
                 InfoTag(
-                    icon = Icons.Outlined.Link,
+                    icon = AppIcons.Link,
                     text = displayLink,
                     color = CalendarAccent,
                     onClick = { try { uriHandler.openUri(link) } catch (_: Exception) { } }

@@ -23,16 +23,6 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.BarChart
-import androidx.compose.material.icons.outlined.CameraAlt
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Dashboard
-import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Restaurant
-import androidx.compose.material.icons.outlined.Widgets
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -61,6 +51,7 @@ import com.macrotracker.ui.theme.Surface
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import kotlinx.coroutines.launch
+import com.macrotracker.ui.theme.AppIcons
 
 private data class TutorialPage(
     val icon: ImageVector,
@@ -73,7 +64,7 @@ private data class TutorialPage(
 
 private val PAGES = listOf(
     TutorialPage(
-        icon = Icons.Outlined.Dashboard,
+        icon = AppIcons.Dashboard,
         accentColor = Primary,
         badge = "Home",
         title = "Your Personal Dashboard",
@@ -85,7 +76,7 @@ private val PAGES = listOf(
         ),
     ),
     TutorialPage(
-        icon = Icons.Outlined.Widgets,
+        icon = AppIcons.Blocks,
         accentColor = androidx.compose.ui.graphics.Color(0xFFF59E0B),
         badge = "Widgets",
         title = "Live Info at a Glance",
@@ -98,7 +89,7 @@ private val PAGES = listOf(
         ),
     ),
     TutorialPage(
-        icon = Icons.Outlined.Restaurant,
+        icon = AppIcons.Restaurant,
         accentColor = Secondary,
         badge = "Nutrition",
         title = "Macro Tracking Made Easy",
@@ -111,7 +102,7 @@ private val PAGES = listOf(
         ),
     ),
     TutorialPage(
-        icon = Icons.Outlined.AutoAwesome,
+        icon = AppIcons.Sparkles,
         accentColor = androidx.compose.ui.graphics.Color(0xFFA855F7),
         badge = "AI",
         title = "Chat With Clanker",
@@ -123,7 +114,7 @@ private val PAGES = listOf(
         ),
     ),
     TutorialPage(
-        icon = Icons.Outlined.FavoriteBorder,
+        icon = AppIcons.Heart,
         accentColor = androidx.compose.ui.graphics.Color(0xFFEC4899),
         badge = "Health",
         title = "Optional Health Metrics",
@@ -135,7 +126,7 @@ private val PAGES = listOf(
         ),
     ),
     TutorialPage(
-        icon = Icons.Outlined.BarChart,
+        icon = AppIcons.ChartBar,
         accentColor = Secondary,
         badge = "Trends",
         title = "See Your Trends",
@@ -147,7 +138,7 @@ private val PAGES = listOf(
         ),
     ),
     TutorialPage(
-        icon = Icons.Outlined.CheckCircle,
+        icon = AppIcons.CheckCircle,
         accentColor = Secondary,
         badge = "All set!",
         title = "You're Ready to Go 🎉",
