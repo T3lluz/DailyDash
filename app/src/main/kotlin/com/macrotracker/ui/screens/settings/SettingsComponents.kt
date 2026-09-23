@@ -16,9 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -43,6 +40,7 @@ import com.macrotracker.ui.theme.Success
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.rememberHaptics
+import com.macrotracker.ui.theme.AppIcons
 
 data class SettingsCategoryItem(
     val icon: ImageVector,
@@ -73,7 +71,7 @@ fun SettingsSubScreenHeader(
             modifier = Modifier.size(40.dp),
         ) {
             Icon(
-                imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                imageVector = AppIcons.ArrowBack,
                 contentDescription = "Back",
                 tint = TextPrimary,
             )
@@ -199,7 +197,7 @@ fun SettingsCategoryRow(
             }
         }
         Icon(
-            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            imageVector = AppIcons.ChevronRight,
             contentDescription = null,
             tint = TextSecondary,
             modifier = Modifier.size(22.dp),

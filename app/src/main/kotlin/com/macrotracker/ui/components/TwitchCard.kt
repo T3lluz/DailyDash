@@ -32,21 +32,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.OpenInNew
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.outlined.AccountCircle
-import androidx.compose.material.icons.outlined.ExpandMore
-import androidx.compose.material.icons.outlined.LinkOff
-import androidx.compose.material.icons.outlined.Sensors
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -117,6 +102,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.format.DateTimeParseException
 import java.util.Locale
+import com.macrotracker.ui.theme.AppIcons
 
 private val TwPurple = Color(0xFF9146FF)
 private val TwPurpleDeep = Color(0xFF5C16C5)
@@ -248,7 +234,7 @@ fun TwitchCard(viewModel: TwitchViewModel = hiltViewModel()) {
                         modifier = Modifier.size(36.dp),
                     ) {
                         Icon(
-                            Icons.Filled.Refresh,
+                            AppIcons.Refresh,
                             contentDescription = "Refresh live",
                             tint = TextSecondary,
                             modifier = Modifier.size(16.dp),
@@ -269,9 +255,9 @@ fun TwitchCard(viewModel: TwitchViewModel = hiltViewModel()) {
                 ) {
                     Icon(
                         imageVector = if (expanded) {
-                            Icons.Outlined.Settings
+                            AppIcons.Settings
                         } else {
-                            Icons.AutoMirrored.Outlined.OpenInNew
+                            AppIcons.ExternalLink
                         },
                         contentDescription = if (expanded) "Manage channels" else "Open Twitch",
                         tint = TextSecondary.copy(alpha = if (expanded) 0.85f else 0.55f),
@@ -522,7 +508,7 @@ private fun TwitchCollapsedGlance(
                         .background(TwPurple.copy(alpha = 0.16f)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Outlined.Videocam, null, tint = TwPurple, modifier = Modifier.size(22.dp))
+                    Icon(AppIcons.Video, null, tint = TwPurple, modifier = Modifier.size(22.dp))
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -538,7 +524,7 @@ private fun TwitchCollapsedGlance(
                     )
                 }
                 Icon(
-                    Icons.Outlined.ExpandMore,
+                    AppIcons.ChevronDown,
                     contentDescription = null,
                     tint = TwPurple.copy(alpha = 0.7f),
                     modifier = Modifier.size(20.dp).rotate(-90f),
@@ -566,7 +552,7 @@ private fun TwitchCollapsedGlance(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Icon(Icons.Outlined.Sensors, null, tint = TextSecondary, modifier = Modifier.size(20.dp))
+                    Icon(AppIcons.Radio, null, tint = TextSecondary, modifier = Modifier.size(20.dp))
                     Text(
                         "Nobody you follow is live right now",
                         fontSize = 13.sp,
@@ -782,7 +768,7 @@ private fun LiveStreamFeed(
                     .padding(vertical = 20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Icon(Icons.Outlined.Sensors, null, tint = TextSecondary, modifier = Modifier.size(28.dp))
+                Icon(AppIcons.Radio, null, tint = TextSecondary, modifier = Modifier.size(28.dp))
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     "Nobody live right now",
@@ -1090,7 +1076,7 @@ private fun TwitchChannelsHub(
                 color = TextPrimary,
             )
             TextButton(onClick = onOpenSearch, contentPadding = PaddingValues(horizontal = 8.dp)) {
-                Icon(Icons.Filled.Search, null, tint = TwPurple, modifier = Modifier.size(16.dp))
+                Icon(AppIcons.Search, null, tint = TwPurple, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("Search", color = TwPurple, fontSize = 12.sp)
             }
@@ -1182,7 +1168,7 @@ private fun TwitchChannelsHub(
                             modifier = Modifier.size(32.dp),
                         ) {
                             Icon(
-                                Icons.Filled.Delete,
+                                AppIcons.Delete,
                                 contentDescription = "Remove",
                                 tint = TextSecondary.copy(alpha = 0.7f),
                                 modifier = Modifier.size(18.dp),
@@ -1217,7 +1203,7 @@ private fun NoTwitchChannelsPrompt(
                 .background(TwPurple.copy(alpha = 0.14f)),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Outlined.Videocam, null, tint = TwPurple, modifier = Modifier.size(30.dp))
+            Icon(AppIcons.Video, null, tint = TwPurple, modifier = Modifier.size(30.dp))
         }
         Spacer(modifier = Modifier.height(12.dp))
         Text(
@@ -1254,7 +1240,7 @@ private fun NoTwitchChannelsPrompt(
                     if (authState.isBusy) {
                         LoadingSpinner(color = Color.White, size = LoadingSpec.SizeInline)
                     } else {
-                        Icon(Icons.Outlined.AccountCircle, null, modifier = Modifier.size(16.dp))
+                        Icon(AppIcons.Account, null, modifier = Modifier.size(16.dp))
                     }
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
@@ -1273,7 +1259,7 @@ private fun NoTwitchChannelsPrompt(
                 colors = ButtonDefaults.buttonColors(containerColor = TwPurple),
                 shape = RoundedCornerShape(10.dp),
             ) {
-                Icon(Icons.Filled.Add, null, modifier = Modifier.size(16.dp))
+                Icon(AppIcons.Add, null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text("Add Channels", fontSize = 13.sp)
             }
@@ -1338,7 +1324,7 @@ private fun TwitchDeviceCodePanel(
                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
             ) {
                 Icon(
-                    Icons.AutoMirrored.Outlined.OpenInNew,
+                    AppIcons.ExternalLink,
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
                 )
@@ -1386,7 +1372,7 @@ private fun TwitchAccountCard(
                     LoadingSpinner(color = TwPurple, size = LoadingSpec.SizeInline)
                 } else {
                     Icon(
-                        Icons.Outlined.AccountCircle,
+                        AppIcons.Account,
                         contentDescription = null,
                         tint = TwPurple,
                         modifier = Modifier.size(22.dp),
@@ -1432,7 +1418,7 @@ private fun TwitchAccountCard(
                         modifier = Modifier.size(34.dp),
                     ) {
                         Icon(
-                            Icons.Filled.Sync,
+                            AppIcons.Refresh,
                             contentDescription = "Sync follows",
                             tint = if (authState.isBusy) TextSecondary.copy(alpha = 0.4f) else TextSecondary,
                             modifier = Modifier.size(18.dp),
@@ -1444,7 +1430,7 @@ private fun TwitchAccountCard(
                         modifier = Modifier.size(34.dp),
                     ) {
                         Icon(
-                            Icons.Outlined.LinkOff,
+                            AppIcons.LinkOff,
                             contentDescription = "Disconnect Twitch",
                             tint = if (authState.isBusy) TextSecondary.copy(alpha = 0.4f) else Error.copy(alpha = 0.85f),
                             modifier = Modifier.size(18.dp),
@@ -1505,7 +1491,7 @@ private fun TwitchAccountCard(
                 )
                 IconButton(onClick = onDismissStatus, modifier = Modifier.size(28.dp)) {
                     Icon(
-                        Icons.Filled.Close,
+                        AppIcons.Close,
                         contentDescription = "Dismiss",
                         tint = TextSecondary,
                         modifier = Modifier.size(14.dp),
@@ -1553,7 +1539,7 @@ private fun TwitchSettingsSheet(
                         .background(TwPurpleDeep),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Outlined.Videocam, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    Icon(AppIcons.Video, null, tint = Color.White, modifier = Modifier.size(18.dp))
                 }
                 Spacer(modifier = Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
@@ -1561,7 +1547,7 @@ private fun TwitchSettingsSheet(
                     Text("Live follows & watching list", fontSize = 12.sp, color = TextSecondary)
                 }
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Filled.Close, contentDescription = "Close", tint = TextSecondary)
+                    Icon(AppIcons.Close, contentDescription = "Close", tint = TextSecondary)
                 }
             }
             Spacer(modifier = Modifier.height(14.dp))
@@ -1658,7 +1644,7 @@ private fun TwitchSettingsSheet(
                                             .padding(horizontal = 16.dp),
                                         contentAlignment = Alignment.CenterEnd,
                                     ) {
-                                        Icon(Icons.Filled.Delete, null, tint = Error)
+                                        Icon(AppIcons.Delete, null, tint = Error)
                                     }
                                 },
                                 enableDismissFromStartToEnd = false,
@@ -1712,7 +1698,7 @@ private fun TwitchSettingsSheet(
                         placeholder = { Text("Search Twitch channels") },
                         singleLine = true,
                         leadingIcon = {
-                            Icon(Icons.Filled.Search, null, tint = TextSecondary)
+                            Icon(AppIcons.Search, null, tint = TextSecondary)
                         },
                         trailingIcon = {
                             if (searchQuery.isNotEmpty()) {
@@ -1720,7 +1706,7 @@ private fun TwitchSettingsSheet(
                                     searchQuery = ""
                                     viewModel.clearChannelSearch()
                                 }) {
-                                    Icon(Icons.Filled.Close, null, tint = TextSecondary)
+                                    Icon(AppIcons.Close, null, tint = TextSecondary)
                                 }
                             }
                         },
@@ -1885,7 +1871,7 @@ private fun ChannelSearchRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                if (already) Icons.Filled.Check else Icons.Filled.Add,
+                if (already) AppIcons.Check else AppIcons.Add,
                 contentDescription = null,
                 tint = if (already) TwPurple else Color.White,
                 modifier = Modifier.size(16.dp),

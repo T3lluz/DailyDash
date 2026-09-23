@@ -13,15 +13,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.HelpOutline
-import androidx.compose.material.icons.outlined.CameraAlt
-import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.BarChart
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Flag
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Rocket
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -42,6 +33,7 @@ import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
+import com.macrotracker.ui.theme.AppIcons
 
 private data class HelpStep(
     val icon: ImageVector,
@@ -51,37 +43,37 @@ private data class HelpStep(
 
 private val STEPS = listOf(
     HelpStep(
-        icon = Icons.Outlined.Home,
+        icon = AppIcons.Home,
         title = "Home Screen — Quick Add",
         body = "The Home screen shows a live greeting with today's date and all your widgets. Use the Quick Add widget to enter a food name (optional), calories and protein, then tap \"Add\". Tap \"View All Logs\" to jump to the full Health tab.",
     ),
     HelpStep(
-        icon = Icons.Outlined.Rocket,
+        icon = AppIcons.Rocket,
         title = "Customise Your Home Screen",
         body = "Tap the pencil icon (top-right of Home or Health) to enter edit mode. Toggle widgets on or off, then drag ☰ to reorder rows. Outside edit mode, long-press and drag any visible widget to reorder them.",
     ),
     HelpStep(
-        icon = Icons.Outlined.CameraAlt,
+        icon = AppIcons.Camera,
         title = "Scan a Nutrition Label",
         body = "Go to the AI tab and tap \"Scan label\". Point the camera at any nutrition facts label (or pick a photo from your gallery) and Clanker will read calories and protein for you.",
     ),
     HelpStep(
-        icon = Icons.Outlined.AutoAwesome,
+        icon = AppIcons.Sparkles,
         title = "AI Food Estimates",
         body = "On the AI tab, chat with Clanker — type something like \"1 medium avocado\" or \"burger\" (then tap add-ons like bacon), or tap + to send a meal photo. Adjust portion if needed, then log the estimate.",
     ),
     HelpStep(
-        icon = Icons.Outlined.BarChart,
+        icon = AppIcons.ChartBar,
         title = "Macro Trends on Health",
         body = "On the Health tab, Macro Trends charts your last 7, 14 or 30 days. Use the range chips (7d / 14d / 30d) and the Calories / Protein toggle to switch views. Tap any bar to see and manage the individual food logs for that day.",
     ),
     HelpStep(
-        icon = Icons.Outlined.Flag,
+        icon = AppIcons.Flag,
         title = "Set Daily Goals",
         body = "Go to Settings → Nutrition. Enter your calorie and protein targets and tap \"Save Goals\". Progress bars turn red when you exceed a goal.",
     ),
     HelpStep(
-        icon = Icons.Outlined.Delete,
+        icon = AppIcons.Delete,
         title = "Delete a Log Entry",
         body = "On the Health tab, click the X on any food entry in the Recent Logs list to delete it. You can also navigate back to a past date in the Health tab and delete entries from there.",
     ),
@@ -145,7 +137,7 @@ fun HelpScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(bottom = 14.dp),
             ) {
-                Icon(Icons.Outlined.Rocket, contentDescription = null, tint = Primary, modifier = Modifier.size(17.dp))
+                Icon(AppIcons.Rocket, contentDescription = null, tint = Primary, modifier = Modifier.size(17.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Quick Start", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
             }
@@ -183,7 +175,7 @@ fun HelpScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(bottom = 14.dp),
             ) {
-                Icon(Icons.AutoMirrored.Outlined.HelpOutline, contentDescription = null, tint = Primary, modifier = Modifier.size(17.dp))
+                Icon(AppIcons.Help, contentDescription = null, tint = Primary, modifier = Modifier.size(17.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("FAQ", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
             }

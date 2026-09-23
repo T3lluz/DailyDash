@@ -12,11 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.Cloud
-import androidx.compose.material.icons.outlined.Dns
-import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -43,6 +38,7 @@ import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.ServerViewModel
 import com.macrotracker.ui.viewmodel.SettingsViewModel
+import com.macrotracker.ui.theme.AppIcons
 
 @Composable
 fun ConnectionsSettingsScreen(
@@ -107,7 +103,7 @@ fun ConnectionsSettingsScreen(
 
         MacroCard(delayMs = 50) {
             ConnectionRow(
-                icon = Icons.Outlined.FavoriteBorder,
+                icon = AppIcons.Heart,
                 name = "Health Connect",
                 description = "Steps, heart rate, sleep, workouts & active calories",
                 connected = healthConnectAvailable,
@@ -207,7 +203,7 @@ fun ConnectionsSettingsScreen(
 
         MacroCard(delayMs = 80) {
             ConnectionRow(
-                icon = Icons.Outlined.Cloud,
+                icon = AppIcons.Cloud,
                 name = "Weather Data",
                 description = "Location-based weather via Yr.no",
                 connected = weatherConnected,
@@ -264,7 +260,7 @@ fun ConnectionsSettingsScreen(
 
         MacroCard(delayMs = 110) {
             ConnectionRow(
-                icon = Icons.Outlined.CalendarMonth,
+                icon = AppIcons.CalendarDays,
                 name = "Google Calendar",
                 description = "Today's events & schedule on dashboard",
                 connected = calendarConnected,
@@ -289,7 +285,7 @@ fun ConnectionsSettingsScreen(
 
         MacroCard(delayMs = 140) {
             SettingsCategoryRow(
-                icon = Icons.Outlined.Dns,
+                icon = AppIcons.Server,
                 title = "Servers",
                 summary = when {
                     serverProfiles.isEmpty() ->

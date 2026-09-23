@@ -12,12 +12,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.outlined.ArrowDownward
-import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -63,6 +57,7 @@ import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import com.macrotracker.ui.theme.AppIcons
 
 // ── Palette (race-control / pit-wall, not soft SaaS) ─────────────────────────
 private val F1Red      = Color(0xFFE10600)
@@ -424,7 +419,7 @@ fun F1Card(
                         onClick = { haptics.click(); onRefresh() },
                         modifier = Modifier.size(36.dp),
                     ) {
-                        Icon(Icons.Default.Refresh, null, tint = TextSecondary, modifier = Modifier.size(16.dp))
+                        Icon(AppIcons.Refresh, null, tint = TextSecondary, modifier = Modifier.size(16.dp))
                     }
                 }
                 WidgetExpandChevron(
@@ -1433,7 +1428,7 @@ private fun F1Error(onRefresh: () -> Unit, haptics: com.macrotracker.ui.util.Hap
         Text("Check your connection and try again", color = TextSecondary, fontSize = 12.sp)
         Spacer(Modifier.height(4.dp))
         TextButton(onClick = { haptics.confirm(); onRefresh() }) {
-            Icon(Icons.Default.Refresh, null, modifier = Modifier.size(14.dp), tint = F1Red)
+            Icon(AppIcons.Refresh, null, modifier = Modifier.size(14.dp), tint = F1Red)
             Spacer(Modifier.width(6.dp))
             Text("Retry", color = F1Red, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
         }
@@ -2032,7 +2027,7 @@ fun RaceScheduleList(schedule: List<RaceScheduleEntry>) {
                             fontWeight = FontWeight.SemiBold,
                         )
                         Icon(
-                            if (isExp) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            if (isExp) AppIcons.ChevronUp else AppIcons.ChevronDown,
                             null,
                             tint = TextSecondary.copy(alpha = 0.4f),
                             modifier = Modifier.size(16.dp),
@@ -2410,7 +2405,7 @@ private fun PositionsDeltaChip(posGained: Int?, modifier: Modifier = Modifier) {
         horizontalArrangement = Arrangement.spacedBy(1.dp),
     ) {
         Icon(
-            imageVector = if (gained) Icons.Outlined.ArrowUpward else Icons.Outlined.ArrowDownward,
+            imageVector = if (gained) AppIcons.ArrowUp else AppIcons.ArrowDown,
             contentDescription = if (gained) "Places gained" else "Places lost",
             tint = color,
             modifier = Modifier.size(12.dp),

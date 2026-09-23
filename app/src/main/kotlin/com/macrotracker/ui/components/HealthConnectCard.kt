@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import com.macrotracker.ui.theme.HealthConnectBrand
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
+import com.macrotracker.ui.theme.AppIcons
 
 private val HealthConnectAccent = HealthConnectBrand
 
@@ -70,7 +69,7 @@ fun HealthConnectCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.MonitorHeart,
+                        imageVector = AppIcons.HeartPulse,
                         contentDescription = null,
                         tint = HealthConnectAccent,
                         modifier = Modifier.size(16.dp)

@@ -41,23 +41,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.outlined.AccountCircle
-import androidx.compose.material.icons.outlined.ExpandMore
-import androidx.compose.material.icons.outlined.GridView
-import androidx.compose.material.icons.outlined.LinkOff
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.VideoLibrary
-import androidx.compose.material.icons.automirrored.outlined.ViewList
-import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.material3.Button
@@ -130,6 +113,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import com.macrotracker.ui.theme.AppIcons
 
 private val YtRed      = Color(0xFFFF0000)
 private val YtDark     = Color(0xFF0F0F0F)
@@ -266,7 +250,7 @@ fun YoutubeCard(viewModel: YouTubeViewModel = hiltViewModel()) {
                         modifier = Modifier.size(36.dp),
                     ) {
                         Icon(
-                            Icons.Filled.Refresh,
+                            AppIcons.Refresh,
                             contentDescription = "Refresh",
                             tint = TextSecondary,
                             modifier = Modifier.size(16.dp),
@@ -289,9 +273,9 @@ fun YoutubeCard(viewModel: YouTubeViewModel = hiltViewModel()) {
                 ) {
                     Icon(
                         imageVector = if (expanded) {
-                            Icons.Outlined.Settings
+                            AppIcons.Settings
                         } else {
-                            Icons.AutoMirrored.Outlined.OpenInNew
+                            AppIcons.ExternalLink
                         },
                         contentDescription = if (expanded) "Manage channels" else "Open YouTube",
                         tint = TextSecondary.copy(alpha = if (expanded) 0.85f else 0.55f),
@@ -531,7 +515,7 @@ private fun YoutubeCollapsedGlance(
                         .background(YtRed.copy(alpha = 0.14f)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Outlined.VideoLibrary, null, tint = YtRed, modifier = Modifier.size(22.dp))
+                    Icon(AppIcons.TvPlay, null, tint = YtRed, modifier = Modifier.size(22.dp))
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -547,7 +531,7 @@ private fun YoutubeCollapsedGlance(
                     )
                 }
                 Icon(
-                    Icons.Outlined.ExpandMore,
+                    AppIcons.ChevronDown,
                     contentDescription = null,
                     tint = YtRed.copy(alpha = 0.7f),
                     modifier = Modifier.size(20.dp).rotate(-90f),
@@ -657,7 +641,7 @@ private fun YoutubeChannelsHub(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(5.dp),
             ) {
-                Icon(Icons.Filled.Search, null, tint = Color.White, modifier = Modifier.size(14.dp))
+                Icon(AppIcons.Search, null, tint = Color.White, modifier = Modifier.size(14.dp))
                 Text(
                     "Add",
                     fontSize = 12.sp,
@@ -736,7 +720,7 @@ private fun CompactVideoFeed(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Icon(
-                    Icons.Outlined.VideoLibrary,
+                    AppIcons.TvPlay,
                     null,
                     tint = YtRed.copy(alpha = 0.6f),
                     modifier = Modifier.size(18.dp),
@@ -833,7 +817,7 @@ private fun CompactVideoFeed(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Icon(
-                    Icons.Outlined.VideoLibrary,
+                    AppIcons.TvPlay,
                     null,
                     tint = YtRed.copy(alpha = 0.6f),
                     modifier = Modifier.size(18.dp),
@@ -932,7 +916,7 @@ private fun CompactVideoTile(
                     .background(Color.Black.copy(alpha = 0.55f)),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(14.dp))
+                Icon(AppIcons.Play, null, tint = Color.White, modifier = Modifier.size(14.dp))
             }
             if (isNew) {
                 Box(
@@ -1039,7 +1023,7 @@ private fun CompactChannelAvatar(
                     .background(YtRed.copy(alpha = 0.3f)),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Filled.Check, null, tint = Color.White, modifier = Modifier.size(14.dp))
+                Icon(AppIcons.Check, null, tint = Color.White, modifier = Modifier.size(14.dp))
             }
         }
     }
@@ -1183,8 +1167,8 @@ private fun VideoFeed(
                     .background(Border.copy(alpha = 0.25f)),
             ) {
                 listOf(
-                    YtLayout.LIST to Icons.AutoMirrored.Outlined.ViewList,
-                    YtLayout.GRID to Icons.Outlined.GridView,
+                    YtLayout.LIST to AppIcons.List,
+                    YtLayout.GRID to AppIcons.Grid,
                 ).forEach { (mode, icon) ->
                     val selected = layout == mode
                     Box(
@@ -1218,7 +1202,7 @@ private fun VideoFeed(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Icon(Icons.Outlined.VideoLibrary, null, tint = YtRed.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
+                    Icon(AppIcons.TvPlay, null, tint = YtRed.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
                     Text(
                         "Latest videos shown above — use filters to explore",
                         color = TextSecondary,
@@ -1235,7 +1219,7 @@ private fun VideoFeed(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Icon(Icons.Outlined.VideoLibrary, null, tint = YtRed.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
+                    Icon(AppIcons.TvPlay, null, tint = YtRed.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
                     Text("No videos from this channel yet", color = TextSecondary, fontSize = 13.sp)
                 }
             }
@@ -1434,7 +1418,7 @@ private fun ShowMoreButton(remaining: Int, onClick: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Icon(
-                Icons.Outlined.ExpandMore,
+                AppIcons.ChevronDown,
                 contentDescription = "Show more",
                 tint = YtRed.copy(alpha = 0.8f),
                 modifier = Modifier.size(16.dp),
@@ -1500,7 +1484,7 @@ private fun VideoCard(video: YoutubeVideo, onClick: () -> Unit) {
                     .background(Color.Black.copy(alpha = 0.55f)),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                Icon(AppIcons.Play, null, tint = Color.White, modifier = Modifier.size(18.dp))
             }
             if (isNew) {
                 Box(
@@ -1613,7 +1597,7 @@ private fun HeroVideoCard(video: YoutubeVideo, onClick: () -> Unit) {
                 .border(1.5.dp, Color.White.copy(alpha = 0.32f), CircleShape),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(30.dp))
+            Icon(AppIcons.Play, null, tint = Color.White, modifier = Modifier.size(30.dp))
         }
         // Title + YouTube-style meta pinned to bottom
         Column(
@@ -1722,7 +1706,7 @@ private fun VideoGridItem(
                     .background(Color.Black.copy(alpha = 0.55f)),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                Icon(AppIcons.Play, null, tint = Color.White, modifier = Modifier.size(16.dp))
             }
             if (isNew) {
                 Box(
@@ -1851,7 +1835,7 @@ private fun ChannelSectionHeader(channel: YoutubeChannel, videoCount: Int) {
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                Icons.AutoMirrored.Outlined.OpenInNew,
+                AppIcons.ExternalLink,
                 contentDescription = "Open channel",
                 tint = TextSecondary.copy(alpha = 0.45f),
                 modifier = Modifier.size(13.dp),
@@ -1924,7 +1908,7 @@ private fun ChannelPill(
         }
         if (isSelected) {
             Spacer(Modifier.width(4.dp))
-            Icon(Icons.Filled.Close, null, tint = YtRed.copy(alpha = 0.7f), modifier = Modifier.size(10.dp))
+            Icon(AppIcons.Close, null, tint = YtRed.copy(alpha = 0.7f), modifier = Modifier.size(10.dp))
         }
     }
 }
@@ -1950,7 +1934,7 @@ private fun NoChannelsPrompt(
                 modifier = Modifier.size(56.dp).clip(CircleShape).background(YtRed.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Outlined.VideoLibrary, null, tint = YtRed, modifier = Modifier.size(30.dp))
+                Icon(AppIcons.TvPlay, null, tint = YtRed, modifier = Modifier.size(30.dp))
             }
             Spacer(modifier = Modifier.height(12.dp))
             Text(
@@ -1988,7 +1972,7 @@ private fun NoChannelsPrompt(
                 if (googleState.isBusy) {
                     LoadingSpinner(color = Color.White, size = LoadingSpec.SizeInline)
                 } else {
-                    Icon(Icons.Outlined.AccountCircle, null, modifier = Modifier.size(16.dp))
+                    Icon(AppIcons.Account, null, modifier = Modifier.size(16.dp))
                 }
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
@@ -2006,7 +1990,7 @@ private fun NoChannelsPrompt(
                 colors = ButtonDefaults.buttonColors(containerColor = YtRed),
                 shape = RoundedCornerShape(10.dp),
             ) {
-                Icon(Icons.Filled.Add, null, modifier = Modifier.size(16.dp))
+                Icon(AppIcons.Add, null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text("Add Channels", fontSize = 13.sp)
             }
@@ -2055,7 +2039,7 @@ private fun YouTubeGoogleAccountCard(
                     LoadingSpinner(color = YtRed, size = LoadingSpec.SizeInline)
                 } else {
                     Icon(
-                        Icons.Outlined.AccountCircle,
+                        AppIcons.Account,
                         contentDescription = null,
                         tint = YtRed,
                         modifier = Modifier.size(22.dp),
@@ -2091,7 +2075,7 @@ private fun YouTubeGoogleAccountCard(
                     modifier = Modifier.size(34.dp),
                 ) {
                     Icon(
-                        Icons.Filled.Sync,
+                        AppIcons.Refresh,
                         contentDescription = "Sync subscriptions",
                         tint = if (googleState.isBusy) TextSecondary.copy(alpha = 0.4f) else TextSecondary,
                         modifier = Modifier.size(18.dp),
@@ -2103,7 +2087,7 @@ private fun YouTubeGoogleAccountCard(
                     modifier = Modifier.size(34.dp),
                 ) {
                     Icon(
-                        Icons.Outlined.LinkOff,
+                        AppIcons.LinkOff,
                         contentDescription = "Disconnect Google",
                         tint = if (googleState.isBusy) TextSecondary.copy(alpha = 0.4f) else Error.copy(alpha = 0.85f),
                         modifier = Modifier.size(18.dp),
@@ -2156,7 +2140,7 @@ private fun YouTubeGoogleAccountCard(
                     modifier = Modifier.size(28.dp),
                 ) {
                     Icon(
-                        Icons.Filled.Close,
+                        AppIcons.Close,
                         contentDescription = "Dismiss",
                         tint = TextSecondary,
                         modifier = Modifier.size(14.dp),
@@ -2202,11 +2186,11 @@ private fun YouTubeSettingsSheet(
             Spacer(Modifier.height(16.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(modifier = Modifier.size(30.dp).clip(RoundedCornerShape(7.dp)).background(YtRed), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    Icon(AppIcons.Play, null, tint = Color.White, modifier = Modifier.size(20.dp))
                 }
                 Spacer(Modifier.width(10.dp))
                 Text("YouTube Channels", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary, modifier = Modifier.weight(1f))
-                IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, "Close", tint = TextSecondary) }
+                IconButton(onClick = onDismiss) { Icon(AppIcons.Close, "Close", tint = TextSecondary) }
             }
             Spacer(Modifier.height(14.dp))
             YouTubeGoogleAccountCard(
@@ -2326,7 +2310,7 @@ private fun WatchingTab(
                         contentAlignment = Alignment.CenterEnd,
                     ) {
                         Row(modifier = Modifier.padding(end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Filled.Delete, null, tint = Error, modifier = Modifier.size(20.dp))
+                            Icon(AppIcons.Delete, null, tint = Error, modifier = Modifier.size(20.dp))
                             Spacer(Modifier.width(4.dp))
                             Text("Remove", fontSize = 12.sp, color = Error, fontWeight = FontWeight.SemiBold)
                         }
@@ -2380,13 +2364,13 @@ private fun SearchTab(
                 if (suggestionsLoading && searchQuery.isNotBlank()) {
                     LoadingSpinner(color = YtRed, size = LoadingSpec.SizeInline)
                 } else {
-                    Icon(Icons.Filled.Search, null, tint = TextSecondary, modifier = Modifier.size(20.dp))
+                    Icon(AppIcons.Search, null, tint = TextSecondary, modifier = Modifier.size(20.dp))
                 }
             },
             trailingIcon = {
                 if (searchQuery.isNotBlank()) {
                     IconButton(onClick = { onQueryChange(""); viewModel.clearChannelSearch() }) {
-                        Icon(Icons.Filled.Close, null, tint = TextSecondary, modifier = Modifier.size(18.dp))
+                        Icon(AppIcons.Close, null, tint = TextSecondary, modifier = Modifier.size(18.dp))
                     }
                 }
             },
@@ -2475,7 +2459,7 @@ private fun SearchTab(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
-                            Icon(Icons.Filled.Search, null, tint = YtRed, modifier = Modifier.size(14.dp))
+                            Icon(AppIcons.Search, null, tint = YtRed, modifier = Modifier.size(14.dp))
                             Text(
                                 "Search \"$searchQuery\"",
                                 fontSize = 12.sp,
@@ -2619,9 +2603,9 @@ private fun SuggestionRow(
             ) { state ->
                 Icon(
                     imageVector = when (state) {
-                        "check" -> Icons.Filled.Check
-                        "remove" -> Icons.Filled.Close
-                        else -> Icons.Filled.Add
+                        "check" -> AppIcons.Check
+                        "remove" -> AppIcons.Close
+                        else -> AppIcons.Add
                     },
                     contentDescription = state,
                     tint = when (state) {
@@ -2705,9 +2689,9 @@ private fun ChannelListRow(
             ) { iconState ->
                 Icon(
                     imageVector = when (iconState) {
-                        "check"  -> Icons.Filled.Check
-                        "remove" -> Icons.Filled.Close
-                        else     -> Icons.Filled.Add
+                        "check"  -> AppIcons.Check
+                        "remove" -> AppIcons.Close
+                        else     -> AppIcons.Add
                     },
                     contentDescription = iconState,
                     tint = when (iconState) {

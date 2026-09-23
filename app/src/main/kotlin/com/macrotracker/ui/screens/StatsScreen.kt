@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -40,6 +38,7 @@ import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.viewmodel.StatsViewModel
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import com.macrotracker.ui.theme.AppIcons
 
 @Composable
 fun StatsScreen(
@@ -63,7 +62,7 @@ fun StatsScreen(
             leading = {
                 IconButton(onClick = onNavigateBack, modifier = Modifier.size(40.dp)) {
                     Icon(
-                        Icons.Outlined.ArrowBack,
+                        AppIcons.ArrowBack,
                         contentDescription = "Back",
                         tint = Primary,
                         modifier = Modifier.size(24.dp),

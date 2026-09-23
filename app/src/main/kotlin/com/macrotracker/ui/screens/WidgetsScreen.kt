@@ -23,14 +23,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.SportsMotorsports
-import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.GridView
-import androidx.compose.material.icons.outlined.Widgets
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -79,6 +71,7 @@ import com.macrotracker.widget.HealthWidgetReceiver
 import com.macrotracker.widget.MacrosWidgetReceiver
 import com.macrotracker.widget.WeatherWidgetReceiver
 import kotlinx.coroutines.delay
+import com.macrotracker.ui.theme.AppIcons
 
 // ── Data model ────────────────────────────────────────────────────────────────
 
@@ -262,14 +255,14 @@ fun WidgetsScreen(
                 onNavigateBack()
             }) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                    imageVector = AppIcons.ArrowBack,
                     contentDescription = "Back",
                     tint = TextPrimary,
                 )
             }
             Spacer(modifier = Modifier.width(4.dp))
             Icon(
-                imageVector = Icons.Outlined.Widgets,
+                imageVector = AppIcons.Blocks,
                 contentDescription = null,
                 tint = Primary,
                 modifier = Modifier.size(24.dp),
@@ -309,7 +302,7 @@ fun WidgetsScreen(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Icon(
-                    androidx.compose.material.icons.Icons.Default.Info,
+                    AppIcons.Info,
                     contentDescription = "Info",
                     tint = TextSecondary,
                     modifier = Modifier.size(16.dp)
@@ -337,7 +330,7 @@ fun WidgetsScreen(
                 WidgetSectionHeader(
                     title = "DailyDash",
                     subtitle = "Nutrition · Health · Weather · Calendar",
-                    icon = androidx.compose.material.icons.Icons.Outlined.Widgets,
+                    icon = AppIcons.Blocks,
                     accentColor = Primary,
                     delayMs = 50L,
                     widgetCount = CORE_WIDGETS.size,
@@ -373,7 +366,7 @@ fun WidgetsScreen(
                 WidgetSectionHeader(
                     title = "Formula 1",
                     subtitle = "Race countdown · Standings · Schedule",
-                    icon = androidx.compose.material.icons.Icons.Default.SportsMotorsports,
+                    icon = AppIcons.Helmet,
                     accentColor = F1_RED,
                     delayMs = 350L,
                     widgetCount = F1_WIDGETS.size,
@@ -545,7 +538,7 @@ private fun WidgetCard(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = Icons.Outlined.CheckCircle,
+                            imageVector = AppIcons.CheckCircle,
                             contentDescription = null,
                             tint = Color.White,
                             modifier = Modifier.size(12.dp),
@@ -593,7 +586,7 @@ private fun WidgetCard(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Outlined.GridView,
+                        imageVector = AppIcons.Grid,
                         contentDescription = null,
                         tint = info.accentColor,
                         modifier = Modifier.size(11.dp),
@@ -653,8 +646,8 @@ private fun WidgetCard(
                     ) else null,
             ) {
                 Icon(
-                    imageVector = if (showPlaced) Icons.Outlined.CheckCircle
-                                  else Icons.Outlined.Add,
+                    imageVector = if (showPlaced) AppIcons.CheckCircle
+                                  else AppIcons.Add,
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
                 )

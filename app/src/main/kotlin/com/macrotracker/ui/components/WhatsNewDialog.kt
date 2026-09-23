@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -32,6 +30,7 @@ import com.macrotracker.ui.theme.Surface as AppSurface
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.rememberHaptics
+import com.macrotracker.ui.theme.AppIcons
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,7 +60,7 @@ fun WhatsNewDialog(
                     horizontalArrangement = Arrangement.Start,
                 ) {
                     Icon(
-                        Icons.Outlined.AutoAwesome,
+                        AppIcons.Sparkles,
                         contentDescription = null,
                         tint = Primary,
                         modifier = Modifier.size(26.dp),

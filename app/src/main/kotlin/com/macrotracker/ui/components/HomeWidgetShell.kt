@@ -21,8 +21,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -56,6 +54,7 @@ import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.LocalTickersPaused
+import com.macrotracker.ui.theme.AppIcons
 
 /** Default cap so expanded hubs stay on-screen instead of stretching the home list. */
 val WidgetScrollBoxMaxHeight = 340.dp
@@ -158,7 +157,7 @@ fun WidgetExpandChevron(
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            imageVector = Icons.Outlined.ExpandMore,
+            imageVector = AppIcons.ChevronDown,
             contentDescription = if (expanded) "Collapse" else "Expand",
             tint = accentColor.copy(alpha = if (expanded) 0.75f else 0.55f),
             modifier = Modifier.size(22.dp).rotate(rotation),

@@ -113,7 +113,6 @@ dependencies {
     implementation(libs.compose.ui.graphics)
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
-    implementation(libs.compose.material.icons)
     implementation(libs.compose.animation)
     debugImplementation(libs.compose.ui.tooling)
 
@@ -174,7 +173,6 @@ dependencies {
     implementation(libs.glance.material3)
     
     // Installed icon library for full-app usage (Weather, UI, etc.)
-    implementation(libs.tabler.icons)
 
     // Frosted-glass blur for the floating pill nav
     implementation(libs.haze)

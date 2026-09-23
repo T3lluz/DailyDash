@@ -12,9 +12,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -36,6 +33,7 @@ import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.rememberHaptics
 import java.util.Locale
+import com.macrotracker.ui.theme.AppIcons
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,7 +83,7 @@ fun AppUpdateDialog(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            Icons.Outlined.SystemUpdate,
+                            AppIcons.Download,
                             contentDescription = null,
                             tint = Primary,
                         )
@@ -103,7 +101,7 @@ fun AppUpdateDialog(
                             onDismiss()
                         }) {
                             Icon(
-                                Icons.Outlined.Close,
+                                AppIcons.Close,
                                 contentDescription = "Dismiss",
                                 tint = TextSecondary,
                             )

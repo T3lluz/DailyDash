@@ -21,12 +21,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Checkroom
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
-import androidx.compose.material.icons.outlined.LocationOff
-import androidx.compose.material.icons.outlined.LocationOn
-import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -69,6 +63,7 @@ import com.macrotracker.ui.util.LastUpdatedText
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.WeatherUiState
 import java.util.Locale
+import com.macrotracker.ui.theme.AppIcons
 
 private enum class TimeOfDay { DAY, NIGHT, TWILIGHT }
 
@@ -336,7 +331,7 @@ fun WeatherCard(
                                         if (weather.locationName.isNotBlank()) {
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Icon(
-                                                if (successState.isPrecise) Icons.Outlined.LocationOn else Icons.Outlined.LocationOff,
+                                                if (successState.isPrecise) AppIcons.MapPin else AppIcons.MapPinOff,
                                                 contentDescription = null,
                                                 tint = if (successState.isPrecise) accent else Color.White.copy(alpha = 0.5f),
                                                 modifier = Modifier.size(14.dp),
@@ -362,7 +357,7 @@ fun WeatherCard(
                                     horizontalArrangement = Arrangement.spacedBy(0.dp),
                                 ) {
                                     IconButton(onClick = onRetry, modifier = Modifier.size(36.dp)) {
-                                        Icon(Icons.Outlined.Refresh, contentDescription = "Refresh", tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(18.dp))
+                                        Icon(AppIcons.Refresh, contentDescription = "Refresh", tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(18.dp))
                                     }
                                     WidgetExpandChevron(
                                         expanded = expanded,
@@ -388,7 +383,7 @@ fun WeatherCard(
                                         .background(Color.White.copy(alpha = 0.12f))
                                         .padding(horizontal = 10.dp, vertical = 8.dp),
                                 ) {
-                                    Icon(Icons.Outlined.LocationOff, contentDescription = null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(14.dp))
+                                    Icon(AppIcons.MapPinOff, contentDescription = null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(14.dp))
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         "Approximate location — tap to enable precise location",
@@ -494,7 +489,7 @@ fun WeatherCard(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = Icons.Outlined.LocationOn,
+                                imageVector = AppIcons.MapPin,
                                 contentDescription = null,
                                 tint = LocationAccent,
                                 modifier = Modifier.size(16.dp)
@@ -544,7 +539,7 @@ fun WeatherCard(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Icon(
-                                imageVector = Icons.Outlined.LocationOn,
+                                imageVector = AppIcons.MapPin,
                                 contentDescription = null,
                                 tint = LocationAccent,
                                 modifier = Modifier.size(16.dp),
@@ -573,7 +568,7 @@ fun WeatherCard(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.weight(1f),
                         ) {
-                            Icon(Icons.Outlined.LocationOff, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(20.dp))
+                            Icon(AppIcons.MapPinOff, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Column {
                                 Text("Weather", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
@@ -697,7 +692,7 @@ private fun WhatToWearCard(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.Checkroom,
+                    imageVector = AppIcons.Shirt,
                     contentDescription = null,
                     tint = accent,
                     modifier = Modifier.size(18.dp),
@@ -998,7 +993,7 @@ private fun DailyForecastRow(
             }
             Spacer(modifier = Modifier.width(6.dp))
             Icon(
-                imageVector = Icons.Outlined.KeyboardArrowDown,
+                imageVector = AppIcons.ChevronDown,
                 contentDescription = if (expanded) "Collapse day" else "Expand day",
                 tint = Color.White.copy(alpha = 0.55f),
                 modifier = Modifier
