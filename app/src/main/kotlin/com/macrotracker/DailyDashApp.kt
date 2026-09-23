@@ -6,6 +6,7 @@ import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.macrotracker.data.hermes.HermesLiveFeed
+import com.macrotracker.data.phone.PhoneHub
 import com.macrotracker.data.server.DashboardSettingsSync
 import com.macrotracker.data.update.AppUpdateWorker
 import com.macrotracker.data.update.PackageReplacedReceiver
@@ -35,10 +36,14 @@ class DailyDashApp : Application(), ImageLoaderFactory {
 
     @Inject lateinit var settingsSync: DashboardSettingsSync
 
+    /** The phone hub: this phone on the dashboard, and the dashboard's commands on this phone. */
+    @Inject lateinit var phoneHub: PhoneHub
+
     override fun onCreate() {
         super.onCreate()
         liveFeed.bind()
         settingsSync.bind()
+        phoneHub.bind()
         PackageReplacedReceiver.ensureChannel(this)
         // Every few hours, even with the app closed: a new build shows up as a notification.
         AppUpdateWorker.schedule(this)
