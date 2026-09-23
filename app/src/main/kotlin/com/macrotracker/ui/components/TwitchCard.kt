@@ -1419,7 +1419,7 @@ private fun TwitchSettingsSheet(
     Column(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(horizontal = 20.dp).padding(top = 12.dp)) {
             ChannelSheetHeader(
-                title = "Twitch Channels",
+                title = "Twitch channels",
                 subtitle = "Live follows & watching list",
                 tileColor = TwPurpleDeep,
                 tileIcon = AppIcons.Video,

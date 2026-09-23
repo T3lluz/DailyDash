@@ -21,15 +21,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -51,11 +49,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import com.macrotracker.data.server.ServerAuthMode
 import com.macrotracker.data.server.ServerConnectionState
 import com.macrotracker.data.server.ServerProfile
 import com.macrotracker.data.server.parseServerTarget
+import com.macrotracker.ui.components.ButtonVariant
+import com.macrotracker.ui.components.CardHeader
+import com.macrotracker.ui.components.LoadingSpec
+import com.macrotracker.ui.components.LoadingSpinner
+import com.macrotracker.ui.components.MacroButton
 import com.macrotracker.ui.components.SubScreenHeader
+import com.macrotracker.ui.components.WidgetExpandSection
 import com.macrotracker.ui.components.subScreenBottomPadding
 import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.components.MacroTextField
@@ -68,6 +74,7 @@ import com.macrotracker.ui.theme.ServerCritical
 import com.macrotracker.ui.theme.ServerGood
 import com.macrotracker.ui.theme.ServerWarn
 import com.macrotracker.ui.theme.ServerWell
+import com.macrotracker.ui.theme.Surface
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.rememberHaptics
@@ -113,6 +120,9 @@ fun ServersSettingsScreen(
 
     LaunchedEffect(Unit) {
         viewModel.ensureChannels()
+    }
+    // Notification access can be granted or revoked in Android's settings while this is open.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         notificationsGranted = viewModel.hasNotificationPermission()
     }
 
@@ -134,21 +144,7 @@ fun ServersSettingsScreen(
 
         // ── Server list ──────────────────────────────────────────────────
         MacroCard(delayMs = 40) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    AppIcons.Server,
-                    contentDescription = null,
-                    tint = Primary,
-                    modifier = Modifier.size(20.dp),
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    "Your servers",
-                    color = TextPrimary,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f),
-                )
+            CardHeader(title = "Your servers", icon = AppIcons.Server, accent = Primary) {
                 if (profiles.isNotEmpty()) {
                     Text(
                         "Open dashboard",
@@ -196,24 +192,20 @@ fun ServersSettingsScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
-            Button(
+            Spacer(modifier = Modifier.height(8.dp))
+            MacroButton(
+                text = "Add server",
                 onClick = {
-                    haptics.click()
                     editingId = null
                     showForm = true
                     viewModel.resetTestState()
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = Primary),
                 modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(AppIcons.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Add server")
-            }
+            )
         }
 
-        if (showForm) {
+        // editingId is left alone on close, so the form keeps its title while it folds away.
+        WidgetExpandSection(visible = showForm) {
             ServerEditorCard(
                 existing = editingId?.let { id -> profiles.firstOrNull { it.id == id } },
                 testState = testState,
@@ -233,7 +225,6 @@ fun ServersSettingsScreen(
                     )
                     if (result is ServerViewModel.SaveResult.Saved) {
                         showForm = false
-                        editingId = null
                         viewModel.resetTestState()
                     }
                     result
@@ -247,7 +238,6 @@ fun ServersSettingsScreen(
                 },
                 onCancel = {
                     showForm = false
-                    editingId = null
                     viewModel.resetTestState()
                 },
             )
@@ -256,12 +246,7 @@ fun ServersSettingsScreen(
         // ── Notifications ────────────────────────────────────────────────
         Spacer(modifier = Modifier.height(4.dp))
         MacroCard(delayMs = 70) {
-            Text(
-                "Notifications",
-                color = TextPrimary,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-            )
+            CardHeader(title = "Notifications")
             Text(
                 "DailyDash posts a push notification when a server needs you. Repeats of the same " +
                     "problem are held back for the cooldown below, so a full disk alerts once, not " +
@@ -286,51 +271,48 @@ fun ServersSettingsScreen(
                 },
             )
 
-            if (settings.enabled && notificationsGranted) {
-                HorizontalDivider(color = Border.copy(alpha = 0.35f), modifier = Modifier.padding(vertical = 6.dp))
-                ToggleRow(
-                    title = "Critical",
-                    subtitle = "Unreachable hosts, failed units, disks about to fill",
-                    checked = settings.criticalEnabled,
-                    onCheckedChange = { haptics.tick(); viewModel.setCriticalEnabled(it) },
-                    accent = ServerCritical,
-                )
-                ToggleRow(
-                    title = "Warnings",
-                    subtitle = "CPU, memory, swap, temperature and container problems",
-                    checked = settings.warningEnabled,
-                    onCheckedChange = { haptics.tick(); viewModel.setWarningEnabled(it) },
-                    accent = ServerWarn,
-                )
-                ToggleRow(
-                    title = "Updates & security news",
-                    subtitle = "Pending packages, security patches, reboot-required flags",
-                    checked = settings.updatesEnabled,
-                    onCheckedChange = { haptics.tick(); viewModel.setUpdatesEnabled(it) },
-                    accent = Primary,
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                StepperRow(
-                    label = "Alert cooldown",
-                    value = "${settings.alertCooldownMinutes} min",
-                    onDecrease = {
-                        viewModel.setAlertCooldownMinutes((settings.alertCooldownMinutes - 5).coerceAtLeast(1))
-                    },
-                    onIncrease = {
-                        viewModel.setAlertCooldownMinutes((settings.alertCooldownMinutes + 5).coerceAtMost(240))
-                    },
-                )
+            WidgetExpandSection(visible = settings.enabled && notificationsGranted) {
+                Column {
+                    HorizontalDivider(color = Border.copy(alpha = 0.35f), modifier = Modifier.padding(vertical = 6.dp))
+                    ToggleRow(
+                        title = "Critical",
+                        subtitle = "Unreachable hosts, failed units, disks about to fill",
+                        checked = settings.criticalEnabled,
+                        onCheckedChange = { haptics.tick(); viewModel.setCriticalEnabled(it) },
+                        accent = ServerCritical,
+                    )
+                    ToggleRow(
+                        title = "Warnings",
+                        subtitle = "CPU, memory, swap, temperature and container problems",
+                        checked = settings.warningEnabled,
+                        onCheckedChange = { haptics.tick(); viewModel.setWarningEnabled(it) },
+                        accent = ServerWarn,
+                    )
+                    ToggleRow(
+                        title = "Updates & security news",
+                        subtitle = "Pending packages, security patches, reboot-required flags",
+                        checked = settings.updatesEnabled,
+                        onCheckedChange = { haptics.tick(); viewModel.setUpdatesEnabled(it) },
+                        accent = Primary,
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    StepperRow(
+                        label = "Alert cooldown",
+                        value = "${settings.alertCooldownMinutes} min",
+                        onDecrease = {
+                            viewModel.setAlertCooldownMinutes((settings.alertCooldownMinutes - 5).coerceAtLeast(1))
+                        },
+                        onIncrease = {
+                            viewModel.setAlertCooldownMinutes((settings.alertCooldownMinutes + 5).coerceAtMost(240))
+                        },
+                    )
+                }
             }
         }
 
         // ── Live notification ────────────────────────────────────────────
         MacroCard(delayMs = 90) {
-            Text(
-                "Live stats notification",
-                color = TextPrimary,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-            )
+            CardHeader(title = "Live stats notification")
             Text(
                 "Keeps an ongoing notification with live gauges. It stays compact; tap More on it " +
                     "for the full panel with dials, history and every core.",
@@ -351,43 +333,45 @@ fun ServersSettingsScreen(
                     viewModel.setLiveNotificationEnabled(enabled && profiles.isNotEmpty())
                 },
             )
-            if (settings.liveNotificationEnabled) {
-                ToggleRow(
-                    title = "Open onto the full panel",
-                    subtitle = "Off keeps it compact until you tap More",
-                    checked = settings.liveNotificationDetailed,
-                    onCheckedChange = { haptics.tick(); viewModel.setLiveNotificationDetailed(it) },
-                )
-                ToggleRow(
-                    title = "Restart after reboot",
-                    subtitle = "Bring the notification back when the phone starts",
-                    checked = settings.startOnBoot,
-                    onCheckedChange = { haptics.tick(); viewModel.setStartOnBoot(it) },
-                )
-                if (profiles.size > 1) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    StatLabel("SERVER SHOWN")
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        profiles.forEach { profile ->
-                            val selected = settings.liveNotificationServerId == profile.id ||
-                                (settings.liveNotificationServerId == null && profile == profiles.first())
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(if (selected) Primary.copy(alpha = 0.2f) else ServerWell)
-                                    .clickable {
-                                        haptics.tick()
-                                        viewModel.setLiveNotificationServer(profile.id)
-                                    }
-                                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                            ) {
-                                Text(
-                                    profile.label,
-                                    color = if (selected) TextPrimary else TextSecondary,
-                                    fontSize = 12.sp,
-                                    maxLines = 1,
-                                )
+            WidgetExpandSection(visible = settings.liveNotificationEnabled) {
+                Column {
+                    ToggleRow(
+                        title = "Open onto the full panel",
+                        subtitle = "Off keeps it compact until you tap More",
+                        checked = settings.liveNotificationDetailed,
+                        onCheckedChange = { haptics.tick(); viewModel.setLiveNotificationDetailed(it) },
+                    )
+                    ToggleRow(
+                        title = "Restart after reboot",
+                        subtitle = "Bring the notification back when the phone starts",
+                        checked = settings.startOnBoot,
+                        onCheckedChange = { haptics.tick(); viewModel.setStartOnBoot(it) },
+                    )
+                    if (profiles.size > 1) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        StatLabel("SERVER SHOWN")
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            profiles.forEach { profile ->
+                                val selected = settings.liveNotificationServerId == profile.id ||
+                                    (settings.liveNotificationServerId == null && profile == profiles.first())
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (selected) Primary.copy(alpha = 0.2f) else ServerWell)
+                                        .clickable {
+                                            haptics.tick()
+                                            viewModel.setLiveNotificationServer(profile.id)
+                                        }
+                                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                                ) {
+                                    Text(
+                                        profile.label,
+                                        color = if (selected) TextPrimary else TextSecondary,
+                                        fontSize = 12.sp,
+                                        maxLines = 1,
+                                    )
+                                }
                             }
                         }
                     }
@@ -397,12 +381,7 @@ fun ServersSettingsScreen(
 
         // ── Polling + thresholds ─────────────────────────────────────────
         MacroCard(delayMs = 110) {
-            Text(
-                "Polling & thresholds",
-                color = TextPrimary,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-            )
+            CardHeader(title = "Polling & thresholds")
             Text(
                 "Each poll is one batched command over a session that stays open, so a 5-second " +
                     "refresh costs the server almost nothing.",
@@ -552,6 +531,7 @@ private fun ServerEditorCard(
     var passphrase by rememberSaveable(existing?.id) { mutableStateOf("") }
     var revealSecret by rememberSaveable { mutableStateOf(false) }
     var error by rememberSaveable(existing?.id) { mutableStateOf<String?>(null) }
+    var confirmDelete by rememberSaveable(existing?.id) { mutableStateOf(false) }
 
     // Typing `deploy@box` should fill the username field rather than making the
     // user enter the same thing twice.
@@ -562,12 +542,7 @@ private fun ServerEditorCard(
     }
 
     MacroCard(delayMs = 50, borderColor = Primary.copy(alpha = 0.4f)) {
-        Text(
-            if (existing == null) "New server" else "Edit ${existing.label}",
-            color = TextPrimary,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold,
-        )
+        CardHeader(title = if (existing == null) "New server" else "Edit ${existing.label}")
         Spacer(modifier = Modifier.height(10.dp))
 
         StatLabel("ADDRESS")
@@ -612,7 +587,7 @@ private fun ServerEditorCard(
                 ServerAuthMode.PRIVATE_KEY to "SSH key",
             ),
             selected = authMode,
-            onSelect = { authMode = it; error = null },
+            onSelect = { haptics.tick(); authMode = it; error = null },
         )
         Spacer(modifier = Modifier.height(10.dp))
 
@@ -627,7 +602,7 @@ private fun ServerEditorCard(
                     PasswordVisualTransformation()
                 },
                 trailingIcon = {
-                    IconButton(onClick = { revealSecret = !revealSecret }) {
+                    IconButton(onClick = { haptics.tick(); revealSecret = !revealSecret }) {
                         Icon(
                             imageVector = if (revealSecret) {
                                 AppIcons.EyeOff
@@ -669,7 +644,7 @@ private fun ServerEditorCard(
 
         when (testState) {
             is ServerTestUiState.Testing -> Row(verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Primary)
+                LoadingSpinner(size = LoadingSpec.SizeInline)
                 Spacer(modifier = Modifier.width(10.dp))
                 Text("Connecting…", color = TextSecondary, fontSize = 12.sp)
             }
@@ -732,53 +707,64 @@ private fun ServerEditorCard(
             )
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(6.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(
-                onClick = {
-                    haptics.click()
-                    onTest(target, username, port, authMode, secret, passphrase)
-                },
+            MacroButton(
+                text = "Test",
+                onClick = { onTest(target, username, port, authMode, secret, passphrase) },
+                variant = ButtonVariant.SECONDARY,
                 modifier = Modifier.weight(1f),
-            ) {
-                Text("Test", fontSize = 13.sp)
-            }
-            Button(
+            )
+            MacroButton(
+                text = "Save",
                 onClick = {
-                    haptics.click()
                     val result = onSave(target, label, username, port, authMode, secret, passphrase)
                     error = (result as? ServerViewModel.SaveResult.Invalid)?.message
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = Primary),
                 modifier = Modifier.weight(1f),
-            ) {
-                Text("Save", fontSize = 13.sp)
-            }
+            )
         }
-        Spacer(modifier = Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) {
-                Text("Cancel", fontSize = 13.sp, color = TextSecondary)
-            }
+            MacroButton(
+                text = "Cancel",
+                onClick = onCancel,
+                variant = ButtonVariant.SECONDARY,
+                modifier = Modifier.weight(1f),
+            )
             if (onDelete != null) {
-                OutlinedButton(
-                    onClick = {
-                        haptics.click()
-                        onDelete()
-                    },
+                MacroButton(
+                    text = "Delete",
+                    onClick = { confirmDelete = true },
+                    variant = ButtonVariant.DANGER,
                     modifier = Modifier.weight(1f),
-                ) {
-                    Icon(
-                        AppIcons.Delete,
-                        contentDescription = null,
-                        tint = ServerCritical,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Delete", fontSize = 13.sp, color = ServerCritical)
-                }
+                )
             }
         }
+    }
+
+    // Deleting drops the saved address and credentials for good, so it asks first.
+    if (confirmDelete && onDelete != null) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            containerColor = Surface,
+            title = { Text("Delete ${existing?.label ?: "this server"}?", color = TextPrimary) },
+            text = {
+                Text(
+                    "Its address and saved credentials are removed from this phone. This cannot be undone.",
+                    color = TextSecondary,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { confirmDelete = false; onDelete() }) {
+                    Text("Delete", color = ServerCritical)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) { Text("Cancel", color = TextSecondary) }
+            },
+        )
     }
 }
 

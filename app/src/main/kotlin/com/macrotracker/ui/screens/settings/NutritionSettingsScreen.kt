@@ -30,6 +30,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.macrotracker.ui.components.CardHeader
 import com.macrotracker.ui.components.SubScreenHeader
 import com.macrotracker.ui.components.subScreenBottomPadding
 import com.macrotracker.ui.components.MacroButton
@@ -39,7 +40,6 @@ import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
-import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.StatsViewModel
 import com.macrotracker.ui.theme.AppIcons
 
@@ -51,7 +51,6 @@ fun NutritionSettingsScreen(
     val calGoal by statsViewModel.calGoal.collectAsState()
     val protGoal by statsViewModel.protGoal.collectAsState()
     var goalsSaved by remember { mutableStateOf(false) }
-    val haptics = rememberHaptics()
 
     LaunchedEffect(Unit) {
         statsViewModel.loadData()
@@ -74,31 +73,13 @@ fun NutritionSettingsScreen(
         Spacer(modifier = Modifier.height(12.dp))
 
         MacroCard(delayMs = 50) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
+            CardHeader(
+                title = "Daily goals",
+                icon = AppIcons.Dumbbell,
+                accent = Primary,
+                subtitle = "Used by progress bars on Home and Health",
                 modifier = Modifier.padding(bottom = 14.dp),
-            ) {
-                Icon(
-                    imageVector = AppIcons.Dumbbell,
-                    contentDescription = null,
-                    tint = Primary,
-                    modifier = Modifier.size(22.dp),
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Column {
-                    Text(
-                        text = "Daily Goals",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary,
-                    )
-                    Text(
-                        text = "Used by progress bars on Home and Health",
-                        fontSize = 12.sp,
-                        color = TextSecondary,
-                    )
-                }
-            }
+            )
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -143,7 +124,6 @@ fun NutritionSettingsScreen(
             MacroButton(
                 text = if (goalsSaved) "Goals saved" else "Save goals",
                 onClick = {
-                    haptics.confirm()
                     statsViewModel.saveGoals()
                     goalsSaved = true
                 },

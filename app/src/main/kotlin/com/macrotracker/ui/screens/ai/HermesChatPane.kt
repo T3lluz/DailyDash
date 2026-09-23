@@ -87,6 +87,7 @@ import com.macrotracker.ui.components.PillButton
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
+import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.OnAccent
 import com.macrotracker.ui.theme.ServerBrand
@@ -616,7 +617,8 @@ private fun HermesUserBubble(item: HermesItem.User) {
 
 @Composable
 private fun OutputNote(text: String) {
-    var open by remember { mutableStateOf(false) }
+    // Saveable, so a fold the person opened stays open when it scrolls away and back.
+    var open by rememberSaveable { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -632,7 +634,7 @@ private fun OutputNote(text: String) {
                 .clickable { open = !open }
                 .padding(horizontal = 8.dp, vertical = 4.dp),
         )
-        AnimatedVisibility(open) {
+        AnimatedVisibility(open, enter = MacroMotion.expandEnter, exit = MacroMotion.expandExit) {
             MonoBlock(text, maxLines = 30)
         }
     }
@@ -699,7 +701,7 @@ private fun AssistantTurn(item: HermesItem.Assistant) {
 
 @Composable
 private fun Foldout(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, content: @Composable () -> Unit) {
-    var open by remember { mutableStateOf(false) }
+    var open by rememberSaveable { mutableStateOf(false) }
     Column(modifier = Modifier.padding(bottom = 6.dp)) {
         Row(
             modifier = Modifier
@@ -714,7 +716,7 @@ private fun Foldout(label: String, icon: androidx.compose.ui.graphics.vector.Ima
             Spacer(Modifier.width(3.dp))
             Icon(if (open) AppIcons.ChevronUp else AppIcons.ChevronDown, null, tint = TextTertiary, modifier = Modifier.size(12.dp))
         }
-        AnimatedVisibility(open) {
+        AnimatedVisibility(open, enter = MacroMotion.expandEnter, exit = MacroMotion.expandExit) {
             Box(
                 modifier = Modifier
                     .padding(top = 4.dp)
@@ -799,7 +801,7 @@ private fun ChangesCard(changes: List<com.macrotracker.data.hermes.HermesFileCha
 /** A command Hermes ran by itself: the prompt line, exit code, time, and the output folded in. */
 @Composable
 private fun TerminalCard(item: HermesItem.Exec) {
-    var open by remember { mutableStateOf(item.code != 0) }
+    var open by rememberSaveable { mutableStateOf(item.code != 0) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -833,7 +835,11 @@ private fun TerminalCard(item: HermesItem.Exec) {
         if (meta.isNotBlank()) {
             Text(meta, color = if (item.risk == "act") ServerWarn else TextTertiary, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
         }
-        AnimatedVisibility(open && item.out.isNotBlank()) {
+        AnimatedVisibility(
+            open && item.out.isNotBlank(),
+            enter = MacroMotion.expandEnter,
+            exit = MacroMotion.expandExit,
+        ) {
             Box(Modifier.padding(top = 8.dp)) { MonoBlock(item.out, maxLines = 24) }
         }
     }

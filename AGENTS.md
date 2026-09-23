@@ -282,7 +282,7 @@ Sub-screens (`SubScreenRoutes.STATS/HELP/WIDGETS/CAMERA_SCAN` and the `SettingsR
 
 **Tab switches must go through `navigateToTab(route)`** (pop to the start destination with `saveState`, `launchSingleTop`, `restoreState`). Never `navigate()` a tab route on top of another tab or a sub-screen — that tab's saved stack then ends in the other tab and the nav pill stops responding. (The one exception is finishing onboarding, which replaces the onboarding stack with Home.) The server dashboard → AI hand-off uses `navigateToTab(Screen.AI.withSeed(id), restoreState = false)` so the seed args beat the AI tab's saved state.
 
-Callers must not add haptics to components that already fire their own: `MacroButton`, `HubHeaderAction`, `HubErrorState`, `WidgetExpandBar`, `DeviceCodePanel`.
+Callers must not add haptics to components that already fire their own: `MacroButton`, `PillButton`, `SettingsCategoryRow`, `HubHeaderAction`, `HubErrorState`, `WidgetExpandBar`, `DeviceCodePanel`.
 
 ### Decorative motion
 Two long-running animations mirror the t3lluz web dashboard and take their specs from `MacroMotion.CircuitPaint`

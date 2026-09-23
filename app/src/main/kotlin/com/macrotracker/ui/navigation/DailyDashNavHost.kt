@@ -100,11 +100,11 @@ fun DailyDashNavHost(
             popEnterTransition = { MacroMotion.subScreenPopEnter },
             popExitTransition = { MacroMotion.subScreenPopExit },
         ) {
-            WelcomeScreen(onGetStarted = { navController.navigate(OnboardingRoutes.PERMISSIONS) })
+            WelcomeScreen(onGetStarted = { navController.navigateToSubScreen(OnboardingRoutes.PERMISSIONS) })
         }
 
         subScreen(OnboardingRoutes.PERMISSIONS) {
-            PermissionsScreen(onContinue = { navController.navigate(OnboardingRoutes.TUTORIAL) })
+            PermissionsScreen(onContinue = { navController.navigateToSubScreen(OnboardingRoutes.TUTORIAL) })
         }
 
         subScreen(OnboardingRoutes.TUTORIAL) {
@@ -124,12 +124,12 @@ fun DailyDashNavHost(
         composable(Screen.Home.route) {
             HomeScreen(
                 onNavigateToHealth = { navController.navigateToTab(Screen.Health.route) },
-                onNavigateToServers = { navController.navigate(SettingsRoutes.SERVER_DASHBOARD) },
+                onNavigateToServers = { navController.navigateToSubScreen(SettingsRoutes.SERVER_DASHBOARD) },
             )
         }
 
         composable(Screen.Health.route) {
-            HealthScreen(onNavigateToCameraScan = { navController.navigate(SubScreenRoutes.CAMERA_SCAN) })
+            HealthScreen(onNavigateToCameraScan = { navController.navigateToSubScreen(SubScreenRoutes.CAMERA_SCAN) })
         }
 
         composable(
@@ -140,8 +140,8 @@ fun DailyDashNavHost(
             ),
         ) { entry ->
             AIScreen(
-                onNavigateToCameraScan = { navController.navigate(SubScreenRoutes.CAMERA_SCAN) },
-                onNavigateToAiSettings = { navController.navigate(SettingsRoutes.AI) },
+                onNavigateToCameraScan = { navController.navigateToSubScreen(SubScreenRoutes.CAMERA_SCAN) },
+                onNavigateToAiSettings = { navController.navigateToSubScreen(SettingsRoutes.AI) },
                 initialTab = entry.arguments?.getString(Screen.AI.ARG_TAB),
                 serverHandoffId = entry.arguments?.getString(Screen.AI.ARG_SEED),
             )
@@ -149,13 +149,13 @@ fun DailyDashNavHost(
 
         composable(Screen.Settings.route) {
             SettingsScreen(
-                onNavigateToConnections = { navController.navigate(SettingsRoutes.CONNECTIONS) },
-                onNavigateToAi = { navController.navigate(SettingsRoutes.AI) },
-                onNavigateToNutrition = { navController.navigate(SettingsRoutes.NUTRITION) },
-                onNavigateToAbout = { navController.navigate(SettingsRoutes.ABOUT) },
-                onNavigateToHelp = { navController.navigate(SubScreenRoutes.HELP) },
-                onNavigateToStats = { navController.navigate(SubScreenRoutes.STATS) },
-                onNavigateToWidgets = { navController.navigate(SubScreenRoutes.WIDGETS) },
+                onNavigateToConnections = { navController.navigateToSubScreen(SettingsRoutes.CONNECTIONS) },
+                onNavigateToAi = { navController.navigateToSubScreen(SettingsRoutes.AI) },
+                onNavigateToNutrition = { navController.navigateToSubScreen(SettingsRoutes.NUTRITION) },
+                onNavigateToAbout = { navController.navigateToSubScreen(SettingsRoutes.ABOUT) },
+                onNavigateToHelp = { navController.navigateToSubScreen(SubScreenRoutes.HELP) },
+                onNavigateToStats = { navController.navigateToSubScreen(SubScreenRoutes.STATS) },
+                onNavigateToWidgets = { navController.navigateToSubScreen(SubScreenRoutes.WIDGETS) },
                 onReplayTutorial = {
                     navController.navigate(OnboardingRoutes.WELCOME) {
                         popUpTo(Screen.Home.route)
@@ -168,7 +168,7 @@ fun DailyDashNavHost(
         subScreen(SettingsRoutes.CONNECTIONS) { entry ->
             ConnectionsSettingsScreen(
                 onNavigateBack = { navController.popSubScreen(entry) },
-                onNavigateToServers = { navController.navigate(SettingsRoutes.SERVERS) },
+                onNavigateToServers = { navController.navigateToSubScreen(SettingsRoutes.SERVERS) },
             )
         }
 
@@ -224,7 +224,7 @@ fun DailyDashNavHost(
             CameraScanScreen(
                 onNavigateBack = { navController.popSubScreen(entry) },
                 onLogged = { navController.popSubScreen(entry) },
-                onNavigateToAiSettings = { navController.navigate(SettingsRoutes.AI) },
+                onNavigateToAiSettings = { navController.navigateToSubScreen(SettingsRoutes.AI) },
             )
         }
     }

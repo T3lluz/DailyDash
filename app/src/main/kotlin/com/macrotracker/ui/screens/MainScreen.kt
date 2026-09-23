@@ -3,7 +3,12 @@ package com.macrotracker.ui.screens
 import android.app.Activity
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.PredictiveBackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -14,7 +19,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -356,7 +363,12 @@ private fun MainBottomBar(
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route?.substringBefore('?')
-    if (!items.any { it.route == currentRoute }) return
+    val onTab = items.any { it.route == currentRoute }
+    // The pill slides away under a sub-screen instead of vanishing, and keeps
+    // showing the tab it came from while it goes.
+    var lastTabRoute by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(currentRoute, onTab) { if (onTab) lastTabRoute = currentRoute }
+    val shownRoute = if (onTab) currentRoute else lastTabRoute
 
     val onItemClick = remember(navController, showSettingsUpdateBadge, onSettingsUpdateBadgeClick) {
         { screen: Screen ->
@@ -368,16 +380,23 @@ private fun MainBottomBar(
         }
     }
 
-    Box(modifier = modifier.navigationBarsPadding()) {
-        PillNavigationBar(
-            items = items,
-            currentRoute = currentRoute,
-            onItemClick = onItemClick,
-            showSettingsUpdateBadge = showSettingsUpdateBadge,
-            hazeState = hazeState,
-            activity = activity,
-            activityProgress = activityProgress,
-            onActivityClick = onActivityClick,
-        )
+    AnimatedVisibility(
+        visible = onTab,
+        modifier = modifier,
+        enter = slideInVertically(MacroMotion.slideTween()) { it } + fadeIn(MacroMotion.fadeTween()),
+        exit = slideOutVertically(MacroMotion.slideTween()) { it } + fadeOut(MacroMotion.fadeTween(150)),
+    ) {
+        Box(modifier = Modifier.navigationBarsPadding()) {
+            PillNavigationBar(
+                items = items,
+                currentRoute = shownRoute,
+                onItemClick = onItemClick,
+                showSettingsUpdateBadge = showSettingsUpdateBadge,
+                hazeState = hazeState,
+                activity = activity,
+                activityProgress = activityProgress,
+                onActivityClick = onActivityClick,
+            )
+        }
     }
 }

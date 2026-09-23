@@ -1,5 +1,6 @@
 package com.macrotracker.ui.components
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -59,7 +60,12 @@ fun SegmentedTabs(
 ) {
     if (tabs.isEmpty()) return
     val selectedIndex = tabs.indexOfFirst { it.key == selectedKey }.coerceAtLeast(0)
-    val accent = tabs[selectedIndex].accent
+    // The tint travels with the indicator rather than snapping to the new tab's colour.
+    val accent by animateColorAsState(
+        targetValue = tabs[selectedIndex].accent,
+        animationSpec = MacroMotion.slideTween(),
+        label = "segmented_accent",
+    )
     val offset by animateFloatAsState(
         targetValue = selectedIndex.toFloat(),
         animationSpec = MacroMotion.slideTween(),

@@ -184,6 +184,7 @@ private fun rainOutlook(steps: List<HourlyForecast>): String {
 @Composable
 private fun NowPanel(advice: ClothingAdvice?, weather: WeatherInfo, windUnit: WindUnit, accent: Color) {
     var detailOpen by rememberSaveable { mutableStateOf(false) }
+    val haptics = rememberHaptics()
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -195,7 +196,10 @@ private fun NowPanel(advice: ClothingAdvice?, weather: WeatherInfo, windUnit: Wi
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { detailOpen = !detailOpen }
+                    .clickable {
+                        detailOpen = !detailOpen
+                        if (detailOpen) haptics.toggleOn() else haptics.toggleOff()
+                    }
                     .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

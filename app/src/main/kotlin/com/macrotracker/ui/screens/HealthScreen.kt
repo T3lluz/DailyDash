@@ -642,10 +642,7 @@ fun HealthScreen(
                                     icon = AppIcons.Camera,
                                     label = "Scan label",
                                     emphasized = true,
-                                    onClick = {
-                                        haptics.click()
-                                        onNavigateToCameraScan()
-                                    },
+                                    onClick = onNavigateToCameraScan,
                                     modifier = Modifier.padding(start = 8.dp),
                                 )
                             }

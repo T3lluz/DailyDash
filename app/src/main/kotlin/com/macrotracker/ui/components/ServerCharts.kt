@@ -60,8 +60,9 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 private val DialTrack = Color(0xFF2C2C2C)
-private val DialNotch = Color(0xFFE4E4E4).copy(alpha = 0.48f)
-private val GridLine = Color(0xFFE4E4E4).copy(alpha = 0.06f)
+// Drawn marks, not text: a faded foreground is fine here.
+private val DialNotch = TextPrimary.copy(alpha = 0.48f)
+private val GridLine = TextPrimary.copy(alpha = 0.06f)
 
 /** Each reading keeps its own colour until it runs warm or hot, then wears the status colour. */
 fun dialColor(accent: Color, percent: Float?, warnAt: Float, hotAt: Float): Color = when {

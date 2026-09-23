@@ -32,7 +32,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -104,27 +103,12 @@ fun CalendarCard(
                 
                 if (allVisibleEvents.isEmpty()) {
                     MacroCard {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                AppIcons.Calendar,
-                                contentDescription = null,
-                                tint = CalendarAccent,
-                                modifier = Modifier.size(20.dp),
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                CardTitle("Calendar")
-                                Text(
-                                    "Nothing coming up in the next month.",
-                                    fontSize = 13.sp,
-                                    color = TextSecondary,
-                                    fontStyle = FontStyle.Italic,
-                                )
-                            }
-                        }
+                        CardHeader(
+                            title = "Calendar",
+                            icon = AppIcons.CalendarDays,
+                            accent = CalendarAccent,
+                            subtitle = "Nothing coming up in the next month.",
+                        )
                     }
                 } else {
                     MacroCard {
@@ -153,7 +137,16 @@ fun CalendarCard(
                 )
             }
 
-            else -> { } // 3 = Unavailable, nothing to show
+            // 3 = Unavailable: switched off in Settings, or the calendar could not be read.
+            // Say so rather than leaving an empty slot in the list.
+            else -> WidgetPromptCard(
+                title = "Calendar",
+                message = "Calendar is off or could not be read. Check Settings → Connections.",
+                actionLabel = "",
+                actionIcon = AppIcons.CalendarDays,
+                accent = CalendarAccent,
+                onAction = null,
+            )
         }
     }
 }

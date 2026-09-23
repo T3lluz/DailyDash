@@ -58,22 +58,22 @@ private data class Feature(val icon: ImageVector, val title: String, val subtitl
 private val features = listOf(
     Feature(
         AppIcons.Dashboard,
-        "Your Personal Dashboard",
+        "Your personal dashboard",
         "Weather, calendar, Formula 1, YouTube, Twitch, GitHub and health stats — all on one home screen, laid out your way.",
     ),
     Feature(
         AppIcons.Blocks,
-        "Fully Customisable Widgets",
+        "Fully customisable widgets",
         "Reorder, show or hide any widget. Build a home screen that shows exactly what matters to you, nothing more.",
     ),
     Feature(
         AppIcons.Restaurant,
-        "Macro & Nutrition Tracking",
+        "Macro & nutrition tracking",
         "Log food manually, scan a label with your camera, or describe your meal and let AI fill in the numbers.",
     ),
     Feature(
         AppIcons.Sparkles,
-        "AI-Powered Throughout",
+        "AI-powered throughout",
         "Chat with Clanker to estimate meal macros, or ask Sysop about your servers. Connect Claude or add a Gemini, OpenAI or OpenRouter key in Settings → AI.",
     ),
 )
@@ -92,25 +92,18 @@ fun WelcomeScreen(onGetStarted: () -> Unit) {
 
     LaunchedEffect(Unit) {
         // Welcome uses EnterTransition.None — child stagger (incl. Y) is intentional.
-        launch {
-            logoAlpha.animateTo(1f, MacroMotion.revealTween(450))
-            logoY.animateTo(0f, MacroMotion.revealTween(450))
-        }
+        // Each element fades and rises together: its own launch per property.
+        launch { logoAlpha.animateTo(1f, MacroMotion.revealTween(450)) }
+        launch { logoY.animateTo(0f, MacroMotion.revealTween(450)) }
         delay(120)
-        launch {
-            titleAlpha.animateTo(1f, MacroMotion.revealTween())
-            titleY.animateTo(0f, MacroMotion.revealTween())
-        }
+        launch { titleAlpha.animateTo(1f, MacroMotion.revealTween()) }
+        launch { titleY.animateTo(0f, MacroMotion.revealTween()) }
         delay(120)
-        launch {
-            featuresAlpha.animateTo(1f, MacroMotion.revealTween())
-            featuresY.animateTo(0f, MacroMotion.revealTween())
-        }
+        launch { featuresAlpha.animateTo(1f, MacroMotion.revealTween()) }
+        launch { featuresY.animateTo(0f, MacroMotion.revealTween()) }
         delay(120)
-        launch {
-            btnAlpha.animateTo(1f, MacroMotion.revealTween(350))
-            btnY.animateTo(0f, MacroMotion.revealTween(350))
-        }
+        launch { btnAlpha.animateTo(1f, MacroMotion.revealTween(350)) }
+        launch { btnY.animateTo(0f, MacroMotion.revealTween(350)) }
     }
 
     Column(

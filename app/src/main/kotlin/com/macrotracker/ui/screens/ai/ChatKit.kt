@@ -85,6 +85,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.text.style.TextOverflow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.macrotracker.ui.theme.AppIcons
 import androidx.compose.runtime.getValue
@@ -434,6 +435,13 @@ private fun CopyChip(text: String) {
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     var copied by remember(text) { mutableStateOf(false) }
+    // "Copied" is a moment's confirmation, then the chip offers Copy again.
+    LaunchedEffect(copied) {
+        if (copied) {
+            delay(2_000)
+            copied = false
+        }
+    }
     Row(modifier = Modifier.padding(top = 6.dp)) {
         SmallActionChip(
             icon = AppIcons.Copy,

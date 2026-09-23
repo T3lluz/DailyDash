@@ -85,6 +85,7 @@ import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.Surface
+import com.macrotracker.ui.theme.TextPlaceholder
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.theme.TextTertiary
@@ -129,7 +130,7 @@ private const val FORTNIGHT_DAYS = 14L
 private val SERVICE_BRAND = mapOf(
     "sonarr" to Color(0xFF00CCFF),
     "radarr" to Color(0xFFFFC230),
-    "f1" to Color(0xFFE34671),
+    "f1" to F1MarqueRed,
     "stremio" to Color(0xFF7B5CFF),
 )
 
@@ -172,7 +173,7 @@ fun UpcomingCard(
         }
         UpcomingUiState.Idle, UpcomingUiState.Loading -> WidgetPlaceholderCard(
             title = "Coming up",
-            icon = AppIcons.CalendarDays,
+            icon = AppIcons.TvPlay,
             accent = UpcomingAccent,
             lines = 0,
             tiles = 3,
@@ -326,7 +327,7 @@ private fun UpcomingHeader(
 ) {
     CardHeader(
         title = "Coming up",
-        icon = AppIcons.CalendarDays,
+        icon = AppIcons.TvPlay,
         accent = UpcomingAccent,
         subtitle = subtitle,
     ) {
@@ -377,7 +378,7 @@ private fun NavArrow(
         Icon(
             icon,
             contentDescription = description,
-            tint = if (enabled) TextSecondary else TextTertiary.copy(alpha = 0.4f),
+            tint = if (enabled) TextSecondary else TextPlaceholder,
             modifier = Modifier.size(18.dp),
         )
     }
@@ -748,7 +749,7 @@ private fun RestPoster(hint: String, info: CarouselItemDrawInfo) {
                     "Nothing new today",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFFD8D8D8),
+                    color = TextPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

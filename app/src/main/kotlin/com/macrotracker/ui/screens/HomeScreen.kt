@@ -26,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -88,14 +89,14 @@ fun HomeScreen(
             Triple("F1", "Formula 1", AppIcons.Flag),
             Triple("GITHUB", "GitHub", AppIcons.Code),
             Triple("SERVERS", "Servers", AppIcons.Server),
-            Triple("YOUTUBE", "YouTube Feed", AppIcons.Play),
-            Triple("TWITCH", "Twitch Live", AppIcons.Video),
+            Triple("YOUTUBE", "YouTube feed", AppIcons.Play),
+            Triple("TWITCH", "Twitch live", AppIcons.Video),
             Triple("WEATHER", "Weather", AppIcons.Cloud),
             Triple("CALENDAR", "Calendar", AppIcons.CalendarDays),
             Triple("UPCOMING", "Coming up", AppIcons.TvPlay),
             Triple("BODY_STATS", "Body Stats", AppIcons.HeartPulse),
-            Triple("PROGRESS", "Today's Progress", AppIcons.ChartPie),
-            Triple("QUICK_ADD", "Quick Add", AppIcons.Add),
+            Triple("PROGRESS", "Today's progress", AppIcons.ChartPie),
+            Triple("QUICK_ADD", "Quick add", AppIcons.Add),
         )
     }
 
@@ -131,30 +132,37 @@ fun HomeScreen(
         }
     }
 
-    val todayFormatted = remember {
-        LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE, MMM d"))
+    // Re-read on resume and with the weather tick below, so the header does not
+    // keep yesterday's date (or a morning greeting) when Home stays open past it.
+    // Writing an unchanged value does not recompose.
+    fun greetingNow(): String = when (java.time.LocalTime.now().hour) {
+        in 0..11 -> "Good morning"
+        in 12..16 -> "Good afternoon"
+        else -> "Good evening"
     }
-    val greeting = remember {
-        when (java.time.LocalTime.now().hour) {
-            in 0..11 -> "Good Morning"
-            in 12..16 -> "Good Afternoon"
-            in 17..20 -> "Good Evening"
-            else -> "Good Night"
-        }
+    var today by remember { mutableStateOf(LocalDate.now()) }
+    var greeting by remember { mutableStateOf(greetingNow()) }
+    val todayFormatted = remember(today) {
+        today.format(DateTimeFormatter.ofPattern("EEEE, MMM d"))
     }
 
     val parsedConfigs = remember(homeWidgetOrder) {
         parseWidgetConfig(homeWidgetOrder, defaultHomeWidgets)
     }
+    // The long-lived observer and loop below read the latest layout through this
+    // instead of restarting (and re-firing ON_RESUME) whenever the layout changes.
+    val currentConfigs by rememberUpdatedState(parsedConfigs)
 
     val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner, parsedConfigs) {
+    DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
+                today = LocalDate.now()
+                greeting = greetingNow()
                 scope.launch {
                     delay(HOME_RESUME_DEFER_MS)
                     viewModel.loadData()
-                    val visibleIds = parsedConfigs.filter { it.isVisible }.map { it.id }.toSet()
+                    val visibleIds = currentConfigs.filter { it.isVisible }.map { it.id }.toSet()
                     viewModel.refreshAll(
                         hasLocationPermission = hasLocationPermission(),
                         hasCalendarPermission = hasCalendarPermission(),
@@ -184,7 +192,9 @@ fun HomeScreen(
     LaunchedEffect(Unit) {
         while (true) {
             delay(10 * 60 * 1000L)
-            val weatherVisible = parsedConfigs.any { it.id == "WEATHER" && it.isVisible }
+            today = LocalDate.now()
+            greeting = greetingNow()
+            val weatherVisible = currentConfigs.any { it.id == "WEATHER" && it.isVisible }
             if (weatherVisible && hasLocationPermission()) {
                 viewModel.loadWeather(hasPermission = true, forceRefresh = true)
             }
@@ -291,7 +301,11 @@ fun HomeScreen(
                     subtitle = todayFormatted,
                     trailing = {
                         IconButton(onClick = { haptics.tick(); isEditMode = !isEditMode }) {
-                            Icon(AppIcons.Edit, contentDescription = "Edit Widgets", tint = Primary)
+                            Icon(
+                                if (isEditMode) AppIcons.Check else AppIcons.Edit,
+                                contentDescription = if (isEditMode) "Done" else "Edit widgets",
+                                tint = Primary,
+                            )
                         }
                     },
                 )

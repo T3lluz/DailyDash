@@ -194,9 +194,10 @@ fun PillNavigationBar(
                             verticalArrangement = Arrangement.Center,
                         ) {
                             Box(contentAlignment = Alignment.TopEnd) {
+                                // The label under the icon already names the tab for TalkBack.
                                 Icon(
                                     imageVector = screen.icon,
-                                    contentDescription = screen.label,
+                                    contentDescription = null,
                                     tint = androidx.compose.ui.graphics.lerp(
                                         TextSecondary,
                                         TextPrimary,

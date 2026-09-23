@@ -1006,10 +1006,8 @@ private fun ResultPhase(
                 if (needsServingsInPackage && summary.servingsPerContainer <= 0) missingRequired.add("servings in package")
 
                 if (missingRequired.isNotEmpty()) {
-                    haptics.reject()
                     Toast.makeText(context, "Please fill: ${missingRequired.joinToString(", ")}", Toast.LENGTH_SHORT).show()
                 } else {
-                    haptics.confirm()
                     onLog(summary)
                 }
             },

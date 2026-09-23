@@ -1357,6 +1357,7 @@ private fun RepoPicker(
     compact: Boolean = false,
 ) {
     var open by rememberSaveable(compact) { mutableStateOf(false) }
+    val haptics = rememberHaptics()
     val selected = repos.firstOrNull { it.fullName.equals(selectedFullName, ignoreCase = true) }
     val rotation by animateFloatAsState(
         if (open) 180f else 0f,
@@ -1373,7 +1374,10 @@ private fun RepoPicker(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { open = !open }
+                .clickable {
+                    open = !open
+                    if (open) haptics.toggleOn() else haptics.toggleOff()
+                }
                 .padding(horizontal = 12.dp, vertical = if (compact) 10.dp else 11.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1414,7 +1418,7 @@ private fun RepoPicker(
                 modifier = Modifier.size(if (compact) 18.dp else 20.dp).rotate(rotation),
             )
         }
-        AnimatedVisibility(visible = open) {
+        AnimatedVisibility(visible = open, enter = MacroMotion.expandEnter, exit = MacroMotion.expandExit) {
             WidgetScrollBox(
                 maxHeight = if (compact) 148.dp else 240.dp,
                 contentPadding = PaddingValues(bottom = 4.dp),

@@ -1,9 +1,6 @@
 package com.macrotracker.ui.components
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -43,6 +40,7 @@ import com.macrotracker.data.update.inProgress
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.Error
+import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.Surface
 import com.macrotracker.ui.theme.SurfaceChrome
@@ -147,7 +145,7 @@ fun AppUpdateSheet(
             AnimatedContent(
                 targetState = state,
                 contentKey = { it::class },
-                transitionSpec = { fadeIn() togetherWith fadeOut() },
+                transitionSpec = { MacroMotion.widgetContentTransition },
                 label = "updateStep",
             ) { step ->
                 Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {

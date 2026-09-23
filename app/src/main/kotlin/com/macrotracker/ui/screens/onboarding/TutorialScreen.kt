@@ -21,8 +21,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -45,6 +47,7 @@ import com.macrotracker.ui.components.ButtonVariant
 import com.macrotracker.ui.components.MacroButton
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
+import com.macrotracker.ui.theme.HealthConnectBrand
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.Secondary
 import com.macrotracker.ui.theme.Surface
@@ -67,7 +70,7 @@ private val PAGES = listOf(
         icon = AppIcons.Dashboard,
         accentColor = Primary,
         badge = "Home",
-        title = "Your Personal Dashboard",
+        title = "Your personal dashboard",
         body = "DailyDash is more than a macro tracker — it's a customisable home screen for your daily life. Weather, calendar, sport, news and nutrition all in one glanceable view.",
         tips = listOf(
             "Long-press and drag any home widget to reorder the layout",
@@ -79,11 +82,11 @@ private val PAGES = listOf(
         icon = AppIcons.Blocks,
         accentColor = androidx.compose.ui.graphics.Color(0xFFF59E0B),
         badge = "Widgets",
-        title = "Live Info at a Glance",
+        title = "Live info at a glance",
         body = "Home pulls in live weather, today's calendar, Formula 1, your YouTube and Twitch picks, GitHub activity and server health — refreshed automatically.",
         tips = listOf(
             "Weather requires location permission",
-            "Connect YouTube, Twitch and GitHub in Settings → Connections",
+            "Connect YouTube, Twitch and GitHub from their cards on Home",
             "Add the weather widget to your home screen from Settings → Widgets",
         ),
     ),
@@ -91,10 +94,10 @@ private val PAGES = listOf(
         icon = AppIcons.Restaurant,
         accentColor = Secondary,
         badge = "Nutrition",
-        title = "Macro Tracking Made Easy",
+        title = "Macro tracking made easy",
         body = "Log food by typing, scanning a nutrition label with your camera, or describing your meal to Clanker in plain English. DailyDash tracks calories and protein.",
         tips = listOf(
-            "Quick Add on Home for fast manual logs",
+            "Quick add on Home for fast manual logs",
             "Scan any nutrition facts label with the camera",
             "Progress bars turn red when you exceed a goal",
             "Delete entries from Recent Logs on Health",
@@ -104,7 +107,7 @@ private val PAGES = listOf(
         icon = AppIcons.Sparkles,
         accentColor = androidx.compose.ui.graphics.Color(0xFFA855F7),
         badge = "AI",
-        title = "Two AI Helpers",
+        title = "Two AI helpers",
         body = "On the AI tab, describe a meal like \"large bowl of porridge with banana\" and Clanker returns calories and protein you can portion and log. Switch to Tech support to ask Sysop about your servers.",
         tips = listOf(
             "Type a dish name to get smart add-on suggestions",
@@ -114,7 +117,7 @@ private val PAGES = listOf(
     ),
     TutorialPage(
         icon = AppIcons.Heart,
-        accentColor = androidx.compose.ui.graphics.Color(0xFFEC4899),
+        accentColor = HealthConnectBrand,
         badge = "Health",
         title = "Optional Health Metrics",
         body = "Connect Health Connect to layer in steps, heart rate, sleep, workouts, floors climbed and active calories alongside your nutrition data. Read-only — DailyDash never writes to Health Connect.",
@@ -128,7 +131,7 @@ private val PAGES = listOf(
         icon = AppIcons.ChartBar,
         accentColor = Secondary,
         badge = "Trends",
-        title = "See Your Trends",
+        title = "See your trends",
         body = "The Health tab charts your last 7, 14 or 30 days of nutrition. Tap any bar to drill into the individual food logs for that day.",
         tips = listOf(
             "Set daily goals in Settings → Nutrition",
@@ -140,7 +143,7 @@ private val PAGES = listOf(
         icon = AppIcons.CheckCircle,
         accentColor = Secondary,
         badge = "All set!",
-        title = "You're Ready to Go 🎉",
+        title = "You're ready to go 🎉",
         body = "DailyDash is your one-stop daily companion. No account needed, your food logs stay on your device, and you control exactly what you see.",
         tips = listOf(
             "Add the weather widget to see the forecast at a glance",
@@ -261,9 +264,11 @@ private fun TutorialPageContent(page: TutorialPage) {
         alpha.animateTo(1f, MacroMotion.revealTween(350))
     }
 
+    // Scrolls on short screens and at large font sizes, where the tips ran off the bottom.
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 28.dp)
             .graphicsLayer {
                 this.alpha = alpha.value
@@ -374,6 +379,7 @@ private fun TutorialPageContent(page: TutorialPage) {
                 }
             }
         }
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 

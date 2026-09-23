@@ -506,7 +506,7 @@ fun HubCardHeader(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        LastUpdatedText(lastUpdatedAt = lastUpdatedAt, color = TextSecondary)
+        LastUpdatedText(lastUpdatedAt = lastUpdatedAt)
         if (expanded && onRefresh != null) {
             HubHeaderAction(AppIcons.Refresh, "Refresh", onRefresh)
         }

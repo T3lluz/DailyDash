@@ -29,8 +29,6 @@ import com.macrotracker.ui.components.encodeWidgetConfig
 import com.macrotracker.ui.components.parseWidgetConfig
 import com.macrotracker.ui.components.rememberDraggableWidgetListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -59,6 +57,9 @@ import com.macrotracker.data.server.ServerAiSection
 import com.macrotracker.data.server.ServerConnectionState
 import com.macrotracker.data.server.ServerError
 import com.macrotracker.data.server.ServerRuntime
+import com.macrotracker.ui.components.ButtonVariant
+import com.macrotracker.ui.components.ContentSkeleton
+import com.macrotracker.ui.components.MacroButton
 import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.components.ServerStatChip
 import com.macrotracker.ui.components.ServerTag
@@ -164,7 +165,13 @@ fun ServerScreen(
                         )
                     }
                 }
-                IconButton(onClick = onNavigateToSettings, modifier = Modifier.size(40.dp)) {
+                IconButton(
+                    onClick = {
+                        haptics.tick()
+                        onNavigateToSettings()
+                    },
+                    modifier = Modifier.size(40.dp),
+                ) {
                     Icon(
                         AppIcons.Settings,
                         contentDescription = "Server settings",
@@ -324,12 +331,19 @@ fun ServerScreen(
             }
             if (shown.isEmpty()) {
                 item(key = "all-hidden") {
-                    Text(
-                        "Every section is switched off. Tap the pencil to bring some back.",
-                        color = TextSecondary,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(vertical = 24.dp),
-                    )
+                    Column(modifier = Modifier.padding(vertical = 24.dp)) {
+                        Text(
+                            "Every section is switched off. Tap the pencil to bring some back.",
+                            color = TextSecondary,
+                            fontSize = 13.sp,
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        MacroButton(
+                            text = "Edit sections",
+                            onClick = { editing = true },
+                            variant = ButtonVariant.SECONDARY,
+                        )
+                    }
                 }
             }
         }
@@ -361,12 +375,12 @@ private val ServerSections = listOf(
     Triple(SECTION_SERVICES, "Services", AppIcons.Activity),
     Triple(SECTION_COMPUTE, "Compute", AppIcons.Cpu),
     Triple(SECTION_MEMORY, "Memory", AppIcons.ChartPie),
-    Triple(SECTION_NETWORK, "Network", AppIcons.Link),
+    Triple(SECTION_NETWORK, "Network", AppIcons.SwapVertical),
     Triple(SECTION_STORAGE, "Storage", AppIcons.HardDrive),
     Triple(SECTION_SENSORS, "Sensors & power", AppIcons.Flame),
     Triple(SECTION_PROCESSES, "Top processes", AppIcons.Terminal),
     Triple(SECTION_CONTAINERS, "Containers", AppIcons.Blocks),
-    Triple(SECTION_SYSTEM, "System", AppIcons.Server),
+    Triple(SECTION_SYSTEM, "System", AppIcons.Settings),
     Triple(SECTION_UPDATES, "Updates & news", AppIcons.Download),
     Triple(SECTION_SESSIONS, "Logged in", AppIcons.Account),
 )
@@ -412,15 +426,8 @@ private fun ServerEmptyState(onNavigateToSettings: () -> Unit) {
             lineHeight = 20.sp,
             modifier = Modifier.fillMaxWidth(),
         )
-        Spacer(modifier = Modifier.height(20.dp))
-        Button(
-            onClick = onNavigateToSettings,
-            colors = ButtonDefaults.buttonColors(containerColor = Primary),
-        ) {
-            Icon(AppIcons.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Add a server")
-        }
+        Spacer(modifier = Modifier.height(14.dp))
+        MacroButton(text = "Add a server", onClick = onNavigateToSettings)
     }
 }
 
@@ -440,7 +447,7 @@ private fun ServerAdvisoriesCard(
     ) {
         SectionHeader(
             title = "Advisories",
-            icon = AppIcons.Bolt,
+            icon = AppIcons.Warning,
             accent = if (critical > 0) ServerCritical else ServerWarn,
             trailing = "${runtime.advisories.size + appAlerts.size}",
             onAskAi = onAskAi,
@@ -464,14 +471,13 @@ private fun ServerAdvisoriesCard(
         val hostKeyChanged = (runtime.connection as? ServerConnectionState.Offline)
             ?.reason is ServerError.HostKeyChanged
         if (hostKeyChanged) {
-            Spacer(modifier = Modifier.height(12.dp))
-            Button(
+            Spacer(modifier = Modifier.height(6.dp))
+            MacroButton(
+                text = "Trust the new host key",
                 onClick = onTrustHostKey,
-                colors = ButtonDefaults.buttonColors(containerColor = ServerCritical),
+                variant = ButtonVariant.DANGER,
                 modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Trust the new host key", fontSize = 13.sp)
-            }
+            )
             Text(
                 text = "Only do this if you rebuilt or reinstalled the server yourself.",
                 color = TextSecondary,
@@ -532,17 +538,14 @@ private fun ServerUpdatesCard(
     MacroCard(delayMs = 190) {
         SectionHeader(
             title = "Updates & news",
-            icon = AppIcons.Bolt,
+            icon = AppIcons.Download,
             accent = ServerWarn,
             trailing = runtime.hostProfile?.packageManager?.label,
             onAskAi = onAskAi,
         )
         if (news == null) {
-            Text(
-                "Checking for package updates…",
-                color = TextSecondary,
-                fontSize = 12.sp,
-            )
+            // First check still running: a placeholder shaped like the card, as elsewhere.
+            ContentSkeleton(lines = 2, accent = Border)
             return@MacroCard
         }
         Row(modifier = Modifier.fillMaxWidth()) {
@@ -619,7 +622,7 @@ private fun ServerSessionsCard(runtime: ServerRuntime, onAskAi: (() -> Unit)? = 
     MacroCard(delayMs = 200) {
         SectionHeader(
             title = "Logged in",
-            icon = AppIcons.Server,
+            icon = AppIcons.Account,
             accent = ServerMemory,
             trailing = "${sessions.size}",
             onAskAi = onAskAi,

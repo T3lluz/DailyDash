@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.macrotracker.ui.components.CardHeader
 import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.components.SubScreenHeader
 import com.macrotracker.ui.components.subScreenBottomPadding
@@ -43,22 +44,22 @@ private data class HelpStep(
 private val STEPS = listOf(
     HelpStep(
         icon = AppIcons.Home,
-        title = "Home Screen — Quick Add",
-        body = "The Home screen shows a live greeting with today's date and all your widgets. Use the Quick Add widget to enter a food name (optional), calories and protein, then tap \"Add\". Tap \"View all logs\" to jump to the full Health tab.",
+        title = "Home screen — Quick add",
+        body = "The Home screen shows a live greeting with today's date and all your widgets. Use the Quick add card to enter a food name (optional), calories and protein, then tap \"Add\". Tap \"View all logs\" to jump to the full Health tab.",
     ),
     HelpStep(
         icon = AppIcons.Rocket,
-        title = "Customise Your Home Screen",
-        body = "Tap the pencil icon (top-right of Home or Health) to enter edit mode. Toggle widgets on or off, then drag ☰ to reorder rows. Outside edit mode, long-press and drag any visible widget to reorder them.",
+        title = "Customise your home screen",
+        body = "Tap the pencil icon (top-right of Home or Health) to enter edit mode. Toggle widgets on or off, then drag the grip handle to reorder rows. Outside edit mode, long-press and drag any visible widget to reorder them.",
     ),
     HelpStep(
         icon = AppIcons.Camera,
-        title = "Scan a Nutrition Label",
+        title = "Scan a nutrition label",
         body = "Tap \"Scan label\" on the AI tab or in Add Entry on Health. Point the camera at any nutrition facts label (or pick a photo from your gallery) and Clanker will read calories and protein for you.",
     ),
     HelpStep(
         icon = AppIcons.Sparkles,
-        title = "AI Food Estimates",
+        title = "AI food estimates",
         body = "On the AI tab, chat with Clanker — type something like \"1 medium avocado\" or \"burger\" (then tap add-ons like bacon), or tap + to send a meal photo. Adjust portion if needed, then log the estimate.",
     ),
     HelpStep(
@@ -68,7 +69,7 @@ private val STEPS = listOf(
     ),
     HelpStep(
         icon = AppIcons.Server,
-        title = "Monitor Your Servers",
+        title = "Monitor your servers",
         body = "Add an SSH host in Settings → Connections → Servers. The Servers card on Home opens a live dashboard. " +
             "Tap the sparkle on any section to ask Tech support on the AI tab about it. If the server runs the t3lluz " +
             "dashboard, Tech support is Hermes, which can look at the server itself and asks before it changes anything, " +
@@ -76,12 +77,12 @@ private val STEPS = listOf(
     ),
     HelpStep(
         icon = AppIcons.Flag,
-        title = "Set Daily Goals",
+        title = "Set daily goals",
         body = "Go to Settings → Nutrition. Enter your calorie and protein targets and tap \"Save goals\". Progress bars turn red when you exceed a goal.",
     ),
     HelpStep(
         icon = AppIcons.Delete,
-        title = "Delete a Log Entry",
+        title = "Delete a log entry",
         body = "On the Health tab, tap the X on any food entry in the Recent Logs list to delete it. You can also navigate back to a past date in the Health tab and delete entries from there.",
     ),
 )
@@ -110,8 +111,8 @@ private val FAQ = listOf(
         answer = "In Garmin Connect, turn on Health Connect sync (including activities). In DailyDash, allow Health Connect exercise and route access. Workouts then appear on the Health tab in Activities. If a walk or ride has GPS, tap Show GPS map once to reveal the route.",
     ),
     FaqItem(
-        question = "How do I connect Weather or Calendar?",
-        answer = "Go to Settings → Connections and toggle on Weather Data (requires location permission) or Google Calendar (requires calendar permission). Weather uses your device location via Yr.no. Calendar shows today's events from any calendars you select.",
+        question = "How do I connect weather or calendar?",
+        answer = "Go to Settings → Connections and toggle on Weather data (requires location permission) or Google Calendar (requires calendar permission). Weather uses your device location via Yr.no. Calendar shows upcoming events from all the calendars on your phone.",
     ),
     FaqItem(
         question = "How accurate are AI estimates?",
@@ -132,7 +133,7 @@ fun HelpScreen(
             .subScreenBottomPadding(),
     ) {
         SubScreenHeader(
-            title = "Help & How-To",
+            title = "Help & how-to",
             subtitle = "Get started in minutes",
             onNavigateBack = onNavigateBack,
         )
@@ -140,14 +141,12 @@ fun HelpScreen(
 
         // Quick Start card
         MacroCard(delayMs = 60) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
+            CardHeader(
+                title = "Quick start",
+                icon = AppIcons.Rocket,
+                accent = Primary,
                 modifier = Modifier.padding(bottom = 14.dp),
-            ) {
-                Icon(AppIcons.Rocket, contentDescription = null, tint = Primary, modifier = Modifier.size(17.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Quick Start", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-            }
+            )
 
             STEPS.forEachIndexed { index, step ->
                 Row(
@@ -178,14 +177,12 @@ fun HelpScreen(
 
         // FAQ card
         MacroCard(delayMs = 120) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
+            CardHeader(
+                title = "FAQ",
+                icon = AppIcons.Help,
+                accent = Primary,
                 modifier = Modifier.padding(bottom = 14.dp),
-            ) {
-                Icon(AppIcons.Help, contentDescription = null, tint = Primary, modifier = Modifier.size(17.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("FAQ", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-            }
+            )
 
             FAQ.forEachIndexed { index, item ->
                 Column(modifier = Modifier.padding(vertical = 12.dp)) {

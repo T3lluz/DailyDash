@@ -62,6 +62,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.macrotracker.R
 import com.macrotracker.ui.components.MacroCard
+import com.macrotracker.ui.components.SkeletonBlock
 import com.macrotracker.ui.components.SubScreenHeader
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Background
@@ -109,10 +110,13 @@ fun WidgetsScreen(
         }
     }
 
+    // "Added!" is brief: once the count has had a moment to catch up, the button
+    // says what is really on the home screen (a dismissed pin dialog adds nothing).
     LaunchedEffect(recentlyPinned) {
         if (recentlyPinned) {
             delay(1500)
             placedCount = WidgetStateProvider.countInstalled(context)
+            recentlyPinned = false
         }
     }
 
@@ -338,9 +342,9 @@ private fun WidgetCard(
                 Text(
                     text = when {
                         isPinned && !isAlreadyPlaced -> "Added!"
-                        isAlreadyPlaced && instanceCount > 1 -> "On Home Screen (×$instanceCount) · Add Another"
-                        isAlreadyPlaced -> "On Home Screen · Add Another"
-                        else -> "Add to Home Screen"
+                        isAlreadyPlaced && instanceCount > 1 -> "On home screen (×$instanceCount) · add another"
+                        isAlreadyPlaced -> "On home screen · add another"
+                        else -> "Add to home screen"
                     },
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -423,6 +427,11 @@ private fun LiveWidgetPreview(modifier: Modifier = Modifier) {
                     .fillMaxSize()
                     .clip(RoundedCornerShape(10.dp))
                     .border(1.dp, Border.copy(alpha = 0.4f), RoundedCornerShape(10.dp)),
+            )
+            // Still rendering: hold the widget's shape instead of an empty gap.
+            else -> SkeletonBlock(
+                modifier = Modifier.fillMaxSize(),
+                shape = RoundedCornerShape(10.dp),
             )
         }
     }
