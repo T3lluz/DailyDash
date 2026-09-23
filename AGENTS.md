@@ -201,8 +201,11 @@ com.macrotracker/
                               fences, diffs); `breaks`/`streaming` for chat. MarkdownParserTest pins it.
                               WeatherForecast.kt: the opened weather card (one "now" panel, HourlyTimeline with
                               its temperature curve, a day per row with a range bar that unfolds that day's
-                              `DailyForecast.steps`). CalendarStrip.kt: the calendar card (summary line, week
-                              strip, events in MediaCarousel, agenda). MediaCarousel.kt: the M3 multi-browse carousel the
+                              `DailyForecast.steps`). CalendarStrip.kt: the calendar card (summary line, a day
+                              strip to the last busy day within `CalendarRepository.WINDOW_DAYS`, events in
+                              MediaCarousel, agenda). A peek never shows a badge or words: it shows who
+                              (`PeekAvatar`, the creator's picture) or when (the calendar's date column), faded
+                              with `peekAlpha`; badges and words come in with `textAlpha`. MediaCarousel.kt: the M3 multi-browse carousel the
                               collapsed YouTube and Twitch cards use (`MediaItemLook` read in draw/layer blocks
                               only; tap a peek to bring it in). F1CircuitMap.kt: the dashboard's four-pass circuit
                               (kerb, bed, marque line, car) that paints its lap on screen, with a

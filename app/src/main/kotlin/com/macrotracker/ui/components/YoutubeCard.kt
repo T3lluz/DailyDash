@@ -768,6 +768,7 @@ private fun CompactVideoFeed(
         } else {
             CompactVideoStrip(
                 videos = displayedVideos,
+                channels = trackedChannels,
                 resetKey = selectedChannelId,
                 onVideoClick = { video ->
                     haptics.tick()
@@ -786,21 +787,26 @@ private fun CompactVideoFeed(
 @Composable
 private fun CompactVideoStrip(
     videos: List<YoutubeVideo>,
+    channels: List<YoutubeChannel>,
     resetKey: Any?,
     onVideoClick: (YoutubeVideo) -> Unit,
 ) {
+    val avatars = remember(channels) { channels.associate { it.channelId to it.thumbnailUrl } }
     MediaCarousel(
         items = videos,
         resetKey = resetKey,
         onOpen = onVideoClick,
     ) { video, look ->
-        VideoCarouselItem(video = video, look = look)
+        VideoCarouselItem(video = video, look = look, avatarUrl = avatars[video.channelId])
     }
 }
 
-/** One video on the collapsed strip: the thumbnail, and its title and channel once it opens. */
+/**
+ * One video on the collapsed strip: the thumbnail, and its title and channel once it opens.
+ * A peek shows whose video it is instead, as the channel's avatar.
+ */
 @Composable
-private fun VideoCarouselItem(video: YoutubeVideo, look: MediaItemLook) {
+private fun VideoCarouselItem(video: YoutubeVideo, look: MediaItemLook, avatarUrl: String?) {
     val density = LocalDensity.current
     val thumbRequest = rememberYoutubeThumbnailRequest(
         url = video.thumbnailUrl,
@@ -844,10 +850,18 @@ private fun VideoCarouselItem(video: YoutubeVideo, look: MediaItemLook) {
                 .graphicsLayer { alpha = 1f - look.openness() }
                 .background(Color.Black.copy(alpha = 0.35f)),
         )
+        PeekAvatar(
+            look = look,
+            url = avatarUrl,
+            fallback = video.channelTitle,
+            ring = YtRed,
+            modifier = Modifier.align(Alignment.CenterStart),
+        )
         if (isNew) {
             Box(
                 modifier = Modifier
                     .followVisible(look)
+                    .graphicsLayer { alpha = look.textAlpha() }
                     .padding(8.dp)
                     .clip(RoundedCornerShape(4.dp))
                     .background(YtRed)

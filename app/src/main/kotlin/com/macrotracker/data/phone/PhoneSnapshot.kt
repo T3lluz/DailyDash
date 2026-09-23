@@ -262,7 +262,7 @@ class PhoneSnapshot @Inject constructor(
         val zone = ZoneId.systemDefault()
         val now = java.time.LocalDateTime.now()
         // Same window as the Home card, so both share the repository's cache.
-        runCatching { calendar.readEvents(extraDays = 14) }.getOrDefault(emptyList())
+        runCatching { calendar.readEvents(extraDays = CalendarRepository.WINDOW_DAYS) }.getOrDefault(emptyList())
             .filter { it.endTime.isAfter(now) }
             .distinctBy { it.id to it.beginMillis }
             .sortedWith(compareBy({ maxOf(it.startTime.toLocalDate(), now.toLocalDate()) }, { it.isAllDay }, { it.startTime }))
