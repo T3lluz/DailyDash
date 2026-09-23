@@ -8,8 +8,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.carousel.CarouselDefaults
 import androidx.compose.material3.carousel.CarouselItemDrawInfo
-import androidx.compose.material3.carousel.HorizontalMultiBrowseCarousel
+import androidx.compose.material3.carousel.HorizontalCenteredHeroCarousel
 import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -72,11 +73,14 @@ fun Modifier.followVisible(look: MediaItemLook, inset: Float = 0f): Modifier =
 
 val MediaCarouselShape = RoundedCornerShape(12.dp)
 
+private val ItemSpacing = 8.dp
+
 /**
- * A strip of thumbnails as Material 3's multi-browse carousel lays them out, the way
- * Pixel's own media rows do: one large item, the next ones shrinking into peeks, and
- * a drag that morphs a peek open under the finger. Items are masked, not resized, so
- * [content] should read its [MediaItemLook] in draw and layer blocks only.
+ * A strip of thumbnails laid out like Coming up: Material 3's centred hero carousel,
+ * so the focused item sits in the middle with a peek on each side that has a
+ * neighbour, a fling turns exactly one item, and a drag morphs a peek open under the
+ * finger. Items are masked, not resized, so [content] should read its
+ * [MediaItemLook] in draw and layer blocks only.
  *
  * Tapping a peek brings it in; tapping an open item runs [onOpen]. A single item gets
  * the whole width, since a carousel of one is just a narrower card.
@@ -89,9 +93,7 @@ fun <T> MediaCarousel(
     modifier: Modifier = Modifier,
     /** Changes when the list is a different list (a filter), which starts it from the top. */
     resetKey: Any? = null,
-    /** Width of the large item as a share of the strip. */
-    largeFraction: Float = 0.8f,
-    /** Height over the large item's width; 16:9 thumbnails by default. */
+    /** Height over the focused item's width; 16:9 thumbnails by default. */
     heightRatio: Float = 9f / 16f,
     maxHeight: Dp = 230.dp,
     shape: Shape = MediaCarouselShape,
@@ -99,8 +101,9 @@ fun <T> MediaCarousel(
 ) {
     if (items.isEmpty()) return
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
-        val large = maxWidth * largeFraction
-        val height = (large * heightRatio).coerceIn(120.dp, maxHeight)
+        // The focused item is what is left once a peek has taken its share on each side.
+        val focused = maxWidth - (CarouselDefaults.MaxSmallItemSize + ItemSpacing) * 2
+        val height = (focused * heightRatio).coerceIn(120.dp, maxHeight)
 
         if (items.size == 1) {
             val only = items.first()
@@ -130,16 +133,16 @@ fun <T> MediaCarousel(
                     .collect { if (state.isScrollInProgress) haptics.tick() }
             }
 
-            HorizontalMultiBrowseCarousel(
+            HorizontalCenteredHeroCarousel(
                 state = state,
-                preferredItemWidth = large,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(height)
                     .nestedScroll(rememberWidgetCrossAxisScrollLock()),
-                itemSpacing = 8.dp,
+                itemSpacing = ItemSpacing,
+                flingBehavior = CarouselDefaults.singleAdvanceFlingBehavior(state = state),
             ) { index ->
-                val item = latest.getOrNull(index) ?: return@HorizontalMultiBrowseCarousel
+                val item = latest.getOrNull(index) ?: return@HorizontalCenteredHeroCarousel
                 val look = remember(carouselItemDrawInfo) { CarouselLook(carouselItemDrawInfo) }
                 Box(
                     modifier = Modifier

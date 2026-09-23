@@ -108,7 +108,7 @@ fun F1CircuitMap(
     weight: CircuitMapWeight = CircuitMapWeight.DETAIL,
     motion: CircuitMotion = CircuitMotion.PAINT_ONCE,
     alignment: Alignment = Alignment.Center,
-    /** Fade the left third out, so a backdrop never sits under the words beside it. */
+    /** Soften the left quarter, so a backdrop sits back behind the words beside it without vanishing. */
     fadeLeftEdge: Boolean = false,
     contentDescription: String? = null,
 ) {
@@ -196,8 +196,8 @@ fun F1CircuitMap(
                             drawContent()
                             drawRect(
                                 brush = Brush.horizontalGradient(
-                                    0f to Color.Transparent,
-                                    0.32f to Color.Black,
+                                    0f to Color.Black.copy(alpha = 0.45f),
+                                    0.24f to Color.Black,
                                     1f to Color.Black,
                                 ),
                                 blendMode = BlendMode.DstIn,
