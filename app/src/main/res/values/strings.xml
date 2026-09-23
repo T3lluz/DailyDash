@@ -2,35 +2,10 @@
 <resources>
     <string name="app_name">DailyDash</string>
 
-    <!-- Dashboard (all-in-one) widget -->
-    <string name="widget_name">DailyDash — Dashboard</string>
-    <string name="widget_description">Your daily dashboard — macros, health, weather, calendar &amp; more at a glance</string>
-
-    <!-- Macros widget -->
-    <string name="widget_macros_name">DailyDash — Nutrition</string>
-    <string name="widget_macros_description">Track your calorie and protein goals with progress bars</string>
-
-    <!-- Health widget -->
-    <string name="widget_health_name">DailyDash — Health</string>
-    <string name="widget_health_description">Steps, heart rate, sleep, and active calories from Health Connect</string>
-
     <!-- Weather widget -->
     <string name="widget_weather_name">DailyDash — Weather</string>
-    <string name="widget_weather_description">Current temperature, conditions, and high/low forecast</string>
+    <string name="widget_weather_description">Current conditions, wind, humidity, sunrise and sunset, plus an hourly forecast</string>
 
-    <!-- Calendar widget -->
-    <string name="widget_calendar_name">DailyDash — Calendar</string>
-    <string name="widget_calendar_description">Next upcoming event and today\'s schedule at a glance</string>
-
-    <!-- F1 widgets — prefixed with "DailyDash — F1:" so they group with the other
-         DailyDash widgets in the picker (all start with "DailyDash") and naturally
-         cluster together alphabetically between Dashboard and Health. -->
-    <string name="widget_f1_countdown_name">DailyDash — F1: Next Race</string>
-    <string name="widget_f1_countdown_description">Countdown timer to the next Formula 1 Grand Prix with circuit info and session schedule</string>
-    <string name="widget_f1_standings_name">DailyDash — F1: Standings</string>
-    <string name="widget_f1_standings_description">Live driver and constructor championship standings with team colours</string>
-    <string name="widget_f1_schedule_name">DailyDash — F1: Schedule</string>
-    <string name="widget_f1_schedule_description">Full 2026 Formula 1 race calendar with sprint weekends highlighted</string>
     <!-- Server monitor -->
     <string name="server_channel_group">Servers</string>
     <string name="server_channel_critical">Server critical</string>

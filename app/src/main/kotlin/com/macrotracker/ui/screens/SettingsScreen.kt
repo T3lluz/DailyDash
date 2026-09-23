@@ -71,7 +71,7 @@ fun SettingsScreen(
                 SettingsCategoryItem(
                     icon = AppIcons.Blocks,
                     title = "Widgets",
-                    summary = "Pin DailyDash widgets to your home screen",
+                    summary = "Pin the weather widget to your home screen",
                     onClick = onNavigateToWidgets,
                 ),
             ),

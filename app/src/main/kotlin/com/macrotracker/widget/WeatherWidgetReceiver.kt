@@ -17,14 +17,14 @@ class WeatherWidgetReceiver : GlanceAppWidgetReceiver() {
         super.onEnabled(context)
         WidgetRefreshWorker.enqueuePeriodicRefresh(context)
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
-            DashboardWidgetDataProvider.preWarm(context)
+            WeatherWidgetDataProvider.preWarm(context)
         }
         WidgetRefreshWorker.enqueueImmediateRefresh(context)
     }
 
     override fun onDisabled(context: Context) {
         super.onDisabled(context)
-        WidgetRefreshWorker.cancelPeriodicRefreshIfNoWidgets(context)
+        WidgetRefreshWorker.cancelPeriodicRefresh(context)
     }
 
     override fun onReceive(context: Context, intent: Intent) {

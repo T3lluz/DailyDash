@@ -146,46 +146,7 @@
             </intent-filter>
         </activity-alias>
 
-        <!-- DailyDash Home-Screen Widget — Full Dashboard -->
-        <receiver
-            android:name=".widget.DashboardWidgetReceiver"
-            android:exported="true"
-            android:label="@string/widget_name">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/dashboard_widget_info" />
-        </receiver>
-
-        <!-- DailyDash Widget — Macros & Nutrition -->
-        <receiver
-            android:name=".widget.MacrosWidgetReceiver"
-            android:exported="true"
-            android:label="@string/widget_macros_name">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/macros_widget_info" />
-        </receiver>
-
-        <!-- DailyDash Widget — Health & Activity -->
-        <receiver
-            android:name=".widget.HealthWidgetReceiver"
-            android:exported="true"
-            android:label="@string/widget_health_name">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/health_widget_info" />
-        </receiver>
-
-        <!-- DailyDash Widget — Weather -->
+        <!-- DailyDash Widget — Weather (the only home-screen widget) -->
         <receiver
             android:name=".widget.WeatherWidgetReceiver"
             android:exported="true"
@@ -196,58 +157,6 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/weather_widget_info" />
-        </receiver>
-
-        <!-- DailyDash Widget — Calendar -->
-        <receiver
-            android:name=".widget.CalendarWidgetReceiver"
-            android:exported="true"
-            android:label="@string/widget_calendar_name">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/calendar_widget_info" />
-        </receiver>
-
-        <!-- F1 Widget — Next Race Countdown -->
-        <receiver
-            android:name=".widget.F1CountdownWidgetReceiver"
-            android:exported="true"
-            android:label="@string/widget_f1_countdown_name">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/f1_countdown_widget_info" />
-        </receiver>
-
-        <!-- F1 Widget — Championship Standings -->
-        <receiver
-            android:name=".widget.F1StandingsWidgetReceiver"
-            android:exported="true"
-            android:label="@string/widget_f1_standings_name">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/f1_standings_widget_info" />
-        </receiver>
-
-        <!-- F1 Widget — Race Schedule -->
-        <receiver
-            android:name=".widget.F1ScheduleWidgetReceiver"
-            android:exported="true"
-            android:label="@string/widget_f1_schedule_name">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/f1_schedule_widget_info" />
         </receiver>
 
     </application>

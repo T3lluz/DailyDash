@@ -2,19 +2,23 @@ package com.macrotracker.ui.screens
 
 import com.macrotracker.ui.theme.OnAccent
 import com.macrotracker.ui.theme.contentColorOn
+import android.annotation.SuppressLint
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
+import android.content.Context
+import android.view.MotionEvent
+import android.widget.FrameLayout
+import android.widget.RemoteViews
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -25,11 +29,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -37,158 +42,46 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.macrotracker.R
-import com.macrotracker.ui.components.SubScreenHeader
 import com.macrotracker.ui.components.MacroCard
+import com.macrotracker.ui.components.SubScreenHeader
+import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.MacroMotion
-import com.macrotracker.ui.theme.CalendarBrand
-import com.macrotracker.ui.theme.Error
-import com.macrotracker.ui.theme.WeatherBrand
-import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.Success
 import com.macrotracker.ui.theme.Surface
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
+import com.macrotracker.ui.theme.WeatherBrand
 import com.macrotracker.ui.util.rememberHaptics
-import com.macrotracker.widget.CalendarWidgetReceiver
-import com.macrotracker.widget.DashboardWidgetReceiver
-import com.macrotracker.widget.F1CountdownWidgetReceiver
-import com.macrotracker.widget.F1ScheduleWidgetReceiver
-import com.macrotracker.widget.F1StandingsWidgetReceiver
-import com.macrotracker.widget.HealthWidgetReceiver
-import com.macrotracker.widget.MacrosWidgetReceiver
+import com.macrotracker.widget.WEATHER_WIDGET_PREVIEW_SIZE
+import com.macrotracker.widget.WeatherWidgetPreview
 import com.macrotracker.widget.WeatherWidgetReceiver
+import com.macrotracker.widget.WidgetStateProvider
 import kotlinx.coroutines.delay
-import com.macrotracker.ui.theme.AppIcons
 
-// ── Data model ────────────────────────────────────────────────────────────────
-
-private data class WidgetInfo(
-    val name: String,
-    val description: String,
-    /** e.g. "3 × 3" */
-    val size: String,
-    /** e.g. "Standard" / "Wide" */
-    val sizeLabel: String,
-    val previewRes: Int,
-    /** Aspect ratio of the preview image (width / height) */
-    val previewRatio: Float,
-    val receiverClass: Class<*>,
-    val accentColor: Color,
-)
-
-private val F1_RED = Color(0xFFE8002D)
-
-/** Widgets are placed at 5×3 and resize down from there; previews are 16:9. */
-private const val WIDGET_PREVIEW_RATIO = 16f / 9f
-
-private val CORE_WIDGETS = listOf(
-    WidgetInfo(
-        name        = "DailyDash — Dashboard",
-        description = "Your all-in-one daily overview: macros, health metrics, weather, and calendar events in one glance.",
-        size        = "5 × 3 — resize to 2 × 2",
-        sizeLabel   = "Resizable",
-        previewRes  = R.drawable.widget_preview_dashboard,
-        previewRatio = WIDGET_PREVIEW_RATIO,
-        receiverClass = DashboardWidgetReceiver::class.java,
-        accentColor = Primary,
-    ),
-    WidgetInfo(
-        name        = "DailyDash — Nutrition",
-        description = "Track today's calories and protein goals with animated progress bars and a quick-glance summary.",
-        size        = "5 × 3 — resize to 2 × 2",
-        sizeLabel   = "Resizable",
-        previewRes  = R.drawable.widget_preview_macros,
-        previewRatio = WIDGET_PREVIEW_RATIO,
-        receiverClass = MacrosWidgetReceiver::class.java,
-        accentColor = Primary,
-    ),
-    WidgetInfo(
-        name        = "DailyDash — Health",
-        description = "Steps, heart rate, sleep duration, and active calories from Health Connect at a glance.",
-        size        = "5 × 3 — resize to 2 × 2",
-        sizeLabel   = "Resizable",
-        previewRes  = R.drawable.widget_preview_health,
-        previewRatio = WIDGET_PREVIEW_RATIO,
-        receiverClass = HealthWidgetReceiver::class.java,
-        accentColor = Error,
-    ),
-    WidgetInfo(
-        name        = "DailyDash — Weather",
-        description = "Current temperature, conditions, high/low forecast, and an AI-generated daily weather summary.",
-        size        = "5 × 3",
-        sizeLabel   = "Large",
-        previewRes  = R.drawable.widget_preview_weather,
-        previewRatio = WIDGET_PREVIEW_RATIO,
-        receiverClass = WeatherWidgetReceiver::class.java,
-        accentColor = WeatherBrand,
-    ),
-    WidgetInfo(
-        name        = "DailyDash — Calendar",
-        description = "Today's upcoming events and tomorrow's schedule from your Google Calendar.",
-        size        = "5 × 3 — resize to 2 × 2",
-        sizeLabel   = "Resizable",
-        previewRes  = R.drawable.widget_preview_calendar,
-        previewRatio = WIDGET_PREVIEW_RATIO,
-        receiverClass = CalendarWidgetReceiver::class.java,
-        accentColor = CalendarBrand,
-    ),
-)
-
-private val F1_WIDGETS = listOf(
-    WidgetInfo(
-        name        = "DailyDash — F1: Next Race",
-        description = "Countdown timer to the next Grand Prix, circuit info, and full session schedule.",
-        size        = "5 × 3 — resize to 2 × 2",
-        sizeLabel   = "Resizable",
-        previewRes  = R.drawable.widget_preview_f1_countdown,
-        previewRatio = WIDGET_PREVIEW_RATIO,
-        receiverClass = F1CountdownWidgetReceiver::class.java,
-        accentColor = F1_RED,
-    ),
-    WidgetInfo(
-        name        = "DailyDash — F1: Standings",
-        description = "Live driver and constructor championship standings with team colours and points.",
-        size        = "5 × 3 — resize to 3 × 2",
-        sizeLabel   = "Resizable",
-        previewRes  = R.drawable.widget_preview_f1_standings,
-        previewRatio = WIDGET_PREVIEW_RATIO,
-        receiverClass = F1StandingsWidgetReceiver::class.java,
-        accentColor = F1_RED,
-    ),
-    WidgetInfo(
-        name        = "DailyDash — F1: Schedule",
-        description = "Full 2026 Formula 1 race calendar with sprint weekends, flags, and round numbers.",
-        size        = "5 × 3 — resize to 3 × 2",
-        sizeLabel   = "Resizable",
-        previewRes  = R.drawable.widget_preview_f1_schedule,
-        previewRatio = WIDGET_PREVIEW_RATIO,
-        receiverClass = F1ScheduleWidgetReceiver::class.java,
-        accentColor = F1_RED,
-    ),
-)
-
-private val ALL_WIDGETS = CORE_WIDGETS + F1_WIDGETS
+private const val WIDGET_NAME = "DailyDash — Weather"
+private const val WIDGET_DESCRIPTION =
+    "Current conditions, wind, humidity, sunrise and sunset, plus an hourly forecast for the next few days."
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -201,39 +94,27 @@ fun WidgetsScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
 
     val appWidgetManager = remember { AppWidgetManager.getInstance(context) }
-    val pinSupported = remember {
-        appWidgetManager.isRequestPinAppWidgetSupported
-    }
+    val pinSupported = remember { appWidgetManager.isRequestPinAppWidgetSupported }
 
-    // Track which widgets have just been pinned (for brief success feedback)
-    val recentlyPinned = remember { mutableStateOf(setOf<String>()) }
-
-    var placedCounts by remember { mutableStateOf(mapOf<Class<*>, Int>()) }
-    fun refreshPlacedCounts() {
-        placedCounts = ALL_WIDGETS.associate { widget ->
-            widget.receiverClass to appWidgetManager.getAppWidgetIds(
-                ComponentName(context, widget.receiverClass)
-            ).size
-        }
-    }
+    // Brief "Added!" feedback after a pin request.
+    var recentlyPinned by remember { mutableStateOf(false) }
+    var placedCount by remember { mutableIntStateOf(0) }
 
     // Covers widgets added/removed through the launcher picker while backgrounded;
     // the short delay lets AppWidgetManager catch up after a pin request.
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             delay(300)
-            refreshPlacedCounts()
+            placedCount = WidgetStateProvider.countInstalled(context)
         }
     }
 
-    LaunchedEffect(recentlyPinned.value) {
-        if (recentlyPinned.value.isNotEmpty()) {
+    LaunchedEffect(recentlyPinned) {
+        if (recentlyPinned) {
             delay(1500)
-            refreshPlacedCounts()
+            placedCount = WidgetStateProvider.countInstalled(context)
         }
     }
-
-    val totalPlaced = placedCounts.values.sum()
 
     Column(
         modifier = Modifier
@@ -242,11 +123,7 @@ fun WidgetsScreen(
     ) {
         SubScreenHeader(
             title = "Widgets",
-            subtitle = if (totalPlaced > 0) {
-                "$totalPlaced active · ${ALL_WIDGETS.size} available"
-            } else {
-                "${ALL_WIDGETS.size} widgets available"
-            },
+            subtitle = if (placedCount > 0) "On your home screen" else "Weather for your home screen",
             onNavigateBack = onNavigateBack,
             modifier = Modifier.padding(horizontal = 16.dp),
         )
@@ -274,7 +151,7 @@ fun WidgetsScreen(
                 )
                 Text(
                     text = "Your launcher doesn't support direct widget pinning. " +
-                        "Long-press your home screen → Widgets → DailyDash to add widgets manually.",
+                        "Long-press your home screen → Widgets → DailyDash to add the widget manually.",
                     fontSize = 12.sp,
                     color = TextPrimary,
                     lineHeight = 17.sp,
@@ -282,176 +159,45 @@ fun WidgetsScreen(
             }
         }
 
-        // ── Widget list ──────────────────────────────────────────────────
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                start = 16.dp,
-                end = 16.dp,
-                bottom = 24.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
-            ),
-        ) {
-            // DailyDash section
-            item {
-                val corePlaced = CORE_WIDGETS.count { (placedCounts[it.receiverClass] ?: 0) > 0 }
-                WidgetSectionHeader(
-                    title = "DailyDash",
-                    subtitle = "Nutrition · Health · Weather · Calendar",
-                    icon = AppIcons.Blocks,
-                    accentColor = Primary,
-                    delayMs = 50L,
-                    widgetCount = CORE_WIDGETS.size,
-                    placedCount = corePlaced,
-                )
-            }
-
-            itemsIndexed(CORE_WIDGETS) { index, widget ->
-                val instanceCount = placedCounts[widget.receiverClass] ?: 0
-                val alreadyPlaced = instanceCount > 0
-
-                WidgetCard(
-                    info = widget,
-                    pinSupported = pinSupported,
-                    isPinned = recentlyPinned.value.contains(widget.name),
-                    isAlreadyPlaced = alreadyPlaced,
-                    instanceCount = instanceCount,
-                    delayMs = 80L + index * 60L,
-                    onAddToHomeScreen = {
-                        haptics.confirm()
-                        val provider = ComponentName(context, widget.receiverClass)
-                        appWidgetManager.requestPinAppWidget(provider, null, null)
-                        // brief visual feedback
-                        recentlyPinned.value = recentlyPinned.value + widget.name
-                    },
-                )
-            }
-
-            // F1 section
-            item {
-                Spacer(modifier = Modifier.height(8.dp))
-                val f1Placed = F1_WIDGETS.count { (placedCounts[it.receiverClass] ?: 0) > 0 }
-                WidgetSectionHeader(
-                    title = "Formula 1",
-                    subtitle = "Race countdown · Standings · Schedule",
-                    icon = AppIcons.Helmet,
-                    accentColor = F1_RED,
-                    delayMs = 350L,
-                    widgetCount = F1_WIDGETS.size,
-                    placedCount = f1Placed,
-                )
-            }
-
-            itemsIndexed(F1_WIDGETS) { index, widget ->
-                val instanceCount = placedCounts[widget.receiverClass] ?: 0
-                val alreadyPlaced = instanceCount > 0
-
-                WidgetCard(
-                    info = widget,
-                    pinSupported = pinSupported,
-                    isPinned = recentlyPinned.value.contains(widget.name),
-                    isAlreadyPlaced = alreadyPlaced,
-                    instanceCount = instanceCount,
-                    delayMs = 380L + index * 60L,
-                    onAddToHomeScreen = {
-                        haptics.confirm()
-                        val provider = ComponentName(context, widget.receiverClass)
-                        appWidgetManager.requestPinAppWidget(provider, null, null)
-                        recentlyPinned.value = recentlyPinned.value + widget.name
-                    },
-                )
-            }
-        }
-    }
-}
-
-// ── Widget section header ─────────────────────────────────────────────────────
-
-@Composable
-private fun WidgetSectionHeader(
-    title: String,
-    subtitle: String,
-    icon: ImageVector,
-    accentColor: Color,
-    delayMs: Long = 0L,
-    widgetCount: Int = 0,
-    placedCount: Int = 0,
-) {
-    var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        delay(delayMs)
-        visible = true
-    }
-
-    AnimatedVisibility(
-        visible = visible,
-        enter = MacroMotion.contentEnter + slideInVertically(MacroMotion.slideTween()) { it / 4 },
-        exit = MacroMotion.contentExit,
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 20.dp, bottom = 10.dp),
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .padding(top = 12.dp)
+                .padding(bottom = 24.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = accentColor,
-                modifier = Modifier.size(24.dp)
-            )
-            Spacer(modifier = Modifier.width(10.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
-                )
-                Text(
-                    text = subtitle,
-                    fontSize = 11.sp,
-                    color = TextSecondary,
-                )
-            }
-            // Accent pill — shows placed / total
-            Box(
-                modifier = Modifier
-                    .background(
-                        accentColor.copy(alpha = 0.15f),
-                        RoundedCornerShape(8.dp),
+            WidgetCard(
+                pinSupported = pinSupported,
+                isPinned = recentlyPinned,
+                instanceCount = placedCount,
+                onAddToHomeScreen = {
+                    haptics.confirm()
+                    appWidgetManager.requestPinAppWidget(
+                        ComponentName(context, WeatherWidgetReceiver::class.java), null, null,
                     )
-                    .border(1.dp, accentColor.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
-            ) {
-                Text(
-                    text = if (placedCount > 0)
-                        "$placedCount / $widgetCount active"
-                    else
-                        "$widgetCount widgets",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = accentColor,
-                )
-            }
+                    recentlyPinned = true
+                },
+            )
         }
     }
 }
 
-// ── Individual widget card ────────────────────────────────────────────────────
+// ── Widget card ───────────────────────────────────────────────────────────────
 
 @Composable
 private fun WidgetCard(
-    info: WidgetInfo,
     pinSupported: Boolean,
     isPinned: Boolean,
-    isAlreadyPlaced: Boolean,
     instanceCount: Int,
-    delayMs: Long = 0L,
     onAddToHomeScreen: () -> Unit,
 ) {
+    val isAlreadyPlaced = instanceCount > 0
+    val accentColor = WeatherBrand
+
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        delay(delayMs)
+        delay(80L)
         visible = true
     }
 
@@ -472,27 +218,15 @@ private fun WidgetCard(
             this.alpha = alpha
         },
     ) {
-        // ── Preview image ────────────────────────────────────────────────
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(info.previewRatio)
-                .clip(RoundedCornerShape(10.dp))
-                .background(Background)
-                .border(1.dp, Border.copy(alpha = 0.4f), RoundedCornerShape(10.dp)),
-        ) {
-            Image(
-                painter = painterResource(id = info.previewRes),
-                contentDescription = "${info.name} preview",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
+        // ── Preview ──────────────────────────────────────────────────────
+        Box(modifier = Modifier.fillMaxWidth()) {
+            LiveWidgetPreview(modifier = Modifier.fillMaxWidth())
 
             // ── "Active" badge overlay when widget is placed ──
             if (isAlreadyPlaced) {
                 Box(
                     modifier = Modifier
-                        .align(Alignment.TopEnd)
+                        .align(Alignment.BottomEnd)
                         .padding(8.dp)
                         .background(
                             Success.copy(alpha = 0.9f),
@@ -521,29 +255,28 @@ private fun WidgetCard(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // ── Name + size badges ───────────────────────────────────────────
+        // ── Name + size badge ────────────────────────────────────────────
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
-                text = info.name,
+                text = WIDGET_NAME,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary,
                 modifier = Modifier.weight(1f),
             )
             Spacer(modifier = Modifier.width(8.dp))
-            // Size badge
             Box(
                 modifier = Modifier
                     .background(
-                        info.accentColor.copy(alpha = 0.13f),
+                        accentColor.copy(alpha = 0.13f),
                         RoundedCornerShape(6.dp),
                     )
                     .border(
                         1.dp,
-                        info.accentColor.copy(alpha = 0.35f),
+                        accentColor.copy(alpha = 0.35f),
                         RoundedCornerShape(6.dp),
                     )
                     .padding(horizontal = 7.dp, vertical = 3.dp),
@@ -552,31 +285,17 @@ private fun WidgetCard(
                     Icon(
                         imageVector = AppIcons.Grid,
                         contentDescription = null,
-                        tint = info.accentColor,
+                        tint = accentColor,
                         modifier = Modifier.size(11.dp),
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = info.size,
+                        text = "5 × 3",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = info.accentColor,
+                        color = accentColor,
                     )
                 }
-            }
-            Spacer(modifier = Modifier.width(6.dp))
-            // Style label badge
-            Box(
-                modifier = Modifier
-                    .background(Surface, RoundedCornerShape(6.dp))
-                    .border(1.dp, Border.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
-                    .padding(horizontal = 7.dp, vertical = 3.dp),
-            ) {
-                Text(
-                    text = info.sizeLabel,
-                    fontSize = 11.sp,
-                    color = TextSecondary,
-                )
             }
         }
 
@@ -584,7 +303,7 @@ private fun WidgetCard(
 
         // ── Description ──────────────────────────────────────────────────
         Text(
-            text = info.description,
+            text = WIDGET_DESCRIPTION,
             fontSize = 13.sp,
             color = TextSecondary,
             lineHeight = 18.sp,
@@ -601,8 +320,8 @@ private fun WidgetCard(
                 shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (showPlaced) Success.copy(alpha = 0.15f)
-                                     else info.accentColor,
-                    contentColor   = if (showPlaced) Success else info.accentColor.contentColorOn(),
+                                     else accentColor,
+                    contentColor   = if (showPlaced) Success else accentColor.contentColorOn(),
                 ),
                 border = if (showPlaced)
                     BorderStroke(
@@ -634,12 +353,12 @@ private fun WidgetCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(
-                        info.accentColor.copy(alpha = 0.08f),
+                        accentColor.copy(alpha = 0.08f),
                         RoundedCornerShape(10.dp),
                     )
                     .border(
                         1.dp,
-                        info.accentColor.copy(alpha = 0.25f),
+                        accentColor.copy(alpha = 0.25f),
                         RoundedCornerShape(10.dp),
                     )
                     .padding(horizontal = 12.dp, vertical = 10.dp),
@@ -649,7 +368,7 @@ private fun WidgetCard(
                         "✅ Already on your home screen" +
                             if (instanceCount > 1) " (×$instanceCount)" else ""
                     else
-                        "Long-press your home screen → Widgets → DailyDash → ${info.name.substringAfter("— ")}",
+                        "Long-press your home screen → Widgets → DailyDash → Weather",
                     fontSize = 12.sp,
                     color = if (isAlreadyPlaced) Success else TextSecondary,
                     lineHeight = 16.sp,
@@ -657,4 +376,63 @@ private fun WidgetCard(
             }
         }
     }
+}
+
+// ── Live preview ──────────────────────────────────────────────────────────────
+
+/**
+ * The real widget, rendered through the same Glance code as the home screen and
+ * scaled down to fit the card. Falls back to the static preview image (the one
+ * older launchers show in their picker) if the render fails.
+ */
+@Composable
+private fun LiveWidgetPreview(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    var views by remember { mutableStateOf<RemoteViews?>(null) }
+    var failed by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        runCatching { WeatherWidgetPreview.render(context) }
+            .onSuccess { views = it }
+            .onFailure { failed = true }
+    }
+
+    val widgetWidth = WEATHER_WIDGET_PREVIEW_SIZE.width
+    val widgetHeight = WEATHER_WIDGET_PREVIEW_SIZE.height
+    BoxWithConstraints(
+        modifier = modifier.aspectRatio(widgetWidth / widgetHeight),
+        contentAlignment = Alignment.Center,
+    ) {
+        val fit = maxWidth / widgetWidth
+        val remoteViews = views
+        when {
+            remoteViews != null -> AndroidView(
+                factory = { NonInteractiveFrame(it) },
+                update = { frame ->
+                    frame.removeAllViews()
+                    frame.addView(remoteViews.apply(frame.context, frame))
+                },
+                modifier = Modifier
+                    .requiredSize(widgetWidth, widgetHeight)
+                    .graphicsLayer { scaleX = fit; scaleY = fit },
+            )
+            failed -> Image(
+                painter = painterResource(id = R.drawable.widget_preview_weather),
+                contentDescription = "$WIDGET_NAME preview",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(10.dp))
+                    .border(1.dp, Border.copy(alpha = 0.4f), RoundedCornerShape(10.dp)),
+            )
+        }
+    }
+}
+
+/** Hosts the preview but swallows its taps, so the widget's buttons don't fire here. */
+@SuppressLint("ViewConstructor")
+private class NonInteractiveFrame(context: Context) : FrameLayout(context) {
+    override fun onInterceptTouchEvent(ev: MotionEvent): Boolean = true
+
+    @SuppressLint("ClickableViewAccessibility")
+    override fun onTouchEvent(event: MotionEvent): Boolean = false
 }

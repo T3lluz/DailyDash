@@ -27,21 +27,30 @@ import com.macrotracker.R
 import java.time.LocalDate
 
 /**
- * Weather widget optimized for fixed 5x3 with a layout that mirrors the in-app theme.
+ * Weather widget, a fixed 5×3 with a layout that mirrors the in-app theme.
+ *
+ * [WeatherRoot] is also what [WeatherWidgetPreview] renders for the widget picker
+ * and the in-app Widgets screen, so the preview is the widget itself.
  */
 class WeatherWidget : GlanceAppWidget() {
     override val sizeMode = SizeMode.Single
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val data = DashboardWidgetDataProvider.loadData(context)
+        val data = WeatherWidgetDataProvider.loadData(context)
         provideContent { GlanceTheme { WeatherRoot(data) } }
     }
 }
 
+/**
+ * @param preview Render for a preview host (widget picker, in-app Widgets screen)
+ *   rather than the home screen. Previews can't show a collection, so the hourly
+ *   list becomes a plain column of its first rows — which is what the widget
+ *   shows before it's scrolled anyway.
+ */
 @Composable
-private fun WeatherRoot(d: DashboardWidgetData) {
+internal fun WeatherRoot(d: WeatherWidgetData, preview: Boolean = false) {
     val c = WidgetClr()
-    val sc = WScale.from()
+    val sc = WScale.Default
 
     Box(
         modifier = GlanceModifier
@@ -52,7 +61,7 @@ private fun WeatherRoot(d: DashboardWidgetData) {
             .padding(sc.pad),
     ) {
         Column(GlanceModifier.fillMaxSize()) {
-            WeatherHeaderBlock(d, c, sc, showGreeting = true)
+            WeatherHeaderBlock(d, c, sc)
             Spacer(GlanceModifier.height(sc.spaceMd))
 
             if (!d.hasWeatherData) {
@@ -96,7 +105,7 @@ private fun WeatherRoot(d: DashboardWidgetData) {
                     // Right Column: Hourly Forecast
                     Column(GlanceModifier.width(190.dp).fillMaxHeight()) {
                         Box(GlanceModifier.fillMaxWidth().fillMaxHeight()) {
-                            HourlyScrollableSection(d.hourlyForecast.take(72), c, sc)
+                            HourlyScrollableSection(d.hourlyForecast.take(72), c, sc, preview)
                         }
                     }
                 }
@@ -106,7 +115,7 @@ private fun WeatherRoot(d: DashboardWidgetData) {
 }
 
 @Composable
-private fun WeatherHeroSection(d: DashboardWidgetData, c: WidgetClr, sc: WScale) {
+private fun WeatherHeroSection(d: WeatherWidgetData, c: WidgetClr, sc: WScale) {
     Box(
         GlanceModifier
             .fillMaxWidth()
@@ -139,7 +148,7 @@ private fun WeatherHeroSection(d: DashboardWidgetData, c: WidgetClr, sc: WScale)
 }
 
 @Composable
-private fun ColumnScope.WeatherDetailsGrid(d: DashboardWidgetData, c: WidgetClr, sc: WScale) {
+private fun ColumnScope.WeatherDetailsGrid(d: WeatherWidgetData, c: WidgetClr, sc: WScale) {
     Column(GlanceModifier.fillMaxWidth().defaultWeight()) {
         Row(GlanceModifier.fillMaxWidth().defaultWeight()) {
             Box(GlanceModifier.defaultWeight().fillMaxHeight()) {
@@ -225,7 +234,7 @@ private fun MetricItem(label: String, value: String, icon: Int, c: WidgetClr, sc
 }
 
 @Composable
-private fun HourlyScrollableSection(hours: List<HourlyForecast>, c: WidgetClr, sc: WScale) {
+private fun HourlyScrollableSection(hours: List<HourlyForecast>, c: WidgetClr, sc: WScale, preview: Boolean) {
     Box(
         GlanceModifier
             .fillMaxSize()
@@ -236,40 +245,44 @@ private fun HourlyScrollableSection(hours: List<HourlyForecast>, c: WidgetClr, s
             Box(GlanceModifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text("No forecast", style = TextStyle(fontSize = sc.fxs, color = c.sub))
             }
+        } else if (preview) {
+            Column(GlanceModifier.fillMaxSize()) {
+                hours.take(PREVIEW_HOURLY_ROWS).indices.forEach { index -> HourlyEntry(index, hours, c, sc) }
+            }
         } else {
             LazyColumn(GlanceModifier.fillMaxSize()) {
-                hours.forEachIndexed { index, slot ->
-                    // Show a date header if it's the first item or if we hit a new day (12 AM)
-                    val isNewDay = slot.hour.contains("12 AM", ignoreCase = true) ||
-                                  slot.hour.contains("00:00")
-
-                    if (index == 0 || isNewDay) {
-                        item {
-                            DateHeaderRow(index, hours, c, sc)
-                        }
-                    }
-
-                    item {
-                        Column(GlanceModifier.fillMaxWidth()) {
-                            HourlyRow(slot, c, sc)
-                            // Add a subtle divider between items, but not after the last one or before a header
-                            val nextIsNewDay = (index + 1 < hours.size) &&
-                                              (hours[index+1].hour.contains("12 AM", ignoreCase = true) ||
-                                               hours[index+1].hour.contains("00:00"))
-
-                            if (index < hours.size - 1 && !nextIsNewDay) {
-                                Box(
-                                    modifier = GlanceModifier
-                                        .fillMaxWidth()
-                                        .height(1.dp)
-                                        .padding(horizontal = 12.dp)
-                                        .background(c.divider)
-                                ) {}
-                            }
-                        }
-                    }
+                hours.indices.forEach { index ->
+                    item { HourlyEntry(index, hours, c, sc) }
                 }
             }
+        }
+    }
+}
+
+/** More rows than fit; the panel clips the rest, as the unscrolled list does. */
+private const val PREVIEW_HOURLY_ROWS = 8
+
+private fun HourlyForecast.startsNewDay(): Boolean =
+    hour.contains("12 AM", ignoreCase = true) || hour.contains("00:00")
+
+/** One hourly slot, headed by the day's label when it's the first slot or a new day. */
+@Composable
+private fun HourlyEntry(index: Int, hours: List<HourlyForecast>, c: WidgetClr, sc: WScale) {
+    Column(GlanceModifier.fillMaxWidth()) {
+        if (index == 0 || hours[index].startsNewDay()) {
+            DateHeaderRow(index, hours, c, sc)
+        }
+        HourlyRow(hours[index], c, sc)
+        // A subtle divider between slots, but not after the last one or before a header
+        val nextIsNewDay = index + 1 < hours.size && hours[index + 1].startsNewDay()
+        if (index < hours.size - 1 && !nextIsNewDay) {
+            Box(
+                modifier = GlanceModifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .padding(horizontal = 12.dp)
+                    .background(c.divider)
+            ) {}
         }
     }
 }
@@ -383,20 +396,18 @@ private fun HourlyRow(slot: HourlyForecast, c: WidgetClr, sc: WScale) {
 
 @Composable
 private fun WeatherHeaderBlock(
-    d: DashboardWidgetData,
+    d: WeatherWidgetData,
     c: WidgetClr,
     sc: WScale,
-    showGreeting: Boolean,
 ) {
     Column(GlanceModifier.fillMaxWidth()) {
         WidgetHeader(
-            title = "WEATHER",
+            title = greeting(),
+            accent = c.weather,
             c = c,
             sc = sc,
-            showGreeting = showGreeting,
             // The forecast's own age, not the widget's render time.
             lastUpdatedAt = if (d.weatherFetchedAt > 0L) d.weatherFetchedAt else d.lastUpdatedAt,
-            accent = c.weather,
         )
         if (!d.weatherLocation.isNullOrBlank()) {
             Spacer(GlanceModifier.height(2.dp))

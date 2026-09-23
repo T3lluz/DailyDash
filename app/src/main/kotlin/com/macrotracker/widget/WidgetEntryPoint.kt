@@ -2,7 +2,6 @@ package com.macrotracker.widget
 
 import android.content.Context
 import com.macrotracker.data.local.SettingsRepository
-import com.macrotracker.data.remote.AiCredentialResolver
 import com.macrotracker.data.remote.LocationProvider
 import com.macrotracker.data.remote.WeatherRepository
 import dagger.hilt.EntryPoint
@@ -16,7 +15,6 @@ interface WidgetEntryPoint {
     fun weatherRepository(): WeatherRepository
     fun locationProvider(): LocationProvider
     fun settingsRepository(): SettingsRepository
-    fun aiCredentialResolver(): AiCredentialResolver
 }
 
 internal fun Context.widgetEntryPoint(): WidgetEntryPoint =
