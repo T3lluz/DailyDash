@@ -39,6 +39,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -92,6 +94,7 @@ import com.macrotracker.R
 import com.macrotracker.ui.components.ButtonVariant
 import com.macrotracker.ui.components.LoadingSpinner
 import com.macrotracker.ui.components.MacroButton
+import com.macrotracker.ui.components.subScreenBottomPadding
 import com.macrotracker.ui.components.MacroTextField
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
@@ -472,7 +475,7 @@ private fun CameraPhase(
                     Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
                 }
                 Text(
-                    "Scan Nutrition Label",
+                    "Scan nutrition label",
                     fontSize = 17.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White,
@@ -522,12 +525,12 @@ private fun CameraPhase(
                 )
             }
 
-            Row(
+            // Box, not a spaced Row: the shutter must sit dead centre whatever the Gallery chip's width.
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .navigationBarsPadding()
                     .padding(bottom = 32.dp, start = 28.dp, end = 28.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     "Gallery",
@@ -535,6 +538,7 @@ private fun CameraPhase(
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier
+                        .align(Alignment.CenterStart)
                         .clip(RoundedCornerShape(10.dp))
                         .background(Color.Black.copy(alpha = 0.45f))
                         .clickable {
@@ -545,11 +549,12 @@ private fun CameraPhase(
                 )
                 Box(
                     modifier = Modifier
+                        .align(Alignment.Center)
                         .size(76.dp)
                         .clip(CircleShape)
                         .background(Color.White.copy(alpha = 0.25f))
                         .border(4.dp, Color.White, CircleShape)
-                        .clickable {
+                        .clickable(onClickLabel = "Take photo") {
                             haptics.confirm()
                             imageCapture.takePicture(
                                 ContextCompat.getMainExecutor(context),
@@ -583,7 +588,6 @@ private fun CameraPhase(
                             .background(Color.White),
                     )
                 }
-                Spacer(modifier = Modifier.width(72.dp))
             }
         }
     }
@@ -615,6 +619,7 @@ private fun PreviewPhase(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(Surface, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                .navigationBarsPadding()
                 .padding(24.dp),
         ) {
             if (scanning) {
@@ -743,8 +748,10 @@ private fun ResultPhase(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(Background)
+            .imePadding()
             .verticalScroll(rememberScrollState())
-            .background(Background),
+            .subScreenBottomPadding(),
     ) {
         // Thumbnail
         if (bitmap != null) {
@@ -1020,7 +1027,6 @@ private fun ResultPhase(
                 modifier = Modifier.weight(1f),
             )
         }
-        Spacer(modifier = Modifier.height(40.dp))
     }
 }
 
