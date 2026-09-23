@@ -3,7 +3,9 @@ package com.macrotracker.data.hermes
 import com.macrotracker.data.local.SettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
@@ -144,6 +146,17 @@ class HermesClient @Inject constructor(
     }
 
     /**
+     * The web dashboard's settings, one blob for every device (`/_api/sync`): `{rev, at, data}`
+     * where `data` is the page's whole settings object. Last write wins by `at`.
+     */
+    suspend fun syncRead(): JSONObject = withContext(Dispatchers.IO) { JSONObject(get("/sync")) }
+
+    /** Saves the whole blob back. A 409 means someone saved later; read theirs instead. */
+    suspend fun syncWrite(at: Long, data: JSONObject): Unit = withContext(Dispatchers.IO) {
+        send("PUT", "/sync", JSONObject().put("at", at).put("data", data))
+    }
+
+    /**
      * The bridge's own change feed: `threads` when the list moved, `status` when the model
      * did, `title` when a chat was named. The web redraws off the same stream, so a chat
      * started on the desk shows up here at once instead of on the next poll.
@@ -174,7 +187,7 @@ class HermesClient @Inject constructor(
             callRef.get()?.cancel()
             job.cancel()
         }
-    }.flowOn(Dispatchers.IO)
+    }.buffer(Channel.UNLIMITED).flowOn(Dispatchers.IO)
 
     suspend fun stop(id: String): Unit = withContext(Dispatchers.IO) {
         send("POST", "/ai/stop", JSONObject().put("thread", id))
@@ -397,6 +410,16 @@ class HermesClient @Inject constructor(
             updatedMs = o.optLong("updated"),
             pending = o.optInt("pending"),
             model = o.optString("model"),
+            live = o.optJSONObject("live")?.let(::parseLive),
+        )
+
+        /** The list's short copy of a running turn: when it started, the tail of its words, its tools. */
+        internal fun parseLive(o: JSONObject): HermesLive = HermesLive(
+            startedAtMs = o.optLong("t0").takeIf { it > 0 } ?: System.currentTimeMillis(),
+            got = o.optString("got"),
+            think = o.optString("think"),
+            tools = parseTools(o.optJSONArray("tools")),
+            phase = o.optString("phase"),
         )
 
         internal fun parseItems(msgs: JSONArray): List<HermesItem> =

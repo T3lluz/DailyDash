@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.macrotracker.data.local.SettingsRepository
 import com.macrotracker.data.upcoming.UpcomingFeed
+import com.macrotracker.data.hermes.HermesLiveFeed
 import com.macrotracker.data.upcoming.UpcomingRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -37,6 +38,7 @@ sealed interface UpcomingUiState {
 class UpcomingViewModel @Inject constructor(
     private val repository: UpcomingRepository,
     private val settings: SettingsRepository,
+    private val liveFeed: HermesLiveFeed,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<UpcomingUiState>(
@@ -47,6 +49,15 @@ class UpcomingViewModel @Inject constructor(
     private var loadJob: Job? = null
 
     init {
+        // The dashboard's live feed: new F1 data reloads at once, a new stats file whenever the cache is due.
+        viewModelScope.launch {
+            liveFeed.files.collect { file ->
+                when (file) {
+                    "f1" -> load(forceRefresh = true)
+                    "stats" -> if (_state.value is UpcomingUiState.Success) load()
+                }
+            }
+        }
         // A new server address means a different schedule; start over from it.
         viewModelScope.launch {
             settings.dashboardServerUrl.drop(1).distinctUntilChanged().collect {

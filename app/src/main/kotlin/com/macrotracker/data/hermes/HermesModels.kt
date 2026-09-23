@@ -128,9 +128,14 @@ data class HermesThreadSummary(
     val pending: Int,
     /** The model this chat last used; opening it puts Hermes back on it, as the web does. */
     val model: String = "",
+    /** The turn running in it right now, as far as the list shows one; null when idle. */
+    val live: HermesLive? = null,
 ) {
     /** A standing Hermes profile (an "employee") rather than a conversation. */
     val isStaff: Boolean get() = kind == "employee"
+
+    /** Duty rounds and staff run on their own; the web does not announce them, and neither does the phone. */
+    val isBackground: Boolean get() = kind == "duty" || kind == "employee"
 }
 
 data class HermesTool(val name: String, val state: String, val preview: String) {
