@@ -45,6 +45,8 @@ import com.macrotracker.data.update.updateAvailable
 import com.macrotracker.ui.components.SubScreenHeader
 import com.macrotracker.ui.components.subScreenBottomPadding
 import com.macrotracker.ui.components.ButtonVariant
+import com.macrotracker.ui.components.CardHeader
+import com.macrotracker.ui.components.ContentSkeleton
 import com.macrotracker.ui.components.MacroButton
 import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.components.MarkdownText
@@ -95,31 +97,13 @@ fun AboutSettingsScreen(
         Spacer(modifier = Modifier.height(12.dp))
 
         MacroCard(delayMs = 50) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
+            CardHeader(
+                title = "App update",
+                icon = AppIcons.Download,
+                accent = Primary,
+                subtitle = "Installed ${appUpdateViewModel.currentVersionName} (build ${appUpdateViewModel.currentVersionCode})",
                 modifier = Modifier.padding(bottom = 10.dp),
-            ) {
-                Icon(
-                    AppIcons.Download,
-                    contentDescription = null,
-                    tint = Primary,
-                    modifier = Modifier.size(22.dp),
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "App Update",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary,
-                    )
-                    Text(
-                        text = "Installed ${appUpdateViewModel.currentVersionName} (build ${appUpdateViewModel.currentVersionCode})",
-                        fontSize = 12.sp,
-                        color = TextSecondary,
-                    )
-                }
-            }
+            )
 
             // One line for where the update is; the sheet has the rest and opens from the button.
             val (line, lineColor) = when (val s = updateState) {
@@ -221,26 +205,25 @@ fun AboutSettingsScreen(
             )
             when {
                 releaseNotesLoading && releaseNotes.isEmpty() -> {
+                    // First load: a placeholder shaped like the list, as the cards do.
+                    ContentSkeleton(lines = 3, accent = Border)
+                }
+                releaseNotes.isEmpty() -> {
+                    // A failed fetch lands here too, so offer another go.
                     Text(
-                        text = "Loading release history…",
+                        text = "No release notes to show. They come from GitHub Releases.",
                         fontSize = 12.sp,
                         color = TextSecondary,
                     )
-                }
-                releaseNotes.isEmpty() -> {
-                    Text(
-                        text = "No published releases found yet.",
-                        fontSize = 12.sp,
-                        color = TextSecondary,
+                    MacroButton(
+                        text = "Try again",
+                        onClick = { appUpdateViewModel.loadReleaseNotes(force = true) },
+                        modifier = Modifier.fillMaxWidth(),
+                        variant = ButtonVariant.SECONDARY,
                     )
                 }
                 else -> {
-                    val visibleNotes = if (showAllReleaseNotes) {
-                        releaseNotes
-                    } else {
-                        releaseNotes.take(3)
-                    }
-                    visibleNotes.forEach { release ->
+                    releaseNotes.take(3).forEach { release ->
                         ReleaseNotesDropdown(
                             release = release,
                             isCurrent = release.versionCode == appUpdateViewModel.currentVersionCode,
@@ -248,16 +231,29 @@ fun AboutSettingsScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                     }
                     if (releaseNotes.size > 3) {
+                        // The older ones unfold instead of popping in.
+                        AnimatedVisibility(
+                            visible = showAllReleaseNotes,
+                            enter = MacroMotion.expandEnter,
+                            exit = MacroMotion.expandExit,
+                        ) {
+                            Column {
+                                releaseNotes.drop(3).forEach { release ->
+                                    ReleaseNotesDropdown(
+                                        release = release,
+                                        isCurrent = release.versionCode == appUpdateViewModel.currentVersionCode,
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                }
+                            }
+                        }
                         MacroButton(
                             text = if (showAllReleaseNotes) {
                                 "Show fewer updates"
                             } else {
                                 "Show ${releaseNotes.size - 3} more updates"
                             },
-                            onClick = {
-                                haptics.click()
-                                showAllReleaseNotes = !showAllReleaseNotes
-                            },
+                            onClick = { showAllReleaseNotes = !showAllReleaseNotes },
                             modifier = Modifier.fillMaxWidth(),
                             variant = ButtonVariant.SECONDARY,
                         )

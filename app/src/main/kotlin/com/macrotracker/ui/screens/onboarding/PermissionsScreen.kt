@@ -36,6 +36,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -52,6 +53,7 @@ import com.macrotracker.ui.theme.Success
 import com.macrotracker.ui.theme.Surface
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
+import com.macrotracker.ui.util.rememberHaptics
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.macrotracker.ui.theme.AppIcons
@@ -62,7 +64,11 @@ private data class PermissionItem(
     val icon: ImageVector,
     val title: String,
     val description: String,
-)
+    /** Any one of these also counts as granted (approximate location stands in for precise). */
+    val alternatives: List<String> = emptyList(),
+) {
+    val requested: List<String> get() = listOfNotNull(permission) + alternatives
+}
 
 private val PERMISSION_ITEMS = listOf(
     PermissionItem(
@@ -70,7 +76,7 @@ private val PERMISSION_ITEMS = listOf(
         permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.POST_NOTIFICATIONS else null,
         icon = AppIcons.Bell,
         title = "Notifications",
-        description = "Get daily reminders to log your meals and stay on track with your goals.",
+        description = "Hear when an update is ready, a server needs attention or Hermes finishes a reply.",
     ),
     PermissionItem(
         key = "camera",
@@ -85,6 +91,7 @@ private val PERMISSION_ITEMS = listOf(
         icon = AppIcons.MapPin,
         title = "Location",
         description = "Show local weather conditions on your home dashboard.",
+        alternatives = listOf(Manifest.permission.ACCESS_COARSE_LOCATION),
     ),
     PermissionItem(
         key = "calendar",
@@ -106,16 +113,17 @@ private val PERMISSION_ITEMS = listOf(
 fun PermissionsScreen(onContinue: () -> Unit) {
     val context = LocalContext.current
 
-    fun isGranted(permission: String?): Boolean {
-        if (permission == null) return false
-        return ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+    // Location counts as granted with either precise or approximate access,
+    // as the weather card does.
+    fun isGranted(item: PermissionItem): Boolean = item.requested.any { permission ->
+        ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
     }
 
     val grantedState = remember {
-        mutableStateOf(PERMISSION_ITEMS.associate { it.key to isGranted(it.permission) })
+        mutableStateOf(PERMISSION_ITEMS.associate { it.key to isGranted(it) })
     }
 
-    val permissionsToRequest = PERMISSION_ITEMS.mapNotNull { it.permission }.toTypedArray()
+    val permissionsToRequest = PERMISSION_ITEMS.flatMap { it.requested }.toTypedArray()
 
     val multiLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -123,18 +131,19 @@ fun PermissionsScreen(onContinue: () -> Unit) {
         val updated = grantedState.value.toMutableMap()
         PERMISSION_ITEMS.forEach { item ->
             if (item.permission != null) {
-                updated[item.key] = results[item.permission] ?: isGranted(item.permission)
+                updated[item.key] = item.requested.any { results[it] == true } || isGranted(item)
             }
         }
         grantedState.value = updated
     }
 
-    val singleLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
+    // One row can ask for more than one permission (precise + approximate location).
+    val rowLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
     ) { _ ->
         val updated = grantedState.value.toMutableMap()
         PERMISSION_ITEMS.forEach { item ->
-            if (item.permission != null) updated[item.key] = isGranted(item.permission)
+            if (item.permission != null) updated[item.key] = isGranted(item)
         }
         grantedState.value = updated
     }
@@ -207,7 +216,7 @@ fun PermissionsScreen(onContinue: () -> Unit) {
                     granted = granted,
                     onClick = {
                         if (item.permission != null && !granted) {
-                            singleLauncher.launch(item.permission)
+                            rowLauncher.launch(item.requested.toTypedArray())
                         }
                     },
                 )
@@ -231,16 +240,18 @@ private fun PermissionRow(
     granted: Boolean,
     onClick: () -> Unit,
 ) {
+    val haptics = rememberHaptics()
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
             .background(Surface, RoundedCornerShape(14.dp))
             .border(
                 width = 1.dp,
                 color = if (granted) Success.copy(alpha = 0.5f) else Border,
                 shape = RoundedCornerShape(14.dp),
             )
-            .clickable(enabled = !granted && item.permission != null) { onClick() }
+            .clickable(enabled = !granted && item.permission != null) { haptics.click(); onClick() }
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

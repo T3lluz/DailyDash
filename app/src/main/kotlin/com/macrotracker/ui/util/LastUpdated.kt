@@ -16,7 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.macrotracker.ui.theme.TextSecondary
+import com.macrotracker.ui.theme.TextTertiary
 import kotlinx.coroutines.delay
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -59,13 +59,14 @@ fun relativeTimeString(instant: Instant): String {
 
 /**
  * Ultra-minimal last-updated indicator.
- * Renders a tiny clock icon + relative time (e.g. "· 2m") at very low opacity.
+ * Renders a tiny clock icon + relative time (e.g. "· 2m") in [TextTertiary],
+ * the quietest text step that still reads; never an alpha-faded colour.
  */
 @Composable
 fun LastUpdatedText(
     lastUpdatedAt: Instant?,
     modifier: Modifier = Modifier,
-    color: Color = TextSecondary,
+    color: Color = TextTertiary,
 ) {
     if (lastUpdatedAt == null) return
 
@@ -76,7 +77,7 @@ fun LastUpdatedText(
         rememberRelativeTime(lastUpdatedAt)
     }
 
-    val dimColor = color.copy(alpha = color.alpha.coerceAtMost(1f) * 0.45f)
+    val spoken = if (relTime == "just now") "Last synced just now" else "Last synced $relTime ago"
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
@@ -84,14 +85,14 @@ fun LastUpdatedText(
     ) {
         Icon(
             imageVector = AppIcons.Clock,
-            contentDescription = "Last synced $relTime ago",
-            tint = dimColor,
+            contentDescription = spoken,
+            tint = color,
             modifier = Modifier.size(9.dp),
         )
         Text(
             text = relTime,
             fontSize = 10.sp,
-            color = dimColor,
+            color = color,
             letterSpacing = 0.2.sp,
         )
     }

@@ -47,6 +47,7 @@ import com.macrotracker.ui.components.ServerCard
 import com.macrotracker.ui.components.WidgetConfig
 import com.macrotracker.ui.components.WidgetPlaceholder
 import com.macrotracker.ui.components.WidgetPlaceholderCard
+import com.macrotracker.ui.components.WidgetPromptCard
 import com.macrotracker.ui.components.TwitchCard
 import com.macrotracker.ui.components.UpcomingCard
 import com.macrotracker.ui.components.YoutubeCard
@@ -61,7 +62,6 @@ import com.macrotracker.ui.theme.Secondary
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.LastUpdatedText
-import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.HomeHealthState
 import com.macrotracker.ui.viewmodel.HomeViewModel
 import com.macrotracker.ui.theme.AppIcons
@@ -100,7 +100,7 @@ fun HomeWidgetItem(
             onRequestPermission = onRequestCalendarPermission,
             isVisible = isVisible,
         )
-        "BODY_STATS" -> HomeBodyStatsWidget(viewModel, isVisible = isVisible)
+        "BODY_STATS" -> HomeBodyStatsWidget(viewModel, isVisible = isVisible, onOpenHealth = onNavigateToHealth)
         "PROGRESS" -> HomeProgressWidget(viewModel = viewModel)
         "QUICK_ADD" -> HomeQuickAddWidget(
             viewModel = viewModel,
@@ -164,7 +164,7 @@ private fun HomeCalendarWidget(
 }
 
 @Composable
-private fun HomeBodyStatsWidget(viewModel: HomeViewModel, isVisible: Boolean) {
+private fun HomeBodyStatsWidget(viewModel: HomeViewModel, isVisible: Boolean, onOpenHealth: () -> Unit) {
     if (!isVisible) {
         WidgetPlaceholderCard(title = "Body Stats", icon = AppIcons.HeartPulse, accent = HealthHeartRate)
         return
@@ -181,7 +181,7 @@ private fun HomeBodyStatsWidget(viewModel: HomeViewModel, isVisible: Boolean) {
                     subtitle = "via Health Connect",
                     modifier = Modifier.padding(bottom = 12.dp),
                 ) {
-                    LastUpdatedText(lastUpdatedAt = hs.lastUpdatedAt, color = TextSecondary)
+                    LastUpdatedText(lastUpdatedAt = hs.lastUpdatedAt)
                     if (hs.isRefreshing) {
                         Spacer(modifier = Modifier.width(8.dp))
                         LoadingSpinner(size = LoadingSpec.SizeInline)
@@ -236,19 +236,15 @@ private fun HomeBodyStatsWidget(viewModel: HomeViewModel, isVisible: Boolean) {
             WidgetPlaceholderCard(title = "Body Stats", icon = AppIcons.HeartPulse, accent = HealthHeartRate)
         }
         HomeHealthState.Unavailable -> {
-            MacroCard {
-                CardHeader(
-                    title = "Body Stats",
-                    icon = AppIcons.HeartPulse,
-                    accent = HealthHeartRate,
-                    modifier = Modifier.padding(bottom = 4.dp),
-                )
-                Text(
-                    "Connect Health Connect in Settings or Health to see steps, heart rate, and sleep here.",
-                    fontSize = 13.sp,
-                    color = TextSecondary,
-                )
-            }
+            // An empty state with a way out: the Health tab has the Connect prompt.
+            WidgetPromptCard(
+                title = "Body Stats",
+                message = "Connect Health Connect in Settings or Health to see steps, heart rate, and sleep here.",
+                actionLabel = "Open Health",
+                actionIcon = AppIcons.HeartPulse,
+                accent = HealthHeartRate,
+                onAction = onOpenHealth,
+            )
         }
     }
 }
@@ -264,8 +260,8 @@ private fun HomeProgressWidget(
     // shoved every widget below it down the moment the query returned.
     val s = summary ?: run {
         WidgetPlaceholderCard(
-            title = "Today's Progress",
-            icon = AppIcons.Restaurant,
+            title = "Today's progress",
+            icon = AppIcons.ChartPie,
             accent = Primary,
             minHeight = WidgetPlaceholder.CompactMinHeight,
             lines = 2,
@@ -275,12 +271,12 @@ private fun HomeProgressWidget(
 
     MacroCard {
         CardHeader(
-            title = "Today's Progress",
-            icon = AppIcons.Restaurant,
+            title = "Today's progress",
+            icon = AppIcons.ChartPie,
             accent = Primary,
             modifier = Modifier.padding(bottom = 12.dp),
         ) {
-            LastUpdatedText(lastUpdatedAt = logsLastUpdatedAt, color = TextSecondary)
+            LastUpdatedText(lastUpdatedAt = logsLastUpdatedAt)
         }
 
         Row(
@@ -398,11 +394,10 @@ private fun HomeQuickAddWidget(
     onQuickProteinChange: (String) -> Unit,
 ) {
     val context = LocalContext.current
-    val haptics = rememberHaptics()
 
     MacroCard {
         CardHeader(
-            title = "Quick Add",
+            title = "Quick add",
             icon = AppIcons.Add,
             accent = Primary,
             modifier = Modifier.padding(bottom = 12.dp),
@@ -474,14 +469,12 @@ private fun HomeQuickAddWidget(
                     val cal = quickCalories.toIntOrNull() ?: 0
                     val prot = quickProtein.toIntOrNull() ?: 0
                     if (cal > 0 || prot > 0) {
-                        haptics.confirm()
                         viewModel.addLog(quickFood, cal, prot)
                         onQuickFoodChange("")
                         onQuickCaloriesChange("")
                         onQuickProteinChange("")
                         Toast.makeText(context, "✅ Entry added!", Toast.LENGTH_SHORT).show()
                     } else {
-                        haptics.reject()
                         Toast.makeText(context, "Enter calories or protein first", Toast.LENGTH_SHORT).show()
                     }
                 },

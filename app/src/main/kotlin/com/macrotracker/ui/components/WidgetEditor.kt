@@ -54,11 +54,14 @@ fun parseWidgetConfig(configStr: String, defaultOrder: List<Triple<String, Strin
         }
     }
 
-    // Then add any missing ones (e.g. if new features added)
-    for (def in defaultOrder) {
-        if (!configs.any { it.id == def.first }) {
-            configs.add(WidgetConfig(def.first, def.second, true, def.third))
-        }
+    // Then slot in any the saved order doesn't know yet (a card added in an
+    // update) right after the card that precedes it by default, so a new card
+    // lands where it belongs instead of at the very bottom.
+    defaultOrder.forEachIndexed { defaultIndex, def ->
+        if (configs.any { it.id == def.first }) return@forEachIndexed
+        val previousId = defaultOrder.take(defaultIndex).lastOrNull { prev -> configs.any { it.id == prev.first } }?.first
+        val insertAt = if (previousId == null) 0 else configs.indexOfFirst { it.id == previousId } + 1
+        configs.add(insertAt, WidgetConfig(def.first, def.second, true, def.third))
     }
     return configs
 }
@@ -82,17 +85,17 @@ fun WidgetEditor(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                "Edit Layout",
+                "Edit layout",
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary,
             )
-            IconButton(onClick = onClose) {
+            IconButton(onClick = { haptics.tick(); onClose() }) {
                 Icon(AppIcons.Check, contentDescription = "Done", tint = Primary)
             }
         }
         Text(
-            "Toggle visibility · drag ☰ to reorder.",
+            "Toggle visibility · drag the grip to reorder.",
             fontSize = 14.sp,
             color = TextSecondary,
             modifier = Modifier.padding(bottom = 16.dp),
@@ -133,9 +136,10 @@ fun WidgetEditor(
                         .background(Primary.copy(alpha = 0.1f)),
                     contentAlignment = Alignment.Center,
                 ) {
+                    // Decorative: the label beside it already names the card.
                     Icon(
                         imageVector = config.icon,
-                        contentDescription = config.label,
+                        contentDescription = null,
                         tint = Primary,
                         modifier = Modifier.size(20.dp),
                     )

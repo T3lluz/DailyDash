@@ -38,6 +38,7 @@ import com.macrotracker.data.chat.BotPrompts
 import com.macrotracker.data.chat.ChatBot
 import com.macrotracker.data.chat.ChatRole
 import com.macrotracker.ui.components.PillButton
+import com.macrotracker.ui.components.WidgetExpandSection
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.ServerBrand
 import com.macrotracker.ui.theme.Surface
@@ -121,10 +122,7 @@ fun SysopChatPane(
                         icon = AppIcons.Close,
                         label = "Stop",
                         accent = ServerBrand,
-                        onClick = {
-                            haptics.tick()
-                            viewModel.cancelStream(bot)
-                        },
+                        onClick = { viewModel.cancelStream(bot) },
                     )
                 } else {
                     Box {
@@ -132,10 +130,7 @@ fun SysopChatPane(
                             icon = AppIcons.History,
                             label = "Threads",
                             accent = ServerBrand,
-                            onClick = {
-                                haptics.tick()
-                                threadMenuOpen = true
-                            },
+                            onClick = { threadMenuOpen = true },
                         )
                         DropdownMenu(
                             expanded = threadMenuOpen,
@@ -237,7 +232,10 @@ fun SysopChatPane(
                                             SmallActionChip(
                                                 icon = AppIcons.Settings,
                                                 label = "AI settings",
-                                                onClick = onNavigateToAiSettings,
+                                                onClick = {
+                                                    haptics.click()
+                                                    onNavigateToAiSettings()
+                                                },
                                             )
                                         }
                                     }
@@ -291,7 +289,7 @@ fun SysopChatPane(
                 )
                 .onSizeChanged { composerHeight = with(density) { it.height.toDp() } },
         ) {
-            if (state.messages.isEmpty() && !state.loading) {
+            WidgetExpandSection(visible = state.messages.isEmpty() && !state.loading) {
                 ChatStarters(BotPrompts.startersFor(bot)) { send(it) }
             }
             ChatComposer(

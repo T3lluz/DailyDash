@@ -38,16 +38,16 @@ import androidx.compose.ui.unit.sp
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import com.macrotracker.data.health.DailyHealthStats
+import com.macrotracker.data.health.percentChange
+import com.macrotracker.ui.components.CardHeader
 import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
-import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.Primary
-import com.macrotracker.ui.theme.Success
-import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.HapticHelper
+import com.macrotracker.ui.viewmodel.HealthViewModel
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -60,6 +60,8 @@ import com.macrotracker.ui.theme.AppIcons
 @Composable
 fun HealthTrendsSection(
     healthHistory: List<DailyHealthStats>,
+    /** The seven days before [healthHistory], for "vs last week". */
+    previousWeek: List<DailyHealthStats> = emptyList(),
     selectedDate: LocalDate,
     selectedMetric: HealthMetric,
     intradayHeartRate: List<HeartRateRecord.Sample>,
@@ -125,52 +127,62 @@ fun HealthTrendsSection(
     val chartKey = remember(weeksBack, activeMetric, healthHistory.firstOrNull()?.date) {
         "${weeksBack}_${activeMetric}_${healthHistory.firstOrNull()?.date}"
     }
+    val previousAvg = previousWeek.map { it.stats.valueOf(activeMetric) }.filter { it > 0 }
+        .takeIf { it.isNotEmpty() }?.average()
+    val vsLastWeek = previousAvg?.let { percentChange(avgValue, it) }
+    val canGoBack = weeksBack < HealthViewModel.MAX_WEEKS_BACK
+    val weekLabel = when (weeksBack) {
+        0 -> "This week"
+        1 -> "Last week"
+        else -> "$weeksBack weeks ago"
+    }
+    val rangeLabel = if (healthHistory.isNotEmpty()) {
+        "${healthHistory.first().date.format(DateTimeFormatter.ofPattern("MMM d"))} – ${
+            healthHistory.last().date.format(DateTimeFormatter.ofPattern("MMM d"))
+        }"
+    } else {
+        null
+    }
 
     MacroCard(delayMs = 75) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+            CardHeader(
+                title = weekLabel,
+                icon = AppIcons.ChartLine,
+                accent = color,
+                subtitle = rangeLabel,
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onPreviousWeek, enabled = weeksBack < 2, modifier = Modifier.size(28.dp)) {
-                        Icon(
-                            AppIcons.ChevronLeft,
-                            contentDescription = "Previous week",
-                            tint = if (weeksBack < 2) Primary else Border,
-                        )
-                    }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            when (weeksBack) {
-                                0 -> "This week"
-                                1 -> "Last week"
-                                else -> "2 weeks ago"
-                            },
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary,
-                        )
-                        if (healthHistory.isNotEmpty()) {
-                            Text(
-                                "${healthHistory.first().date.format(DateTimeFormatter.ofPattern("MMM d"))} – ${
-                                    healthHistory.last().date.format(DateTimeFormatter.ofPattern("MMM d"))
-                                }",
-                                fontSize = 11.sp,
-                                color = TextSecondary,
-                            )
-                        }
-                    }
-                    IconButton(onClick = onNextWeek, enabled = weeksBack > 0, modifier = Modifier.size(28.dp)) {
-                        Icon(
-                            AppIcons.ChevronRight,
-                            contentDescription = "Next week",
-                            tint = if (weeksBack > 0) Primary else Border,
-                        )
-                    }
+                IconButton(
+                    onClick = {
+                        haptics.tick()
+                        onPreviousWeek()
+                    },
+                    enabled = canGoBack,
+                    modifier = Modifier.size(32.dp),
+                ) {
+                    Icon(
+                        AppIcons.ChevronLeft,
+                        contentDescription = "Previous week",
+                        tint = if (canGoBack) Primary else Border,
+                        modifier = Modifier.size(20.dp),
+                    )
                 }
-
+                IconButton(
+                    onClick = {
+                        haptics.tick()
+                        onNextWeek()
+                    },
+                    enabled = weeksBack > 0,
+                    modifier = Modifier.size(32.dp),
+                ) {
+                    Icon(
+                        AppIcons.ChevronRight,
+                        contentDescription = "Next week",
+                        tint = if (weeksBack > 0) Primary else Border,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+                Spacer(modifier = Modifier.width(4.dp))
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
@@ -195,7 +207,7 @@ fun HealthTrendsSection(
 
             if (availableMetrics.isEmpty()) {
                 Text(
-                    "No Health Connect data for this week yet.",
+                    if (weeksBack == 0) "No Health Connect data for this week yet." else "No Health Connect data for this week.",
                     color = TextSecondary,
                     fontSize = 14.sp,
                     modifier = Modifier.padding(vertical = 20.dp),
@@ -209,12 +221,15 @@ fun HealthTrendsSection(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 availableMetrics.forEach { metric ->
-                    MetricChip(
-                        text = metric.chipLabel(),
+                    HealthChip(
+                        label = metric.chipLabel(),
                         iconRes = metric.iconRes(),
                         selected = activeMetric == metric,
                         color = metric.tint(),
-                        onClick = { onMetricSelected(metric) },
+                        onClick = {
+                            haptics.tick()
+                            onMetricSelected(metric)
+                        },
                     )
                 }
             }
@@ -224,7 +239,9 @@ fun HealthTrendsSection(
             if (avgValue > 0) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(bottom = 10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 10.dp),
                 ) {
                     Icon(
                         painter = painterResource(activeMetric.iconRes()),
@@ -237,7 +254,15 @@ fun HealthTrendsSection(
                         "Avg ${formatMetricValue(activeMetric, avgValue, compact = true)} ${formatMetricUnit(activeMetric)}".trim(),
                         fontSize = 13.sp,
                         color = TextSecondary,
+                        modifier = Modifier.weight(1f),
                     )
+                    if (vsLastWeek != null) {
+                        DeltaPill(
+                            text = "${String.format(Locale.US, "%.0f", abs(vsLastWeek))}% vs last week",
+                            change = vsLastWeek,
+                            better = activeMetric.better(),
+                        )
+                    }
                 }
             }
 
@@ -326,26 +351,18 @@ fun HealthTrendsSection(
                         }
                         if (avgValue > 0) {
                             val diff = ((selectedDayValue - avgValue) / avgValue * 100)
-                            val up = diff >= 0
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    if (up) AppIcons.ArrowUp else AppIcons.ArrowDown,
-                                    contentDescription = null,
-                                    tint = if (up) Success else Error,
-                                    modifier = Modifier.size(14.dp),
-                                )
-                                Spacer(modifier = Modifier.width(2.dp))
-                                Text(
-                                    "${String.format(Locale.US, "%.0f", abs(diff))}% vs avg",
-                                    fontSize = 12.sp,
-                                    color = if (up) Success else Error,
-                                )
-                            }
+                            DeltaPill(
+                                text = "${String.format(Locale.US, "%.0f", abs(diff))}% vs avg",
+                                change = diff,
+                                better = activeMetric.better(),
+                                modifier = Modifier.padding(bottom = 8.dp),
+                            )
                         }
                     }
                 }
-
             }
+
+            WeekSummaryTiles(week = healthHistory, metric = activeMetric)
 
             AnimatedVisibility(
                 visible = activeMetric == HealthMetric.HEART_RATE || activeMetric == HealthMetric.SLEEP,
@@ -372,34 +389,61 @@ fun HealthTrendsSection(
     }
 }
 
+/** Best day, week total or range, and days at goal for the metric on show. */
 @Composable
-private fun MetricChip(
-    text: String,
-    iconRes: Int,
-    selected: Boolean,
-    color: Color,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .clip(CircleShape)
-            .background(if (selected) color.copy(alpha = 0.18f) else Background)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 7.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
-    ) {
-        Icon(
-            painter = painterResource(iconRes),
-            contentDescription = null,
-            tint = if (selected) color else TextSecondary,
-            modifier = Modifier.size(14.dp),
+private fun WeekSummaryTiles(week: List<DailyHealthStats>, metric: HealthMetric) {
+    val days = week.filter { it.stats.valueOf(metric) > 0 }
+    if (days.size < 2) return
+    val dayFmt = DateTimeFormatter.ofPattern("EEE")
+    val unit = formatMetricUnit(metric)
+    fun withUnit(v: Double) = "${formatMetricValue(metric, v, compact = true)} $unit".trim()
+    val best = when (metric.better()) {
+        Better.LOWER -> days.minBy { it.stats.valueOf(metric) }
+        else -> days.maxBy { it.stats.valueOf(metric) }
+    }
+    val summable = metric == HealthMetric.STEPS || metric == HealthMetric.CALORIES ||
+        metric == HealthMetric.DISTANCE || metric == HealthMetric.FLOORS_CLIMBED
+    val goalDays = when (metric) {
+        HealthMetric.STEPS -> days.count { it.stats.steps >= DEFAULT_STEP_GOAL }
+        HealthMetric.SLEEP -> days.count { it.stats.sleepMinutes >= DEFAULT_SLEEP_GOAL_MINUTES * 0.9 }
+        else -> null
+    }
+
+    Spacer(modifier = Modifier.height(12.dp))
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        HealthStatTile(
+            label = if (metric.better() == Better.NEITHER) "Highest" else "Best day",
+            value = best.date.format(dayFmt),
+            sub = withUnit(best.stats.valueOf(metric)),
+            accent = metric.tint(),
+            modifier = Modifier.weight(1f),
         )
-        Text(
-            text = text,
-            fontSize = 12.sp,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            color = if (selected) color else TextSecondary,
+        if (summable) {
+            HealthStatTile(
+                label = "Week total",
+                value = withUnit(days.sumOf { it.stats.valueOf(metric) }),
+                sub = "${days.size} days",
+                modifier = Modifier.weight(1f),
+            )
+        } else {
+            val values = days.map { it.stats.valueOf(metric) }
+            HealthStatTile(
+                label = "Range",
+                value = "${formatMetricValue(metric, values.min(), compact = true)}–" +
+                    formatMetricValue(metric, values.max(), compact = true),
+                sub = unit.ifBlank { "${days.size} days" },
+                modifier = Modifier.weight(1f),
+            )
+        }
+        HealthStatTile(
+            label = if (goalDays != null) "At goal" else "Days logged",
+            value = "${goalDays ?: days.size} of ${week.size}",
+            sub = when (metric) {
+                HealthMetric.STEPS -> "${String.format(Locale.US, "%,d", DEFAULT_STEP_GOAL)} steps"
+                HealthMetric.SLEEP -> "${DEFAULT_SLEEP_GOAL_MINUTES / 60}h a night"
+                else -> "this week"
+            },
+            modifier = Modifier.weight(1f),
         )
     }
 }

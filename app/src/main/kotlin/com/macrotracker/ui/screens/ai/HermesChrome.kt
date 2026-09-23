@@ -81,6 +81,7 @@ import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.GlassHairline
+import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.OnAccent
 import com.macrotracker.ui.theme.ServerBrand
 import com.macrotracker.ui.theme.ServerCritical
@@ -401,7 +402,7 @@ private fun ThreadRow(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         thread.title,
-                        color = if (selected) TextPrimary else TextPrimary.copy(alpha = 0.92f),
+                        color = TextPrimary, // selection shows in the weight and the row fill
                         fontSize = 14.sp,
                         fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                         maxLines = 1,
@@ -531,6 +532,7 @@ internal fun HermesComposer(
             canSend -> ServerBrand
             else -> Border
         },
+        animationSpec = MacroMotion.colorTween(),
         label = "hermesSend",
     )
     val haptics = rememberHaptics()

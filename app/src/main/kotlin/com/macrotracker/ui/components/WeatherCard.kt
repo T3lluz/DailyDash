@@ -44,6 +44,7 @@ import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.Surface
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.theme.TextTertiary
+import com.macrotracker.ui.theme.WeatherBrand
 import com.macrotracker.ui.theme.WeatherRain
 import com.macrotracker.ui.util.LastUpdatedText
 import com.macrotracker.ui.util.rememberHaptics
@@ -165,9 +166,13 @@ fun WeatherCard(
         val currentState = state
         when (stateKey) {
             WeatherStateKey.LOADING -> {
-                MacroCard {
-                    ContentSkeleton(lines = 4, accent = Border)
-                }
+                // Same header and reserved height as every other card while it loads.
+                WidgetPlaceholderCard(
+                    title = "Weather",
+                    icon = AppIcons.Cloud,
+                    accent = WeatherBrand,
+                    lines = 4,
+                )
             }
 
             WeatherStateKey.SUCCESS -> {
@@ -222,17 +227,14 @@ fun WeatherCard(
                                             )
                                         }
                                     }
-                                    LastUpdatedText(
-                                        lastUpdatedAt = successState.lastUpdatedAt,
-                                        color = TextPrimary,
-                                    )
+                                    LastUpdatedText(lastUpdatedAt = successState.lastUpdatedAt)
                                 }
                                 // Right: refresh + chevron
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(0.dp),
                                 ) {
-                                    IconButton(onClick = onRetry, modifier = Modifier.size(36.dp)) {
+                                    IconButton(onClick = { haptics.tick(); onRetry() }, modifier = Modifier.size(36.dp)) {
                                         Icon(AppIcons.Refresh, contentDescription = "Refresh", tint = TextSecondary, modifier = Modifier.size(18.dp))
                                     }
                                     WidgetExpandChevron(

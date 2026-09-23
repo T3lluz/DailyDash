@@ -267,7 +267,7 @@ fun MetricToggleRow(
         icon = {
             Icon(
                 imageVector = icon,
-                contentDescription = name,
+                contentDescription = null, // the row's text already says it
                 tint = TextSecondary,
                 modifier = Modifier.size(22.dp),
             )
@@ -289,7 +289,7 @@ fun MetricToggleRow(
         icon = {
             Icon(
                 painter = painterResource(iconRes),
-                contentDescription = name,
+                contentDescription = null, // the row's text already says it
                 tint = TextSecondary,
                 modifier = Modifier.size(22.dp),
             )

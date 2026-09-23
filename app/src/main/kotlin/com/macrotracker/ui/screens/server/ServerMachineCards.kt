@@ -173,7 +173,7 @@ internal fun MemoryCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
     MacroCard(delayMs = 100) {
         SectionHeader(
             title = "Memory",
-            icon = AppIcons.Blocks,
+            icon = AppIcons.ChartPie,
             accent = ServerMemory,
             trailing = "${formatKb(mem.usedKb)} of ${formatKb(mem.totalKb)}",
             onAskAi = onAskAi,

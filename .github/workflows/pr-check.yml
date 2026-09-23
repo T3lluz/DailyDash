@@ -1,0 +1,48 @@
+name: Build check
+
+# Compiles the app and runs the unit tests on every pull request, so a change
+# that doesn't build is caught before it reaches master (where a failed build
+# means no release). Mirrors build-apk.yml's setup; no secrets are needed to
+# compile, since local.properties keys default to empty strings.
+
+on:
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+concurrency:
+  group: build-check-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+env:
+  GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -XX:+UseParallelGC -Dfile.encoding=UTF-8"
+
+jobs:
+  check:
+    name: Compile and unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+          cache-cleanup: never
+
+      - name: Point Gradle at the runner's SDK
+        run: echo "sdk.dir=${ANDROID_HOME}" > local.properties
+
+      - name: Compile
+        run: ./gradlew :app:compileDebugKotlin --build-cache
+
+      - name: Unit tests
+        run: ./gradlew :app:testDebugUnitTest --build-cache

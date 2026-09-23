@@ -23,11 +23,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.macrotracker.ui.components.CardTitle
+import com.macrotracker.ui.components.ContentSkeleton
 import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.components.MacroProgressBar
 import com.macrotracker.ui.components.SubScreenHeader
 import com.macrotracker.ui.components.subScreenBottomPadding
 import com.macrotracker.ui.theme.Background
+import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.Secondary
@@ -63,7 +65,12 @@ fun StatsScreen(
 
         // Last 7 Days Card
         MacroCard(delayMs = 100) {
-            CardTitle("Last 7 Days", modifier = Modifier.padding(bottom = 16.dp))
+            CardTitle("Last 7 days", modifier = Modifier.padding(bottom = 16.dp))
+
+            // The list is empty only until the first load lands.
+            if (history.isEmpty()) {
+                ContentSkeleton(lines = 3, accent = Border)
+            }
 
             history.forEachIndexed { index, day ->
                 val hasData = day.totalCalories > 0 || day.totalProtein > 0
@@ -108,6 +115,15 @@ fun StatsScreen(
                         Text("${day.totalProtein}g pro", fontSize = 12.sp, color = TextSecondary)
                     }
                 }
+            }
+
+            if (history.isNotEmpty() && history.none { it.totalCalories > 0 || it.totalProtein > 0 }) {
+                Text(
+                    "Nothing logged this week yet. Quick add on Home or a meal on the AI tab fills this in.",
+                    fontSize = 13.sp,
+                    color = TextSecondary,
+                    lineHeight = 18.sp,
+                )
             }
         }
     }

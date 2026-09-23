@@ -15,7 +15,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -39,11 +38,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import com.macrotracker.data.remote.TempUnit
 import com.macrotracker.data.remote.WindUnit
 import com.macrotracker.ui.components.SubScreenHeader
 import com.macrotracker.ui.components.subScreenBottomPadding
 import com.macrotracker.ui.components.MacroCard
+import com.macrotracker.ui.components.WidgetExpandSection
 import com.macrotracker.ui.screens.health.HealthMetric
 import com.macrotracker.ui.screens.health.iconRes
 import com.macrotracker.ui.theme.Background
@@ -101,7 +103,27 @@ fun ConnectionsSettingsScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
+    // Weather counts either precise or approximate location, as the Home card does.
+    fun hasLocationPermission(): Boolean =
+        ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_FINE_LOCATION,
+        ) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(
+                context, Manifest.permission.ACCESS_COARSE_LOCATION,
+            ) == PackageManager.PERMISSION_GRANTED
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions(),
+    ) { permissions ->
+        val granted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true ||
+            permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true
+        if (granted) {
+            viewModel.setMasterWeatherEnabled(true)
+        }
+    }
+
+    // Permissions can change in Android's settings while this screen is behind them.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         viewModel.refreshConnectionStatus()
     }
 
@@ -135,87 +157,89 @@ fun ConnectionsSettingsScreen(
                 },
             )
 
-            if (healthConnectAvailable) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = "Health Connect Metrics",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
-                    modifier = Modifier.padding(bottom = 8.dp),
-                )
-                MetricToggleRow(
-                    iconRes = HealthMetric.HEART_RATE.iconRes(),
-                    name = "Heart Rate",
-                    enabled = heartRateEnabled,
-                    onCheckedChange = {
-                        haptics.tick()
-                        viewModel.setMetricEnabled("heart_rate_enabled", it)
-                    },
-                )
-                MetricToggleRow(
-                    iconRes = HealthMetric.RESTING_HEART_RATE.iconRes(),
-                    name = "Resting Heart Rate",
-                    enabled = restingHeartRateEnabled,
-                    onCheckedChange = {
-                        haptics.tick()
-                        viewModel.setMetricEnabled("resting_heart_rate_enabled", it)
-                    },
-                )
-                MetricToggleRow(
-                    iconRes = HealthMetric.OXYGEN_SATURATION.iconRes(),
-                    name = "Oxygen Saturation",
-                    enabled = oxygenSaturationEnabled,
-                    onCheckedChange = {
-                        haptics.tick()
-                        viewModel.setMetricEnabled("oxygen_saturation_enabled", it)
-                    },
-                )
-                MetricToggleRow(
-                    iconRes = HealthMetric.RESPIRATORY_RATE.iconRes(),
-                    name = "Respiratory Rate",
-                    enabled = respiratoryRateEnabled,
-                    onCheckedChange = {
-                        haptics.tick()
-                        viewModel.setMetricEnabled("respiratory_rate_enabled", it)
-                    },
-                )
-                MetricToggleRow(
-                    iconRes = HealthMetric.STEPS.iconRes(),
-                    name = "Steps",
-                    enabled = stepsEnabled,
-                    onCheckedChange = {
-                        haptics.tick()
-                        viewModel.setMetricEnabled("steps_enabled", it)
-                    },
-                )
-                MetricToggleRow(
-                    iconRes = HealthMetric.DISTANCE.iconRes(),
-                    name = "Distance",
-                    enabled = distanceEnabled,
-                    onCheckedChange = {
-                        haptics.tick()
-                        viewModel.setMetricEnabled("distance_enabled", it)
-                    },
-                )
-                MetricToggleRow(
-                    iconRes = HealthMetric.FLOORS_CLIMBED.iconRes(),
-                    name = "Floors Climbed",
-                    enabled = floorsClimbedEnabled,
-                    onCheckedChange = {
-                        haptics.tick()
-                        viewModel.setMetricEnabled("floors_climbed_enabled", it)
-                    },
-                )
-                MetricToggleRow(
-                    iconRes = HealthMetric.CALORIES.iconRes(),
-                    name = "Active Calories",
-                    enabled = activeCaloriesEnabled,
-                    onCheckedChange = {
-                        haptics.tick()
-                        viewModel.setMetricEnabled("active_calories_enabled", it)
-                    },
-                )
+            WidgetExpandSection(visible = healthConnectAvailable) {
+                Column {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Health Connect Metrics",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                    MetricToggleRow(
+                        iconRes = HealthMetric.HEART_RATE.iconRes(),
+                        name = "Heart Rate",
+                        enabled = heartRateEnabled,
+                        onCheckedChange = {
+                            haptics.tick()
+                            viewModel.setMetricEnabled("heart_rate_enabled", it)
+                        },
+                    )
+                    MetricToggleRow(
+                        iconRes = HealthMetric.RESTING_HEART_RATE.iconRes(),
+                        name = "Resting Heart Rate",
+                        enabled = restingHeartRateEnabled,
+                        onCheckedChange = {
+                            haptics.tick()
+                            viewModel.setMetricEnabled("resting_heart_rate_enabled", it)
+                        },
+                    )
+                    MetricToggleRow(
+                        iconRes = HealthMetric.OXYGEN_SATURATION.iconRes(),
+                        name = "Oxygen Saturation",
+                        enabled = oxygenSaturationEnabled,
+                        onCheckedChange = {
+                            haptics.tick()
+                            viewModel.setMetricEnabled("oxygen_saturation_enabled", it)
+                        },
+                    )
+                    MetricToggleRow(
+                        iconRes = HealthMetric.RESPIRATORY_RATE.iconRes(),
+                        name = "Respiratory Rate",
+                        enabled = respiratoryRateEnabled,
+                        onCheckedChange = {
+                            haptics.tick()
+                            viewModel.setMetricEnabled("respiratory_rate_enabled", it)
+                        },
+                    )
+                    MetricToggleRow(
+                        iconRes = HealthMetric.STEPS.iconRes(),
+                        name = "Steps",
+                        enabled = stepsEnabled,
+                        onCheckedChange = {
+                            haptics.tick()
+                            viewModel.setMetricEnabled("steps_enabled", it)
+                        },
+                    )
+                    MetricToggleRow(
+                        iconRes = HealthMetric.DISTANCE.iconRes(),
+                        name = "Distance",
+                        enabled = distanceEnabled,
+                        onCheckedChange = {
+                            haptics.tick()
+                            viewModel.setMetricEnabled("distance_enabled", it)
+                        },
+                    )
+                    MetricToggleRow(
+                        iconRes = HealthMetric.FLOORS_CLIMBED.iconRes(),
+                        name = "Floors Climbed",
+                        enabled = floorsClimbedEnabled,
+                        onCheckedChange = {
+                            haptics.tick()
+                            viewModel.setMetricEnabled("floors_climbed_enabled", it)
+                        },
+                    )
+                    MetricToggleRow(
+                        iconRes = HealthMetric.CALORIES.iconRes(),
+                        name = "Active Calories",
+                        enabled = activeCaloriesEnabled,
+                        onCheckedChange = {
+                            haptics.tick()
+                            viewModel.setMetricEnabled("active_calories_enabled", it)
+                        },
+                    )
+                }
             }
         }
 
@@ -224,55 +248,66 @@ fun ConnectionsSettingsScreen(
         MacroCard(delayMs = 80) {
             ConnectionRow(
                 icon = AppIcons.Cloud,
-                name = "Weather Data",
+                name = "Weather data",
                 description = "Location-based weather via Yr.no",
                 connected = weatherConnected,
                 iconTint = WeatherBrand,
                 enabled = masterWeatherEnabled,
-                onToggle = {
+                onToggle = { enabled ->
                     haptics.tick()
-                    viewModel.setMasterWeatherEnabled(it)
+                    if (enabled && !hasLocationPermission()) {
+                        locationPermissionLauncher.launch(
+                            arrayOf(
+                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                Manifest.permission.ACCESS_COARSE_LOCATION,
+                            ),
+                        )
+                    } else {
+                        viewModel.setMasterWeatherEnabled(enabled)
+                    }
                 },
             )
 
-            if (masterWeatherEnabled) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = "Units",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = TextPrimary,
-                    modifier = Modifier.padding(bottom = 8.dp),
-                )
-                Text(
-                    text = "Temperature",
-                    fontSize = 12.sp,
-                    color = TextSecondary,
-                    modifier = Modifier.padding(bottom = 6.dp),
-                )
-                SettingsSegmentedToggle(
-                    options = TempUnit.entries.map { it to it.label },
-                    selected = tempUnit,
-                    onSelect = {
-                        haptics.tick()
-                        viewModel.setTempUnit(it)
-                    },
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                Text(
-                    text = "Wind speed",
-                    fontSize = 12.sp,
-                    color = TextSecondary,
-                    modifier = Modifier.padding(bottom = 6.dp),
-                )
-                SettingsSegmentedToggle(
-                    options = WindUnit.entries.map { it to it.label },
-                    selected = windUnit,
-                    onSelect = {
-                        haptics.tick()
-                        viewModel.setWindUnit(it)
-                    },
-                )
+            WidgetExpandSection(visible = masterWeatherEnabled) {
+                Column {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Units",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                    Text(
+                        text = "Temperature",
+                        fontSize = 12.sp,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(bottom = 6.dp),
+                    )
+                    SettingsSegmentedToggle(
+                        options = TempUnit.entries.map { it to it.label },
+                        selected = tempUnit,
+                        onSelect = {
+                            haptics.tick()
+                            viewModel.setTempUnit(it)
+                        },
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "Wind speed",
+                        fontSize = 12.sp,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(bottom = 6.dp),
+                    )
+                    SettingsSegmentedToggle(
+                        options = WindUnit.entries.map { it to it.label },
+                        selected = windUnit,
+                        onSelect = {
+                            haptics.tick()
+                            viewModel.setWindUnit(it)
+                        },
+                    )
+                }
             }
         }
 
@@ -331,10 +366,7 @@ fun ConnectionsSettingsScreen(
                     }
                 },
                 iconTint = ServerBrand,
-                onClick = {
-                    haptics.click()
-                    onNavigateToServers()
-                },
+                onClick = onNavigateToServers,
             )
         }
     }
@@ -343,7 +375,6 @@ fun ConnectionsSettingsScreen(
 /** Where the Home tab's Coming up card reads its schedule: the t3lluz dashboard's `_stats.json`. */
 @Composable
 private fun DashboardServerSection(savedUrl: String, onSave: (String) -> Unit) {
-    val haptics = rememberHaptics()
     var draft by rememberSaveable(savedUrl) { mutableStateOf(savedUrl) }
     val cleaned = draft.trim().trimEnd('/')
     val valid = cleaned.startsWith("https://") || cleaned.startsWith("http://")
@@ -369,14 +400,11 @@ private fun DashboardServerSection(savedUrl: String, onSave: (String) -> Unit) {
         placeholder = SettingsRepository.DEFAULT_DASHBOARD_SERVER_URL,
         keyboardType = KeyboardType.Uri,
     )
-    if (cleaned != savedUrl) {
+    WidgetExpandSection(visible = cleaned != savedUrl) {
         MacroButton(
             text = if (valid) "Save server" else "Needs http:// or https://",
             enabled = valid,
-            onClick = {
-                haptics.confirm()
-                onSave(cleaned)
-            },
+            onClick = { onSave(cleaned) },
             modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
         )
     }

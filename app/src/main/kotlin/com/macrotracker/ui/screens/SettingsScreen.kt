@@ -17,7 +17,6 @@ import com.macrotracker.ui.components.ScreenHeaderSpacer
 import com.macrotracker.ui.screens.settings.SettingsCategoryGroup
 import com.macrotracker.ui.screens.settings.SettingsCategoryItem
 import com.macrotracker.ui.theme.Background
-import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.theme.AppIcons
 
 @Composable
@@ -31,8 +30,6 @@ fun SettingsScreen(
     onNavigateToWidgets: () -> Unit = {},
     onReplayTutorial: () -> Unit = {},
 ) {
-    val haptics = rememberHaptics()
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -86,7 +83,7 @@ fun SettingsScreen(
             items = listOf(
                 SettingsCategoryItem(
                     icon = AppIcons.Help,
-                    title = "Help & How-To",
+                    title = "Help & how-to",
                     summary = "Guides for logging, scanning, and widgets",
                     onClick = onNavigateToHelp,
                 ),
@@ -98,12 +95,9 @@ fun SettingsScreen(
                 ),
                 SettingsCategoryItem(
                     icon = AppIcons.GraduationCap,
-                    title = "Replay Tutorial",
+                    title = "Replay tutorial",
                     summary = "Walk through the app again",
-                    onClick = {
-                        haptics.click()
-                        onReplayTutorial()
-                    },
+                    onClick = onReplayTutorial,
                 ),
             ),
         )

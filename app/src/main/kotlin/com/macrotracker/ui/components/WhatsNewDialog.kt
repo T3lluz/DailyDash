@@ -29,7 +29,6 @@ import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.Surface as AppSurface
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
-import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.theme.AppIcons
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -38,7 +37,6 @@ fun WhatsNewDialog(
     info: WhatsNewInfo,
     onDismiss: () -> Unit,
 ) {
-    val haptics = rememberHaptics()
 
     BasicAlertDialog(onDismissRequest = onDismiss) {
         Surface(
@@ -97,10 +95,7 @@ fun WhatsNewDialog(
                 Spacer(modifier = Modifier.height(16.dp))
                 MacroButton(
                     text = "Continue",
-                    onClick = {
-                        haptics.confirm()
-                        onDismiss()
-                    },
+                    onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }

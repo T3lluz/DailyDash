@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.macrotracker.data.f1.CircuitOutline
 import com.macrotracker.ui.theme.MacroMotion
+import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.util.rememberIsResumed
 import com.macrotracker.ui.util.rememberOnScreenFraction
 import com.macrotracker.ui.util.rememberReducedMotion
@@ -46,7 +47,8 @@ import kotlin.math.min
 /** The lap is the marque's red wherever it is drawn, never whatever accent is nearby. */
 val F1MarqueRed = Color(0xFFE8002D)
 
-private val Tarmac = Color(0xFFE4E4E4)
+/** The track bed is the foreground ink, so it follows the palette. */
+private val Tarmac = TextPrimary
 
 /**
  * Stroke weights per place a circuit is drawn. A box unit is a different number of

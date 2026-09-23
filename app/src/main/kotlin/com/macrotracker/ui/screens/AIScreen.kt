@@ -384,18 +384,14 @@ private fun MacrosChatPane(
             AiChatHeader(
                 loggedCount = loggedCount,
                 loading = loading,
-                onCameraScan = {
-                    haptics.click()
-                    onNavigateToCameraScan()
-                },
+                // These land on PillButtons, which give their own haptic.
+                onCameraScan = onNavigateToCameraScan,
                 onClear = {
-                    haptics.tick()
                     viewModel.clearChat()
                     draft = ""
                     forceFollow = true
                 },
                 onCancel = {
-                    haptics.tick()
                     forceFollow = true
                     viewModel.cancelEstimate()
                 },
@@ -460,7 +456,6 @@ private fun MacrosChatPane(
                                         estimate = estimate,
                                         logged = message.estimateLogged,
                                         onLog = {
-                                            haptics.confirm()
                                             forceFollow = true
                                             viewModel.logEstimate(message.id, it)
                                         },
@@ -674,6 +669,7 @@ private fun EstimateCard(
     var editMode by remember(estimate.foodName) { mutableStateOf(false) }
     var caloriesText by remember(estimate.calories) { mutableStateOf(estimate.calories.toString()) }
     var proteinText by remember(estimate.protein) { mutableStateOf(estimate.protein.toString()) }
+    val haptics = rememberHaptics()
 
     val baseCalories = caloriesText.toIntOrNull()?.coerceAtLeast(0) ?: estimate.calories
     val baseProtein = proteinText.toIntOrNull()?.coerceAtLeast(0) ?: estimate.protein
@@ -747,7 +743,10 @@ private fun EstimateCard(
                     color = Primary,
                     modifier = Modifier
                         .clip(PillShape)
-                        .clickable { editMode = !editMode }
+                        .clickable {
+                            haptics.tick()
+                            editMode = !editMode
+                        }
                         .padding(horizontal = 8.dp, vertical = 4.dp),
                 )
             }
@@ -777,13 +776,16 @@ private fun EstimateCard(
                             .clip(PillShape)
                             .background(if (selected) SurfaceElevated else Color.Transparent)
                             .border(1.dp, if (selected) BorderStrong else Color.Transparent, PillShape)
-                            .clickable { portion = option }
+                            .clickable {
+                                if (portion != option) haptics.tick()
+                                portion = option
+                            }
                             .padding(vertical = 7.dp),
                     )
                 }
             }
 
-            AnimatedVisibility(visible = editMode) {
+            AnimatedVisibility(visible = editMode, enter = MacroMotion.expandEnter, exit = MacroMotion.expandExit) {
                 Column(modifier = Modifier.padding(top = 10.dp)) {
                     MacroTextField(
                         value = caloriesText,

@@ -53,6 +53,7 @@ import com.macrotracker.data.remote.OpenRouterModels
 import com.macrotracker.ui.components.SubScreenHeader
 import com.macrotracker.ui.components.subScreenBottomPadding
 import com.macrotracker.ui.components.ButtonVariant
+import com.macrotracker.ui.components.CardHeader
 import com.macrotracker.ui.components.MacroButton
 import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.theme.Background
@@ -130,21 +131,8 @@ fun AiSettingsScreen(
         Spacer(modifier = Modifier.height(12.dp))
 
         MacroCard(delayMs = 50) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = AppIcons.Key,
-                    contentDescription = null,
-                    tint = Primary,
-                    modifier = Modifier.size(20.dp),
-                )
-                Text(
-                    text = "  Provider",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
-                )
+            CardHeader(title = "Provider", icon = AppIcons.Key, accent = Primary) {
                 if (hasKey) {
-                    Spacer(modifier = Modifier.weight(1f))
                     Icon(
                         imageVector = AppIcons.CheckCircleFilled,
                         contentDescription = "Key saved",
@@ -183,24 +171,17 @@ fun AiSettingsScreen(
                     message = claudeMessage,
                     code = claudeCode,
                     onCodeChange = { claudeCode = it },
-                    onConnect = {
-                        haptics.tick()
-                        viewModel.startClaudeLogin()
-                    },
+                    // Each of these is a MacroButton, which already gives the haptic.
+                    onConnect = { viewModel.startClaudeLogin() },
                     onFinish = {
-                        haptics.confirm()
                         viewModel.finishClaudeLogin(claudeCode)
                         claudeCode = ""
                     },
                     onCancel = {
-                        haptics.reject()
                         viewModel.cancelClaudeLogin()
                         claudeCode = ""
                     },
-                    onDisconnect = {
-                        haptics.reject()
-                        viewModel.disconnectClaude()
-                    },
+                    onDisconnect = { viewModel.disconnectClaude() },
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
@@ -212,7 +193,7 @@ fun AiSettingsScreen(
             } else {
                 Spacer(modifier = Modifier.height(14.dp))
                 Text(
-                    text = "${aiProvider.displayName} API Key",
+                    text = "${aiProvider.displayName} API key",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = TextPrimary,
@@ -296,18 +277,17 @@ fun AiSettingsScreen(
                 MacroButton(
                     text = if (keySaved) "Saved" else "Save key",
                     onClick = {
-                        haptics.confirm()
                         viewModel.saveApiKey(aiProvider, draftKey)
                         keySaved = true
                     },
                     modifier = Modifier.weight(1f),
-                    enabled = isDirty || !hasKey,
+                    // Nothing to save when the field is empty; Clear removes a key.
+                    enabled = isDirty && draftKey.isNotBlank(),
                 )
                 if (hasKey) {
                     MacroButton(
                         text = "Clear",
                         onClick = {
-                            haptics.reject()
                             draftKey = ""
                             viewModel.saveApiKey(aiProvider, "")
                             keySaved = false
@@ -322,15 +302,12 @@ fun AiSettingsScreen(
         Spacer(modifier = Modifier.height(10.dp))
 
         MacroCard(delayMs = 100) {
-            Text(
-                text = when (aiProvider) {
-                    AiProvider.OPENROUTER -> "OpenRouter Model"
-                    AiProvider.ANTHROPIC -> "Claude Model"
-                    else -> "AI Model"
+            CardHeader(
+                title = when (aiProvider) {
+                    AiProvider.OPENROUTER -> "OpenRouter model"
+                    AiProvider.ANTHROPIC -> "Claude model"
+                    else -> "AI model"
                 },
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary,
             )
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -399,7 +376,7 @@ fun AiSettingsScreen(
                         )
                     }
                     Text(
-                        text = if (hasKey) "Active" else "No Key",
+                        text = if (hasKey) "Active" else "No key",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = if (hasKey) Success else Error,

@@ -33,6 +33,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.macrotracker.data.phone.PhoneNotificationListener
 import com.macrotracker.ui.components.PillButton
+import com.macrotracker.ui.components.WidgetExpandSection
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.ServerWarn
@@ -95,79 +96,82 @@ fun PhoneHubSettingsCard(viewModel: PhoneHubViewModel = hiltViewModel()) {
             )
         }
 
-        if (!config.enabled) return@Column
+        // Everything below follows the switch in and out instead of popping.
+        WidgetExpandSection(visible = config.enabled) {
+            Column {
+                Spacer(Modifier.height(10.dp))
+                val (dot, line) = when {
+                    status.waiting -> ServerWarn to "Another phone is paired. Accept this one on the dashboard: the phone button in its top bar."
+                    status.linked -> Success to "Live on the dashboard" + ago(status.lastReportAt, now)?.let { " · reported $it" }.orEmpty()
+                    status.lastReportAt > 0 -> Success to "Reported ${ago(status.lastReportAt, now)}"
+                    status.error != null -> ServerWarn to "Not reaching the dashboard: ${status.error}"
+                    else -> TextTertiary to "Connecting…"
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(SurfaceChrome)
+                        .border(1.dp, Border, RoundedCornerShape(10.dp))
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(dot))
+                    Spacer(Modifier.width(10.dp))
+                    Text(line, fontSize = 12.sp, color = TextSecondary, lineHeight = 16.sp, modifier = Modifier.weight(1f))
+                }
 
-        Spacer(Modifier.height(10.dp))
-        val (dot, line) = when {
-            status.waiting -> ServerWarn to "Another phone is paired. Accept this one on the dashboard: the phone button in its top bar."
-            status.linked -> Success to "Live on the dashboard" + ago(status.lastReportAt, now)?.let { " · reported $it" }.orEmpty()
-            status.lastReportAt > 0 -> Success to "Reported ${ago(status.lastReportAt, now)}"
-            status.error != null -> ServerWarn to "Not reaching the dashboard: ${status.error}"
-            else -> TextTertiary to "Connecting…"
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .background(SurfaceChrome)
-                .border(1.dp, Border, RoundedCornerShape(10.dp))
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.size(8.dp).clip(CircleShape).background(dot))
-            Spacer(Modifier.width(10.dp))
-            Text(line, fontSize = 12.sp, color = TextSecondary, lineHeight = 16.sp, modifier = Modifier.weight(1f))
-        }
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Notification access", fontSize = 14.sp, color = TextPrimary)
+                        Text(
+                            if (access) "On: notifications and media show on the dashboard, and it can answer and dismiss them"
+                            else "Needed for notifications and media controls, and to keep the phone listening when DailyDash is closed",
+                            fontSize = 12.sp,
+                            color = TextSecondary,
+                            lineHeight = 16.sp,
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    PillButton(
+                        icon = if (access) AppIcons.Settings else AppIcons.Key,
+                        label = if (access) "Manage" else "Grant",
+                        accent = HubAccent,
+                        emphasized = !access,
+                        onClick = {
+                            runCatching { context.startActivity(PhoneNotificationListener.settingsIntent(context)) }
+                        },
+                    )
+                }
 
-        Spacer(Modifier.height(10.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("Notification access", fontSize = 14.sp, color = TextPrimary)
+                Spacer(Modifier.height(12.dp))
+                Text("Share with the dashboard", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary)
+                Spacer(Modifier.height(4.dp))
+                MetricToggleRow(name = "Notifications", enabled = config.notifications, icon = AppIcons.Bell) {
+                    haptics.tick(); viewModel.update { c -> c.copy(notifications = it) }
+                }
+                MetricToggleRow(name = "Today's health", enabled = config.health, icon = AppIcons.Heart) {
+                    haptics.tick(); viewModel.update { c -> c.copy(health = it) }
+                }
+                MetricToggleRow(name = "Next events", enabled = config.calendar, icon = AppIcons.Calendar) {
+                    haptics.tick(); viewModel.update { c -> c.copy(calendar = it) }
+                }
+                MetricToggleRow(name = "Weather and place", enabled = config.location, icon = AppIcons.MapPin) {
+                    haptics.tick(); viewModel.update { c -> c.copy(location = it) }
+                }
+                MetricToggleRow(name = "Let the dashboard act on this phone", enabled = config.commands, icon = AppIcons.Bolt) {
+                    haptics.tick(); viewModel.update { c -> c.copy(commands = it) }
+                }
+                Spacer(Modifier.height(6.dp))
                 Text(
-                    if (access) "On: notifications and media show on the dashboard, and it can answer and dismiss them"
-                    else "Needed for notifications and media controls, and to keep the phone listening when DailyDash is closed",
+                    "Anything can go the other way too: share a link, a photo or some text and pick Send to desk.",
                     fontSize = 12.sp,
-                    color = TextSecondary,
+                    color = TextTertiary,
                     lineHeight = 16.sp,
                 )
             }
-            Spacer(Modifier.width(8.dp))
-            PillButton(
-                icon = if (access) AppIcons.Settings else AppIcons.Key,
-                label = if (access) "Manage" else "Grant",
-                accent = HubAccent,
-                emphasized = !access,
-                onClick = {
-                    runCatching { context.startActivity(PhoneNotificationListener.settingsIntent(context)) }
-                },
-            )
         }
-
-        Spacer(Modifier.height(12.dp))
-        Text("Share with the dashboard", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary)
-        Spacer(Modifier.height(4.dp))
-        MetricToggleRow(name = "Notifications", enabled = config.notifications, icon = AppIcons.Bell) {
-            haptics.tick(); viewModel.update { c -> c.copy(notifications = it) }
-        }
-        MetricToggleRow(name = "Today's health", enabled = config.health, icon = AppIcons.Heart) {
-            haptics.tick(); viewModel.update { c -> c.copy(health = it) }
-        }
-        MetricToggleRow(name = "Next events", enabled = config.calendar, icon = AppIcons.Calendar) {
-            haptics.tick(); viewModel.update { c -> c.copy(calendar = it) }
-        }
-        MetricToggleRow(name = "Weather and place", enabled = config.location, icon = AppIcons.MapPin) {
-            haptics.tick(); viewModel.update { c -> c.copy(location = it) }
-        }
-        MetricToggleRow(name = "Let the dashboard act on this phone", enabled = config.commands, icon = AppIcons.Bolt) {
-            haptics.tick(); viewModel.update { c -> c.copy(commands = it) }
-        }
-        Spacer(Modifier.height(6.dp))
-        Text(
-            "Anything can go the other way too: share a link, a photo or some text and pick Send to desk.",
-            fontSize = 12.sp,
-            color = TextTertiary,
-            lineHeight = 16.sp,
-        )
     }
 }
 

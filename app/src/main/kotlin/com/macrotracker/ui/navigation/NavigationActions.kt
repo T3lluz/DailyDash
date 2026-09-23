@@ -25,6 +25,11 @@ fun NavHostController.navigateToTab(route: String, restoreState: Boolean = true)
     }
 }
 
+/** Pushes a sub-screen once: a double tap on whatever opens it can't stack a second copy. */
+fun NavHostController.navigateToSubScreen(route: String) {
+    navigate(route) { launchSingleTop = true }
+}
+
 /** Pops [entry] only while it is still on top, so a double-tapped back arrow can't also pop the tab below. */
 fun NavHostController.popSubScreen(entry: NavBackStackEntry) {
     if (currentBackStackEntry?.id == entry.id) popBackStack()

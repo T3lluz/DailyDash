@@ -1936,7 +1936,7 @@ private fun SessionStrip(sessions: List<WeekendSession>, accentColor: Color) {
                 )
                 Text(
                     formatLocalTime(s.date, s.time).ifBlank { "TBC" },
-                    color = if (s.main) TextPrimary else TextPrimary.copy(alpha = 0.9f),
+                    color = TextPrimary, // the main session stands out by weight
                     fontSize = 12.sp,
                     fontWeight = if (s.main || isNext) FontWeight.Bold else FontWeight.SemiBold,
                     maxLines = 1,

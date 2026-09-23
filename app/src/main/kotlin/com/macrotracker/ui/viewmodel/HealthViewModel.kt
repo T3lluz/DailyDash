@@ -5,6 +5,7 @@ import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.macrotracker.data.health.BodyVitals
 import com.macrotracker.data.health.DailyHealthStats
 import com.macrotracker.data.health.HealthActivity
 import com.macrotracker.data.health.HealthConnectRepository
@@ -15,6 +16,8 @@ import com.macrotracker.data.local.MacroLogEntity
 import com.macrotracker.data.local.MacroRepository
 import com.macrotracker.data.local.SettingsRepository
 import com.macrotracker.ui.screens.health.MacroRangeInsights
+import com.macrotracker.ui.screens.health.SleepNight
+import com.macrotracker.ui.screens.health.buildSleepNights
 import com.macrotracker.ui.screens.health.WeekHealthInsights
 import com.macrotracker.ui.screens.health.computeMacroInsights
 import com.macrotracker.ui.screens.health.computeWeekInsights
@@ -50,6 +53,13 @@ sealed class ActivitiesUiState {
     data class Error(val message: String) : ActivitiesUiState()
 }
 
+/** Body & Vitals: loading until the first read, then whatever Health Connect had. */
+sealed class VitalsUiState {
+    data object Loading : VitalsUiState()
+    data object Unavailable : VitalsUiState()
+    data class Success(val vitals: BodyVitals) : VitalsUiState()
+}
+
 @HiltViewModel
 class HealthViewModel @Inject constructor(
     private val repository: MacroRepository,
@@ -59,6 +69,9 @@ class HealthViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "HealthViewModel"
+
+        /** How far back Trends can page, in weeks before this one. */
+        const val MAX_WEEKS_BACK = 11
     }
 
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd")
@@ -78,6 +91,30 @@ class HealthViewModel @Inject constructor(
 
     private val _healthHistory = MutableStateFlow<List<DailyHealthStats>>(emptyList())
     val healthHistory: StateFlow<List<DailyHealthStats>> = _healthHistory
+
+    /** The seven days before [healthHistory], for week-over-week deltas. */
+    private val _previousWeekHistory = MutableStateFlow<List<DailyHealthStats>>(emptyList())
+    val previousWeekHistory: StateFlow<List<DailyHealthStats>> = _previousWeekHistory
+
+    private val _vitalsState = MutableStateFlow<VitalsUiState>(VitalsUiState.Loading)
+    val vitalsState: StateFlow<VitalsUiState> = _vitalsState
+
+    /** The last two weeks of nights, oldest first, for the Sleep card. */
+    private val _sleepNights = MutableStateFlow<List<SleepNight>>(emptyList())
+    val sleepNights: StateFlow<List<SleepNight>> = _sleepNights
+
+    /** Set once the first sleep read finished, so "no nights" isn't shown while loading. */
+    private val _sleepLoaded = MutableStateFlow(false)
+    val sleepLoaded: StateFlow<Boolean> = _sleepLoaded
+
+    /** Today's steps per hour (24 entries), for the Daily Health timeline. */
+    private val _hourlySteps = MutableStateFlow<List<Long>>(emptyList())
+    val hourlySteps: StateFlow<List<Long>> = _hourlySteps
+
+    /** True while a pull-to-refresh the person started is running. */
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing
+    private var refreshGeneration = 0
 
     private val _weekInsights = MutableStateFlow<WeekHealthInsights?>(null)
     val weekInsights: StateFlow<WeekHealthInsights?> = _weekInsights
@@ -180,7 +217,7 @@ class HealthViewModel @Inject constructor(
     }
 
     fun previousWeek() {
-        if (_weeksBack.value < 2) {
+        if (_weeksBack.value < MAX_WEEKS_BACK) {
             _weeksBack.value += 1
             reloadWeekOnly()
         }
@@ -211,9 +248,25 @@ class HealthViewModel @Inject constructor(
 
     private suspend fun loadWeekHistory() {
         val (start, end) = getWeekRange()
-        val current = healthConnectRepository.readHistoryStatsBetween(start, end)
+        // One read for both weeks: the one on screen and the one before it.
+        val both = healthConnectRepository.readHistoryStatsBetween(start.minusDays(7), end)
+        val current = both.filter { !it.date.isBefore(start) }
+        _previousWeekHistory.value = both.filter { it.date.isBefore(start) }
         _healthHistory.value = current
         _weekInsights.value = computeWeekInsights(current)
+    }
+
+    /**
+     * Pull-to-refresh: re-read everything, dropping the metric cache, while
+     * the cards keep showing what they have.
+     */
+    fun refresh() {
+        val generation = ++refreshGeneration
+        _refreshing.value = true
+        loadData()
+        loadHealthConnect(silent = true, dropCache = true) {
+            if (generation == refreshGeneration) _refreshing.value = false
+        }
     }
 
     fun loadData() {
@@ -300,96 +353,155 @@ class HealthViewModel @Inject constructor(
         }
     }
 
-    fun loadHealthConnect(permissionsGranted: Boolean = false, silent: Boolean = false) {
+    fun loadHealthConnect(
+        permissionsGranted: Boolean = false,
+        silent: Boolean = false,
+        dropCache: Boolean = false,
+        onDone: () -> Unit = {},
+    ) {
         healthJob?.cancel()
         healthJob = viewModelScope.launch {
-            healthConnectRepository.beginReadCycle()
-            if (permissionsGranted) {
-                settingsRepository.setMasterHealthConnectEnabled(true)
-            }
-
-            if (!healthConnectRepository.isAvailable()) {
-                Log.w(TAG, "Health Connect not available")
-                _healthConnectState.value = HealthConnectUiState.NotAvailable
-                _activitiesState.value = ActivitiesUiState.Unavailable
-                return@launch
-            }
-
-            if (!settingsRepository.masterHealthConnectEnabled.value) {
-                _healthConnectState.value = HealthConnectUiState.PermissionRequired
-                _activitiesState.value = ActivitiesUiState.PermissionRequired
-                return@launch
-            }
-
-            val hasPerms = permissionsGranted || healthConnectRepository.hasAnyPermissions()
-            if (!hasPerms) {
-                _healthConnectState.value = HealthConnectUiState.PermissionRequired
-                _activitiesState.value = ActivitiesUiState.PermissionRequired
-                return@launch
-            }
-
-            val current = _healthConnectState.value
-            if (!silent) {
-                healthConnectRepository.clearMetricCache()
-            }
-            if (!silent || current !is HealthConnectUiState.Success) {
-                _healthConnectState.value = HealthConnectUiState.Loading
-            } else {
-                _healthConnectState.value = current.copy(isRefreshing = true)
-            }
-
             try {
-                coroutineScope {
-                    // runCatching so one failing read reports itself instead of
-                    // cancelling the workouts / week history running beside it.
-                    val statsDeferred = async { runCatching { healthConnectRepository.readTodayStats() } }
-                    val historyDeferred = async { runCatching { loadWeekHistory() } }
-                    val todaySleepDeferred = async {
-                        if (healthConnectRepository.hasPermission(HealthConnectRepository.SLEEP_PERMISSION)) {
-                            healthConnectRepository.readSleepSessions(LocalDate.now())
-                        } else {
-                            emptyList()
-                        }
-                    }
-                    val activitiesDeferred = async { loadActivitiesInternal(silent) }
-                    val statsResult = statsDeferred.await()
-                    historyDeferred.await()
-                    _todaySleepSessions.value = todaySleepDeferred.await()
-                    activitiesDeferred.await()
+                loadHealthConnectInternal(permissionsGranted, silent, dropCache)
+            } finally {
+                onDone()
+            }
+        }
+    }
 
-                    val stats = statsResult.getOrNull()
-                    when {
-                        stats == null -> {
-                            val error = statsResult.exceptionOrNull()
-                            Log.e(TAG, "Failed to read today's health stats", error)
-                            _healthConnectState.value = if (current is HealthConnectUiState.Success) {
-                                // Keep the numbers already on screen rather than zeroing them.
-                                current.copy(isRefreshing = false)
-                            } else {
-                                HealthConnectUiState.Error(
-                                    error?.message ?: "Failed to read health data",
-                                )
-                            }
-                        }
-                        // A momentary empty read shouldn't wipe a good snapshot.
-                        stats.steps == 0L && current is HealthConnectUiState.Success && current.stats.steps > 0 ->
-                            _healthConnectState.value = current.copy(isRefreshing = false)
-                        else -> _healthConnectState.value = HealthConnectUiState.Success(stats)
+    private suspend fun loadHealthConnectInternal(
+        permissionsGranted: Boolean,
+        silent: Boolean,
+        dropCache: Boolean,
+    ) {
+        healthConnectRepository.beginReadCycle()
+        if (permissionsGranted) {
+            settingsRepository.setMasterHealthConnectEnabled(true)
+        }
+
+        if (!healthConnectRepository.isAvailable()) {
+            Log.w(TAG, "Health Connect not available")
+            _healthConnectState.value = HealthConnectUiState.NotAvailable
+            _activitiesState.value = ActivitiesUiState.Unavailable
+            _vitalsState.value = VitalsUiState.Unavailable
+            _sleepLoaded.value = true
+            return
+        }
+
+        if (!settingsRepository.masterHealthConnectEnabled.value) {
+            _healthConnectState.value = HealthConnectUiState.PermissionRequired
+            _activitiesState.value = ActivitiesUiState.PermissionRequired
+            _vitalsState.value = VitalsUiState.Unavailable
+            _sleepLoaded.value = true
+            return
+        }
+
+        val hasPerms = permissionsGranted || healthConnectRepository.hasAnyPermissions()
+        if (!hasPerms) {
+            _healthConnectState.value = HealthConnectUiState.PermissionRequired
+            _activitiesState.value = ActivitiesUiState.PermissionRequired
+            _vitalsState.value = VitalsUiState.Unavailable
+            _sleepLoaded.value = true
+            return
+        }
+
+        val current = _healthConnectState.value
+        if (!silent || dropCache) {
+            healthConnectRepository.clearMetricCache()
+        }
+        if (!silent || current !is HealthConnectUiState.Success) {
+            _healthConnectState.value = HealthConnectUiState.Loading
+        } else {
+            _healthConnectState.value = current.copy(isRefreshing = true)
+        }
+
+        try {
+            coroutineScope {
+                // runCatching so one failing read reports itself instead of
+                // cancelling the workouts / week history running beside it.
+                val statsDeferred = async { runCatching { healthConnectRepository.readTodayStats() } }
+                val historyDeferred = async { runCatching { loadWeekHistory() } }
+                val todaySleepDeferred = async {
+                    if (healthConnectRepository.hasPermission(HealthConnectRepository.SLEEP_PERMISSION)) {
+                        healthConnectRepository.readSleepSessions(LocalDate.now())
+                    } else {
+                        emptyList()
                     }
                 }
-                // Detail datasets only when the HR/Sleep panel is open.
-                loadDetailedData(_selectedDate.value, detailMetric)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to read health data", e)
-                if (current !is HealthConnectUiState.Success) {
-                    _healthConnectState.value = HealthConnectUiState.Error(
-                        e.message ?: "Failed to read health data",
-                    )
-                } else {
-                    _healthConnectState.value = current.copy(isRefreshing = false)
+                val activitiesDeferred = async { loadActivitiesInternal(silent) }
+                // The newer cards read on their own so one slow or refused
+                // type never holds up (or fails) the rest of the screen.
+                val vitalsDeferred = async {
+                    try {
+                        _vitalsState.value = VitalsUiState.Success(healthConnectRepository.readBodyVitals())
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to read body & vitals", e)
+                        if (_vitalsState.value !is VitalsUiState.Success) {
+                            _vitalsState.value = VitalsUiState.Success(BodyVitals())
+                        }
+                    }
                 }
+                val nightsDeferred = async {
+                    try {
+                        _sleepNights.value = buildSleepNights(healthConnectRepository.readSleepNights())
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to read sleep nights", e)
+                    }
+                    _sleepLoaded.value = true
+                }
+                val hourlyDeferred = async {
+                    try {
+                        _hourlySteps.value = healthConnectRepository.readHourlySteps()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to read hourly steps", e)
+                    }
+                }
+                val statsResult = statsDeferred.await()
+                historyDeferred.await()
+                _todaySleepSessions.value = todaySleepDeferred.await()
+                activitiesDeferred.await()
+                vitalsDeferred.await()
+                nightsDeferred.await()
+                hourlyDeferred.await()
+
+                val stats = statsResult.getOrNull()
+                when {
+                    stats == null -> {
+                        val error = statsResult.exceptionOrNull()
+                        Log.e(TAG, "Failed to read today's health stats", error)
+                        _healthConnectState.value = if (current is HealthConnectUiState.Success) {
+                            // Keep the numbers already on screen rather than zeroing them.
+                            current.copy(isRefreshing = false)
+                        } else {
+                            HealthConnectUiState.Error(
+                                error?.message ?: "Failed to read health data",
+                            )
+                        }
+                    }
+                    // A momentary empty read shouldn't wipe a good snapshot.
+                    stats.steps == 0L && current is HealthConnectUiState.Success && current.stats.steps > 0 ->
+                        _healthConnectState.value = current.copy(isRefreshing = false)
+                    else -> _healthConnectState.value = HealthConnectUiState.Success(stats)
+                }
+            }
+            // Detail datasets only when the HR/Sleep panel is open.
+            loadDetailedData(_selectedDate.value, detailMetric)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read health data", e)
+            if (current !is HealthConnectUiState.Success) {
+                _healthConnectState.value = HealthConnectUiState.Error(
+                    e.message ?: "Failed to read health data",
+                )
+            } else {
+                _healthConnectState.value = current.copy(isRefreshing = false)
             }
         }
     }

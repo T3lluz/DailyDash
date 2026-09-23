@@ -2059,7 +2059,7 @@ private fun YouTubeSettingsSheet(
         // ── Sheet handle + title ─────────────────────────────────────────
         Column(modifier = Modifier.padding(horizontal = 20.dp).padding(top = 12.dp)) {
             ChannelSheetHeader(
-                title = "YouTube Channels",
+                title = "YouTube channels",
                 subtitle = "Subscriptions & watching list",
                 tileColor = YtRed,
                 tileIcon = AppIcons.Play,
