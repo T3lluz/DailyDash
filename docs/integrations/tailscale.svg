@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <!-- Tailscale mark: nine dots, the lit ones forming a T -->
+  <style>
+    circle { fill: #242424; }
+    @media (prefers-color-scheme: dark) {
+      circle { fill: #f0f6fc; }
+    }
+  </style>
+  <circle cx="3.6" cy="3.6" r="2.6" opacity=".2"/>
+  <circle cx="12" cy="3.6" r="2.6" opacity=".2"/>
+  <circle cx="20.4" cy="3.6" r="2.6" opacity=".2"/>
+  <circle cx="3.6" cy="12" r="2.6"/>
+  <circle cx="12" cy="12" r="2.6"/>
+  <circle cx="20.4" cy="12" r="2.6"/>
+  <circle cx="3.6" cy="20.4" r="2.6" opacity=".2"/>
+  <circle cx="12" cy="20.4" r="2.6"/>
+  <circle cx="20.4" cy="20.4" r="2.6" opacity=".2"/>
+</svg>
