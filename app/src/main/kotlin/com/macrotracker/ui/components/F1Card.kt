@@ -537,7 +537,7 @@ private fun F1CollapsedWidget(data: F1Standings) {
                 if (outline != null) {
                     // The lap is the panel's backdrop, as on the web: it paints when it
                     // comes on screen, a dim car keeps lapping, and it paints again after
-                    // scrolling fully away. The left third fades out under the words.
+                    // scrolling fully away. Its left edge softens under the words but stays visible.
                     Box(modifier = Modifier.matchParentSize().padding(vertical = 4.dp)) {
                         F1CircuitMap(
                             outline = outline,
@@ -558,9 +558,9 @@ private fun F1CollapsedWidget(data: F1Standings) {
                             .matchParentSize()
                             .background(
                                 Brush.horizontalGradient(
-                                    0.0f to com.macrotracker.ui.theme.Surface.copy(alpha = 0.9f),
-                                    0.4f to com.macrotracker.ui.theme.Surface.copy(alpha = 0.55f),
-                                    0.7f to com.macrotracker.ui.theme.Surface.copy(alpha = 0.1f),
+                                    0.0f to com.macrotracker.ui.theme.Surface.copy(alpha = 0.82f),
+                                    0.35f to com.macrotracker.ui.theme.Surface.copy(alpha = 0.38f),
+                                    0.6f to com.macrotracker.ui.theme.Surface.copy(alpha = 0.06f),
                                     1.0f to Color.Transparent,
                                 ),
                             ),
