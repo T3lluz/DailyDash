@@ -71,6 +71,11 @@ com.macrotracker/
                               5-min memory + SharedPrefs disk cache; GitHubAuthClient Device Code
                               OAuth (Custom Tabs → github.com/login/device, scopes `repo read:user`);
                               leftover PAT / BuildConfig.GITHUB_TOKEN is an optional fallback
+    upcoming/              ← UpcomingRepository: the Coming up timeline, read from the t3lluz dashboard's
+                              `_stats.json` (`rows.upcoming`: Sonarr, Radarr, Stremio, F1 sessions) plus
+                              `_f1.json` circuits. Server URL is `SettingsRepository.dashboardServerUrl`
+                              (Settings → Connections); tailnet-only, so the last good copy is kept on disk.
+                              UpcomingTimeline.kt holds the strip's rules (rest card, default focus, jumps)
     calendar/              ← CalendarRepository (READ_CALENDAR permission). All-day instances are stored
                               at UTC midnight — always convert with `calendarLocalDateTime(millis, allDay, zone)`
                               so they land on the right day
@@ -168,9 +173,11 @@ Callers must not add haptics to components that already fire their own: `MacroBu
 ### Home Screen Widgets (draggable)
 Widget order and visibility are persisted as a single colon-and-comma encoded string in SharedPrefs:
 ```
-"WEATHER:true,CALENDAR:true,BODY_STATS:true,PROGRESS:true,QUICK_ADD:true,F1:true,GITHUB:true,YOUTUBE:true,TWITCH:true"
+"WEATHER:true,CALENDAR:true,UPCOMING:true,BODY_STATS:true,PROGRESS:true,QUICK_ADD:true,F1:true,GITHUB:true,YOUTUBE:true,TWITCH:true"
 ```
 `DraggableWidgetColumn` + `WidgetEditor` read/write this via `SettingsRepository`. **`GITHUB`** is the home GitHub hub (`GitHubCard`): account-wide issues, PRs, activity, and repos for the connected GitHub user (not a single project). Connect with Device Code OAuth on the Account tab (`repo` + `read:user`).
+
+**`UPCOMING`** is Coming up (`UpcomingCard`): a Material 3 `HorizontalCenteredHeroCarousel` with `singleAdvanceFlingBehavior`, one card per entry in time order. Items are masked, not resized, so anything that grows or fades with a card reads `carouselItemDrawInfo` inside `graphicsLayer`/draw blocks (`openness()`, `followMask()`) and never in composition. Programmatic moves use `MacroMotion.carouselTravel`.
 
 The **Health screen** uses the same draggable pattern with a separate key (`healthWidgetOrder`):
 ```

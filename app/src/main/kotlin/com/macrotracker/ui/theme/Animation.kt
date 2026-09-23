@@ -120,6 +120,25 @@ object MacroMotion {
         tween(durationMs, easing = FastOutSlowInEasing)
 
     /**
+     * Coming up carousel: a programmatic move (Today, a fortnight arrow, a tap on a peek)
+     * travels the strip instead of cutting to it, for longer the further it goes.
+     * One step eases out like a release; a journey eases in too so it gathers speed
+     * rather than bolting. Same curve the t3lluz web timeline uses.
+     */
+    fun <T> carouselTravel(distance: Int): FiniteAnimationSpec<T> {
+        val far = kotlin.math.abs(distance)
+        val ms = (CAROUSEL_TRAVEL_MIN_MS + CAROUSEL_TRAVEL_PER_MS * kotlin.math.sqrt(far.toFloat()))
+            .toInt().coerceAtMost(CAROUSEL_TRAVEL_MAX_MS)
+        return tween(ms, easing = if (far > 2) CarouselJourneyEasing else CarouselStepEasing)
+    }
+
+    private const val CAROUSEL_TRAVEL_MIN_MS = 300
+    private const val CAROUSEL_TRAVEL_PER_MS = 110
+    private const val CAROUSEL_TRAVEL_MAX_MS = 1100
+    private val CarouselStepEasing = CubicBezierEasing(0.33f, 1f, 0.68f, 1f)
+    private val CarouselJourneyEasing = CubicBezierEasing(0.65f, 0f, 0.35f, 1f)
+
+    /**
      * Splash overlay — the one cinematic sequence in the app, and the only place
      * with bespoke easings. They live here, not at the call site, so
      * [MacroMotion] really is the single source for every spec.
