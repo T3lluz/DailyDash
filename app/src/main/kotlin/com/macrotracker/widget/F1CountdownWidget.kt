@@ -12,7 +12,6 @@ import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
-import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.lazy.items
@@ -33,8 +32,6 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import com.macrotracker.MainActivity
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 /**
  * F1 Countdown Widget
@@ -66,7 +63,7 @@ private fun F1CountdownRoot(data: F1WidgetData) {
 @Composable
 private fun CdTiny(d: F1WidgetData, c: F1Clr, sc: WScale) {
     Column(GlanceModifier.fillMaxSize()) {
-        CdHeader("Next GP", d, c, sc)
+        F1WidgetHeader("Next GP", d, c, sc)
         Spacer(GlanceModifier.defaultWeight())
         if (!d.hasData || d.nextRaceName == null) {
             Text(
@@ -96,7 +93,7 @@ private fun CdTiny(d: F1WidgetData, c: F1Clr, sc: WScale) {
                 if (d.nextSessionLabel != null) {
                     Spacer(GlanceModifier.height(sc.spaceXs))
                     Text(
-                        abbrev(d.nextSessionLabel),
+                        sessionAbbrev(d.nextSessionLabel),
                         style = TextStyle(fontWeight = FontWeight.Bold, fontSize = sc.fxs, color = c.sub),
                         maxLines = 1,
                     )
@@ -107,34 +104,6 @@ private fun CdTiny(d: F1WidgetData, c: F1Clr, sc: WScale) {
     }
 }
 
-// ── Shared header with inline status + refresh ────────────────────
-@Composable
-private fun CdHeader(title: String, data: F1WidgetData, c: F1Clr, sc: WScale) {
-    Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Box(GlanceModifier.width(3.dp).height(sc.flg.value.dp).cornerRadius(2.dp).background(c.red)) {}
-        Spacer(GlanceModifier.width(sc.spaceSm))
-        Text(title, style = TextStyle(fontWeight = FontWeight.Bold, fontSize = sc.flg, color = c.text), maxLines = 1)
-        Spacer(GlanceModifier.defaultWeight())
-        val statusText = statusTagText(data)
-        if (statusText.isNotBlank() && statusText != "—") {
-            Box(
-                GlanceModifier.cornerRadius(sc.btnCorner)
-                    .background(if (data.isStale) c.cardAlt else c.card)
-                    .padding(horizontal = sc.spaceSm, vertical = 2.dp),
-            ) {
-                Text(statusText, style = TextStyle(fontSize = sc.fxs, fontWeight = FontWeight.Medium,
-                    color = if (data.isStale) c.gold else c.sub), maxLines = 1)
-            }
-            Spacer(GlanceModifier.width(sc.spaceSm))
-        }
-        Box(
-            GlanceModifier.width(sc.btnSize).height(sc.btnSize).cornerRadius(sc.btnCorner)
-                .background(c.card).clickable(actionRunCallback<RefreshF1WidgetAction>()).padding(sc.btnPad),
-            contentAlignment = Alignment.Center,
-        ) { Text("↻", style = TextStyle(fontSize = sc.fmd, fontWeight = FontWeight.Bold, color = c.sub)) }
-    }
-}
-
 // ════════════════════════════════════════════════════════
 //  FULL — header + race info + giant timer + sessions
 // ════════════════════════════════════════════════════════
@@ -142,7 +111,7 @@ private fun CdHeader(title: String, data: F1WidgetData, c: F1Clr, sc: WScale) {
 private fun CdFull(d: F1WidgetData, c: F1Clr, sc: WScale) {
     val w = widgetContentWidth(sc)
     Column(GlanceModifier.fillMaxSize()) {
-        CdHeader("Next Grand Prix", d, c, sc)
+        F1WidgetHeader("Next Grand Prix", d, c, sc)
         Spacer(GlanceModifier.height(sc.spaceSm))
         if (!d.hasData || d.nextRaceName == null) {
             Spacer(GlanceModifier.defaultWeight())
@@ -205,9 +174,9 @@ private fun CdFull(d: F1WidgetData, c: F1Clr, sc: WScale) {
                                             fontSize = sc.fxs, color = c.bg))
                                     }
                                 } else if (d.nextRaceDate != null) {
-                                    val raceLocalT = fmtLocalTimeStr(d.nextRaceDate, d.nextRaceTime)
+                                    val raceLocalT = sessionLocalTime(d.nextRaceDate, d.nextRaceTime)
                                     Text(buildString {
-                                        append(fmtLongDate(d.nextRaceDate))
+                                        append(sessionLongDate(d.nextRaceDate))
                                         if (raceLocalT.isNotEmpty()) { append("  ·  Race "); append(raceLocalT) }
                                     }, style = TextStyle(fontSize = sc.fxs, color = c.sub))
                                 }
@@ -218,10 +187,10 @@ private fun CdFull(d: F1WidgetData, c: F1Clr, sc: WScale) {
                                     Text("Next: ", style = TextStyle(fontSize = sc.fxs, color = c.sub))
                                     Box(GlanceModifier.cornerRadius(3.dp).background(c.red)
                                         .padding(horizontal = 4.dp, vertical = 1.dp)) {
-                                        Text(abbrev(d.nextSessionLabel),
+                                        Text(sessionAbbrev(d.nextSessionLabel),
                                             style = TextStyle(fontWeight = FontWeight.Bold, fontSize = sc.fxs, color = c.text))
                                     }
-                                    val lt = fmtLocalTimeStr(d.nextSessionDate, d.nextSessionTime)
+                                    val lt = sessionLocalTime(d.nextSessionDate, d.nextSessionTime)
                                     if (lt.isNotEmpty()) {
                                         Spacer(GlanceModifier.width(sc.spaceXs))
                                         Text(lt, style = TextStyle(fontWeight = FontWeight.Bold, fontSize = sc.fxs, color = c.text))
@@ -403,7 +372,7 @@ private fun CdQualiGrid(d: F1WidgetData, c: F1Clr, sc: WScale, compact: Boolean 
         CdDivider(buildString {
             append("QUALIFYING GRID")
             if (d.lastRaceFlag != null) { append("  "); append(d.lastRaceFlag) }
-            if (d.lastRaceName != null) { append("  ·  "); append(cleanRaceName(d.lastRaceName).take(14)) }
+            if (d.lastRaceName != null) { append("  ·  "); append(cleanRaceName(d.lastRaceName).clip(14)) }
         }, c, sc)
         Spacer(GlanceModifier.height(sc.spaceXs))
         d.lastQualiResults.take(if (compact) 3 else 5).forEachIndexed { i, qr ->
@@ -458,7 +427,7 @@ private fun LastRacePodium(d: F1WidgetData, c: F1Clr, sc: WScale, compact: Boole
     Column(GlanceModifier.fillMaxWidth()) {
         CdDivider(buildString {
             append("LAST RACE")
-            if (d.lastRaceName != null) { append("  ·  "); append(cleanRaceName(d.lastRaceName).take(22)) }
+            if (d.lastRaceName != null) { append("  ·  "); append(cleanRaceName(d.lastRaceName).clip(22)) }
             if (d.lastRaceFlag != null) { append("  "); append(d.lastRaceFlag) }
         }, c, sc)
         Spacer(GlanceModifier.height(sc.spaceXs))
@@ -561,16 +530,16 @@ private fun CdSessionRow(s: SessionRow, c: F1Clr, sc: WScale) {
         Box(GlanceModifier.cornerRadius(3.dp)
             .background(if (s.isNext) c.red else c.pill)
             .padding(horizontal = 4.dp, vertical = 1.dp)) {
-            Text(abbrev(s.label), style = TextStyle(fontWeight = FontWeight.Bold, fontSize = sc.fxs,
+            Text(sessionAbbrev(s.label), style = TextStyle(fontWeight = FontWeight.Bold, fontSize = sc.fxs,
                 color = if (s.isNext) c.text else c.sub))
         }
         Spacer(GlanceModifier.width(sc.spaceSm))
         Text(s.label, style = TextStyle(fontWeight = if (s.isNext) FontWeight.Bold else FontWeight.Medium,
             fontSize = sc.fsm, color = tc))
         Spacer(GlanceModifier.defaultWeight())
-        val localT = fmtLocalTimeStr(s.date, s.time)
+        val localT = sessionLocalTime(s.date, s.time)
         Column(horizontalAlignment = Alignment.End) {
-            Text(fmtLongDate(s.date), style = TextStyle(fontSize = sc.fxs, color = if (s.isNext) c.text else c.sub))
+            Text(sessionLongDate(s.date), style = TextStyle(fontSize = sc.fxs, color = if (s.isNext) c.text else c.sub))
             if (localT.isNotEmpty())
                 Text(localT, style = TextStyle(fontWeight = if (s.isNext) FontWeight.Bold else FontWeight.Medium,
                     fontSize = sc.fxs, color = if (s.isNext) c.red else c.sub))
@@ -591,33 +560,3 @@ private fun CdDivider(label: String, c: F1Clr, sc: WScale) {
 // ── HELPERS ───────────────────────────────────────────────────────
 private fun isLive(d: F1WidgetData) =
     d.daysUntil == 0L && d.hoursUntil == 0L && d.minutesUntil == 0L && d.secondsUntil >= 0
-
-private fun cleanRaceName(n: String) =
-    n.removePrefix("Grand Prix of ").removePrefix("Formula 1 ").trim()
-
-private fun fmtLocalTimeStr(dateStr: String?, timeStr: String?): String {
-    if (dateStr == null || timeStr == null) return ""
-    return try {
-        val clean = timeStr.trimEnd('Z')
-        val dt = java.time.LocalDateTime.parse("${dateStr}T$clean", DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-        dt.atZone(ZoneId.of("UTC")).withZoneSameInstant(ZoneId.systemDefault())
-            .format(DateTimeFormatter.ofPattern("HH:mm"))
-    } catch (_: Exception) { "" }
-}
-
-private fun fmtLongDate(dateStr: String?): String {
-    if (dateStr == null) return ""
-    return try {
-        java.time.LocalDate.parse(dateStr)
-            .format(DateTimeFormatter.ofPattern("EEE d MMM"))
-    } catch (_: Exception) { dateStr }
-}
-
-private fun abbrev(label: String): String = when {
-    label.startsWith("Sprint Quali", ignoreCase = true) -> "SQ"
-    label.startsWith("Sprint",       ignoreCase = true) -> "SPR"
-    label.startsWith("Qualifying",   ignoreCase = true) -> "QUALI"
-    label.startsWith("Race",         ignoreCase = true) -> "RACE"
-    label.startsWith("FP",           ignoreCase = true) -> label.take(3).uppercase()
-    else -> label.take(5).uppercase()
-}

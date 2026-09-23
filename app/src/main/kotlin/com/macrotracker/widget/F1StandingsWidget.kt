@@ -1,5 +1,6 @@
 package com.macrotracker.widget
 
+import java.time.LocalDate
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
@@ -11,7 +12,6 @@ import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
-import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.lazy.items
@@ -58,41 +58,11 @@ private fun F1StandingsRoot(data: F1WidgetData) {
     }
 }
 
-// ——— Shared header ————————————————————————————————————————————————————————————————————————————————————————
-@Composable
-private fun StandingsHeader(title: String, data: F1WidgetData, c: F1Clr, sc: WScale) {
-    Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Box(GlanceModifier.width(3.dp).height(sc.flg.value.dp).cornerRadius(2.dp).background(c.red)) {}
-        Spacer(GlanceModifier.width(sc.spaceSm))
-        Text(title, style = TextStyle(fontWeight = FontWeight.Bold, fontSize = sc.flg, color = c.text), maxLines = 1)
-        Spacer(GlanceModifier.defaultWeight())
-        // Inline status tag
-        val statusText = statusTagText(data)
-        if (statusText.isNotBlank() && statusText != "—") {
-            Box(
-                GlanceModifier.cornerRadius(sc.btnCorner)
-                    .background(if (data.isStale) c.cardAlt else c.card)
-                    .padding(horizontal = sc.spaceSm, vertical = 2.dp),
-            ) {
-                Text(statusText, style = TextStyle(fontSize = sc.fxs,
-                    fontWeight = FontWeight.Medium,
-                    color = if (data.isStale) c.gold else c.sub), maxLines = 1)
-            }
-            Spacer(GlanceModifier.width(sc.spaceSm))
-        }
-        Box(
-            GlanceModifier.width(sc.btnSize).height(sc.btnSize).cornerRadius(sc.btnCorner)
-                .background(c.card).clickable(actionRunCallback<RefreshF1WidgetAction>()).padding(sc.btnPad),
-            contentAlignment = Alignment.Center,
-        ) { Text("↻", style = TextStyle(fontSize = sc.fmd, fontWeight = FontWeight.Bold, color = c.sub)) }
-    }
-}
-
 // ——— FULL —————————————————————————————————————————————————————————————————————————————————————————
 @Composable
 private fun StandingsFull(d: F1WidgetData, c: F1Clr, sc: WScale) {
     Column(GlanceModifier.fillMaxSize()) {
-        StandingsHeader("F1 Championship    ${java.time.LocalDate.now().year}", d, c, sc)
+        F1WidgetHeader("F1 Championship · ${LocalDate.now().year}", d, c, sc)
         Spacer(GlanceModifier.height(sc.spaceSm))
         if (d.driverStandings.isEmpty()) {
             Spacer(GlanceModifier.defaultWeight())
@@ -150,8 +120,7 @@ private fun LastRaceStrip(d: F1WidgetData, c: F1Clr, sc: WScale) {
                 Text(buildString {
                     append("LAST")
                     if (d.lastRaceFlag != null) { append("  "); append(d.lastRaceFlag) }
-                    if (d.lastRaceName != null) { append("  "); append(d.lastRaceName.removePrefix("Grand Prix of ")
-                        .removePrefix("Formula 1 ").take(14)) }
+                    if (d.lastRaceName != null) { append("  "); append(cleanRaceName(d.lastRaceName).clip(14)) }
                 }, style = TextStyle(fontWeight = FontWeight.Bold, fontSize = sc.fxs, color = c.sub), maxLines = 1)
             }
             Spacer(GlanceModifier.width(sc.spaceSm))
@@ -191,8 +160,7 @@ private fun QualiGridStrip(d: F1WidgetData, c: F1Clr, sc: WScale) {
                 Text(buildString {
                     append("QUALI")
                     if (d.lastRaceFlag != null) { append("  "); append(d.lastRaceFlag) }
-                    if (d.lastRaceName != null) { append("  "); append(
-                        d.lastRaceName.removePrefix("Grand Prix of ").removePrefix("Formula 1 ").take(12)) }
+                    if (d.lastRaceName != null) { append("  "); append(cleanRaceName(d.lastRaceName).clip(12)) }
                 }, style = TextStyle(fontWeight = FontWeight.Bold, fontSize = sc.fxs, color = c.sub), maxLines = 1)
             }
             Spacer(GlanceModifier.width(sc.spaceSm))
@@ -345,7 +313,7 @@ private fun DriverRow(d: DriverStandingRow, c: F1Clr, sc: WScale, showTeam: Bool
             Text(d.acronym, style = TextStyle(fontWeight = FontWeight.Bold, fontSize = sc.fsm, color = c.text))
             if (showTeam) {
                 Spacer(GlanceModifier.width(sc.spaceSm))
-                Text(d.team.take(12), style = TextStyle(fontSize = sc.fxs, color = c.sub), maxLines = 1)
+                Text(d.team.clip(12), style = TextStyle(fontSize = sc.fxs, color = c.sub), maxLines = 1)
             }
         } else {
             Column(GlanceModifier.defaultWeight()) {

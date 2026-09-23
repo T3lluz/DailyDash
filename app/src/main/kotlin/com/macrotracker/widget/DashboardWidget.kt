@@ -28,6 +28,7 @@ import androidx.glance.layout.width
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
+import androidx.glance.unit.ColorProvider
 import com.macrotracker.MainActivity
 
 /**
@@ -126,9 +127,9 @@ private fun DashFull(d: DashboardWidgetData, c: WidgetClr, sc: WScale) {
         // Domain snapshot strip
         Row(GlanceModifier.fillMaxWidth().defaultWeight()) {
             MetricChip(
-                value = if (d.hasWeatherData && d.weatherTemp != null) "${d.weatherTemp}" else "—",
+                value = if (d.hasWeatherData && d.weatherTemp != null) "${d.weatherTemp}°" else "—",
                 label = when {
-                    d.hasWeatherData -> d.weatherDescription?.replaceFirstChar { it.uppercase() }?.take(10) ?: "Weather"
+                    d.hasWeatherData -> d.weatherDescription?.replaceFirstChar { it.uppercase() } ?: "Weather"
                     d.weatherState == WidgetSourceState.NO_PERMISSION -> "No location"
                     else -> "Weather"
                 },
@@ -154,7 +155,7 @@ private fun DashFull(d: DashboardWidgetData, c: WidgetClr, sc: WScale) {
                 Spacer(GlanceModifier.width(sc.spaceSm))
                 MetricChip(
                     value = when {
-                        d.nextEventTitle != null -> d.nextEventTitle.take(10)
+                        d.nextEventTitle != null -> d.nextEventTitle
                         d.hasCalendarData -> "${d.eventsToday}"
                         else -> "—"
                     },
@@ -175,7 +176,7 @@ private fun DashFull(d: DashboardWidgetData, c: WidgetClr, sc: WScale) {
 // ——— Helpers ——————————————————————————————————————————————————————————————————————————————————————————————————————
 
 @Composable
-private fun HeroValue(value: String, sub: String, accent: androidx.glance.unit.ColorProvider, c: WidgetClr, sc: WScale) {
+private fun HeroValue(value: String, sub: String, accent: ColorProvider, c: WidgetClr, sc: WScale) {
     Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Box(GlanceModifier.width(3.dp).height((sc.fxxl.value + 2f).dp).cornerRadius(2.dp).background(accent)) {}
         Spacer(GlanceModifier.width(sc.spaceSm))
@@ -192,7 +193,7 @@ private fun InfoPill(text: String, c: WidgetClr, sc: WScale) {
         GlanceModifier.cornerRadius(sc.cornerSm).background(c.pill)
             .padding(horizontal = sc.spaceSm, vertical = 1.dp),
     ) {
-        Text(text, style = TextStyle(fontSize = sc.fxs, color = c.text))
+        Text(text, style = TextStyle(fontSize = sc.fxs, color = c.text), maxLines = 1)
     }
 }
 
