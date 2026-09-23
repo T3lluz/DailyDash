@@ -17,8 +17,8 @@ android {
         applicationId = "com.macrotracker"
         minSdk = 26
         targetSdk = 35
-        versionCode = 73
-        versionName = "1.1.73"
+        versionCode = 74
+        versionName = "1.1.74"
 
         // Read API keys from local.properties
         val localProperties = Properties()
@@ -109,7 +109,6 @@ dependencies {
     implementation(libs.compose.ui.graphics)
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
-    implementation(libs.compose.material.icons)
     implementation(libs.compose.animation)
     debugImplementation(libs.compose.ui.tooling)
 
@@ -170,7 +169,6 @@ dependencies {
     implementation(libs.glance.material3)
     
     // Installed icon library for full-app usage (Weather, UI, etc.)
-    implementation(libs.tabler.icons)
 
     // Frosted-glass blur for the floating pill nav
     implementation(libs.haze)

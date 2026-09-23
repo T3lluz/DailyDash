@@ -31,9 +31,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -84,6 +81,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.text.style.TextOverflow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.macrotracker.ui.theme.AppIcons
 
 /**
  * Every visual primitive both chat bots share.
@@ -376,7 +374,7 @@ private fun CopyChip(text: String) {
     var copied by remember(text) { mutableStateOf(false) }
     Row(modifier = Modifier.padding(top = 6.dp)) {
         SmallActionChip(
-            icon = Icons.Outlined.ContentCopy,
+            icon = AppIcons.Copy,
             label = if (copied) "Copied" else "Copy",
             onClick = {
                 scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Chat message", text))) }
@@ -505,7 +503,7 @@ fun ChatComposer(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.Send,
+                imageVector = AppIcons.Send,
                 contentDescription = "Send",
                 tint = if (canSend) OnAccent else TextSecondary,
                 modifier = Modifier.size(17.dp),

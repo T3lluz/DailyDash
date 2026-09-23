@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -27,6 +25,7 @@ import com.macrotracker.ui.theme.HeaderColor
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.rememberHaptics
+import com.macrotracker.ui.theme.AppIcons
 
 /** Bottom padding for tab content so the last card scrolls clear of the floating nav pill. */
 val TabContentBottomPadding = 120.dp
@@ -100,7 +99,7 @@ fun SubScreenHeader(
             modifier = Modifier.size(40.dp),
         ) {
             Icon(
-                imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                imageVector = AppIcons.ArrowBack,
                 contentDescription = "Back",
                 tint = TextPrimary,
             )

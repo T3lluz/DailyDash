@@ -27,15 +27,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.OpenInNew
-import androidx.compose.material.icons.outlined.AccountCircle
-import androidx.compose.material.icons.outlined.AccountTree
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.ExpandMore
-import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material.icons.outlined.NewReleases
-import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -109,6 +100,8 @@ import com.macrotracker.ui.viewmodel.GitHubAuthUiState
 import com.macrotracker.ui.viewmodel.GitHubRepoFocusUiState
 import com.macrotracker.ui.viewmodel.GitHubUiState
 import com.macrotracker.ui.viewmodel.GitHubViewModel
+import com.macrotracker.ui.theme.AppIcons
+import com.macrotracker.ui.theme.TextTertiary
 
 private val GhAccent = Color(0xFF58A6FF)
 private val GhOpen = Color(0xFF3FB950)
@@ -284,9 +277,9 @@ fun GitHubCard(
                 },
                 actions = {
                     HubHeaderAction(
-                        icon = Icons.AutoMirrored.Outlined.OpenInNew,
+                        icon = AppIcons.ExternalLink,
                         contentDescription = "Open GitHub",
-                        tint = TextSecondary.copy(alpha = 0.55f),
+                        tint = TextTertiary,
                         onClick = {
                             val url = hub?.selectedRepo?.htmlUrl ?: data?.user?.htmlUrl ?: "https://github.com"
                             context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
@@ -513,7 +506,7 @@ private fun GhTabChip(
     onClick: () -> Unit,
 ) {
     val fg by animateColorAsState(
-        if (active) TextPrimary else TextSecondary.copy(alpha = 0.75f),
+        if (active) TextPrimary else TextTertiary,
         MacroMotion.colorTween(160),
         label = "ghTabFg",
     )
@@ -759,7 +752,7 @@ private fun collapsedStats(hub: GhHub): List<GhStat> {
         selected != null -> GhStat(
             compactCount(selected.stars),
             "Stars",
-            Color(0xFFE3B341),
+            GhReview,
             R.drawable.ic_gh_star,
         )
         else -> GhStat("${hub.activity.size}", "Events", TextSecondary, R.drawable.ic_gh_commit)
@@ -1366,7 +1359,7 @@ private fun RepoPicker(
                 }
             }
             Icon(
-                Icons.Outlined.ExpandMore,
+                AppIcons.ChevronDown,
                 contentDescription = if (open) "Close repo list" else "Choose repo",
                 tint = TextSecondary,
                 modifier = Modifier.size(if (compact) 18.dp else 20.dp).rotate(rotation),
@@ -1504,7 +1497,7 @@ private fun RepoDetail(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     if (repo.isPrivate) {
-                        Icon(Icons.Outlined.Lock, null, tint = GhDraft, modifier = Modifier.size(12.dp))
+                        Icon(AppIcons.Lock, null, tint = GhDraft, modifier = Modifier.size(12.dp))
                     }
                     Text("Focused", fontSize = 11.sp, color = GhAccent, fontWeight = FontWeight.SemiBold)
                     GhRelative(repo.pushedAt ?: repo.updatedAt)
@@ -1518,7 +1511,7 @@ private fun RepoDetail(
                 modifier = Modifier.size(36.dp),
             ) {
                 Icon(
-                    Icons.AutoMirrored.Outlined.OpenInNew,
+                    AppIcons.ExternalLink,
                     contentDescription = "Open on GitHub",
                     tint = TextSecondary,
                     modifier = Modifier.size(16.dp),
@@ -1537,8 +1530,8 @@ private fun RepoDetail(
             if (!repo.language.isNullOrBlank()) {
                 MetaChip(dotColor = languageColor(repo.language), text = repo.language)
             }
-            MetaChip(icon = Icons.Outlined.Star, text = compactCount(repo.stars), color = Color(0xFFE3B341))
-            MetaChip(icon = Icons.Outlined.AccountTree, text = compactCount(repo.forks))
+            MetaChip(icon = AppIcons.Star, text = compactCount(repo.stars), color = GhReview)
+            MetaChip(icon = AppIcons.GitFork, text = compactCount(repo.forks))
             repo.defaultBranch?.let { MetaChip(text = it) }
             repo.license?.takeIf { it != "NOASSERTION" }?.let { MetaChip(text = it) }
         }
@@ -1604,7 +1597,7 @@ private fun ReleaseRow(release: GitHubRelease, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Icon(Icons.Outlined.NewReleases, null, tint = GhAccent, modifier = Modifier.size(16.dp))
+        Icon(AppIcons.Tag, null, tint = GhAccent, modifier = Modifier.size(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 release.name?.takeIf { it.isNotBlank() } ?: release.tagName,
@@ -1847,7 +1840,7 @@ private fun GitHubAccountActions(
                     LoadingSpinner(color = Color.White, size = LoadingSpec.SizeInline)
                 } else {
                     Icon(
-                        Icons.Outlined.AccountCircle,
+                        AppIcons.Account,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
                     )
@@ -1907,7 +1900,7 @@ private fun IssueRow(issue: GitHubIssue, onClick: () -> Unit) {
             issue.labels.take(2).forEach { LabelChip(it) }
             if (issue.comments > 0) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Icon(Icons.Outlined.ChatBubbleOutline, null, tint = TextSecondary, modifier = Modifier.size(11.dp))
+                    Icon(AppIcons.Chat, null, tint = TextSecondary, modifier = Modifier.size(11.dp))
                     Text("${issue.comments}", fontSize = 11.sp, color = TextSecondary)
                 }
             }
@@ -2038,16 +2031,16 @@ private fun RepoRow(repo: GitHubRepo, onClick: () -> Unit) {
                 modifier = Modifier.weight(1f),
             )
             if (repo.isPrivate) {
-                Icon(Icons.Outlined.Lock, null, tint = GhDraft, modifier = Modifier.size(13.dp))
+                Icon(AppIcons.Lock, null, tint = GhDraft, modifier = Modifier.size(13.dp))
             }
             IconButton(
                 onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, repo.htmlUrl.toUri())) },
                 modifier = Modifier.size(36.dp),
             ) {
                 Icon(
-                    Icons.AutoMirrored.Outlined.OpenInNew,
+                    AppIcons.ExternalLink,
                     contentDescription = "Open on GitHub",
-                    tint = TextSecondary.copy(alpha = 0.55f),
+                    tint = TextTertiary,
                     modifier = Modifier.size(16.dp),
                 )
             }
@@ -2068,8 +2061,8 @@ private fun RepoRow(repo: GitHubRepo, onClick: () -> Unit) {
             if (!repo.language.isNullOrBlank()) {
                 MetaChip(dotColor = languageColor(repo.language), text = repo.language)
             }
-            MetaChip(icon = Icons.Outlined.Star, text = compactCount(repo.stars), color = Color(0xFFE3B341))
-            MetaChip(icon = Icons.Outlined.AccountTree, text = compactCount(repo.forks))
+            MetaChip(icon = AppIcons.Star, text = compactCount(repo.stars), color = GhReview)
+            MetaChip(icon = AppIcons.GitFork, text = compactCount(repo.forks))
             Spacer(Modifier.weight(1f))
             GhRelative(repo.pushedAt)
         }
@@ -2118,7 +2111,7 @@ private fun MetaChip(
             text,
             fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold,
-            color = TextPrimary.copy(alpha = 0.88f),
+            color = TextPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.widthIn(max = 160.dp),
@@ -2240,7 +2233,7 @@ private fun GhAvatar(url: String?, name: String, size: Dp = 22.dp) {
 private fun GhRelative(iso: String?) {
     val instant = remember(iso) { parseGitHubInstant(iso) } ?: return
     val text = rememberRelativeTime(instant)
-    Text(text, fontSize = 11.sp, color = TextSecondary.copy(alpha = 0.85f))
+    Text(text, fontSize = 11.sp, color = TextSecondary)
 }
 
 @Composable

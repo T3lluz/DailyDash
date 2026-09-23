@@ -16,8 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
@@ -37,6 +35,7 @@ import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.LocalTickersPaused
 import com.macrotracker.ui.util.rememberHaptics
+import com.macrotracker.ui.theme.AppIcons
 
 /**
  * Unified expand/collapse bar used at the bottom of every widget.
@@ -140,7 +139,7 @@ fun WidgetExpandBar(
                     )
                 }
                 Icon(
-                    imageVector = Icons.Outlined.ExpandMore,
+                    imageVector = AppIcons.ChevronDown,
                     contentDescription = null,
                     tint = accentColor.copy(alpha = if (expanded) 0.80f else 0.65f),
                     modifier = Modifier.size(14.dp).rotate(chevronRotation),

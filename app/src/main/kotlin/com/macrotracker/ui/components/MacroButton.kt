@@ -15,7 +15,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -27,7 +26,11 @@ import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.OnAccent
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.PrimaryVariant
-import com.macrotracker.ui.theme.Surface
+import com.macrotracker.ui.theme.BorderStrong
+import com.macrotracker.ui.theme.Error
+import com.macrotracker.ui.theme.SurfaceElevated
+import com.macrotracker.ui.theme.TextTertiary
+import com.macrotracker.ui.theme.chipFill
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.util.rememberHaptics
 
@@ -53,8 +56,8 @@ fun MacroButton(
 
     val (baseBg, contentColor, borderColor) = when (variant) {
         ButtonVariant.PRIMARY -> Triple(Primary, OnAccent, Primary)
-        ButtonVariant.SECONDARY -> Triple(Surface, TextPrimary, Border)
-        ButtonVariant.DANGER -> Triple(Error, Color.White, Error)
+        ButtonVariant.SECONDARY -> Triple(SurfaceElevated, TextPrimary, BorderStrong)
+        ButtonVariant.DANGER -> Triple(Error.chipFill(), Error, Error.copy(alpha = 0.5f))
     }
 
     val bgColor by animateColorAsState(
@@ -82,8 +85,10 @@ fun MacroButton(
         colors = ButtonDefaults.buttonColors(
             containerColor = bgColor,
             contentColor = contentColor,
+            disabledContainerColor = SurfaceElevated,
+            disabledContentColor = TextTertiary,
         ),
-        border = BorderStroke(1.dp, borderColor),
+        border = BorderStroke(1.dp, if (enabled) borderColor else Border),
     ) {
         // One line, always: buttons share rows, and a wrapped label makes its button taller than its neighbour.
         Text(

@@ -29,19 +29,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CameraAlt
-import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.automirrored.filled.ShowChart
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.MonitorHeart
-import androidx.compose.material.icons.filled.ViewDay
-import androidx.compose.material.icons.outlined.BarChart
-import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -61,7 +48,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -124,6 +110,7 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle as JavaTextStyle
 import java.util.Locale
 import kotlin.math.roundToInt
+import com.macrotracker.ui.theme.AppIcons
 
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -180,14 +167,14 @@ fun HealthScreen(
 
     val defaultHealthWidgets = remember {
         listOf(
-            Triple("DAILY_HEALTH", "Daily Health", Icons.Filled.Favorite),
-            Triple("ACTIVITIES", "Activities", Icons.AutoMirrored.Filled.DirectionsWalk),
-            Triple("BODY_STATS", "Body Stats", Icons.Default.MonitorHeart),
-            Triple("HISTORY", "Weekly Trends", Icons.AutoMirrored.Filled.ShowChart),
-            Triple("SUMMARY", "Daily Summary", Icons.Default.ViewDay),
-            Triple("ADD_ENTRY", "Add Entry", Icons.Default.Add),
-            Triple("WEEK_AT_A_GLANCE", "Macro Trends", Icons.Outlined.BarChart),
-            Triple("RECENT_LOGS", "Recent Logs", Icons.AutoMirrored.Filled.List),
+            Triple("DAILY_HEALTH", "Daily Health", AppIcons.HeartFilled),
+            Triple("ACTIVITIES", "Activities", AppIcons.Walk),
+            Triple("BODY_STATS", "Body Stats", AppIcons.HeartPulse),
+            Triple("HISTORY", "Weekly Trends", AppIcons.ChartLine),
+            Triple("SUMMARY", "Daily Summary", AppIcons.Rows),
+            Triple("ADD_ENTRY", "Add Entry", AppIcons.Add),
+            Triple("WEEK_AT_A_GLANCE", "Macro Trends", AppIcons.ChartBar),
+            Triple("RECENT_LOGS", "Recent Logs", AppIcons.List),
         )
     }
     val parsedConfigs = remember(healthWidgetOrder) {
@@ -275,7 +262,7 @@ fun HealthScreen(
                 subtitle = todayFormatted,
                 trailing = {
                     IconButton(onClick = { haptics.tick(); isEditMode = !isEditMode }) {
-                        Icon(Icons.Default.Edit, contentDescription = "Edit Widgets", tint = Primary)
+                        Icon(AppIcons.Edit, contentDescription = "Edit Widgets", tint = Primary)
                     }
                 },
             )
@@ -399,7 +386,7 @@ fun HealthScreen(
                             MacroCard(delayMs = 0) {
                                 CardHeader(
                                     title = "Body Stats",
-                                    icon = Icons.Default.MonitorHeart,
+                                    icon = AppIcons.HeartPulse,
                                     accent = HealthHeartRate,
                                     modifier = Modifier.padding(bottom = 12.dp),
                                 )
@@ -431,7 +418,7 @@ fun HealthScreen(
                             // down the instant the week query returned.
                             WidgetPlaceholderCard(
                                 title = "Weekly Trends",
-                                icon = Icons.AutoMirrored.Filled.ShowChart,
+                                icon = AppIcons.ChartLine,
                                 lines = 4,
                             )
                         } else {
@@ -471,7 +458,7 @@ fun HealthScreen(
                         if (s == null) {
                             WidgetPlaceholderCard(
                                 title = "Daily Summary",
-                                icon = Icons.Default.ViewDay,
+                                icon = AppIcons.Rows,
                                 accent = Primary,
                                 minHeight = WidgetPlaceholder.CompactMinHeight,
                                 lines = 2,
@@ -481,7 +468,7 @@ fun HealthScreen(
                             MacroCard(delayMs = 100) {
                                 CardHeader(
                                     title = "Daily Summary",
-                                    icon = Icons.Default.ViewDay,
+                                    icon = AppIcons.Rows,
                                     accent = Primary,
                                     modifier = Modifier.padding(bottom = 16.dp),
                                 )
@@ -558,12 +545,12 @@ fun HealthScreen(
                         MacroCard(delayMs = 150) {
                             CardHeader(
                                 title = "Add Entry",
-                                icon = Icons.Default.Add,
+                                icon = AppIcons.Add,
                                 accent = Primary,
                                 modifier = Modifier.padding(bottom = 16.dp),
                             ) {
                                 PillButton(
-                                    icon = Icons.Outlined.CameraAlt,
+                                    icon = AppIcons.Camera,
                                     label = "Scan label",
                                     emphasized = true,
                                     onClick = {
@@ -582,7 +569,7 @@ fun HealthScreen(
                                     if (foodName.isNotEmpty()) {
                                         IconButton(onClick = { foodName = "" }) {
                                             Icon(
-                                                imageVector = Icons.Filled.Clear,
+                                                imageVector = AppIcons.Close,
                                                 contentDescription = "Clear",
                                             )
                                         }
@@ -604,7 +591,7 @@ fun HealthScreen(
                                         if (calories.isNotEmpty()) {
                                             IconButton(onClick = { calories = "" }) {
                                                 Icon(
-                                                    imageVector = Icons.Filled.Clear,
+                                                    imageVector = AppIcons.Close,
                                                     contentDescription = "Clear",
                                                 )
                                             }
@@ -621,7 +608,7 @@ fun HealthScreen(
                                         if (protein.isNotEmpty()) {
                                             IconButton(onClick = { protein = "" }) {
                                                 Icon(
-                                                    imageVector = Icons.Filled.Clear,
+                                                    imageVector = AppIcons.Close,
                                                     contentDescription = "Clear",
                                                 )
                                             }
@@ -671,7 +658,7 @@ fun HealthScreen(
                         MacroCard(delayMs = 250) {
                             CardHeader(
                                 title = "Recent Logs",
-                                icon = Icons.AutoMirrored.Filled.List,
+                                icon = AppIcons.List,
                                 modifier = Modifier.padding(bottom = 8.dp),
                             )
 
@@ -748,7 +735,7 @@ private fun MacroTrendsSection(
         MacroCard(delayMs = 70) {
             CardHeader(
                 title = "Macro Trends",
-                icon = Icons.Outlined.BarChart,
+                icon = AppIcons.ChartBar,
                 accent = barColor,
                 modifier = Modifier.padding(bottom = 10.dp),
             )
@@ -759,7 +746,8 @@ private fun MacroTrendsSection(
                     Box(
                         modifier = Modifier
                             .clip(CircleShape)
-                            .background(if (isActive) barColor else Background)
+                            .background(if (isActive) barColor.copy(alpha = 0.18f) else Background)
+                            .border(1.dp, if (isActive) barColor.copy(alpha = 0.45f) else Border, CircleShape)
                             .clickable {
                                 haptics.tick()
                                 onRangeDaysSelected(option)
@@ -770,7 +758,7 @@ private fun MacroTrendsSection(
                             "${option}d",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = if (isActive) Color.White else TextSecondary,
+                            color = if (isActive) barColor else TextSecondary,
                         )
                     }
                 }
@@ -851,7 +839,7 @@ private fun MacroTrendsSection(
 
         MacroCard(delayMs = 100) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 10.dp)) {
-                Icon(Icons.Outlined.CalendarMonth, contentDescription = null, tint = Primary, modifier = Modifier.size(18.dp))
+                Icon(AppIcons.CalendarDays, contentDescription = null, tint = Primary, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 val displayDate = try {
                     LocalDate.parse(selectedDate).format(DateTimeFormatter.ofPattern("EEEE, MMM d"))

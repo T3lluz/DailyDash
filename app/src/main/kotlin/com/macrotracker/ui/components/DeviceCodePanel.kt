@@ -18,10 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.OpenInNew
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -51,6 +47,7 @@ import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.rememberHaptics
 import kotlinx.coroutines.delay
+import com.macrotracker.ui.theme.AppIcons
 
 /**
  * OAuth device-code step shared by the Twitch and GitHub hubs: the code (copied as soon as
@@ -122,7 +119,7 @@ fun DeviceCodePanel(
                 fontFamily = FontFamily.Monospace,
             )
             Icon(
-                imageVector = if (copied) Icons.Filled.Check else Icons.Outlined.ContentCopy,
+                imageVector = if (copied) AppIcons.Check else AppIcons.Copy,
                 contentDescription = if (copied) "Copied" else "Copy code",
                 tint = if (copied) Success else accent,
                 modifier = Modifier.size(18.dp),
@@ -151,7 +148,7 @@ fun DeviceCodePanel(
                 shape = shape,
                 contentPadding = padding,
             ) {
-                Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
+                Icon(AppIcons.ExternalLink, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text("Open $service", fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }

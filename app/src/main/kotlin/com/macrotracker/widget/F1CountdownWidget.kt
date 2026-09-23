@@ -32,6 +32,10 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import com.macrotracker.MainActivity
+import androidx.glance.Image
+import androidx.glance.ImageProvider
+import androidx.glance.ColorFilter
+import com.macrotracker.R
 
 /**
  * F1 Countdown Widget

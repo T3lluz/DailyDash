@@ -81,7 +81,7 @@ object WidgetUpdater {
 
     /**
      * User-requested dashboard refresh: clear location/weather caches, refetch a
-     * fresh GPS fix + live forecast, then re-render so the ↻ button updates to
+     * fresh GPS fix + live forecast, then re-render so the refresh button updates to
      * the current location immediately.
      */
     suspend fun forceRefreshDashboardWidgets(context: Context) {

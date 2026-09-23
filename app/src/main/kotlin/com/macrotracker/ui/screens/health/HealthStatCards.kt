@@ -22,9 +22,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.annotation.DrawableRes
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowDownward
-import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -48,6 +45,7 @@ import com.macrotracker.ui.components.HealthMetricUiState
 import com.macrotracker.ui.components.calculatePercentageChange
 import java.text.DecimalFormat
 import kotlin.math.abs
+import com.macrotracker.ui.theme.AppIcons
 
 @Composable
 fun HealthStatCard(
@@ -150,7 +148,7 @@ fun HealthStatCard(
 fun HealthPercentageChange(percentage: Double) {
     val isPositive = percentage >= 0
     val color = if (isPositive) Success else Error
-    val icon = if (isPositive) Icons.Outlined.ArrowUpward else Icons.Outlined.ArrowDownward
+    val icon = if (isPositive) AppIcons.ArrowUp else AppIcons.ArrowDown
     val formatter = DecimalFormat("0.0'%'")
 
     Row(

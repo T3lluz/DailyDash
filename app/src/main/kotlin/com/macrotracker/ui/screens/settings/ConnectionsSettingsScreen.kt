@@ -13,18 +13,12 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.Cloud
-import androidx.compose.material.icons.outlined.Dns
-import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -39,12 +33,16 @@ import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.screens.health.HealthMetric
 import com.macrotracker.ui.screens.health.iconRes
 import com.macrotracker.ui.theme.Background
+import com.macrotracker.ui.theme.CalendarBrand
+import com.macrotracker.ui.theme.HealthConnectBrand
+import com.macrotracker.ui.theme.WeatherBrand
 import com.macrotracker.ui.theme.ServerBrand
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.ServerViewModel
 import com.macrotracker.ui.viewmodel.SettingsViewModel
+import com.macrotracker.ui.theme.AppIcons
 
 @Composable
 fun ConnectionsSettingsScreen(
@@ -110,11 +108,11 @@ fun ConnectionsSettingsScreen(
 
         MacroCard(delayMs = 50) {
             ConnectionRow(
-                icon = Icons.Outlined.FavoriteBorder,
+                icon = AppIcons.Heart,
                 name = "Health Connect",
                 description = "Steps, heart rate, sleep, workouts & active calories",
                 connected = healthConnectAvailable,
-                iconTint = Color(0xFFEF5350),
+                iconTint = HealthConnectBrand,
                 enabled = masterHealthConnectEnabled,
                 onToggle = {
                     haptics.tick()
@@ -210,11 +208,11 @@ fun ConnectionsSettingsScreen(
 
         MacroCard(delayMs = 80) {
             ConnectionRow(
-                icon = Icons.Outlined.Cloud,
+                icon = AppIcons.Cloud,
                 name = "Weather Data",
                 description = "Location-based weather via Yr.no",
                 connected = weatherConnected,
-                iconTint = Color(0xFF42A5F5),
+                iconTint = WeatherBrand,
                 enabled = masterWeatherEnabled,
                 onToggle = {
                     haptics.tick()
@@ -267,11 +265,11 @@ fun ConnectionsSettingsScreen(
 
         MacroCard(delayMs = 110) {
             ConnectionRow(
-                icon = Icons.Outlined.CalendarMonth,
+                icon = AppIcons.CalendarDays,
                 name = "Google Calendar",
                 description = "Today's events & schedule on dashboard",
                 connected = calendarConnected,
-                iconTint = Color(0xFF4285F4),
+                iconTint = CalendarBrand,
                 enabled = masterCalendarEnabled,
                 onToggle = { enabled ->
                     haptics.tick()
@@ -292,7 +290,7 @@ fun ConnectionsSettingsScreen(
 
         MacroCard(delayMs = 140) {
             SettingsCategoryRow(
-                icon = Icons.Outlined.Dns,
+                icon = AppIcons.Server,
                 title = "Servers",
                 summary = when {
                     serverProfiles.isEmpty() ->

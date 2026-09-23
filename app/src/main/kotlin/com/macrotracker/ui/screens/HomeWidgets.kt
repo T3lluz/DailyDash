@@ -13,15 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.DirectionsWalk
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.Bedtime
-import androidx.compose.material.icons.outlined.FitnessCenter
-import androidx.compose.material.icons.outlined.LocalFireDepartment
-import androidx.compose.material.icons.outlined.MonitorHeart
-import androidx.compose.material.icons.outlined.Restaurant
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -72,6 +63,7 @@ import com.macrotracker.ui.util.LastUpdatedText
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.HomeHealthState
 import com.macrotracker.ui.viewmodel.HomeViewModel
+import com.macrotracker.ui.theme.AppIcons
 
 @Composable
 fun HomeWidgetItem(
@@ -172,7 +164,7 @@ private fun HomeCalendarWidget(
 @Composable
 private fun HomeBodyStatsWidget(viewModel: HomeViewModel, isVisible: Boolean) {
     if (!isVisible) {
-        WidgetPlaceholderCard(title = "Body Stats", icon = Icons.Outlined.MonitorHeart, accent = HealthHeartRate)
+        WidgetPlaceholderCard(title = "Body Stats", icon = AppIcons.HeartPulse, accent = HealthHeartRate)
         return
     }
     val healthState by viewModel.healthState.collectAsState()
@@ -182,7 +174,7 @@ private fun HomeBodyStatsWidget(viewModel: HomeViewModel, isVisible: Boolean) {
             MacroCard {
                 CardHeader(
                     title = "Body Stats",
-                    icon = Icons.Outlined.MonitorHeart,
+                    icon = AppIcons.HeartPulse,
                     accent = HealthHeartRate,
                     subtitle = "via Health Connect",
                     modifier = Modifier.padding(bottom = 12.dp),
@@ -202,25 +194,25 @@ private fun HomeBodyStatsWidget(viewModel: HomeViewModel, isVisible: Boolean) {
 
                 val homeMetrics = listOf(
                     Pair(
-                        MetricInfo("Steps", "", Icons.AutoMirrored.Outlined.DirectionsWalk, HealthSteps),
+                        MetricInfo("Steps", "", AppIcons.Walk, HealthSteps),
                         HealthMetricUiState(value = "%,d".format(stats.steps), isEnabled = true),
                     ),
                     Pair(
-                        MetricInfo("Avg HR", "bpm", Icons.Outlined.MonitorHeart, HealthHeartRate),
+                        MetricInfo("Avg HR", "bpm", AppIcons.HeartPulse, HealthHeartRate),
                         HealthMetricUiState(
                             value = if (stats.avgHeartRate > 0) "${stats.avgHeartRate}" else "—",
                             isEnabled = true,
                         ),
                     ),
                     Pair(
-                        MetricInfo("Sleep", "", Icons.Outlined.Bedtime, HealthSleep),
+                        MetricInfo("Sleep", "", AppIcons.Moon, HealthSleep),
                         HealthMetricUiState(value = sleepDisplay, isEnabled = true),
                     ),
                     Pair(
                         MetricInfo(
                             if (stats.activeCaloriesBurned > 0) "Active" else "Total Cal",
                             "kcal",
-                            Icons.Outlined.LocalFireDepartment,
+                            AppIcons.Flame,
                             HealthMove,
                         ),
                         HealthMetricUiState(
@@ -239,13 +231,13 @@ private fun HomeBodyStatsWidget(viewModel: HomeViewModel, isVisible: Boolean) {
             }
         }
         is HomeHealthState.Loading -> {
-            WidgetPlaceholderCard(title = "Body Stats", icon = Icons.Outlined.MonitorHeart, accent = HealthHeartRate)
+            WidgetPlaceholderCard(title = "Body Stats", icon = AppIcons.HeartPulse, accent = HealthHeartRate)
         }
         HomeHealthState.Unavailable -> {
             MacroCard {
                 CardHeader(
                     title = "Body Stats",
-                    icon = Icons.Outlined.MonitorHeart,
+                    icon = AppIcons.HeartPulse,
                     accent = HealthHeartRate,
                     modifier = Modifier.padding(bottom = 4.dp),
                 )
@@ -271,7 +263,7 @@ private fun HomeProgressWidget(
     val s = summary ?: run {
         WidgetPlaceholderCard(
             title = "Today's Progress",
-            icon = Icons.Outlined.Restaurant,
+            icon = AppIcons.Restaurant,
             accent = Primary,
             minHeight = WidgetPlaceholder.CompactMinHeight,
             lines = 2,
@@ -282,7 +274,7 @@ private fun HomeProgressWidget(
     MacroCard {
         CardHeader(
             title = "Today's Progress",
-            icon = Icons.Outlined.Restaurant,
+            icon = AppIcons.Restaurant,
             accent = Primary,
             modifier = Modifier.padding(bottom = 12.dp),
         ) {
@@ -301,7 +293,7 @@ private fun HomeProgressWidget(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Icon(
-                    Icons.Outlined.LocalFireDepartment,
+                    AppIcons.Flame,
                     contentDescription = null,
                     tint = if (s.totalCalories > s.calorieGoal) Error else Primary,
                     modifier = Modifier.size(24.dp),
@@ -328,7 +320,7 @@ private fun HomeProgressWidget(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Icon(
-                    Icons.Outlined.FitnessCenter,
+                    AppIcons.Dumbbell,
                     contentDescription = null,
                     tint = Secondary,
                     modifier = Modifier.size(24.dp),
@@ -355,7 +347,7 @@ private fun HomeProgressWidget(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Icon(
-                    Icons.Outlined.Restaurant,
+                    AppIcons.Restaurant,
                     contentDescription = null,
                     tint = Primary,
                     modifier = Modifier.size(24.dp),
@@ -409,7 +401,7 @@ private fun HomeQuickAddWidget(
     MacroCard {
         CardHeader(
             title = "Quick Add",
-            icon = Icons.Outlined.Add,
+            icon = AppIcons.Add,
             accent = Primary,
             modifier = Modifier.padding(bottom = 12.dp),
         )
@@ -422,7 +414,7 @@ private fun HomeQuickAddWidget(
                 if (quickFood.isNotEmpty()) {
                     IconButton(onClick = { onQuickFoodChange("") }) {
                         Icon(
-                            imageVector = Icons.Default.Clear,
+                            imageVector = AppIcons.Close,
                             contentDescription = "Clear",
                         )
                     }
@@ -444,7 +436,7 @@ private fun HomeQuickAddWidget(
                     if (quickCalories.isNotEmpty()) {
                         IconButton(onClick = { onQuickCaloriesChange("") }) {
                             Icon(
-                                imageVector = Icons.Default.Clear,
+                                imageVector = AppIcons.Close,
                                 contentDescription = "Clear",
                             )
                         }
@@ -461,7 +453,7 @@ private fun HomeQuickAddWidget(
                     if (quickProtein.isNotEmpty()) {
                         IconButton(onClick = { onQuickProteinChange("") }) {
                             Icon(
-                                imageVector = Icons.Default.Clear,
+                                imageVector = AppIcons.Close,
                                 contentDescription = "Clear",
                             )
                         }

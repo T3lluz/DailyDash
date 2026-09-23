@@ -12,9 +12,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Switch
@@ -33,6 +30,7 @@ import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.rememberHaptics
+import com.macrotracker.ui.theme.AppIcons
 
 data class WidgetConfig(val id: String, val label: String, val isVisible: Boolean, val icon: ImageVector)
 
@@ -90,7 +88,7 @@ fun WidgetEditor(
                 color = TextPrimary,
             )
             IconButton(onClick = onClose) {
-                Icon(Icons.Default.Check, contentDescription = "Done", tint = Primary)
+                Icon(AppIcons.Check, contentDescription = "Done", tint = Primary)
             }
         }
         Text(
@@ -118,7 +116,7 @@ fun WidgetEditor(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    imageVector = Icons.Default.DragHandle,
+                    imageVector = AppIcons.GripHorizontal,
                     contentDescription = "Drag to reorder",
                     tint = if (isDragging) Primary else TextSecondary,
                     modifier = Modifier

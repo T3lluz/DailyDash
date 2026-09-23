@@ -10,7 +10,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * Manual refresh for the dashboard widgets (Dashboard, Macros, Health, Weather,
- * Calendar), triggered by the ↻ button in [WidgetHeader].
+ * Calendar), triggered by the refresh button in [WidgetHeader].
  *
  * Re-reads every local source and forces a fresh location + forecast. It is
  * shared by all five widgets, so the feedback has to be about the refresh, not

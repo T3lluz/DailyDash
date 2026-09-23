@@ -12,18 +12,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.Dns
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Flag
-import androidx.compose.material.icons.filled.MonitorHeart
-import androidx.compose.material.icons.filled.PieChart
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -70,6 +58,7 @@ import com.macrotracker.ui.viewmodel.TwitchViewModel
 import com.macrotracker.ui.viewmodel.YouTubeViewModel
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import com.macrotracker.ui.theme.AppIcons
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -94,16 +83,16 @@ fun HomeScreen(
 
     val defaultHomeWidgets = remember {
         listOf(
-            Triple("F1", "Formula 1", Icons.Default.Flag),
-            Triple("GITHUB", "GitHub", Icons.Default.Code),
-            Triple("SERVERS", "Servers", Icons.Default.Dns),
-            Triple("YOUTUBE", "YouTube Feed", Icons.Default.PlayArrow),
-            Triple("TWITCH", "Twitch Live", Icons.Default.Videocam),
-            Triple("WEATHER", "Weather", Icons.Default.Cloud),
-            Triple("CALENDAR", "Calendar", Icons.Default.CalendarMonth),
-            Triple("BODY_STATS", "Body Stats", Icons.Default.MonitorHeart),
-            Triple("PROGRESS", "Today's Progress", Icons.Default.PieChart),
-            Triple("QUICK_ADD", "Quick Add", Icons.Default.Add),
+            Triple("F1", "Formula 1", AppIcons.Flag),
+            Triple("GITHUB", "GitHub", AppIcons.Code),
+            Triple("SERVERS", "Servers", AppIcons.Server),
+            Triple("YOUTUBE", "YouTube Feed", AppIcons.Play),
+            Triple("TWITCH", "Twitch Live", AppIcons.Video),
+            Triple("WEATHER", "Weather", AppIcons.Cloud),
+            Triple("CALENDAR", "Calendar", AppIcons.CalendarDays),
+            Triple("BODY_STATS", "Body Stats", AppIcons.HeartPulse),
+            Triple("PROGRESS", "Today's Progress", AppIcons.ChartPie),
+            Triple("QUICK_ADD", "Quick Add", AppIcons.Add),
         )
     }
 
@@ -293,7 +282,7 @@ fun HomeScreen(
                     subtitle = todayFormatted,
                     trailing = {
                         IconButton(onClick = { haptics.tick(); isEditMode = !isEditMode }) {
-                            Icon(Icons.Default.Edit, contentDescription = "Edit Widgets", tint = Primary)
+                            Icon(AppIcons.Edit, contentDescription = "Edit Widgets", tint = Primary)
                         }
                     },
                 )

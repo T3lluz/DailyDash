@@ -14,8 +14,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,6 +27,7 @@ import com.macrotracker.ui.theme.Surface
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.rememberHaptics
+import com.macrotracker.ui.theme.AppIcons
 
 @Composable
 fun MacroLogItem(
@@ -80,7 +79,7 @@ fun MacroLogItem(
                 ),
             ) {
                 Icon(
-                    imageVector = Icons.Default.Close,
+                    imageVector = AppIcons.Close,
                     contentDescription = "Delete",
                     modifier = Modifier.size(18.dp),
                 )

@@ -21,12 +21,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Checkroom
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
-import androidx.compose.material.icons.outlined.LocationOff
-import androidx.compose.material.icons.outlined.LocationOn
-import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -45,6 +39,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -63,10 +58,18 @@ import com.macrotracker.data.remote.WindUnit
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.Primary
+import com.macrotracker.ui.theme.TextPrimary
+import com.macrotracker.ui.theme.NutritionCalories
+import com.macrotracker.ui.theme.Surface
+import com.macrotracker.ui.theme.TextSecondary
+import com.macrotracker.ui.theme.TextTertiary
+import com.macrotracker.ui.theme.WeatherRain
+import com.macrotracker.ui.theme.WeatherSun
 import com.macrotracker.ui.util.LastUpdatedText
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.WeatherUiState
 import java.util.Locale
+import com.macrotracker.ui.theme.AppIcons
 
 private enum class TimeOfDay { DAY, NIGHT, TWILIGHT }
 
@@ -76,125 +79,14 @@ private fun parseTimeOfDay(symbolCode: String): TimeOfDay = when {
     else -> TimeOfDay.DAY
 }
 
+/** Cursor-dark card with a faint glow of the condition's accent in the leading corner. */
 private fun weatherGradient(symbolCode: String): Brush {
-    val base = symbolCode
-        .replace("_day", "")
-        .replace("_night", "")
-        .replace("_polartwilight", "")
-    val tod = parseTimeOfDay(symbolCode)
-
-    return when {
-        base == "clearsky" -> when (tod) {
-            TimeOfDay.DAY -> Brush.linearGradient(
-                colors = listOf(Color(0xFF1565C0), Color(0xFF42A5F5), Color(0xFF81D4FA)),
-            )
-            TimeOfDay.NIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF141414), Color(0xFF181818), Color(0xFF1F2433)),
-            )
-            TimeOfDay.TWILIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF1A237E), Color(0xFF4A148C), Color(0xFFE65100)),
-            )
-        }
-        base == "fair" -> when (tod) {
-            TimeOfDay.DAY -> Brush.linearGradient(
-                colors = listOf(Color(0xFF1976D2), Color(0xFF42A5F5), Color(0xFF90CAF9)),
-            )
-            TimeOfDay.NIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF141414), Color(0xFF181818), Color(0xFF222830)),
-            )
-            TimeOfDay.TWILIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF283593), Color(0xFF5C3D8F), Color(0xFFBF360C)),
-            )
-        }
-        base.startsWith("partlycloudy") -> when (tod) {
-            TimeOfDay.DAY -> Brush.linearGradient(
-                colors = listOf(Color(0xFF37474F), Color(0xFF546E7A), Color(0xFF78909C)),
-            )
-            TimeOfDay.NIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF141414), Color(0xFF181818), Color(0xFF23282E)),
-            )
-            TimeOfDay.TWILIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF1A2040), Color(0xFF37474F), Color(0xFF5D4037)),
-            )
-        }
-        base == "cloudy" -> when (tod) {
-            TimeOfDay.DAY -> Brush.linearGradient(
-                colors = listOf(Color(0xFF37474F), Color(0xFF455A64), Color(0xFF607D8B)),
-            )
-            TimeOfDay.NIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF141414), Color(0xFF181818), Color(0xFF1F1F1F)),
-            )
-            TimeOfDay.TWILIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF1A1A2E), Color(0xFF37474F), Color(0xFF4E342E)),
-            )
-        }
-        base == "fog" -> when (tod) {
-            TimeOfDay.DAY -> Brush.linearGradient(
-                colors = listOf(Color(0xFF455A64), Color(0xFF607D8B), Color(0xFF78909C)),
-            )
-            TimeOfDay.NIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF181818), Color(0xFF1A1A1A), Color(0xFF2A2A2A)),
-            )
-            TimeOfDay.TWILIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF2E2E3A), Color(0xFF455A64), Color(0xFF5D4037)),
-            )
-        }
-        base.contains("thunder") -> when (tod) {
-            TimeOfDay.DAY -> Brush.linearGradient(
-                colors = listOf(Color(0xFF1A1530), Color(0xFF311B92), Color(0xFF4A148C)),
-            )
-            TimeOfDay.NIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF141414), Color(0xFF181818), Color(0xFF221C28)),
-            )
-            TimeOfDay.TWILIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF1A1530), Color(0xFF2D1F4A), Color(0xFF4E342E)),
-            )
-        }
-        base.contains("rain") -> when (tod) {
-            TimeOfDay.DAY -> Brush.linearGradient(
-                colors = listOf(Color(0xFF263238), Color(0xFF37474F), Color(0xFF455A64)),
-            )
-            TimeOfDay.NIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF141414), Color(0xFF181818), Color(0xFF1C2228)),
-            )
-            TimeOfDay.TWILIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF1A2030), Color(0xFF2E3545), Color(0xFF3E2723)),
-            )
-        }
-        base.contains("sleet") -> when (tod) {
-            TimeOfDay.DAY -> Brush.linearGradient(
-                colors = listOf(Color(0xFF37474F), Color(0xFF455A64), Color(0xFF546E7A)),
-            )
-            TimeOfDay.NIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF141414), Color(0xFF181818), Color(0xFF22262C)),
-            )
-            TimeOfDay.TWILIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF1A2530), Color(0xFF37474F), Color(0xFF4E342E)),
-            )
-        }
-        base.contains("snow") -> when (tod) {
-            TimeOfDay.DAY -> Brush.linearGradient(
-                colors = listOf(Color(0xFF37474F), Color(0xFF546E7A), Color(0xFF78909C)),
-            )
-            TimeOfDay.NIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF141414), Color(0xFF1A1A1A), Color(0xFF242830)),
-            )
-            TimeOfDay.TWILIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF1A2030), Color(0xFF37474F), Color(0xFF4E342E)),
-            )
-        }
-        else -> when (tod) {
-            TimeOfDay.DAY -> Brush.linearGradient(
-                colors = listOf(Color(0xFF1565C0), Color(0xFF1976D2), Color(0xFF42A5F5)),
-            )
-            TimeOfDay.NIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF141414), Color(0xFF181818), Color(0xFF1A1A1A)),
-            )
-            TimeOfDay.TWILIGHT -> Brush.linearGradient(
-                colors = listOf(Color(0xFF1A237E), Color(0xFF311B92), Color(0xFFBF360C)),
-            )
-        }
-    }
+    val glow = weatherAccentColor(symbolCode)
+    return Brush.linearGradient(
+        0f to glow.copy(alpha = 0.16f).compositeOver(Surface),
+        0.6f to Surface,
+        1f to Surface,
+    )
 }
 
 private fun weatherAccentColor(symbolCode: String): Color {
@@ -216,19 +108,19 @@ private fun weatherAccentColor(symbolCode: String): Color {
             TimeOfDay.TWILIGHT -> Color(0xFFFFAB91)
         }
         base.startsWith("partlycloudy") -> when (tod) {
-            TimeOfDay.DAY -> Color(0xFF90CAF9)
+            TimeOfDay.DAY -> WeatherRain
             TimeOfDay.NIGHT -> Color(0xFF78909C)
             TimeOfDay.TWILIGHT -> Color(0xFFCE93D8)
         }
         base == "cloudy" -> when (tod) {
             TimeOfDay.DAY -> Color(0xFF90A4AE)
-            TimeOfDay.NIGHT -> Color(0xFF546E7A)
-            TimeOfDay.TWILIGHT -> Color(0xFF8D6E63)
+            TimeOfDay.NIGHT -> Color(0xFF90A4AE)
+            TimeOfDay.TWILIGHT -> Color(0xFFBCAAA4)
         }
         base == "fog" -> when (tod) {
             TimeOfDay.DAY -> Color(0xFFB0BEC5)
             TimeOfDay.NIGHT -> Color(0xFF78909C)
-            TimeOfDay.TWILIGHT -> Color(0xFFA1887F)
+            TimeOfDay.TWILIGHT -> Color(0xFFBCAAA4)
         }
         base.contains("thunder") -> when (tod) {
             TimeOfDay.DAY -> Color(0xFFCE93D8)
@@ -237,7 +129,7 @@ private fun weatherAccentColor(symbolCode: String): Color {
         }
         base.contains("rain") -> when (tod) {
             TimeOfDay.DAY -> Color(0xFF64B5F6)
-            TimeOfDay.NIGHT -> Color(0xFF5C6BC0)
+            TimeOfDay.NIGHT -> Color(0xFF8C9EFF)
             TimeOfDay.TWILIGHT -> Color(0xFF7986CB)
         }
         base.contains("snow") -> when (tod) {
@@ -253,7 +145,7 @@ private fun weatherAccentColor(symbolCode: String): Color {
     }
 }
 
-private val LocationAccent = Color(0xFF4CAF50)
+private val LocationAccent = Primary
 
 // Stable discriminant so AnimatedContent only transitions between loading/success/error —
 // not on every internal field change within a Success state.
@@ -310,7 +202,7 @@ fun WeatherCard(
                         .padding(vertical = 6.dp),
                     shape = MacroCardShape,
                     colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-                    border = BorderStroke(1.dp, Border.copy(alpha = 0.5f)),
+                    border = BorderStroke(1.dp, Border),
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                 ) {
                     Box(
@@ -330,20 +222,20 @@ fun WeatherCard(
                                 // Left: title + location stacked, timestamp below
                                 Column(modifier = Modifier.weight(1f)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        CardTitle("Weather", color = Color.White)
+                                        CardTitle("Weather")
                                         if (weather.locationName.isNotBlank()) {
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Icon(
-                                                if (successState.isPrecise) Icons.Outlined.LocationOn else Icons.Outlined.LocationOff,
+                                                if (successState.isPrecise) AppIcons.MapPin else AppIcons.MapPinOff,
                                                 contentDescription = null,
-                                                tint = if (successState.isPrecise) accent else Color.White.copy(alpha = 0.5f),
+                                                tint = if (successState.isPrecise) accent else TextTertiary,
                                                 modifier = Modifier.size(14.dp),
                                             )
                                             Spacer(modifier = Modifier.width(2.dp))
                                             Text(
                                                 weather.locationName,
                                                 fontSize = 12.sp,
-                                                color = Color.White.copy(alpha = 0.7f),
+                                                color = TextSecondary,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis,
                                             )
@@ -351,7 +243,7 @@ fun WeatherCard(
                                     }
                                     LastUpdatedText(
                                         lastUpdatedAt = successState.lastUpdatedAt,
-                                        color = Color.White.copy(alpha = 0.9f),
+                                        color = TextPrimary,
                                     )
                                 }
                                 // Right: refresh + chevron
@@ -360,7 +252,7 @@ fun WeatherCard(
                                     horizontalArrangement = Arrangement.spacedBy(0.dp),
                                 ) {
                                     IconButton(onClick = onRetry, modifier = Modifier.size(36.dp)) {
-                                        Icon(Icons.Outlined.Refresh, contentDescription = "Refresh", tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(18.dp))
+                                        Icon(AppIcons.Refresh, contentDescription = "Refresh", tint = TextSecondary, modifier = Modifier.size(18.dp))
                                     }
                                     WidgetExpandChevron(
                                         expanded = expanded,
@@ -369,7 +261,7 @@ fun WeatherCard(
                                             expanded = !expanded
                                             if (!wasExpanded) haptics.toggleOn() else haptics.toggleOff()
                                         },
-                                        accentColor = Color.White,
+                                        accentColor = TextPrimary,
                                     )
                                 }
                             }
@@ -386,12 +278,12 @@ fun WeatherCard(
                                         .background(Color.White.copy(alpha = 0.12f))
                                         .padding(horizontal = 10.dp, vertical = 8.dp),
                                 ) {
-                                    Icon(Icons.Outlined.LocationOff, contentDescription = null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(14.dp))
+                                    Icon(AppIcons.MapPinOff, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(14.dp))
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         "Approximate location — tap to enable precise location",
                                         fontSize = 12.sp,
-                                        color = Color.White.copy(alpha = 0.75f),
+                                        color = TextSecondary,
                                         modifier = Modifier.weight(1f),
                                     )
                                 }
@@ -416,12 +308,12 @@ fun WeatherCard(
                                         WeatherUnits.formatTemp(weather.temperature, tempUnit),
                                         fontSize = 36.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = Color.White,
+                                        color = TextPrimary,
                                     )
                                     Text(
                                         weather.description,
                                         fontSize = 15.sp,
-                                        color = Color.White.copy(alpha = 0.85f),
+                                        color = TextPrimary,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                     )
@@ -429,7 +321,7 @@ fun WeatherCard(
                                         Text(
                                             "Feels like ${WeatherUnits.formatTempValue(feels, tempUnit)}",
                                             fontSize = 12.sp,
-                                            color = Color.White.copy(alpha = 0.65f),
+                                            color = TextSecondary,
                                             modifier = Modifier.padding(top = 2.dp),
                                         )
                                     }
@@ -455,7 +347,7 @@ fun WeatherCard(
                                 WidgetExpandFooter(
                                     expanded = false,
                                     onToggle = { expanded = true },
-                                    accentColor = Color.White,
+                                    accentColor = TextPrimary,
                                     expandLabel = "Forecast",
                                 )
                             }
@@ -470,7 +362,7 @@ fun WeatherCard(
                     title = "Weather",
                     message = "Allow location access to see weather",
                     actionLabel = "Enable",
-                    actionIcon = Icons.Outlined.LocationOn,
+                    actionIcon = AppIcons.MapPin,
                     accent = LocationAccent,
                     onAction = onRequestPermission,
                 )
@@ -481,7 +373,7 @@ fun WeatherCard(
                     title = "Weather",
                     message = "Using approximate location — enable precise location for accurate weather",
                     actionLabel = "Precise",
-                    actionIcon = Icons.Outlined.LocationOn,
+                    actionIcon = AppIcons.MapPin,
                     accent = LocationAccent,
                     onAction = onRequestPreciseLocation,
                 )
@@ -493,7 +385,7 @@ fun WeatherCard(
                     title = "Weather",
                     message = errorState?.message ?: "Couldn't load the forecast",
                     actionLabel = "Retry",
-                    actionIcon = Icons.Outlined.Refresh,
+                    actionIcon = AppIcons.Refresh,
                     accent = Primary,
                     onAction = onRetry,
                 )
@@ -526,13 +418,13 @@ private fun WeatherExpandedForecast(
 
         if (weather.hourlyForecasts.isNotEmpty()) {
             Spacer(modifier = Modifier.height(16.dp))
-            HorizontalDivider(color = Color.White.copy(alpha = 0.15f), thickness = 1.dp)
+            HorizontalDivider(color = Border, thickness = 1.dp)
             Spacer(modifier = Modifier.height(12.dp))
             Text(
                 "Hourly",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = Color.White.copy(alpha = 0.9f),
+                color = TextPrimary,
                 modifier = Modifier.padding(bottom = 8.dp),
             )
             Row(
@@ -550,13 +442,13 @@ private fun WeatherExpandedForecast(
 
         if (weather.dailyForecasts.isNotEmpty()) {
             Spacer(modifier = Modifier.height(16.dp))
-            HorizontalDivider(color = Color.White.copy(alpha = 0.15f), thickness = 1.dp)
+            HorizontalDivider(color = Border, thickness = 1.dp)
             Spacer(modifier = Modifier.height(12.dp))
             Text(
                 "Daily",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = Color.White.copy(alpha = 0.9f),
+                color = TextPrimary,
                 modifier = Modifier.padding(bottom = 10.dp),
             )
             WidgetScrollBox(
@@ -585,7 +477,7 @@ private fun WeatherExpandedForecast(
         WidgetExpandBar(
             expanded = true,
             onToggle = onCollapse,
-            accentColor = Color.White,
+            accentColor = TextPrimary,
             collapseLabel = "Show less",
         )
     }
@@ -611,7 +503,7 @@ private fun WhatToWearCard(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.Checkroom,
+                    imageVector = AppIcons.Shirt,
                     contentDescription = null,
                     tint = accent,
                     modifier = Modifier.size(18.dp),
@@ -629,7 +521,7 @@ private fun WhatToWearCard(
                     text = advice.headline,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color.White,
+                    color = TextPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -653,7 +545,7 @@ private fun WhatToWearCard(
                         Icon(
                             painter = painterResource(item.icon.iconRes),
                             contentDescription = item.label,
-                            tint = Color.White.copy(alpha = 0.95f),
+                            tint = TextPrimary,
                             modifier = Modifier.size(16.dp),
                         )
                         Spacer(modifier = Modifier.width(6.dp))
@@ -661,7 +553,7 @@ private fun WhatToWearCard(
                             text = item.label,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
-                            color = Color.White.copy(alpha = 0.9f),
+                            color = TextPrimary,
                             maxLines = 1,
                         )
                     }
@@ -673,7 +565,7 @@ private fun WhatToWearCard(
         Text(
             text = advice.detail,
             fontSize = 13.sp,
-            color = Color.White.copy(alpha = 0.78f),
+            color = TextSecondary,
             lineHeight = 18.sp,
         )
     }
@@ -690,7 +582,7 @@ private fun WeatherDetailsGrid(
                 iconRes = R.drawable.ic_weather_wind,
                 label = "Wind",
                 value = WeatherUnits.formatWind(weather.windSpeed, windUnit),
-                tint = Color.White,
+                tint = TextPrimary,
             ),
         )
         weather.windGust?.let {
@@ -699,7 +591,7 @@ private fun WeatherDetailsGrid(
                     iconRes = R.drawable.ic_weather_wind,
                     label = "Gusts",
                     value = WeatherUnits.formatWind(it, windUnit),
-                    tint = Color.White.copy(alpha = 0.85f),
+                    tint = TextPrimary,
                 ),
             )
         }
@@ -709,7 +601,7 @@ private fun WeatherDetailsGrid(
                     iconRes = R.drawable.ic_humidity,
                     label = "Humidity",
                     value = "${it.toInt()}%",
-                    tint = Color(0xFF4FC3F7),
+                    tint = WeatherRain,
                 ),
             )
         }
@@ -719,7 +611,7 @@ private fun WeatherDetailsGrid(
                     iconRes = R.drawable.ic_weather_precip,
                     label = "Rain",
                     value = "$it%",
-                    tint = Color(0xFF90CAF9),
+                    tint = WeatherRain,
                 ),
             )
         }
@@ -729,7 +621,7 @@ private fun WeatherDetailsGrid(
                     iconRes = R.drawable.ic_uv_index,
                     label = "UV",
                     value = String.format(Locale.US, "%.0f", it),
-                    tint = Color(0xFFFFB300),
+                    tint = WeatherSun,
                 ),
             )
         }
@@ -739,7 +631,7 @@ private fun WeatherDetailsGrid(
                     iconRes = R.drawable.ic_sunrise,
                     label = "Sunrise",
                     value = it,
-                    tint = Color(0xFFFFB300),
+                    tint = WeatherSun,
                 ),
             )
         }
@@ -749,7 +641,7 @@ private fun WeatherDetailsGrid(
                     iconRes = R.drawable.ic_sunset,
                     label = "Sunset",
                     value = it,
-                    tint = Color(0xFFFF8A65),
+                    tint = NutritionCalories,
                 ),
             )
         }
@@ -760,7 +652,7 @@ private fun WeatherDetailsGrid(
         "Conditions",
         fontSize = 14.sp,
         fontWeight = FontWeight.SemiBold,
-        color = Color.White.copy(alpha = 0.9f),
+        color = TextPrimary,
         modifier = Modifier.padding(bottom = 8.dp),
     )
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -814,7 +706,7 @@ private fun WeatherDetailTile(
                 cell.label.uppercase(Locale.US),
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White.copy(alpha = 0.55f),
+                color = TextTertiary,
                 letterSpacing = 0.4.sp,
             )
         }
@@ -822,7 +714,7 @@ private fun WeatherDetailTile(
             cell.value,
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
-            color = Color.White,
+            color = TextPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -873,13 +765,13 @@ private fun DailyForecastRow(
                     daily.date,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = if (daily.isToday) accent else Color.White,
+                    color = if (daily.isToday) accent else TextPrimary,
                 )
                 if (dayMeta.isNotBlank()) {
                     Text(
                         dayMeta,
                         fontSize = 11.sp,
-                        color = Color.White.copy(alpha = 0.55f),
+                        color = TextTertiary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 2.dp),
@@ -891,20 +783,20 @@ private fun DailyForecastRow(
                     Text(
                         WeatherUnits.formatTempValue(daily.minTemp, tempUnit),
                         fontSize = 13.sp,
-                        color = Color.White.copy(alpha = 0.45f),
+                        color = TextTertiary,
                     )
                     Text(
                         "  ${WeatherUnits.formatTempValue(daily.maxTemp, tempUnit)}",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White,
+                        color = TextPrimary,
                     )
                 }
                 daily.precipitation?.takeIf { it >= 0.1 }?.let { mm ->
                     Text(
                         WeatherUnits.formatPrecipMm(mm),
                         fontSize = 11.sp,
-                        color = Color(0xFF90CAF9),
+                        color = WeatherRain,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.padding(top = 2.dp),
                     )
@@ -912,9 +804,9 @@ private fun DailyForecastRow(
             }
             Spacer(modifier = Modifier.width(6.dp))
             Icon(
-                imageVector = Icons.Outlined.KeyboardArrowDown,
+                imageVector = AppIcons.ChevronDown,
                 contentDescription = if (expanded) "Collapse day" else "Expand day",
-                tint = Color.White.copy(alpha = 0.55f),
+                tint = TextTertiary,
                 modifier = Modifier
                     .size(20.dp)
                     .rotate(chevronRotation),
@@ -933,7 +825,7 @@ private fun DailyForecastRow(
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
                 Spacer(modifier = Modifier.height(10.dp))
-                HorizontalDivider(color = Color.White.copy(alpha = 0.12f), thickness = 1.dp)
+                HorizontalDivider(color = Border, thickness = 1.dp)
                 Spacer(modifier = Modifier.height(10.dp))
 
                 if (daily.periods.isNotEmpty()) {
@@ -951,7 +843,7 @@ private fun DailyForecastRow(
                     Text(
                         daily.description,
                         fontSize = 13.sp,
-                        color = Color.White.copy(alpha = 0.8f),
+                        color = TextSecondary,
                     )
                 }
 
@@ -971,7 +863,7 @@ private fun DailyForecastRow(
                                 iconRes = R.drawable.ic_humidity,
                                 label = "Humidity",
                                 value = "${it.toInt()}%",
-                                tint = Color(0xFF4FC3F7),
+                                tint = WeatherRain,
                             ),
                         )
                     }
@@ -983,7 +875,7 @@ private fun DailyForecastRow(
                                 iconRes = R.drawable.ic_weather_precip,
                                 label = "Rain",
                                 value = "$pop% · ${String.format(Locale.US, "%.1f", mm)}",
-                                tint = Color(0xFF90CAF9),
+                                tint = WeatherRain,
                             ),
                         )
                         pop != null -> add(
@@ -991,7 +883,7 @@ private fun DailyForecastRow(
                                 iconRes = R.drawable.ic_weather_precip,
                                 label = "Rain",
                                 value = "$pop%",
-                                tint = Color(0xFF90CAF9),
+                                tint = WeatherRain,
                             ),
                         )
                         mm != null -> add(
@@ -999,7 +891,7 @@ private fun DailyForecastRow(
                                 iconRes = R.drawable.ic_weather_precip,
                                 label = "Precip",
                                 value = String.format(Locale.US, "%.1f mm", mm),
-                                tint = Color(0xFF90CAF9),
+                                tint = WeatherRain,
                             ),
                         )
                     }
@@ -1030,7 +922,7 @@ private data class DayStat(
     val iconRes: Int,
     val label: String,
     val value: String,
-    val tint: Color = Color.White.copy(alpha = 0.85f),
+    val tint: Color = TextPrimary,
 )
 
 @Composable
@@ -1067,7 +959,7 @@ private fun DayPeriodGlanceStrip(
                     period.shortLabel,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White.copy(alpha = 0.45f),
+                    color = TextTertiary,
                     letterSpacing = 0.3.sp,
                 )
                 Spacer(modifier = Modifier.height(4.dp))
@@ -1082,7 +974,7 @@ private fun DayPeriodGlanceStrip(
                     WeatherUnits.formatTempValue(period.temp, tempUnit),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White,
+                    color = TextPrimary,
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 val pop = period.precipProbability
@@ -1091,18 +983,18 @@ private fun DayPeriodGlanceStrip(
                         "$pop%",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF90CAF9),
+                        color = WeatherRain,
                     )
                     period.windSpeed != null -> Text(
                         WeatherUnits.formatWind(period.windSpeed, windUnit),
                         fontSize = 10.sp,
-                        color = Color.White.copy(alpha = 0.5f),
+                        color = TextTertiary,
                         maxLines = 1,
                     )
                     else -> Text(
                         "—",
                         fontSize = 10.sp,
-                        color = Color.White.copy(alpha = 0.3f),
+                        color = TextTertiary,
                     )
                 }
             }
@@ -1143,7 +1035,7 @@ private fun DayPeriodDetailRow(
                 Text(
                     period.description,
                     fontSize = 12.sp,
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = TextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 2.dp),
@@ -1166,13 +1058,13 @@ private fun DayPeriodDetailRow(
                     Text(
                         WeatherUnits.formatTempValue(low, tempUnit),
                         fontSize = 13.sp,
-                        color = Color.White.copy(alpha = 0.45f),
+                        color = TextTertiary,
                     )
                     Text(
                         "  ${WeatherUnits.formatTempValue(high, tempUnit)}",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White,
+                        color = TextPrimary,
                     )
                 }
             } else {
@@ -1180,7 +1072,7 @@ private fun DayPeriodDetailRow(
                     WeatherUnits.formatTempValue(period.temp, tempUnit),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White,
+                    color = TextPrimary,
                     modifier = Modifier.widthIn(min = 56.dp),
                 )
             }
@@ -1208,9 +1100,9 @@ private fun DayPeriodDetailRow(
                     else -> "Dry"
                 },
                 tint = if ((pop != null && pop > 0) || precipMm != null) {
-                    Color(0xFF90CAF9)
+                    WeatherRain
                 } else {
-                    Color.White.copy(alpha = 0.55f)
+                    TextTertiary
                 },
                 modifier = Modifier.weight(1f),
             )
@@ -1223,7 +1115,7 @@ private fun DayPeriodMetric(
     iconRes: Int,
     text: String,
     modifier: Modifier = Modifier,
-    tint: Color = Color.White.copy(alpha = 0.7f),
+    tint: Color = TextSecondary,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -1242,7 +1134,7 @@ private fun DayPeriodMetric(
             text,
             fontSize = 11.sp,
             fontWeight = FontWeight.Medium,
-            color = Color.White.copy(alpha = 0.8f),
+            color = TextSecondary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -1255,7 +1147,7 @@ private fun DayStatPill(
     label: String,
     value: String,
     modifier: Modifier = Modifier,
-    tint: Color = Color.White.copy(alpha = 0.85f),
+    tint: Color = TextPrimary,
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1275,7 +1167,7 @@ private fun DayStatPill(
                 label.uppercase(Locale.US),
                 fontSize = 9.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White.copy(alpha = 0.45f),
+                color = TextTertiary,
                 letterSpacing = 0.3.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -1286,7 +1178,7 @@ private fun DayStatPill(
             value,
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
-            color = Color.White.copy(alpha = 0.9f),
+            color = TextPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -1308,10 +1200,10 @@ private fun WeatherMetricChip(
         Icon(
             painter = painterResource(iconRes),
             contentDescription = null,
-            tint = Color.White.copy(alpha = 0.85f),
+            tint = TextPrimary,
             modifier = Modifier.size(14.dp),
         )
-        Text(label, fontSize = 12.sp, color = Color.White.copy(alpha = 0.85f), fontWeight = FontWeight.Medium, maxLines = 1)
+        Text(label, fontSize = 12.sp, color = TextPrimary, fontWeight = FontWeight.Medium, maxLines = 1)
     }
 }
 
@@ -1332,7 +1224,7 @@ private fun HourlyForecastTile(
             .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
             .padding(vertical = 10.dp, horizontal = 6.dp),
     ) {
-        Text(hourly.time, fontSize = 11.sp, color = Color.White.copy(alpha = 0.65f), fontWeight = FontWeight.Medium)
+        Text(hourly.time, fontSize = 11.sp, color = TextSecondary, fontWeight = FontWeight.Medium)
         Spacer(Modifier.height(6.dp))
         Icon(
             painter = painterResource(hourly.iconRes),
@@ -1345,21 +1237,21 @@ private fun HourlyForecastTile(
             WeatherUnits.formatTempValue(hourly.temperature, tempUnit),
             fontSize = 15.sp,
             fontWeight = FontWeight.Bold,
-            color = Color.White,
+            color = TextPrimary,
         )
         Spacer(modifier = Modifier.height(6.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
                 painter = painterResource(R.drawable.ic_weather_wind),
                 contentDescription = null,
-                tint = Color.White.copy(alpha = 0.55f),
+                tint = TextTertiary,
                 modifier = Modifier.size(10.dp),
             )
             Spacer(modifier = Modifier.width(2.dp))
             Text(
                 WeatherUnits.formatWindValue(hourly.windSpeed, windUnit),
                 fontSize = 10.sp,
-                color = Color.White.copy(alpha = 0.55f),
+                color = TextTertiary,
             )
         }
         Spacer(modifier = Modifier.height(4.dp))
@@ -1367,19 +1259,19 @@ private fun HourlyForecastTile(
             showPop -> Text(
                 "$pop%",
                 fontSize = 10.sp,
-                color = Color(0xFF90CAF9),
+                color = WeatherRain,
                 fontWeight = FontWeight.SemiBold,
             )
             showPrecipMm -> Text(
                 String.format(Locale.US, "%.1f mm", precip),
                 fontSize = 10.sp,
-                color = Color(0xFF90CAF9),
+                color = WeatherRain,
                 fontWeight = FontWeight.SemiBold,
             )
             else -> Text(
                 "—",
                 fontSize = 10.sp,
-                color = Color.White.copy(alpha = 0.35f),
+                color = TextTertiary,
             )
         }
     }

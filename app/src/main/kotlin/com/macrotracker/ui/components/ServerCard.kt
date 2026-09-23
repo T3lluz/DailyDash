@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -52,6 +50,8 @@ import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.ServerViewModel
 import kotlin.math.roundToInt
+import com.macrotracker.ui.theme.AppIcons
+import com.macrotracker.ui.theme.TextTertiary
 
 /**
  * Home-screen server widget.
@@ -87,7 +87,7 @@ fun ServerCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    Icons.Outlined.Dns,
+                    AppIcons.Server,
                     contentDescription = null,
                     tint = TextSecondary,
                     modifier = Modifier.size(20.dp),
@@ -117,7 +117,7 @@ fun ServerCard(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                Icons.Outlined.Dns,
+                AppIcons.Server,
                 contentDescription = null,
                 tint = Primary,
                 modifier = Modifier.size(20.dp),
@@ -291,7 +291,7 @@ private fun MiniMeter(
         if (caption != null) {
             Text(
                 text = caption,
-                color = TextSecondary.copy(alpha = 0.7f),
+                color = TextTertiary,
                 fontSize = 9.sp,
                 fontFamily = FontFamily.Monospace,
                 maxLines = 1,

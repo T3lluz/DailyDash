@@ -14,13 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Autorenew
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
@@ -54,11 +47,12 @@ import com.macrotracker.ui.viewmodel.ChatViewModel
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.delay
+import com.macrotracker.ui.theme.AppIcons
 
 val SysopIdentity = BotIdentity(
     name = "Sysop",
     accent = ServerBrand,
-    avatarIcon = Icons.Outlined.Terminal,
+    avatarIcon = AppIcons.Terminal,
     composerHint = "Ask about a server…",
 )
 
@@ -122,7 +116,7 @@ fun SysopChatPane(
             ) {
                 if (state.loading) {
                     PillButton(
-                        icon = Icons.Outlined.Close,
+                        icon = AppIcons.Close,
                         label = "Stop",
                         accent = ServerBrand,
                         onClick = {
@@ -133,7 +127,7 @@ fun SysopChatPane(
                 } else {
                     Box {
                         PillButton(
-                            icon = Icons.Outlined.History,
+                            icon = AppIcons.History,
                             label = "Threads",
                             accent = ServerBrand,
                             onClick = {
@@ -214,7 +208,7 @@ fun SysopChatPane(
                                         modifier = Modifier.padding(top = 8.dp),
                                     ) {
                                         SmallActionChip(
-                                            icon = Icons.Outlined.Refresh,
+                                            icon = AppIcons.Refresh,
                                             label = "Retry",
                                             onClick = {
                                                 haptics.click()
@@ -224,7 +218,7 @@ fun SysopChatPane(
                                         )
                                         if (message.showSettingsCta) {
                                             SmallActionChip(
-                                                icon = Icons.Outlined.Settings,
+                                                icon = AppIcons.Settings,
                                                 label = "AI settings",
                                                 onClick = onNavigateToAiSettings,
                                             )
@@ -233,7 +227,7 @@ fun SysopChatPane(
                                 } else if (message.id == state.messages.lastOrNull()?.id && !state.loading) {
                                     Row(modifier = Modifier.padding(top = 6.dp)) {
                                         SmallActionChip(
-                                            icon = Icons.Outlined.Autorenew,
+                                            icon = AppIcons.Refresh,
                                             label = "Regenerate",
                                             onClick = {
                                                 haptics.click()

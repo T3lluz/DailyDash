@@ -39,6 +39,8 @@ import androidx.glance.text.TextStyle
 import com.macrotracker.MainActivity
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import androidx.glance.ColorFilter
+import com.macrotracker.R
 
 /**
  * F1 Schedule Widget

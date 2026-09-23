@@ -1,10 +1,9 @@
 package com.macrotracker.ui.components
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.macrotracker.ui.theme.HealthConnectBrand
+import com.macrotracker.ui.theme.AppIcons
 
 @Composable
 fun HealthConnectCard(
@@ -18,7 +17,7 @@ fun HealthConnectCard(
         title = title,
         message = message,
         actionLabel = actionLabel,
-        actionIcon = Icons.Default.MonitorHeart,
+        actionIcon = AppIcons.HeartPulse,
         accent = HealthConnectBrand,
         onAction = onRequestPermission,
         modifier = modifier,

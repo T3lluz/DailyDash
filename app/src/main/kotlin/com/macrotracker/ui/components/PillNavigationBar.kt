@@ -9,8 +9,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -31,10 +29,13 @@ import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.GlassHairline
 import com.macrotracker.ui.theme.GlassTint
 import com.macrotracker.ui.theme.MacroMotion
-import com.macrotracker.ui.theme.Primary
+import com.macrotracker.ui.theme.OnAccent
+import com.macrotracker.ui.theme.SelectedFill
+import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.rememberHaptics
 import dev.chrisbanes.haze.HazeState
+import com.macrotracker.ui.theme.AppIcons
 
 private val NavPillShape = RoundedCornerShape(percent = 50)
 
@@ -102,7 +103,8 @@ fun PillNavigationBar(
                         .width(with(density) { indicatorWidthPx.toDp() })
                         .height(indicatorHeight)
                         .clip(NavPillShape)
-                        .background(Primary.copy(alpha = 0.92f)),
+                        .background(SelectedFill)
+                        .border(BorderStroke(0.5.dp, GlassHairline), NavPillShape),
                 )
             }
         }
@@ -143,8 +145,8 @@ fun PillNavigationBar(
                                 imageVector = screen.icon,
                                 contentDescription = screen.label,
                                 tint = androidx.compose.ui.graphics.lerp(
-                                    TextSecondary.copy(alpha = 0.75f),
-                                    Color.White,
+                                    TextSecondary,
+                                    TextPrimary,
                                     selectionProgress,
                                 ),
                                 modifier = Modifier.size(22.dp),
@@ -164,9 +166,9 @@ fun PillNavigationBar(
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Outlined.SystemUpdate,
+                                        imageVector = AppIcons.Download,
                                         contentDescription = "Update available",
-                                        tint = Color.White,
+                                        tint = OnAccent,
                                         modifier = Modifier.size(9.dp),
                                     )
                                 }
@@ -175,12 +177,14 @@ fun PillNavigationBar(
 
                         Text(
                             text = screen.label,
-                            color = Color.White,
+                            color = androidx.compose.ui.graphics.lerp(
+                                TextSecondary,
+                                TextPrimary,
+                                selectionProgress,
+                            ),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier
-                                .padding(top = 2.dp)
-                                .graphicsLayer { alpha = 0.55f + 0.45f * selectionProgress },
+                            modifier = Modifier.padding(top = 2.dp),
                         )
                     }
                 }

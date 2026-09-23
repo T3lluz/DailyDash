@@ -24,11 +24,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.Dashboard
-import androidx.compose.material.icons.outlined.Restaurant
-import androidx.compose.material.icons.outlined.Widgets
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -56,27 +51,28 @@ import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.macrotracker.ui.theme.AppIcons
 
 private data class Feature(val icon: ImageVector, val title: String, val subtitle: String)
 
 private val features = listOf(
     Feature(
-        Icons.Outlined.Dashboard,
+        AppIcons.Dashboard,
         "Your Personal Dashboard",
         "Weather, calendar, Formula 1, YouTube, Twitch, GitHub and health stats — all on one home screen, laid out your way.",
     ),
     Feature(
-        Icons.Outlined.Widgets,
+        AppIcons.Blocks,
         "Fully Customisable Widgets",
         "Reorder, show or hide any widget. Build a home screen that shows exactly what matters to you, nothing more.",
     ),
     Feature(
-        Icons.Outlined.Restaurant,
+        AppIcons.Restaurant,
         "Macro & Nutrition Tracking",
         "Log food manually, scan a label with your camera, or describe your meal and let AI fill in the numbers.",
     ),
     Feature(
-        Icons.Outlined.AutoAwesome,
+        AppIcons.Sparkles,
         "AI-Powered Throughout",
         "Chat with Clanker to estimate meal macros, or ask Sysop about your servers. Connect Claude or add a Gemini, OpenAI or OpenRouter key in Settings → AI.",
     ),

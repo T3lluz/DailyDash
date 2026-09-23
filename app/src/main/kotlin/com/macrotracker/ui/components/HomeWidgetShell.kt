@@ -23,11 +23,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.ErrorOutline
-import androidx.compose.material.icons.outlined.ExpandMore
-import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -66,6 +61,7 @@ import com.macrotracker.ui.util.LastUpdatedText
 import com.macrotracker.ui.util.LocalTickersPaused
 import com.macrotracker.ui.util.rememberHaptics
 import java.time.Instant
+import com.macrotracker.ui.theme.AppIcons
 
 /** Default cap so expanded hubs stay on-screen instead of stretching the home list. */
 val WidgetScrollBoxMaxHeight = 340.dp
@@ -168,9 +164,9 @@ fun WidgetExpandChevron(
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            imageVector = Icons.Outlined.ExpandMore,
+            imageVector = AppIcons.ChevronDown,
             contentDescription = if (expanded) "Collapse" else "Expand",
-            tint = accentColor.copy(alpha = if (expanded) 0.75f else 0.55f),
+            tint = accentColor,
             modifier = Modifier.size(22.dp).rotate(rotation),
         )
     }
@@ -392,7 +388,7 @@ fun ChannelSheetHeader(
                 CardTitle(title)
                 Text(subtitle, fontSize = 12.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            HubHeaderAction(Icons.Outlined.Close, "Close", onDismiss)
+            HubHeaderAction(AppIcons.Close, "Close", onDismiss)
         }
     }
 }
@@ -415,7 +411,7 @@ fun HubErrorState(
             .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Outlined.ErrorOutline, contentDescription = null, tint = Error, modifier = Modifier.size(18.dp))
+        Icon(AppIcons.Warning, contentDescription = null, tint = Error, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(10.dp))
         Text(
             message,
@@ -512,7 +508,7 @@ fun HubCardHeader(
         }
         LastUpdatedText(lastUpdatedAt = lastUpdatedAt, color = TextSecondary)
         if (expanded && onRefresh != null) {
-            HubHeaderAction(Icons.Outlined.Refresh, "Refresh", onRefresh)
+            HubHeaderAction(AppIcons.Refresh, "Refresh", onRefresh)
         }
         actions()
         WidgetExpandChevron(expanded = expanded, onClick = onToggleExpanded, accentColor = accent)

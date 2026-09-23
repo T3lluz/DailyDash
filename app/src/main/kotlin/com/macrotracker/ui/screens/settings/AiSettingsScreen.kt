@@ -19,13 +19,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Key
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.outlined.AccountCircle
-import androidx.compose.material.icons.outlined.Visibility
-import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
@@ -64,6 +57,8 @@ import com.macrotracker.ui.components.MacroButton
 import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
+import com.macrotracker.ui.theme.BorderStrong
+import com.macrotracker.ui.theme.SurfaceElevated
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.Success
@@ -71,6 +66,7 @@ import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.SettingsViewModel
+import com.macrotracker.ui.theme.AppIcons
 
 @Composable
 fun AiSettingsScreen(
@@ -136,7 +132,7 @@ fun AiSettingsScreen(
         MacroCard(delayMs = 50) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = Icons.Filled.Key,
+                    imageVector = AppIcons.Key,
                     contentDescription = null,
                     tint = Primary,
                     modifier = Modifier.size(20.dp),
@@ -150,7 +146,7 @@ fun AiSettingsScreen(
                 if (hasKey) {
                     Spacer(modifier = Modifier.weight(1f))
                     Icon(
-                        imageVector = Icons.Filled.CheckCircle,
+                        imageVector = AppIcons.CheckCircleFilled,
                         contentDescription = "Key saved",
                         tint = Success,
                         modifier = Modifier.size(18.dp),
@@ -254,7 +250,7 @@ fun AiSettingsScreen(
                         keyVisible = !keyVisible
                     }) {
                         Icon(
-                            imageVector = if (keyVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                            imageVector = if (keyVisible) AppIcons.EyeOff else AppIcons.Eye,
                             contentDescription = if (keyVisible) "Hide key" else "Show key",
                             tint = TextSecondary,
                         )
@@ -278,7 +274,7 @@ fun AiSettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.Warning,
+                        imageVector = AppIcons.Warning,
                         contentDescription = null,
                         tint = TextSecondary,
                         modifier = Modifier.size(16.dp),
@@ -438,7 +434,7 @@ private fun ClaudeSubscriptionBlock(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
-                imageVector = Icons.Outlined.AccountCircle,
+                imageVector = AppIcons.Account,
                 contentDescription = null,
                 tint = if (connected) Success else Primary,
                 modifier = Modifier.size(20.dp),
@@ -556,7 +552,8 @@ private fun AiProviderToggle(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(9.dp))
-                                .background(if (isSelected) Primary else Color.Transparent)
+                                .background(if (isSelected) SurfaceElevated else Color.Transparent)
+                                .border(1.dp, if (isSelected) BorderStrong else Color.Transparent, RoundedCornerShape(9.dp))
                                 .clickable { onSelect(provider) }
                                 .padding(vertical = 10.dp, horizontal = 2.dp),
                             contentAlignment = Alignment.Center,
@@ -565,7 +562,7 @@ private fun AiProviderToggle(
                                 text = provider.displayName,
                                 fontSize = 12.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) Color.White else TextSecondary,
+                                color = if (isSelected) TextPrimary else TextSecondary,
                                 maxLines = 1,
                             )
                         }
@@ -672,7 +669,7 @@ private fun OpenRouterModelSelector(
                     trailingIcon = if (model.id == selectedId) {
                         {
                             Icon(
-                                imageVector = Icons.Filled.CheckCircle,
+                                imageVector = AppIcons.CheckCircleFilled,
                                 contentDescription = "Selected",
                                 tint = Primary,
                                 modifier = Modifier.size(18.dp),
@@ -779,7 +776,7 @@ private fun AnthropicModelSelector(
                     trailingIcon = if (model.id == selectedId) {
                         {
                             Icon(
-                                imageVector = Icons.Filled.CheckCircle,
+                                imageVector = AppIcons.CheckCircleFilled,
                                 contentDescription = "Selected",
                                 tint = Primary,
                                 modifier = Modifier.size(18.dp),

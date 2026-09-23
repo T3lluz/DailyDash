@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,6 +41,7 @@ import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.StatsViewModel
+import com.macrotracker.ui.theme.AppIcons
 
 @Composable
 fun NutritionSettingsScreen(
@@ -80,7 +79,7 @@ fun NutritionSettingsScreen(
                 modifier = Modifier.padding(bottom = 14.dp),
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.FitnessCenter,
+                    imageVector = AppIcons.Dumbbell,
                     contentDescription = null,
                     tint = Primary,
                     modifier = Modifier.size(22.dp),

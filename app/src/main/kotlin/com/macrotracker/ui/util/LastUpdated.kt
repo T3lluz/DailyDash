@@ -3,8 +3,6 @@ package com.macrotracker.ui.util
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,6 +20,7 @@ import com.macrotracker.ui.theme.TextSecondary
 import kotlinx.coroutines.delay
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import com.macrotracker.ui.theme.AppIcons
 
 @Composable
 fun rememberRelativeTime(instant: Instant): String {
@@ -84,7 +83,7 @@ fun LastUpdatedText(
         horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         Icon(
-            imageVector = Icons.Outlined.Schedule,
+            imageVector = AppIcons.Clock,
             contentDescription = "Last synced $relTime ago",
             tint = dimColor,
             modifier = Modifier.size(9.dp),

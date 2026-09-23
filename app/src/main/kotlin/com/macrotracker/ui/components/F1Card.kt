@@ -12,11 +12,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.outlined.ArrowDownward
-import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -61,6 +56,7 @@ import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import com.macrotracker.ui.theme.AppIcons
 
 // ── Palette (race-control / pit-wall, not soft SaaS) ─────────────────────────
 private val F1Red      = Color(0xFFE10600)
@@ -192,7 +188,7 @@ private fun TeamLogo(url: String?, teamName: String, modifier: Modifier = Modifi
     SubcomposeAsyncImage(model = request, contentDescription = teamName, modifier = modifier, contentScale = contentScale) {
         when (painter.state) {
             is AsyncImagePainter.State.Loading -> Box(modifier = Modifier.matchParentSize(), contentAlignment = Alignment.Center) {
-                LoadingSpinner(color = TextSecondary.copy(alpha = 0.4f), size = LoadingSpec.SizeInline)
+                LoadingSpinner(color = TextTertiary, size = LoadingSpec.SizeInline)
             }
             is AsyncImagePainter.State.Error -> Box(modifier = Modifier.matchParentSize(), contentAlignment = Alignment.Center) {
                 Text(
@@ -411,7 +407,7 @@ fun F1Card(
                         tabs.forEach { tab ->
                             val active = currentTab == tab
                             val fg by animateColorAsState(
-                                if (active) TextPrimary else TextSecondary.copy(alpha = 0.75f),
+                                if (active) TextPrimary else TextTertiary,
                                 MacroMotion.colorTween(160),
                                 label = "f1TabFg",
                             )
@@ -1126,7 +1122,7 @@ private fun CountdownBlock(value: String, label: String, color: Color) {
 private fun CountdownColon() {
     Text(
         ":",
-        color = TextSecondary.copy(alpha = 0.45f),
+        color = TextTertiary,
         style = F1CountdownHeroStyle.copy(fontSize = 28.sp, letterSpacing = 0.sp),
         modifier = Modifier.padding(top = 2.dp),
     )
@@ -1142,7 +1138,7 @@ private fun CountdownUnit(value: String, unit: String, color: Color) {
 
 @Composable
 private fun CountdownSep() {
-    Text("·", color = TextSecondary.copy(alpha = 0.4f), fontSize = 13.sp)
+    Text("·", color = TextTertiary, fontSize = 13.sp)
 }
 
 // ── Shared circuit stat ───────────────────────────────────────────────────────
@@ -1223,7 +1219,7 @@ private fun TrackVisualization(circuitId: String, accentColor: Color, raceName: 
             Text("Circuit", color = TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
             Text(
                 "· $raceName",
-                color = TextSecondary.copy(alpha = 0.7f),
+                color = TextTertiary,
                 fontSize = 11.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -1898,7 +1894,7 @@ fun RaceScheduleList(schedule: List<RaceScheduleEntry>) {
                                         else -> "${days}d"
                                     },
                                     color = when {
-                                        past -> TextSecondary.copy(alpha = 0.55f)
+                                        past -> TextTertiary
                                         days <= 7L -> F1Red
                                         else -> TextSecondary
                                     },
@@ -1906,9 +1902,9 @@ fun RaceScheduleList(schedule: List<RaceScheduleEntry>) {
                                     fontWeight = FontWeight.SemiBold,
                                 )
                                 Icon(
-                                    if (isExp) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    if (isExp) AppIcons.ChevronUp else AppIcons.ChevronDown,
                                     contentDescription = if (isExp) "Hide sessions" else "Show sessions",
-                                    tint = TextSecondary.copy(alpha = 0.4f),
+                                    tint = TextTertiary,
                                     modifier = Modifier.size(16.dp),
                                 )
                             }
@@ -1966,7 +1962,7 @@ private fun RaceSessionDetail(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
-            Text(getLocalTimezone(), color = TextSecondary.copy(alpha = 0.55f), fontSize = 11.sp, maxLines = 1)
+            Text(getLocalTimezone(), color = TextTertiary, fontSize = 11.sp, maxLines = 1)
         }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             race.laps?.let { CircuitStat("Laps", "$it") }
@@ -2003,7 +1999,7 @@ private fun SessionRow(label: String, date: String, time: String?, color: Color,
                 fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal,
             )
             if (utcTimeStr.isNotEmpty() && localTimeStr.isNotEmpty()) {
-                Text("$utcTimeStr UTC", color = TextSecondary.copy(alpha = 0.45f), fontSize = 10.sp)
+                Text("$utcTimeStr UTC", color = TextTertiary, fontSize = 10.sp)
             }
         }
     }
@@ -2241,7 +2237,7 @@ private fun RaceResultRow(r: RaceResult) {
     ) {
         Text(
             "${r.position}",
-            color = if (isPoints) TextPrimary else TextSecondary.copy(alpha = 0.55f),
+            color = if (isPoints) TextPrimary else TextTertiary,
             fontWeight = FontWeight.SemiBold,
             fontSize = 13.sp,
             modifier = Modifier.width(26.dp),
@@ -2279,7 +2275,7 @@ private fun RaceResultRow(r: RaceResult) {
         Column(horizontalAlignment = Alignment.End) {
             Text(
                 r.time ?: r.status ?: "+?",
-                color = if (r.time != null) TextPrimary else TextSecondary.copy(alpha = 0.55f),
+                color = if (r.time != null) TextPrimary else TextTertiary,
                 fontSize = 12.sp,
             )
             if (r.points > 0) {
@@ -2301,7 +2297,7 @@ private fun PositionsDeltaChip(posGained: Int?, modifier: Modifier = Modifier) {
         horizontalArrangement = Arrangement.spacedBy(1.dp),
     ) {
         Icon(
-            imageVector = if (gained) Icons.Outlined.ArrowUpward else Icons.Outlined.ArrowDownward,
+            imageVector = if (gained) AppIcons.ArrowUp else AppIcons.ArrowDown,
             contentDescription = if (gained) "Places gained" else "Places lost",
             tint = color,
             modifier = Modifier.size(12.dp),
@@ -2381,11 +2377,11 @@ private fun PodiumDriver(result: RaceResult, pos: Int, stepHeight: androidx.comp
                 fontSize = 12.sp,
             )
             if (delta != null && delta != 0) {
-                Text("·", color = TextSecondary.copy(alpha = 0.5f), fontSize = 11.sp)
+                Text("·", color = TextTertiary, fontSize = 11.sp)
                 PositionsDeltaChip(delta)
             }
             if (result.fastestLap) {
-                Text("·", color = TextSecondary.copy(alpha = 0.5f), fontSize = 11.sp)
+                Text("·", color = TextTertiary, fontSize = 11.sp)
                 Text("FL", color = FL_Purple, fontSize = 11.sp, fontWeight = FontWeight.Medium)
             }
         }
@@ -2405,7 +2401,7 @@ private fun PodiumDriver(result: RaceResult, pos: Int, stepHeight: androidx.comp
         ) {
             Text(
                 "P$pos",
-                color = TextPrimary.copy(alpha = 0.9f),
+                color = TextPrimary,
                 fontWeight = FontWeight.Bold,
                 fontSize = if (pos == 1) 14.sp else 12.sp,
                 modifier = Modifier.padding(top = 8.dp),

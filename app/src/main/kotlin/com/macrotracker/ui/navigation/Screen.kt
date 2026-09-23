@@ -1,16 +1,12 @@
 package com.macrotracker.ui.navigation
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.MonitorHeart
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.macrotracker.ui.theme.AppIcons
 
 sealed class Screen(val route: String, val label: String, val icon: ImageVector) {
-    object Home : Screen("home", "Home", Icons.Default.Home)
-    object Health : Screen("health", "Health", Icons.Default.MonitorHeart)
-    object AI : Screen("ai", "AI", Icons.Default.AutoAwesome) {
+    object Home : Screen("home", "Home", AppIcons.Home)
+    object Health : Screen("health", "Health", AppIcons.HeartPulse)
+    object AI : Screen("ai", "AI", AppIcons.Sparkles) {
         /**
          * Optional args, so plain `navigate("ai")` still matches. Only the hand-off
          * *id* travels — the server context itself is far too big for a nav argument
@@ -22,7 +18,7 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
 
         fun withSeed(seedId: String): String = "ai?tab=sysop&seed=$seedId"
     }
-    object Settings : Screen("settings", "Settings", Icons.Default.Settings)
+    object Settings : Screen("settings", "Settings", AppIcons.Settings)
 }
 
 // Onboarding flow — not part of the bottom-nav bar

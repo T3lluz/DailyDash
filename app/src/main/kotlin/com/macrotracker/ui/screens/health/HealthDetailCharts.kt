@@ -62,6 +62,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
+import com.macrotracker.ui.theme.TextTertiary
 
 private val HrColor = Color(0xFFEF5350)
 private val SleepAwake = Color(0xFFFF8A65)
@@ -144,7 +145,7 @@ fun HeartRateDetailChart(
         Text(
             dateStr,
             fontSize = 12.sp,
-            color = TextSecondary.copy(alpha = 0.85f),
+            color = TextSecondary,
             modifier = Modifier.padding(start = 22.dp),
         )
 
@@ -311,7 +312,7 @@ fun HeartRateDetailChart(
 
                 val avgY = yFor(stats.avgBpm.toFloat())
                 drawLine(
-                    color = TextSecondary.copy(alpha = 0.4f),
+                    color = TextTertiary,
                     start = Offset(padL, avgY),
                     end = Offset(padL + width * progress, avgY),
                     strokeWidth = 1.dp.toPx(),
@@ -457,7 +458,7 @@ fun SleepDetailChart(
         Text(
             dateStr,
             fontSize = 12.sp,
-            color = TextSecondary.copy(alpha = 0.85f),
+            color = TextSecondary,
             modifier = Modifier.padding(start = 22.dp),
         )
 
@@ -910,7 +911,7 @@ private fun SleepStagesHypnogram(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(startZ.format(timeFmt), fontSize = 10.sp, color = TextSecondary)
-            Text(midZ.format(timeFmt), fontSize = 10.sp, color = TextSecondary.copy(alpha = 0.85f))
+            Text(midZ.format(timeFmt), fontSize = 10.sp, color = TextSecondary)
             Text(endZ.format(timeFmt), fontSize = 10.sp, color = TextSecondary)
         }
     }
@@ -975,7 +976,7 @@ fun HeartRateEffortChart(effort: HeartRateEffort) {
             Text(
                 "resting ~${effort.restingAnchorBpm} bpm",
                 fontSize = 11.sp,
-                color = TextSecondary.copy(alpha = 0.85f),
+                color = TextSecondary,
             )
         }
         Spacer(modifier = Modifier.height(10.dp))
