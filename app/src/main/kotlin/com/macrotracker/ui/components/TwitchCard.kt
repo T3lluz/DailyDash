@@ -291,7 +291,7 @@ fun TwitchCard(viewModel: TwitchViewModel = hiltViewModel()) {
                                     .padding(horizontal = 12.dp, vertical = 8.dp),
                             ) {
                                 if (tab == TwHubTab.LIVE && active) {
-                                    LivePulseDot(color = TwLive, size = 7.dp)
+                                    LivePulseDot(color = TwLive, size = LivePulseSpec.SizeTwitch, style = LivePulseStyle.Rings)
                                 }
                                 Text(
                                     tab.label.uppercase(),
@@ -948,7 +948,11 @@ private fun LiveBadge(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        LivePulseDot(color = Color.White, size = if (compact) 5.dp else 6.dp)
+        LivePulseDot(
+            color = Color.White,
+            size = if (compact) 10.dp else LivePulseSpec.SizeTwitch,
+            style = LivePulseStyle.Rings,
+        )
         Text(
             if (compact) formatViewers(viewers) else "LIVE · ${formatViewers(viewers)}",
             fontSize = if (compact) 9.sp else 10.sp,
@@ -985,7 +989,7 @@ private fun LiveFilterChip(
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 6.dp),
     ) {
-        if (live) LivePulseDot(color = TwLive, size = LivePulseSpec.SizeChip)
+        if (live) LivePulseDot(color = TwLive, size = LivePulseSpec.SizeTwitch, style = LivePulseStyle.Rings)
         Text(
             label,
             fontSize = 11.sp,
@@ -1068,14 +1072,15 @@ private fun TwitchChannelsHub(
                                 Box(
                                     modifier = Modifier
                                         .align(Alignment.BottomEnd)
-                                        .size(14.dp)
+                                        .size(17.dp)
                                         .clip(CircleShape)
                                         .background(TwSurface),
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     LivePulseDot(
                                         color = TwLive,
-                                        size = LivePulseSpec.SizeBadge,
+                                        size = LivePulseSpec.SizeTwitchBadge,
+                                        style = LivePulseStyle.Rings,
                                     )
                                 }
                             }
