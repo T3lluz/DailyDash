@@ -5,7 +5,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
+import androidx.glance.ColorFilter
 import androidx.glance.GlanceTheme
+import androidx.glance.Image
+import androidx.glance.ImageProvider
 
 import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
@@ -25,11 +28,13 @@ import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
+import androidx.glance.layout.size
 import androidx.glance.layout.width
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import com.macrotracker.MainActivity
+import com.macrotracker.R
 
 /**
  * Calendar / Events widget.
@@ -69,7 +74,7 @@ private fun CalFull(d: DashboardWidgetData, c: WidgetClr, sc: WScale) {
                 WidgetStateMessage(
                     state = d.calendarState,
                     subject = "Calendar",
-                    iconRes = com.macrotracker.R.drawable.ic_calendar,
+                    iconRes = R.drawable.ic_calendar,
                     c = c,
                     sc = sc,
                 )
@@ -91,34 +96,40 @@ private fun CalFull(d: DashboardWidgetData, c: WidgetClr, sc: WScale) {
         // Today summary card — the busy/free line. Dropped on the shortest
         // slots so the events themselves keep the space.
         if (ws != WSize.COMPACT) {
-        Box(
-            GlanceModifier.fillMaxWidth().cornerRadius(sc.cornerSm).background(c.card)
-                .padding(horizontal = sc.padSm, vertical = sc.spaceSm),
-            contentAlignment = Alignment.CenterStart,
-        ) {
-            Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("📅", style = TextStyle(fontSize = sc.iconHero))
-                Spacer(GlanceModifier.width(sc.spaceMd))
-                Column(GlanceModifier.defaultWeight()) {
-                    Text("${d.eventsToday}", style = TextStyle(fontWeight = FontWeight.Bold, fontSize = sc.fxl, color = c.event))
-                    Text("event${if (d.eventsToday != 1) "s" else ""} today", style = TextStyle(fontSize = sc.fsm, color = c.sub), maxLines = 1)
-                }
-                Box(
-                    GlanceModifier.cornerRadius(sc.cornerSm)
-                        .background(if (d.eventsToday > 0) c.event else c.pill)
-                        .padding(horizontal = sc.spaceSm, vertical = sc.spaceXs),
-                ) {
-                    Text(
-                        if (d.eventsToday > 0) "Busy" else "Free",
-                        style = TextStyle(
-                            fontSize = sc.fsm, fontWeight = FontWeight.Bold,
-                            color = if (d.eventsToday > 0) c.bg else c.sub,
-                        ),
+            Box(
+                GlanceModifier.fillMaxWidth().cornerRadius(sc.cornerSm).background(c.card)
+                    .padding(horizontal = sc.padSm, vertical = sc.spaceSm),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Image(
+                        provider = ImageProvider(R.drawable.ic_calendar),
+                        contentDescription = null,
+                        modifier = GlanceModifier.size(22.dp),
+                        colorFilter = ColorFilter.tint(c.event),
                     )
+                    Spacer(GlanceModifier.width(sc.spaceMd))
+                    Column(GlanceModifier.defaultWeight()) {
+                        Text("${d.eventsToday}", style = TextStyle(fontWeight = FontWeight.Bold, fontSize = sc.fxl, color = c.event), maxLines = 1)
+                        Text("event${if (d.eventsToday != 1) "s" else ""} today", style = TextStyle(fontSize = sc.fsm, color = c.sub), maxLines = 1)
+                    }
+                    Box(
+                        GlanceModifier.cornerRadius(sc.cornerSm)
+                            .background(if (d.eventsToday > 0) c.event else c.pill)
+                            .padding(horizontal = sc.spaceSm, vertical = sc.spaceXs),
+                    ) {
+                        Text(
+                            if (d.eventsToday > 0) "Busy" else "Free",
+                            style = TextStyle(
+                                fontSize = sc.fsm, fontWeight = FontWeight.Bold,
+                                color = if (d.eventsToday > 0) c.bg else c.sub,
+                            ),
+                            maxLines = 1,
+                        )
+                    }
                 }
             }
-        }
-        Spacer(GlanceModifier.height(sc.spaceSm))
+            Spacer(GlanceModifier.height(sc.spaceSm))
         }
         if (ws != WSize.TINY) {
             SectionLabel("UPCOMING EVENTS", c.event, c, sc)
@@ -129,7 +140,7 @@ private fun CalFull(d: DashboardWidgetData, c: WidgetClr, sc: WScale) {
                 WidgetStateMessage(
                     state = WidgetSourceState.OK,
                     subject = "Calendar",
-                    iconRes = com.macrotracker.R.drawable.ic_calendar,
+                    iconRes = R.drawable.ic_calendar,
                     c = c,
                     sc = sc,
                     emptyMessage = "Nothing scheduled",
@@ -200,12 +211,6 @@ private fun EventRow(event: CalendarEvent, c: WidgetClr, sc: WScale) {
                         Spacer(GlanceModifier.width(sc.spaceXs))
                         Text("· ${event.date}", style = TextStyle(fontSize = sc.fxs, color = c.sub), maxLines = 1)
                     }
-                }
-            }
-            if (event.isAllDay) {
-                Spacer(GlanceModifier.width(sc.spaceXs))
-                Box(GlanceModifier.cornerRadius(999.dp).background(c.event).padding(horizontal = sc.spaceSm, vertical = 1.dp)) {
-                    Text("All day", style = TextStyle(fontSize = sc.fxs, fontWeight = FontWeight.Bold, color = c.bg), maxLines = 1)
                 }
             }
         }

@@ -294,7 +294,10 @@ fun isDataStale(lastUpdatedAt: Long): Boolean {
     return System.currentTimeMillis() - lastUpdatedAt > 30 * 60 * 1000L
 }
 
-/** RemoteViews text is hard-clipped at the edge rather than ellipsized, so shorten names up front. */
+/**
+ * A wrap-content text in a RemoteViews row takes all the width it asks for and pushes the
+ * siblings after it off-edge, so names that sit before other content are shortened up front.
+ */
 fun String.clip(max: Int): String = if (length <= max) this else take(max - 1).trimEnd() + "…"
 
 // ─────────────────────────────────────────────────────────────────
