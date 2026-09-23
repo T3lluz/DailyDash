@@ -69,7 +69,10 @@ private val STEPS = listOf(
     HelpStep(
         icon = AppIcons.Server,
         title = "Monitor Your Servers",
-        body = "Add an SSH host in Settings → Connections → Servers. The Servers card on Home opens a live dashboard; tap the sparkle on any section to ask Sysop, the Tech support bot on the AI tab, about it.",
+        body = "Add an SSH host in Settings → Connections → Servers. The Servers card on Home opens a live dashboard. " +
+            "Tap the sparkle on any section to ask Tech support on the AI tab about it. If the server runs the t3lluz " +
+            "dashboard, Tech support is Hermes, which can look at the server itself and asks before it changes anything, " +
+            "and the dashboard adds a day of history, service uptime and what is playing or downloading.",
     ),
     HelpStep(
         icon = AppIcons.Flag,

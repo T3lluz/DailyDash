@@ -66,6 +66,8 @@ fun SysopChatPane(
     viewModel: ChatViewModel,
     onNavigateToAiSettings: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Switches Tech support to Hermes on the dashboard server; null hides the option. */
+    onUseHermes: (() -> Unit)? = null,
 ) {
     val bot = ChatBot.SYSOP
     val state by viewModel.state(bot).collectAsState()
@@ -148,6 +150,21 @@ fun SysopChatPane(
                                     viewModel.newThread(bot)
                                 },
                             )
+                            if (onUseHermes != null) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            "Ask Hermes on your server instead",
+                                            color = ServerBrand,
+                                            fontSize = 13.sp,
+                                        )
+                                    },
+                                    onClick = {
+                                        threadMenuOpen = false
+                                        onUseHermes()
+                                    },
+                                )
+                            }
                             state.threads.take(12).forEach { thread ->
                                 DropdownMenuItem(
                                     text = {
