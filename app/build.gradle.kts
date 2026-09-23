@@ -6,13 +6,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
-    id("org.jetbrains.kotlin.plugin.serialization") version "1.9.22"
-}
-
-// Enable Compose strong skipping mode — skips recomposition when inputs haven't changed,
-// even for composables with "unstable" parameters (e.g. List, data classes from other modules).
-composeCompiler {
-    enableStrongSkippingMode = true
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -86,6 +80,8 @@ android {
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
             optIn.add("kotlin.RequiresOptIn")
+            // Hilt qualifiers on constructor properties (`@ApplicationContext private val …`) target the param and field alike.
+            freeCompilerArgs.add("-Xannotation-default-target=param-property")
         }
     }
 
