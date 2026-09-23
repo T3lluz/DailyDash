@@ -11,7 +11,9 @@
     <uses-permission android:name="android.permission.GET_ACCOUNTS" />
     <!-- Android 13+ post-notification permission -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- Live server stats notification (foreground service) -->
+    <!-- Android 16: lets "Hermes is working" show as a status-bar chip -->
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
+    <!-- Live server stats and Hermes turns (foreground services) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- Restores the live server notification after a reboot, when enabled -->
@@ -95,6 +97,19 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Continuously monitors user-configured SSH servers to keep the live status notification and alerts up to date" />
+        </service>
+
+        <!--
+            Runs only while Hermes is working on something, so a backgrounded app keeps
+            hearing the turn and can say when it is done.
+        -->
+        <service
+            android:name=".data.hermes.HermesTurnService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Follows a reply the user asked the Hermes agent for, so the app can notify them when it finishes" />
         </service>
 
         <!-- Restarts the live notification after a reboot when the user enabled it -->

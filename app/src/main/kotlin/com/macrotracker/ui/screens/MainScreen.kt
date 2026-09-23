@@ -3,11 +3,13 @@ package com.macrotracker.ui.screens
 import android.app.Activity
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.PredictiveBackHandler
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -29,8 +31,13 @@ import com.macrotracker.data.update.UpdateInstallActivity
 import com.macrotracker.ui.components.AppUpdateSheet
 import com.macrotracker.data.update.AppUpdateNotifier
 import com.macrotracker.data.update.updateAvailable
+import com.macrotracker.ui.components.LocalNavTabRise
+import com.macrotracker.ui.components.NavActivity
+import com.macrotracker.ui.components.NavTabRise
 import com.macrotracker.ui.components.PillNavigationBar
 import com.macrotracker.ui.components.WhatsNewDialog
+import com.macrotracker.ui.theme.MacroMotion
+import com.macrotracker.ui.viewmodel.HermesActivityViewModel
 import com.macrotracker.ui.navigation.DailyDashNavHost
 import com.macrotracker.ui.navigation.OnboardingRoutes
 import com.macrotracker.ui.navigation.Screen
@@ -54,6 +61,8 @@ fun MainScreen(
     onboardingViewModel: OnboardingViewModel = hiltViewModel(),
     serverRequest: StateFlow<ServerIntentRequest?>? = null,
     onServerRequestHandled: () -> Unit = {},
+    hermesRequest: StateFlow<String?>? = null,
+    onHermesRequestHandled: () -> Unit = {},
 ) {
     val activity = LocalContext.current as ComponentActivity
     val appUpdateViewModel: AppUpdateViewModel = hiltViewModel(viewModelStoreOwner = activity)
@@ -154,6 +163,26 @@ fun MainScreen(
         onServerRequestHandled()
     }
 
+    // Hermes in the navbar's tab and in notifications: both open the chat in Tech support.
+    val hermesActivityViewModel: HermesActivityViewModel = hiltViewModel()
+    val hermesActivity by hermesActivityViewModel.navActivity.collectAsState()
+    val pendingHermesRequest by (hermesRequest ?: remember { MutableStateFlow(null) }).collectAsState()
+    LaunchedEffect(pendingHermesRequest, onboardingCompleted, hasAiApiKey) {
+        val threadId = pendingHermesRequest ?: return@LaunchedEffect
+        if (!onboardingCompleted) return@LaunchedEffect
+        if (hasAiApiKey) {
+            hermesActivityViewModel.open(threadId)
+            navController.navigateToTab(Screen.AI.route)
+        }
+        onHermesRequestHandled()
+    }
+    val onHermesActivityClick = remember(hermesActivityViewModel, navController) {
+        { tab: NavActivity ->
+            hermesActivityViewModel.open(tab.key)
+            navController.navigateToTab(Screen.AI.route)
+        }
+    }
+
     val onOnboardingComplete = remember(onboardingViewModel) {
         { onboardingViewModel.completeOnboarding() }
     }
@@ -201,6 +230,9 @@ fun MainScreen(
                 navController.navigateToTab(Screen.Settings.route)
                 navController.navigate(SettingsRoutes.ABOUT) { launchSingleTop = true }
             },
+            // Without the AI tab there is nowhere for the tab to lead.
+            activity = hermesActivity.takeIf { hasAiApiKey },
+            onActivityClick = onHermesActivityClick,
         )
 
         if (!splashShown) {
@@ -242,6 +274,8 @@ private fun MainScreenScaffold(
     showSettingsUpdateBadge: Boolean,
     hasAiApiKey: Boolean,
     onSettingsUpdateBadgeClick: () -> Unit,
+    activity: NavActivity?,
+    onActivityClick: (NavActivity) -> Unit,
 ) {
     val navHostModifier = remember { Modifier.statusBarsPadding() }
 
@@ -272,24 +306,37 @@ private fun MainScreenScaffold(
 
     val hazeState = rememberHazeState()
 
+    // The navbar's tab rises out of the pill; the chat composers float just above the
+    // bar, so they lift by the same amount at the same pace.
+    val activityProgress by animateFloatAsState(
+        targetValue = if (activity != null) 1f else 0f,
+        animationSpec = MacroMotion.navTabSpring(),
+        label = "nav_tab_rise",
+    )
+
     // Overlay the frosted pill on top of content so scrolling content
     // can blur through the bar (hazeSource + hazeEffect).
     Box(modifier = Modifier.fillMaxSize()) {
-        DailyDashNavHost(
-            navController = navController,
-            modifier = navHostModifier
-                .fillMaxSize()
-                .hazeSource(state = hazeState),
-            startDestination = startDestination,
-            onOnboardingComplete = onOnboardingComplete,
-            aiAvailable = hasAiApiKey,
-        )
+        CompositionLocalProvider(LocalNavTabRise provides NavTabRise * activityProgress.coerceIn(0f, 1f)) {
+            DailyDashNavHost(
+                navController = navController,
+                modifier = navHostModifier
+                    .fillMaxSize()
+                    .hazeSource(state = hazeState),
+                startDestination = startDestination,
+                onOnboardingComplete = onOnboardingComplete,
+                aiAvailable = hasAiApiKey,
+            )
+        }
         MainBottomBar(
             navController = navController,
             items = items,
             showSettingsUpdateBadge = showSettingsUpdateBadge,
             onSettingsUpdateBadgeClick = onSettingsUpdateBadgeClick,
             hazeState = hazeState,
+            activity = activity,
+            activityProgress = activityProgress,
+            onActivityClick = onActivityClick,
             modifier = Modifier.align(Alignment.BottomCenter),
         )
     }
@@ -302,6 +349,9 @@ private fun MainBottomBar(
     showSettingsUpdateBadge: Boolean,
     onSettingsUpdateBadgeClick: () -> Unit,
     hazeState: HazeState,
+    activity: NavActivity?,
+    activityProgress: Float,
+    onActivityClick: (NavActivity) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -325,6 +375,9 @@ private fun MainBottomBar(
             onItemClick = onItemClick,
             showSettingsUpdateBadge = showSettingsUpdateBadge,
             hazeState = hazeState,
+            activity = activity,
+            activityProgress = activityProgress,
+            onActivityClick = onActivityClick,
         )
     }
 }

@@ -52,7 +52,15 @@ com.macrotracker/
                               CLI mode like `agent`). HermesCatalog ports the web's picker rules
                               (`hermes-models.js` / `hermes-core.js`): families per provider, OpenCode's billed
                               rows behind search, `pickVariant` for depth/think/fast, modes per CLI source with
-                              `modeFor` mapping a saved mode by kind. HermesCatalogTest pins them
+                              `modeFor` mapping a saved mode by kind. HermesCatalogTest pins them.
+                              Turns outside the chat: the pane reports each live turn to the singleton
+                              HermesActivityTracker (label from `HermesActivityLabel.of(live)`); when it
+                              stops following a running turn it `release`s it and HermesTurnService
+                              (specialUse FGS) rejoins it via `/watch` and sees it through. The first
+                              follower to `finish` a turn wins. HermesNotifier: silent ongoing
+                              notification (Android 16 promoted chip, Stop) plus a "done / needs you /
+                              failed" one with Reply (RemoteInput → the service sends it), posted only
+                              while the app is in the background. HermesActivityTest pins the labels
     server/                ← server monitor: SSH probes (SshClient/ServerProbe), ServerMonitorService +
                               ServerNotifier, encrypted ServerStore, ServerAdvisories.
                               ServerProbe has three lanes: the fast script (every poll: /proc, df, hwmon
@@ -150,7 +158,12 @@ com.macrotracker/
                              SubScreenRoutes (const routes) + DailyDashNavHost.kt + NavigationActions.kt
                              (`navigateToTab`, `popSubScreen`, `subScreen` destination builder)
     components/            ← shared Composables (MacroCard, PillNavigationBar, DraggableWidgetColumn,
-                              WidgetEditor, WidgetExpandBar, PillButton, …). ScreenHeader.kt: tab
+                              WidgetEditor, WidgetExpandBar, PillButton, …). PillNavigationBar grows a
+                              tab from its top-left edge while Hermes works (NavActivityTab.kt:
+                              `NavWithTabShape` is pill + tab as one outline, so the glass has no seam;
+                              `LocalNavTabRise` lifts the chat composers with it). WorkingScanner.kt is
+                              opencode's Knight Rider scanner (KnightRiderTest pins it to opencode's
+                              frames). ScreenHeader.kt: tab
                               `ScreenHeader`, pushed-screen `SubScreenHeader`, `TabContentBottomPadding`,
                               `Modifier.subScreenBottomPadding()`. HomeWidgetShell.kt: card chrome shared by
                               every Home/Health card — `CardHeader`, `HubCardHeader` + `HubHeaderAction`,

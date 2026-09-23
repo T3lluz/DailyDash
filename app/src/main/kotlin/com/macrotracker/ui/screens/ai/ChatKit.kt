@@ -57,6 +57,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.macrotracker.ui.components.LocalNavTabRise
 import com.macrotracker.ui.components.MarkdownText
 import com.macrotracker.ui.components.TypingDots
 import com.macrotracker.ui.components.dottedGlass
@@ -449,7 +450,7 @@ fun ChatComposer(
     val density = LocalDensity.current
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val imeOpen = WindowInsets.ime.getBottom(density) > 0
-    val bottomPad = if (imeOpen) 10.dp else navBottom + PillNavClearance
+    val bottomPad = if (imeOpen) 10.dp else navBottom + PillNavClearance + LocalNavTabRise.current
     val canSend = enabled && value.isNotBlank()
     val sendBackground by animateColorAsState(
         targetValue = if (canSend) accent else Border,

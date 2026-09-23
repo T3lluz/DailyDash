@@ -77,6 +77,7 @@ import com.macrotracker.data.hermes.HermesPermission
 import com.macrotracker.data.hermes.HermesStatus
 import com.macrotracker.data.hermes.HermesThreadSummary
 import com.macrotracker.ui.components.LivePulseDot
+import com.macrotracker.ui.components.LocalNavTabRise
 import com.macrotracker.ui.components.LoadingSpinner
 import com.macrotracker.ui.components.dottedGlass
 import com.macrotracker.ui.theme.AppIcons
@@ -519,7 +520,7 @@ internal fun HermesComposer(
     val density = LocalDensity.current
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val imeOpen = WindowInsets.ime.getBottom(density) > 0
-    val bottomPad = if (imeOpen) 10.dp else navBottom + PillNavClearance
+    val bottomPad = if (imeOpen) 10.dp else navBottom + PillNavClearance + LocalNavTabRise.current
     val hasContent = value.isNotBlank() || attachments.isNotEmpty()
     val showStop = busy && value.isBlank()
     val canSend = enabled && hasContent && !uploading

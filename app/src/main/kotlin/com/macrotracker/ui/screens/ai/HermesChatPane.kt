@@ -1,6 +1,14 @@
 package com.macrotracker.ui.screens.ai
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import com.macrotracker.data.hermes.HermesActivityLabel
+import com.macrotracker.ui.components.WorkingScanner
+import com.macrotracker.ui.util.rememberIsResumed
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.DrawerValue
@@ -166,8 +174,27 @@ fun HermesChatPane(
         onDispose { viewModel.stopLive() }
     }
 
+    // While this chat is on screen its turns end without a notification or a navbar "Done".
+    val resumed = rememberIsResumed()
+    DisposableEffect(viewModel, resumed, state.threadId) {
+        viewModel.setViewing(resumed)
+        onDispose { viewModel.setViewing(false) }
+    }
+
     val attachLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let(viewModel::attach)
+    }
+
+    // "Hermes is done" is a notification, so the first message asks once if they are off.
+    val context = LocalContext.current
+    var askedNotifications by rememberSaveable { mutableStateOf(false) }
+    val notificationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    fun askForNotifications() {
+        if (askedNotifications || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        askedNotifications = true
+        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        if (!granted) notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
     fun closeRail() {
@@ -186,6 +213,7 @@ fun HermesChatPane(
         draft = ""
         forceFollow = true
         viewModel.send(body)
+        askForNotifications()
     }
 
     val current = state.currentThread
@@ -507,7 +535,7 @@ private fun openQuestion(state: HermesUiState): HermesItem.Clarify? =
 private fun headerStatus(state: HermesUiState): String {
     val live = state.live
     return when {
-        live != null -> "Hermes · ${live.phase.ifBlank { "working" }}"
+        live != null -> "Hermes · ${HermesActivityLabel.of(live).text.lowercase()}"
         state.reach == HermesReach.DOWN -> "Hermes is not reachable"
         state.status != null -> listOfNotNull(
             state.currentModel?.familyLabel ?: state.status.modelLabel,
@@ -1068,10 +1096,10 @@ private fun LiveTurn(live: HermesLive) {
         Spacer(Modifier.width(9.dp))
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                com.macrotracker.ui.components.TypingDots(color = ServerBrand, dotSize = 5.dp)
+                WorkingScanner(color = ServerBrand, blockSize = 5.dp, gap = 2.dp)
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    live.phase.ifBlank { "working" },
+                    HermesActivityLabel.of(live).text,
                     color = TextSecondary,
                     fontSize = 12.sp,
                     maxLines = 1,
