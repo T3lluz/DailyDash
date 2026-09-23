@@ -19,7 +19,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -34,6 +33,7 @@ import com.macrotracker.ui.navigation.DailyDashNavHost
 import com.macrotracker.ui.navigation.OnboardingRoutes
 import com.macrotracker.ui.navigation.Screen
 import com.macrotracker.ui.navigation.SettingsRoutes
+import com.macrotracker.ui.navigation.navigateToTab
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import com.macrotracker.ui.screens.onboarding.SplashOverlay
@@ -167,22 +167,13 @@ fun MainScreen(
             navController = navController,
             items = items,
             startDestination = startDestination,
-            onboardingCompleted = onboardingCompleted,
             onOnboardingComplete = onOnboardingComplete,
             showSettingsUpdateBadge = updateAvailable,
             hasAiApiKey = hasAiApiKey,
             onSettingsUpdateBadgeClick = {
                 appUpdateViewModel.openDialog()
-                navController.navigate(Screen.Settings.route) {
-                    popUpTo(navController.graph.findStartDestination().id) {
-                        saveState = true
-                    }
-                    launchSingleTop = true
-                    restoreState = true
-                }
-                navController.navigate(SettingsRoutes.ABOUT) {
-                    launchSingleTop = true
-                }
+                navController.navigateToTab(Screen.Settings.route)
+                navController.navigate(SettingsRoutes.ABOUT) { launchSingleTop = true }
             },
         )
 
@@ -230,7 +221,6 @@ private fun MainScreenScaffold(
     navController: NavHostController,
     items: List<Screen>,
     startDestination: String,
-    onboardingCompleted: Boolean,
     onOnboardingComplete: () -> Unit,
     showSettingsUpdateBadge: Boolean,
     hasAiApiKey: Boolean,
@@ -248,13 +238,7 @@ private fun MainScreenScaffold(
     // bottom bar does not vanish with no selected tab.
     LaunchedEffect(hasAiApiKey, currentRoute) {
         if (!hasAiApiKey && currentRoute == Screen.AI.route) {
-            navController.navigate(Screen.Home.route) {
-                popUpTo(navController.graph.findStartDestination().id) {
-                    saveState = true
-                }
-                launchSingleTop = true
-                restoreState = true
-            }
+            navController.navigateToTab(Screen.Home.route)
         }
     }
 
@@ -280,8 +264,8 @@ private fun MainScreenScaffold(
                 .fillMaxSize()
                 .hazeSource(state = hazeState),
             startDestination = startDestination,
-            onboardingCompleted = onboardingCompleted,
             onOnboardingComplete = onOnboardingComplete,
+            aiAvailable = hasAiApiKey,
         )
         MainBottomBar(
             navController = navController,
@@ -312,13 +296,7 @@ private fun MainBottomBar(
             if (screen is Screen.Settings && showSettingsUpdateBadge) {
                 onSettingsUpdateBadgeClick()
             } else {
-                navController.navigate(screen.route) {
-                    popUpTo(navController.graph.findStartDestination().id) {
-                        saveState = true
-                    }
-                    launchSingleTop = true
-                    restoreState = true
-                }
+                navController.navigateToTab(screen.route)
             }
         }
     }

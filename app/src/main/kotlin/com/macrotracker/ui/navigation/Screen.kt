@@ -43,3 +43,11 @@ object SettingsRoutes {
     const val SERVERS = "settings_servers"
     const val ABOUT = "settings_about"
 }
+
+// Other pushed sub-screens
+object SubScreenRoutes {
+    const val STATS = "stats"
+    const val HELP = "help"
+    const val WIDGETS = "widgets"
+    const val CAMERA_SCAN = "camera_scan"
+}
