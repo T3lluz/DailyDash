@@ -16,6 +16,7 @@ import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.room.Room
+import com.macrotracker.data.calendar.calendarLocalDateTime
 import com.macrotracker.data.local.GoalsEntity
 import com.macrotracker.data.local.MacroDatabase
 import com.macrotracker.data.local.SettingsRepository
@@ -647,15 +648,16 @@ object DashboardWidgetDataProvider {
                     val title = it.getString(0) ?: "(No title)"
                     val begin = it.getLong(1)
                     val isAllDay = it.getInt(3) == 1
-
-                    // Count today's events
-                    if (begin in todayStart until todayEnd) {
-                        todayCount++
+                    val today = LocalDate.now()
+                    val eventDt = calendarLocalDateTime(begin, isAllDay, zone)
+                    val eventDate = eventDt.toLocalDate()
+                    if (isAllDay && !calendarLocalDateTime(it.getLong(2), true, zone).toLocalDate().isAfter(today)) {
+                        continue
                     }
 
-                    val eventDt = LocalDateTime.ofInstant(Instant.ofEpochMilli(begin), zone)
-                    val eventDate = eventDt.toLocalDate()
-                    val today = LocalDate.now()
+                    if (if (isAllDay) eventDate == today else begin in todayStart until todayEnd) {
+                        todayCount++
+                    }
 
                     val monthDay = eventDate.format(DateTimeFormatter.ofPattern("MMM d"))
                     val relativeDay = when {

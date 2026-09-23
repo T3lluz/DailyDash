@@ -15,10 +15,18 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/**
+ * Wall-clock time of a calendar instance boundary. The provider stores all-day events at
+ * UTC midnight, so reading them in the device zone moves them a day early west of UTC.
+ */
+fun calendarLocalDateTime(epochMillis: Long, allDay: Boolean, zone: ZoneId): LocalDateTime =
+    LocalDateTime.ofInstant(Instant.ofEpochMilli(epochMillis), if (allDay) ZoneOffset.UTC else zone)
 
 data class CalendarEvent(
     val id: Long,
@@ -181,8 +189,10 @@ class CalendarRepository @Inject constructor(
                     val calendarName = it.getString(9) ?: ""
                     val calendarId = it.getLong(10)
 
-                    val startDt = LocalDateTime.ofInstant(Instant.ofEpochMilli(begin), zone)
-                    val endDt = LocalDateTime.ofInstant(Instant.ofEpochMilli(end), zone)
+                    val startDt = calendarLocalDateTime(begin, allDay, zone)
+                    val endDt = calendarLocalDateTime(end, allDay, zone)
+                    // The UTC-based query window also catches yesterday's all-day events east of UTC.
+                    if (allDay && !endDt.toLocalDate().isAfter(LocalDate.now())) continue
 
                     events.add(
                         CalendarEvent(
