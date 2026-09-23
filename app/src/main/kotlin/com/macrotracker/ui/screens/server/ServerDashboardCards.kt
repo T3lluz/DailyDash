@@ -3,6 +3,11 @@ package com.macrotracker.ui.screens.server
 import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -54,7 +59,7 @@ import com.macrotracker.ui.theme.TextTertiary
 import com.macrotracker.ui.util.rememberHaptics
 import kotlin.math.roundToInt
 
-/** How many services the wall shows before "Show all". */
+/** How many services the wall shows before "Show all": three rows of two. */
 private const val SERVICES_FOLDED = 6
 
 /**
@@ -62,7 +67,8 @@ private const val SERVICES_FOLDED = 6
  *
  * The record is honest because the server does the probing: the collector opens a
  * connection to each upstream every run, whether or not anyone is watching. The phone
- * only reads the result. Down ones sort first; a tap opens the service.
+ * only reads the result. Down ones sort first; a tap opens the service. Tiles, as on
+ * the dashboard's wall, two to a row on a phone and three when there is room.
  */
 @Composable
 internal fun ServicesWallCard(link: DashboardLink, onAskAi: (() -> Unit)?) {
@@ -89,11 +95,27 @@ internal fun ServicesWallCard(link: DashboardLink, onAskAi: (() -> Unit)?) {
             onAskAi = onAskAi,
         )
         val shown = if (showAll) services else services.take(SERVICES_FOLDED)
-        shown.forEachIndexed { index, service ->
-            if (index > 0) HorizontalDivider(color = Border.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 5.dp))
-            ServiceRow(service) {
-                haptics.tick()
-                context.startActivity(Intent(Intent.ACTION_VIEW, service.href.toUri()))
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            val columns = if (maxWidth >= 520.dp) 3 else 2
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                shown.chunked(columns).forEach { row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        row.forEach { service ->
+                            ServiceTile(
+                                service = service,
+                                modifier = Modifier.weight(1f).fillMaxHeight(),
+                            ) {
+                                haptics.tick()
+                                context.startActivity(Intent(Intent.ACTION_VIEW, service.href.toUri()))
+                            }
+                        }
+                        // Keep the last row's tiles the same width as the rest.
+                        repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                }
             }
         }
         if (services.size > SERVICES_FOLDED) {
@@ -122,49 +144,55 @@ internal fun ServicesWallCard(link: DashboardLink, onAskAi: (() -> Unit)?) {
 }
 
 @Composable
-private fun ServiceRow(service: DashboardService, onClick: () -> Unit) {
+private fun ServiceTile(service: DashboardService, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val statusColor = when (service.up) {
         true -> ServerGood
         false -> ServerCritical
         null -> TextTertiary
     }
+    val shape = RoundedCornerShape(10.dp)
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+        modifier = modifier
+            .clip(shape)
+            .background(ServerWell)
+            .then(
+                if (service.up == false) Modifier.border(1.dp, ServerCritical.copy(alpha = 0.55f), shape) else Modifier,
+            )
             .clickable(onClick = onClick)
-            .padding(vertical = 2.dp),
+            // The bars sit inside this padding, so the tile's rounded corners never cut
+            // the first and last half hour off.
+            .padding(10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             ServiceIcon(service)
-            Spacer(Modifier.width(10.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        service.title,
-                        color = TextPrimary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(statusColor))
-                }
-                Text(
-                    listOfNotNull(
-                        service.description,
-                        if (service.up == false) "down" else null,
-                        service.drops.takeIf { it > 0 }?.let { if (it == 1) "1 drop" else "$it drops" },
-                    ).joinToString(" · "),
-                    color = if (service.up == false) ServerCritical else TextSecondary,
-                    fontSize = 11.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
             Spacer(Modifier.width(8.dp))
+            Text(
+                service.title,
+                color = TextPrimary,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(6.dp))
+            Box(Modifier.size(7.dp).clip(RoundedCornerShape(4.dp)).background(statusColor))
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            when {
+                service.up == false -> "Down"
+                !service.description.isNullOrBlank() -> service.description
+                else -> " "
+            },
+            color = if (service.up == false) ServerCritical else TextSecondary,
+            fontSize = 11.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(Modifier.weight(1f, fill = true))
+        Spacer(Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.Bottom) {
             Text(
                 service.uptimePercent?.let { if (it >= 99.95f) "100%" else "%.1f%%".format(it) } ?: "—",
                 color = when {
@@ -173,13 +201,23 @@ private fun ServiceRow(service: DashboardService, onClick: () -> Unit) {
                     service.uptimePercent >= 95f -> ServerWarn
                     else -> ServerCritical
                 },
-                fontSize = 12.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace,
+                modifier = Modifier.weight(1f),
             )
+            service.drops.takeIf { it > 0 }?.let { drops ->
+                Text(
+                    if (drops == 1) "1 drop" else "$drops drops",
+                    color = ServerWarn,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                )
+            }
         }
         Spacer(Modifier.height(5.dp))
-        UptimeBars(bars = service.bars, height = 10.dp)
+        UptimeBars(bars = service.bars, height = 12.dp, gap = 1.dp, emptyColor = Border)
     }
 }
 

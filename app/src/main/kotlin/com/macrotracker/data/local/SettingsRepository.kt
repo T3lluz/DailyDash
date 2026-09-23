@@ -133,6 +133,14 @@ class SettingsRepository @Inject constructor(
     private val _healthWidgetOrder = MutableStateFlow(loadHealthWidgetOrder())
     val healthWidgetOrder: StateFlow<String> = _healthWidgetOrder
 
+    /**
+     * Section order and visibility on the server screen, in the same `ID:visible,…` form
+     * as Home and Health. Blank means the built-in order; sections added later are
+     * appended by `parseWidgetConfig`.
+     */
+    private val _serverSectionOrder = MutableStateFlow(prefs.getString(KEY_SERVER_SECTION_ORDER, "") ?: "")
+    val serverSectionOrder: StateFlow<String> = _serverSectionOrder
+
     fun setAiProvider(provider: AiProvider) {
         prefs.edit { putString(KEY_AI_PROVIDER, provider.storageValue) }
         _aiProvider.value = provider
@@ -230,6 +238,11 @@ class SettingsRepository @Inject constructor(
         _healthWidgetOrder.value = order
     }
 
+    fun updateServerSectionOrder(order: String) {
+        prefs.edit { putString(KEY_SERVER_SECTION_ORDER, order) }
+        _serverSectionOrder.value = order
+    }
+
     fun setMasterHealthConnectEnabled(enabled: Boolean) {
         healthPrefs.edit { putBoolean("master_health_connect_enabled", enabled) }
         _masterHealthConnectEnabled.value = enabled
@@ -312,6 +325,7 @@ class SettingsRepository @Inject constructor(
     }
 
     companion object {
+        const val KEY_SERVER_SECTION_ORDER = "server_section_order"
         const val KEY_AI_PROVIDER = "ai_provider"
         const val KEY_GEMINI_API_KEY = "gemini_api_key"
         const val KEY_OPENAI_API_KEY = "openai_api_key"

@@ -471,16 +471,23 @@ fun StackedMeter(
  * answered, red when none did, amber for a mix, and a faint stub where there is no data.
  */
 @Composable
-fun UptimeBars(bars: List<Float?>, modifier: Modifier = Modifier, height: Dp = 14.dp) {
+fun UptimeBars(
+    bars: List<Float?>,
+    modifier: Modifier = Modifier,
+    height: Dp = 14.dp,
+    gap: Dp = 1.5.dp,
+    /** The stub for a half hour with no data; it must differ from what the bars sit on. */
+    emptyColor: Color = ServerWell,
+) {
     Canvas(modifier = modifier.fillMaxWidth().height(height)) {
         if (bars.isEmpty()) return@Canvas
-        val gap = 1.5.dp.toPx()
-        val w = ((size.width - gap * (bars.size - 1)) / bars.size).coerceAtLeast(1f)
+        val gapPx = gap.toPx()
+        val w = ((size.width - gapPx * (bars.size - 1)) / bars.size).coerceAtLeast(1f)
         val radius = CornerRadius(w / 3f)
         bars.forEachIndexed { i, v ->
-            val x = i * (w + gap)
+            val x = i * (w + gapPx)
             val (color, h) = when {
-                v == null -> ServerWell to size.height * 0.35f
+                v == null -> emptyColor to size.height * 0.35f
                 v >= 0.999f -> ServerGood.copy(alpha = 0.85f) to size.height
                 v <= 0.001f -> ServerCritical to size.height
                 else -> ServerWarn to size.height

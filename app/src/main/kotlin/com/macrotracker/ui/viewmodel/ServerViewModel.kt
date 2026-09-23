@@ -53,8 +53,14 @@ class ServerViewModel @Inject constructor(
     private val focus: ServerFocus,
     private val store: ServerStore,
     private val notifier: ServerNotifier,
+    private val settingsRepository: com.macrotracker.data.local.SettingsRepository,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
+
+    /** Which server-screen sections show, and in what order; see [com.macrotracker.ui.screens.ServerSections]. */
+    val sectionOrder: StateFlow<String> = settingsRepository.serverSectionOrder
+
+    fun updateSectionOrder(order: String) = settingsRepository.updateServerSectionOrder(order)
 
     val runtimes: StateFlow<Map<String, ServerRuntime>> = repository.runtimes
     val profiles: StateFlow<List<ServerProfile>> = repository.profiles
