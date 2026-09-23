@@ -521,7 +521,7 @@ private fun HomeQuickAddWidget(
                 modifier = Modifier.weight(1f),
             )
             MacroButton(
-                text = "📋 View All Logs",
+                text = "View all logs",
                 onClick = onNavigateToHealth,
                 modifier = Modifier.weight(1f),
                 variant = ButtonVariant.SECONDARY,

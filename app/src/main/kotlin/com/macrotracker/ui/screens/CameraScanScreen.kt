@@ -981,7 +981,7 @@ private fun ResultPhase(
 
         // Action buttons
         MacroButton(
-            text = "➕  Log to Today",
+            text = "Log to today",
             onClick = {
                 val missingRequired = mutableListOf<String>()
                 if (summary.foodName.isBlank() || summary.foodName.lowercase() == "scanned food") missingRequired.add("product name")
@@ -1001,10 +1001,25 @@ private fun ResultPhase(
                     onLog(summary)
                 }
             },
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            modifier = Modifier.padding(horizontal = 16.dp),
         )
-        MacroButton(text = "Scan Again", onClick = onScanAgain, variant = ButtonVariant.SECONDARY, modifier = Modifier.padding(horizontal = 16.dp))
-        MacroButton(text = "Cancel", onClick = onCancel, variant = ButtonVariant.SECONDARY, modifier = Modifier.padding(horizontal = 16.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            MacroButton(
+                text = "Scan again",
+                onClick = onScanAgain,
+                variant = ButtonVariant.SECONDARY,
+                modifier = Modifier.weight(1f),
+            )
+            MacroButton(
+                text = "Cancel",
+                onClick = onCancel,
+                variant = ButtonVariant.SECONDARY,
+                modifier = Modifier.weight(1f),
+            )
+        }
         Spacer(modifier = Modifier.height(40.dp))
     }
 }

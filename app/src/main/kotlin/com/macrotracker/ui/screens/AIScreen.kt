@@ -83,6 +83,7 @@ import com.macrotracker.data.remote.NutritionEstimate
 import com.macrotracker.ui.components.ButtonVariant
 import com.macrotracker.ui.components.MacroButton
 import com.macrotracker.ui.components.MacroTextField
+import com.macrotracker.ui.components.PillButton
 import com.macrotracker.ui.components.ScreenHeader
 import com.macrotracker.ui.components.ScreenHeaderSpacer
 import com.macrotracker.data.chat.ChatBot
@@ -98,7 +99,6 @@ import com.macrotracker.ui.screens.ai.FollowChatOnKeyboard
 import com.macrotracker.ui.screens.ai.SysopIdentity
 import com.macrotracker.ui.screens.ai.followChatBottom
 import com.macrotracker.ui.screens.ai.rememberNearChatBottom
-import com.macrotracker.ui.screens.ai.ChatHeaderAction
 import com.macrotracker.ui.screens.ai.DishSuggestion
 import com.macrotracker.ui.screens.ai.SmallActionChip
 import com.macrotracker.ui.screens.ai.SysopChatPane
@@ -575,16 +575,16 @@ private fun AiChatHeader(
         else -> "Describe a meal, snap it, or scan the label"
     }
     ChatPaneHeader(status = status, active = loading, accent = Primary) {
-        ChatHeaderAction(
+        PillButton(
             icon = Icons.Outlined.CameraAlt,
             label = "Scan label",
             emphasized = true,
             onClick = onCameraScan,
         )
         if (loading) {
-            ChatHeaderAction(icon = Icons.Outlined.Close, label = "Stop", onClick = onCancel)
+            PillButton(icon = Icons.Outlined.Close, label = "Stop", onClick = onCancel)
         } else if (canClear) {
-            ChatHeaderAction(icon = Icons.Outlined.DeleteSweep, label = "New chat", onClick = onClear)
+            PillButton(icon = Icons.Outlined.DeleteSweep, label = "New chat", onClick = onClear)
         }
     }
 }

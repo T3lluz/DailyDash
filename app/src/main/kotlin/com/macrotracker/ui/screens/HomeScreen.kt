@@ -7,8 +7,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
@@ -53,6 +54,7 @@ import com.macrotracker.ui.components.encodeWidgetConfig
 import com.macrotracker.ui.components.parseWidgetConfig
 import com.macrotracker.ui.components.rememberDraggableWidgetListState
 import com.macrotracker.ui.components.ScreenHeader
+import com.macrotracker.ui.components.TabContentBottomPadding
 import com.macrotracker.ui.components.ScreenHeaderSpacer
 import com.macrotracker.ui.util.HOME_RESUME_DEFER_MS
 import com.macrotracker.ui.util.LocalTickersPaused
@@ -276,10 +278,12 @@ fun HomeScreen(
             userScrollEnabled = !dragState.isDragActive,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                .imePadding(),
+            contentPadding = PaddingValues(
+                start = 16.dp,
+                end = 16.dp,
                 top = 16.dp,
-                bottom = 120.dp,
+                bottom = TabContentBottomPadding,
             ),
         ) {
             item(key = "header") {

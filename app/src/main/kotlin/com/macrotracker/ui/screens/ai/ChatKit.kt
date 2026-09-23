@@ -407,39 +407,6 @@ fun SmallActionChip(
     }
 }
 
-@Composable
-fun ChatHeaderAction(
-    icon: ImageVector,
-    label: String,
-    onClick: () -> Unit,
-    accent: Color = Primary,
-    emphasized: Boolean = false,
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .clip(ChatPillShape)
-            .background(if (emphasized) accent.copy(alpha = 0.16f) else Surface)
-            .border(1.dp, if (emphasized) accent.copy(alpha = 0.38f) else Border, ChatPillShape)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 13.dp, vertical = 8.dp),
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = if (emphasized) accent else TextSecondary,
-            modifier = Modifier.size(15.dp),
-        )
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(
-            label,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = if (emphasized) accent else TextPrimary,
-        )
-    }
-}
-
 /** Starter questions on an empty thread. */
 @Composable
 fun ChatStarters(starters: List<String>, onPick: (String) -> Unit) {

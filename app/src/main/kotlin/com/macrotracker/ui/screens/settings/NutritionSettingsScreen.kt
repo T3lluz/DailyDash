@@ -142,7 +142,7 @@ fun NutritionSettingsScreen(
             }
 
             MacroButton(
-                text = if (goalsSaved) "Goals Saved" else "Save Goals",
+                text = if (goalsSaved) "Goals saved" else "Save goals",
                 onClick = {
                     haptics.confirm()
                     statsViewModel.saveGoals()

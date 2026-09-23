@@ -298,7 +298,7 @@ fun AiSettingsScreen(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 MacroButton(
-                    text = if (keySaved) "Saved ✓" else "Save Key",
+                    text = if (keySaved) "Saved" else "Save key",
                     onClick = {
                         haptics.confirm()
                         viewModel.saveApiKey(aiProvider, draftKey)
@@ -515,24 +515,10 @@ private fun ClaudeSubscriptionBlock(
             }
         } else {
             Spacer(modifier = Modifier.height(10.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                if (connected) {
-                    MacroButton(
-                        text = "Disconnect",
-                        onClick = onDisconnect,
-                        modifier = Modifier.weight(1f),
-                        variant = ButtonVariant.SECONDARY,
-                    )
-                } else {
-                    MacroButton(
-                        text = "Connect Claude",
-                        onClick = onConnect,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
+            if (connected) {
+                MacroButton(text = "Disconnect", onClick = onDisconnect, variant = ButtonVariant.SECONDARY)
+            } else {
+                MacroButton(text = "Connect Claude", onClick = onConnect)
             }
         }
 

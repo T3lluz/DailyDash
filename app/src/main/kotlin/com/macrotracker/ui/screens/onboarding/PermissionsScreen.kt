@@ -189,7 +189,7 @@ fun PermissionsScreen(onContinue: () -> Unit) {
             )
             Spacer(modifier = Modifier.height(12.dp))
             MacroButton(
-                text = "Grant All Permissions",
+                text = "Grant all permissions",
                 onClick = { multiLauncher.launch(permissionsToRequest) },
                 variant = ButtonVariant.PRIMARY,
                 modifier = Modifier.fillMaxWidth(),

@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import com.macrotracker.data.chat.BotPrompts
 import com.macrotracker.data.chat.ChatBot
 import com.macrotracker.data.chat.ChatRole
+import com.macrotracker.ui.components.PillButton
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.ServerBrand
 import com.macrotracker.ui.theme.Surface
@@ -120,7 +121,7 @@ fun SysopChatPane(
                 accent = ServerBrand,
             ) {
                 if (state.loading) {
-                    ChatHeaderAction(
+                    PillButton(
                         icon = Icons.Outlined.Close,
                         label = "Stop",
                         accent = ServerBrand,
@@ -131,7 +132,7 @@ fun SysopChatPane(
                     )
                 } else {
                     Box {
-                        ChatHeaderAction(
+                        PillButton(
                             icon = Icons.Outlined.History,
                             label = "Threads",
                             accent = ServerBrand,

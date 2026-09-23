@@ -238,7 +238,7 @@ fun TutorialScreen(onFinish: () -> Unit) {
             ) {
                 if (isLastPage) {
                     MacroButton(
-                        text = "Start Dashing 🚀",
+                        text = "Start dashing",
                         onClick = onFinish,
                         variant = ButtonVariant.PRIMARY,
                         modifier = Modifier.fillMaxWidth(),

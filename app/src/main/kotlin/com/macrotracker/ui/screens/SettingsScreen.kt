@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.macrotracker.ui.components.ScreenHeader
+import com.macrotracker.ui.components.TabContentBottomPadding
 import com.macrotracker.ui.components.ScreenHeaderSpacer
 import com.macrotracker.ui.screens.settings.SettingsCategoryGroup
 import com.macrotracker.ui.screens.settings.SettingsCategoryItem
@@ -47,7 +48,7 @@ fun SettingsScreen(
             .background(Background)
             .verticalScroll(rememberScrollState())
             .padding(16.dp)
-            .padding(bottom = 120.dp),
+            .padding(bottom = TabContentBottomPadding),
     ) {
         ScreenHeaderSpacer()
         ScreenHeader(title = "Settings")
