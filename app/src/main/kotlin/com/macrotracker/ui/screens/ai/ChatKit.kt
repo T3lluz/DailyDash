@@ -1,5 +1,6 @@
 package com.macrotracker.ui.screens.ai
 
+import android.content.ClipData
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
@@ -46,13 +47,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -72,6 +73,17 @@ import com.macrotracker.ui.theme.Surface
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import dev.chrisbanes.haze.HazeState
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.text.style.TextOverflow
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Every visual primitive both chat bots share.
@@ -99,7 +111,84 @@ private val ComposerShape = RoundedCornerShape(22.dp)
 private val ComposerSendShape = RoundedCornerShape(999.dp)
 
 /** Pill nav = 64dp + 8dp bottom pad; keep a little air above it. */
-val PillNavClearance = 80.dp
+private val PillNavClearance = 80.dp
+
+// ── Scrolling ────────────────────────────────────────────────────────────────
+
+/** Scroll far enough that the newest message's bottom clears the floating composer. */
+suspend fun LazyListState.followChatBottom() {
+    val lastIndex = layoutInfo.totalItemsCount - 1
+    if (lastIndex < 0) return
+    // Jump to the last item, then nudge so tall cards aren't clipped by the composer strip.
+    animateScrollToItem(lastIndex)
+    val lastItem = layoutInfo.visibleItemsInfo.lastOrNull() ?: return
+    val visibleBottom = layoutInfo.viewportEndOffset - layoutInfo.afterContentPadding
+    val overflow = (lastItem.offset + lastItem.size) - visibleBottom
+    if (overflow > 0) animateScrollBy(overflow.toFloat())
+}
+
+/** True while the newest message is (nearly) in view — i.e. the user is following along. */
+@Composable
+fun rememberNearChatBottom(listState: LazyListState): State<Boolean> = remember(listState) {
+    derivedStateOf {
+        val info = listState.layoutInfo
+        val lastVisible = info.visibleItemsInfo.lastOrNull() ?: return@derivedStateOf true
+        val lastIndex = info.totalItemsCount - 1
+        if (lastIndex < 0) return@derivedStateOf true
+        lastVisible.index >= lastIndex - 1 &&
+            (lastVisible.offset + lastVisible.size) >= (info.viewportEndOffset - 120)
+    }
+}
+
+/** Re-pin the conversation when the keyboard opens or closes and the chat height changes. */
+@Composable
+fun FollowChatOnKeyboard(listState: LazyListState, shouldFollow: () -> Boolean) {
+    val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
+    LaunchedEffect(imeBottom) {
+        if (shouldFollow()) {
+            delay(16)
+            listState.followChatBottom()
+        }
+    }
+}
+
+// ── Pane header ──────────────────────────────────────────────────────────────
+
+/**
+ * The strip above each conversation: a live status line, then that bot's actions.
+ * Both panes use it so switching tabs never shifts the chat up or down.
+ */
+@Composable
+fun ChatPaneHeader(
+    status: String,
+    active: Boolean,
+    accent: Color,
+    actions: @Composable RowScope.() -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ChatStatusDot(active = active, accent = accent)
+            Spacer(modifier = Modifier.width(7.dp))
+            Text(
+                text = status,
+                fontSize = 14.sp,
+                color = TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(top = 10.dp),
+            content = actions,
+        )
+    }
+}
 
 // ── Avatar ───────────────────────────────────────────────────────────────────
 
@@ -282,14 +371,15 @@ fun TypingBubble(identity: BotIdentity, label: String, onCancel: () -> Unit) {
 
 @Composable
 private fun CopyChip(text: String) {
-    val clipboard = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
     var copied by remember(text) { mutableStateOf(false) }
     Row(modifier = Modifier.padding(top = 6.dp)) {
         SmallActionChip(
             icon = Icons.Outlined.ContentCopy,
             label = if (copied) "Copied" else "Copy",
             onClick = {
-                clipboard.setText(AnnotatedString(text))
+                scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Chat message", text))) }
                 copied = true
             },
         )
@@ -356,7 +446,7 @@ fun ChatStarters(starters: List<String>, onPick: (String) -> Unit) {
     LazyRow(
         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp),
     ) {
         items(starters) { starter ->
             Text(

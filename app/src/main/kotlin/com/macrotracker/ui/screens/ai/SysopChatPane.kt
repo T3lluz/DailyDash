@@ -1,22 +1,17 @@
 package com.macrotracker.ui.screens.ai
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
@@ -32,7 +27,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,6 +38,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.macrotracker.data.chat.BotPrompts
@@ -53,7 +48,6 @@ import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.ServerBrand
 import com.macrotracker.ui.theme.Surface
 import com.macrotracker.ui.theme.TextPrimary
-import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.ChatViewModel
 import dev.chrisbanes.haze.hazeSource
@@ -89,16 +83,7 @@ fun SysopChatPane(
     var composerHeight by remember { mutableStateOf(0.dp) }
     var threadMenuOpen by remember { mutableStateOf(false) }
 
-    val nearBottom by remember {
-        derivedStateOf {
-            val info = listState.layoutInfo
-            val lastVisible = info.visibleItemsInfo.lastOrNull() ?: return@derivedStateOf true
-            val lastIndex = info.totalItemsCount - 1
-            if (lastIndex < 0) return@derivedStateOf true
-            lastVisible.index >= lastIndex - 1 &&
-                (lastVisible.offset + lastVisible.size) >= (info.viewportEndOffset - 120)
-        }
-    }
+    val nearBottom by rememberNearChatBottom(listState)
 
     // Follow the stream unless the user has deliberately scrolled up to read.
     LaunchedEffect(state.messages.lastOrNull()?.id, state.streaming, state.loading) {
@@ -109,13 +94,7 @@ fun SysopChatPane(
         forceFollow = false
     }
 
-    val imeBottom = WindowInsets.ime.getBottom(density)
-    LaunchedEffect(imeBottom) {
-        if (forceFollow || nearBottom) {
-            delay(16)
-            listState.followChatBottom()
-        }
-    }
+    FollowChatOnKeyboard(listState) { forceFollow || nearBottom }
 
     fun send(text: String) {
         val body = text.trim()
@@ -131,23 +110,15 @@ fun SysopChatPane(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Background),
+            .background(Background)
+            .imePadding(),
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            ChatPaneHeader(
+                status = if (state.loading) "Thinking…" else viewModel.modelLabel(),
+                active = state.loading,
+                accent = ServerBrand,
             ) {
-                ChatStatusDot(active = state.loading, accent = ServerBrand)
-                Spacer(modifier = Modifier.width(7.dp))
-                Text(
-                    text = if (state.loading) "Thinking…" else viewModel.modelLabel(),
-                    fontSize = 13.sp,
-                    color = TextSecondary,
-                    modifier = Modifier.weight(1f),
-                )
                 if (state.loading) {
                     ChatHeaderAction(
                         icon = Icons.Outlined.Close,
@@ -190,6 +161,7 @@ fun SysopChatPane(
                                             color = if (thread.id == state.threadId) ServerBrand else TextPrimary,
                                             fontSize = 13.sp,
                                             maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
                                         )
                                     },
                                     onClick = {
@@ -213,7 +185,7 @@ fun SysopChatPane(
                 contentPadding = PaddingValues(
                     start = 16.dp,
                     end = 16.dp,
-                    top = 6.dp,
+                    top = 10.dp,
                     bottom = composerHeight + 10.dp,
                 ),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -321,15 +293,4 @@ fun SysopChatPane(
             )
         }
     }
-}
-
-/** Scroll far enough that the newest message's bottom clears the floating composer. */
-suspend fun LazyListState.followChatBottom() {
-    val lastIndex = layoutInfo.totalItemsCount - 1
-    if (lastIndex < 0) return
-    animateScrollToItem(lastIndex)
-    val lastItem = layoutInfo.visibleItemsInfo.lastOrNull() ?: return
-    val visibleBottom = layoutInfo.viewportEndOffset - layoutInfo.afterContentPadding
-    val overflow = (lastItem.offset + lastItem.size) - visibleBottom
-    if (overflow > 0) animateScrollBy(overflow.toFloat())
 }

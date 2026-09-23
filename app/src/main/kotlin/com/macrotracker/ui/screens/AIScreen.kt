@@ -1,6 +1,7 @@
 package com.macrotracker.ui.screens
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -10,7 +11,6 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -18,28 +18,23 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
@@ -60,7 +55,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -79,7 +73,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -99,8 +92,13 @@ import com.macrotracker.ui.screens.ai.BotAvatar
 import com.macrotracker.ui.screens.ai.BotBubble
 import com.macrotracker.ui.screens.ai.BotIdentity
 import com.macrotracker.ui.screens.ai.ChatComposer
+import com.macrotracker.ui.screens.ai.ChatPaneHeader
+import com.macrotracker.ui.screens.ai.ChatPillShape
+import com.macrotracker.ui.screens.ai.FollowChatOnKeyboard
+import com.macrotracker.ui.screens.ai.SysopIdentity
+import com.macrotracker.ui.screens.ai.followChatBottom
+import com.macrotracker.ui.screens.ai.rememberNearChatBottom
 import com.macrotracker.ui.screens.ai.ChatHeaderAction
-import com.macrotracker.ui.screens.ai.ChatStatusDot
 import com.macrotracker.ui.screens.ai.DishSuggestion
 import com.macrotracker.ui.screens.ai.SmallActionChip
 import com.macrotracker.ui.screens.ai.SysopChatPane
@@ -130,27 +128,7 @@ import java.io.File
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
-/** Pill nav = 64dp + 8dp bottom pad; keep a little air above it. */
-private val PillNavClearance = 80.dp
-
 private val PortionOptions = listOf(0.5f, 1f, 1.5f, 2f)
-
-/** Scroll far enough that the last (newest) message's bottom sits in view. */
-private suspend fun LazyListState.followChatBottom() {
-    val lastIndex = layoutInfo.totalItemsCount - 1
-    if (lastIndex < 0) return
-
-    // First jump to the last item, then nudge so tall estimate cards aren't clipped.
-    animateScrollToItem(lastIndex)
-    val lastItem = layoutInfo.visibleItemsInfo.lastOrNull() ?: return
-    // Stop above the reserved strip the floating composer sits in, not at the
-    // raw viewport edge — otherwise the newest bubble ends up behind it.
-    val visibleBottom = layoutInfo.viewportEndOffset - layoutInfo.afterContentPadding
-    val overflow = (lastItem.offset + lastItem.size) - visibleBottom
-    if (overflow > 0) {
-        animateScrollBy(overflow.toFloat())
-    }
-}
 
 /** Clanker's identity; Sysop's lives next to its pane. Both feed the same ChatKit. */
 private val ClankerIdentity = BotIdentity(
@@ -200,7 +178,7 @@ fun AIScreen(
                 title = "AI",
                 trailing = {
                     BotAvatar(
-                        identity = if (selectedTab == ChatBot.SYSOP.id) SysopIdentityRef else ClankerIdentity,
+                        identity = if (selectedTab == ChatBot.SYSOP.id) SysopIdentity else ClankerIdentity,
                         size = 44.dp,
                         live = false,
                     )
@@ -333,17 +311,7 @@ private fun MacrosChatPane(
         galleryLauncher.launch("image/*")
     }
 
-    val nearBottom by remember {
-        derivedStateOf {
-            val info = listState.layoutInfo
-            val lastVisible = info.visibleItemsInfo.lastOrNull() ?: return@derivedStateOf true
-            val lastIndex = info.totalItemsCount - 1
-            if (lastIndex < 0) return@derivedStateOf true
-            // Within ~120px of the true bottom of the list.
-            lastVisible.index >= lastIndex - 1 &&
-                (lastVisible.offset + lastVisible.size) >= (info.viewportEndOffset - 120)
-        }
-    }
+    val nearBottom by rememberNearChatBottom(listState)
 
     val lastMessageId = messages.lastOrNull()?.id
     val lastEstimateKey = (messages.lastOrNull() as? NutritionChatMessage.Doctor)
@@ -362,15 +330,7 @@ private fun MacrosChatPane(
         forceFollow = false
     }
 
-    // Also re-follow when IME opens/closes and changes the available chat height.
-    val density = LocalDensity.current
-    val imeBottom = WindowInsets.ime.getBottom(density)
-    LaunchedEffect(imeBottom) {
-        if (messages.isNotEmpty() && (forceFollow || nearBottom)) {
-            delay(16)
-            listState.followChatBottom()
-        }
-    }
+    FollowChatOnKeyboard(listState) { messages.isNotEmpty() && (forceFollow || nearBottom) }
 
     fun send() {
         val text = draft.trim()
@@ -398,6 +358,7 @@ private fun MacrosChatPane(
     // The composer floats over the list, so reserve exactly its height at the
     // bottom of the chat instead of guessing a constant.
     var composerHeight by remember { mutableStateOf(0.dp) }
+    val density = LocalDensity.current
 
     Box(
         modifier = Modifier
@@ -562,7 +523,7 @@ private fun MacrosChatPane(
 }
 
 private fun launchMealCamera(
-    context: android.content.Context,
+    context: Context,
     onReady: (Uri, File) -> Unit,
     launcher: (Uri) -> Unit,
 ) {
@@ -596,7 +557,6 @@ private fun mealPhotoToBase64(bitmap: Bitmap): String {
     return Base64.encodeToString(stream.toByteArray(), Base64.NO_WRAP)
 }
 
-
 // ── Chrome ───────────────────────────────────────────────────────────────────
 
 @Composable
@@ -614,67 +574,20 @@ private fun AiChatHeader(
         loggedCount > 1 -> "$loggedCount meals logged this chat"
         else -> "Describe a meal, snap it, or scan the label"
     }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 10.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            ChatStatusDot(active = loading, accent = Primary)
-            Spacer(modifier = Modifier.width(7.dp))
-            // 16.sp keeps this in step with the Home/Health header subtitles.
-            Text(status, fontSize = 16.sp, color = TextSecondary)
-        }
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(top = 14.dp),
-        ) {
-            ChatHeaderAction(
-                icon = Icons.Outlined.CameraAlt,
-                label = "Scan label",
-                emphasized = true,
-                onClick = onCameraScan,
-            )
-            if (loading) {
-                ChatHeaderAction(icon = Icons.Outlined.Close, label = "Stop", onClick = onCancel)
-            } else if (canClear) {
-                ChatHeaderAction(icon = Icons.Outlined.DeleteSweep, label = "New chat", onClick = onClear)
-            }
-        }
-    }
-}
-
-/** Clanker, framed by a soft accent ring that lifts while he is thinking. */
-@Composable
-private fun ClankerAvatar(size: Dp, live: Boolean, modifier: Modifier = Modifier) {
-    val ring by animateColorAsState(
-        targetValue = if (live) Primary.copy(alpha = 0.55f) else Border,
-        animationSpec = MacroMotion.colorTween(),
-        label = "clanker_ring",
-    )
-    Box(
-        modifier = modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(Surface)
-            .border(1.5.dp, ring, CircleShape)
-            .padding(size * 0.08f),
-        contentAlignment = Alignment.Center,
-    ) {
-        Image(
-            painter = painterResource(R.drawable.ic_clanker),
-            contentDescription = "Clanker",
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(CircleShape),
+    ChatPaneHeader(status = status, active = loading, accent = Primary) {
+        ChatHeaderAction(
+            icon = Icons.Outlined.CameraAlt,
+            label = "Scan label",
+            emphasized = true,
+            onClick = onCameraScan,
         )
+        if (loading) {
+            ChatHeaderAction(icon = Icons.Outlined.Close, label = "Stop", onClick = onCancel)
+        } else if (canClear) {
+            ChatHeaderAction(icon = Icons.Outlined.DeleteSweep, label = "New chat", onClick = onClear)
+        }
     }
 }
-
-
 
 @Composable
 private fun SuggestionStrip(
@@ -730,19 +643,8 @@ private fun SuggestionStrip(
     }
 }
 
-// ── Bubbles ──────────────────────────────────────────────────────────────────
-
-/** Chat radii: square off the corner nearest the speaker, like a tail. */
-private val DoctorBubbleShape =
-    RoundedCornerShape(topStart = 6.dp, topEnd = 18.dp, bottomEnd = 18.dp, bottomStart = 18.dp)
-private val UserBubbleShape =
-    RoundedCornerShape(topStart = 18.dp, topEnd = 6.dp, bottomEnd = 18.dp, bottomStart = 18.dp)
 private val CardShape = RoundedCornerShape(16.dp)
-private val PillShape = RoundedCornerShape(999.dp)
-
-
-
-
+private val PillShape = ChatPillShape
 
 // ── Estimate card ────────────────────────────────────────────────────────────
 
@@ -1005,15 +907,6 @@ private fun ConfidenceChip(confidence: String) {
         Text(label, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = color)
     }
 }
-
-// ── Composer ─────────────────────────────────────────────────────────────────
-
-private val ComposerShape = RoundedCornerShape(22.dp)
-private val ComposerSendShape = RoundedCornerShape(999.dp)
-
-/** Alias so the host header can show Sysop's badge without importing the pane's value twice. */
-private val SysopIdentityRef: BotIdentity
-    get() = com.macrotracker.ui.screens.ai.SysopIdentity
 
 /** Clanker's composer slot: the photo attach menu. Sysop leaves this slot empty. */
 @Composable

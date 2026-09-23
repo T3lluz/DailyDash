@@ -1,5 +1,8 @@
 package com.macrotracker.ui.components
 
+import android.content.ClipData
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -10,7 +13,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
 import androidx.compose.foundation.layout.Column
@@ -25,7 +29,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.LinkAnnotation
@@ -328,7 +331,8 @@ private fun buildInlineMarkdown(
  */
 @Composable
 private fun CodeBlock(language: String, code: String, fontSize: TextUnit) {
-    val clipboard = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
     var copied by remember(code) { mutableStateOf(false) }
 
     Column(
@@ -360,7 +364,7 @@ private fun CodeBlock(language: String, code: String, fontSize: TextUnit) {
                 modifier = Modifier
                     .clip(RoundedCornerShape(6.dp))
                     .clickable {
-                        clipboard.setText(AnnotatedString(code))
+                        scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Code", code))) }
                         copied = true
                     }
                     .padding(horizontal = 8.dp, vertical = 4.dp),
