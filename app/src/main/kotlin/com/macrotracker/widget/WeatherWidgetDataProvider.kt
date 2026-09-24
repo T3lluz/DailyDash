@@ -1,14 +1,10 @@
 package com.macrotracker.widget
 
 import android.Manifest
-import android.appwidget.AppWidgetManager
-import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
 import android.text.format.DateFormat
 import android.util.Log
-import androidx.compose.ui.unit.DpSize
-import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.macrotracker.data.local.SettingsRepository
 import com.macrotracker.data.remote.ClothingAdvisor
@@ -187,25 +183,13 @@ object WeatherWidgetDataProvider {
      * portrait (min width × max height) or landscape (max width × min height). A 5×3
      * on its own never pays for a brief it can't show.
      */
-    private fun anyPlacedCopyShowsBrief(context: Context): Boolean = runCatching {
-        val manager = AppWidgetManager.getInstance(context)
-        val ids = manager.getAppWidgetIds(ComponentName(context, WeatherWidgetReceiver::class.java))
-        ids.any { id ->
-            val o = manager.getAppWidgetOptions(id)
-            val portrait = DpSize(
-                o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH).dp,
-                o.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT).dp,
-            )
-            val landscape = DpSize(
-                o.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH).dp,
-                o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT).dp,
-            )
-            listOf(portrait, landscape).any { size ->
+    private fun anyPlacedCopyShowsBrief(context: Context): Boolean =
+        WidgetInstances.idsShowing(context, WeatherWidgetSpec).any { id ->
+            WidgetInstances.sizes(context, id).any { size ->
                 val dims = WidgetDims(size)
                 WeatherLayouts.showsBrief(WeatherLayouts.forCells(dims.cols, dims.rows))
             }
         }
-    }.getOrDefault(false)
 
     private suspend fun fetchLiveWeather(context: Context, force: Boolean = false) {
         try {

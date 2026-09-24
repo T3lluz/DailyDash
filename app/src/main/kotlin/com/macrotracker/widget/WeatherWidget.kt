@@ -4,16 +4,12 @@ import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
 import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.LocalContext
 import androidx.glance.LocalSize
-import androidx.glance.appwidget.GlanceAppWidget
-import androidx.glance.appwidget.SizeMode
-import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.currentState
 import androidx.glance.layout.Alignment
@@ -27,11 +23,11 @@ import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.size
 import androidx.glance.layout.width
-import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import com.macrotracker.R
 import com.macrotracker.widget.kit.AiBriefLine
+import com.macrotracker.widget.kit.FramePad
 import com.macrotracker.widget.kit.HGap
 import com.macrotracker.widget.kit.KitEmptyState
 import com.macrotracker.widget.kit.VGap
@@ -84,17 +80,13 @@ import com.macrotracker.widget.weather.curvePanelHeight
  * [WeatherRoot] is also what [WeatherWidgetPreview] renders for the widget picker
  * and the in-app Widgets screen, so the preview is the widget itself.
  */
-class WeatherWidget : GlanceAppWidget() {
-    override val sizeMode = SizeMode.Exact
-    override val stateDefinition = PreferencesGlanceStateDefinition
-
-    override suspend fun provideGlance(context: Context, id: GlanceId) {
-        WeatherWidgetDataProvider.loadData(context) // warm the memory copy off the composition
-        provideContent {
-            val data = rememberWidgetData(WeatherWidgetSpec.key) { WeatherWidgetDataProvider.loadData(context) }
-            val tab = currentState(WeatherTabs.Key) ?: WeatherTabs.HOURS
-            GlanceTheme { WeatherRoot(data, preview = false, tab = tab) }
-        }
+internal object WeatherWidget {
+    /** A placed copy, inside [DashWidget]'s composition. */
+    @Composable
+    fun Content(context: Context) {
+        val data = rememberWidgetData(WeatherWidgetSpec.key) { WeatherWidgetDataProvider.loadData(context) }
+        val tab = currentState(WeatherTabs.Key) ?: WeatherTabs.HOURS
+        GlanceTheme { WeatherRoot(data, preview = false, tab = tab) }
     }
 }
 
@@ -110,7 +102,10 @@ internal fun WeatherRoot(d: WeatherWidgetData, preview: Boolean = false, tab: St
     val context = LocalContext.current
     val dims = WidgetDims(LocalSize.current)
     val v = WxView(d, context)
-    WidgetFrame(onClick = v.openApp) {
+    // A strip shorter than a launcher row (landscape, dense grids) keeps its text by trimming the frame.
+    val pad = if (dims.rows <= 1 && dims.height < 64.dp) 6.dp else FramePad
+    val stripH = dims.height.value - pad.value * 2
+    WidgetFrame(onClick = v.openApp, pad = pad) {
         when {
             d.weatherDisabled -> WeatherEmpty(v, dims, "Weather is off", "Turn it on in DailyDash settings", WK.Sub)
             !d.hasWeatherData -> when (d.weatherState) {
@@ -122,8 +117,8 @@ internal fun WeatherRoot(d: WeatherWidgetData, preview: Boolean = false, tab: St
                     WeatherEmpty(v, dims, "No forecast yet", "Tap refresh, or open DailyDash", WK.Weather)
             }
             else -> when (WeatherLayouts.forCells(dims.cols, dims.rows)) {
-                WeatherLayout.STRIP -> StripLayout(v, dims)
-                WeatherLayout.STRIP_HOURS -> StripHoursLayout(v, dims)
+                WeatherLayout.STRIP -> StripLayout(v, dims, stripH)
+                WeatherLayout.STRIP_HOURS -> StripHoursLayout(v, dims, stripH)
                 WeatherLayout.SQUARE -> SquareLayout(v, dims)
                 WeatherLayout.NOW_HOURS -> NowHoursLayout(v, dims)
                 WeatherLayout.WIDE -> WideLayout(v, dims)
@@ -166,27 +161,35 @@ private fun WeatherEmpty(v: WxView, dims: WidgetDims, headline: String, detail: 
 // ── 2×1, 3×1 ──────────────────────────────────────────────────────
 
 @Composable
-private fun StripLayout(v: WxView, dims: WidgetDims) {
+private fun StripLayout(v: WxView, dims: WidgetDims, innerH: Float) {
     val narrow = dims.cols <= 2
-    val lines = WeatherLayouts.fit(dims.innerHeight.value, 36f, listOf("sky" to 14f, "range" to 12f))
+    // Under a hero line's height the temperature drops to the big size, alone on its line.
+    val micro = innerH < 36f
+    val temp = if (micro) WT.Big else WT.Hero
+    val lines = WeatherLayouts.fit(innerH, 36f, listOf("sky" to 14f, "range" to 12f))
     Row(GlanceModifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-        Image(ImageProvider(v.icon), contentDescription = v.sky, modifier = GlanceModifier.size(if (narrow) 34.dp else 40.dp))
-        HGap(8.dp)
+        val icon = when {
+            micro -> 24.dp
+            narrow -> 34.dp
+            else -> 40.dp
+        }
+        Image(ImageProvider(v.icon), contentDescription = v.sky, modifier = GlanceModifier.size(icon))
+        HGap(if (micro) 6.dp else 8.dp)
         if (narrow) {
             Column(GlanceModifier.defaultWeight(), verticalAlignment = Alignment.CenterVertically) {
-                Text(v.t(v.d.tempC), style = ts(WT.Hero, WK.Text, FontWeight.Bold), maxLines = 1)
+                Text(v.t(v.d.tempC), style = ts(temp, WK.Text, FontWeight.Bold), maxLines = 1)
                 if ("sky" in lines) Text(v.sky, style = ts(WT.Small, WK.Text, FontWeight.Medium), maxLines = 1)
                 if ("range" in lines) Text(v.hiLo, style = ts(WT.Tiny, WK.Sub), maxLines = 1)
             }
         } else {
-            Column(GlanceModifier.width(66.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(v.t(v.d.tempC), style = ts(WT.Hero, WK.Text, FontWeight.Bold), maxLines = 1)
+            Column(GlanceModifier.width(if (micro) 48.dp else 66.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(v.t(v.d.tempC), style = ts(temp, WK.Text, FontWeight.Bold), maxLines = 1)
                 if ("range" in lines) Text(v.hiLo, style = ts(WT.Micro, WK.Sub), maxLines = 1)
             }
             HGap(6.dp)
             Column(GlanceModifier.defaultWeight(), verticalAlignment = Alignment.CenterVertically) {
                 Text(v.sky, style = ts(WT.Small, WK.Text, FontWeight.Bold), maxLines = 1)
-                v.rain?.let { r ->
+                if (!micro) v.rain?.let { r ->
                     val wet = r.kind != com.macrotracker.widget.weather.RainOutlook.Kind.DRY
                     Text(r.short(v.zone, v.is24h), style = ts(WT.Tiny, if (wet) WK.WeatherRain else WK.Sub, FontWeight.Medium), maxLines = 1)
                 }
@@ -199,29 +202,33 @@ private fun StripLayout(v: WxView, dims: WidgetDims) {
 // ── 4×1, 5×1 ──────────────────────────────────────────────────────
 
 @Composable
-private fun StripHoursLayout(v: WxView, dims: WidgetDims) {
-    val nowW = 76f
-    val hoursW = dims.innerWidth.value - 36f - 6f - nowW - 6f - 1f - 4f
+private fun StripHoursLayout(v: WxView, dims: WidgetDims, innerH: Float) {
+    val micro = innerH < 36f
+    val nowW = if (micro) 52f else 76f
+    val iconW = if (micro) 24f else 36f
+    val hoursW = dims.width.value - 12f - iconW - 6f - nowW - 6f - 1f - 4f
     val count = WeatherLayouts.hourColumns(hoursW, 42f, 7)
-    val lines = WeatherLayouts.fit(dims.innerHeight.value, 36f, listOf("sky" to 12f, "range" to 11f))
+    val lines = WeatherLayouts.fit(innerH, 36f, listOf("sky" to 12f, "range" to 11f))
     Row(GlanceModifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-        Image(ImageProvider(v.icon), contentDescription = v.sky, modifier = GlanceModifier.size(36.dp))
+        Image(ImageProvider(v.icon), contentDescription = v.sky, modifier = GlanceModifier.size(iconW.dp))
         HGap(6.dp)
         Column(GlanceModifier.width(nowW.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(v.t(v.d.tempC), style = ts(WT.Hero, WK.Text, FontWeight.Bold), maxLines = 1)
+            Text(v.t(v.d.tempC), style = ts(if (micro) WT.Big else WT.Hero, WK.Text, FontWeight.Bold), maxLines = 1)
             if ("sky" in lines) Text(v.sky, style = ts(WT.Tiny, WK.Text, FontWeight.Medium), maxLines = 1)
             if ("range" in lines) Text(v.hiLo, style = ts(WT.Micro, WK.Sub), maxLines = 1)
         }
         HGap(6.dp)
-        Box(GlanceModifier.width(1.dp).height(44.dp).background(WK.Divider.cp())) {}
+        Box(GlanceModifier.width(1.dp).height(minOf(44f, innerH).dp).background(WK.Divider.cp())) {}
         HGap(4.dp)
         HourStrip(
             v,
             count,
             GlanceModifier.defaultWeight(),
             iconSize = 18.dp,
-            showRain = dims.innerHeight.value >= 70f,
+            showRain = innerH >= 70f,
             framed = false,
+            // Time over temperature fits a 25 dp line; the sky icon needs twice that.
+            showIcon = innerH >= 50f,
         )
     }
 }
@@ -237,13 +244,7 @@ private fun SquareLayout(v: WxView, dims: WidgetDims) {
             PlaceHeader(v, showStatus = false)
             VGap(GAP.dp)
         }
-        Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Image(ImageProvider(v.icon), contentDescription = v.sky, modifier = GlanceModifier.size(36.dp))
-            HGap(6.dp)
-            // Weighted, so a long temperature ("-12°", "104°") can't push the range off-edge.
-            Text(v.t(v.d.tempC), style = ts(WT.Hero, WK.Text, FontWeight.Bold), maxLines = 1, modifier = GlanceModifier.defaultWeight())
-            HighLow(v)
-        }
+        TempRow(v, dims.innerWidth, 36.dp)
         Text(v.sky, style = ts(WT.Small, WK.Text, FontWeight.Medium), maxLines = 1)
         Spacer(GlanceModifier.defaultWeight())
         if ("hours" in opt) {
@@ -251,6 +252,22 @@ private fun SquareLayout(v: WxView, dims: WidgetDims) {
             Spacer(GlanceModifier.defaultWeight())
         }
         if ("rain" in opt) RainLine(v, short = true)
+    }
+}
+
+/**
+ * Sky, temperature and today's range on one row. The temperature is weighted, so a long
+ * one ("-12°", "104°") can't push the range off-edge; under ~118 dp the icon shrinks and
+ * the range goes, so the temperature itself is never cut.
+ */
+@Composable
+private fun TempRow(v: WxView, width: Dp, iconSize: Dp) {
+    val tight = width < 118.dp
+    Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Image(ImageProvider(v.icon), contentDescription = v.sky, modifier = GlanceModifier.size(if (tight) 26.dp else iconSize))
+        HGap(if (tight) 4.dp else 6.dp)
+        Text(v.t(v.d.tempC), style = ts(WT.Hero, WK.Text, FontWeight.Bold), maxLines = 1, modifier = GlanceModifier.defaultWeight())
+        if (!tight) HighLow(v)
     }
 }
 
@@ -319,12 +336,7 @@ private fun TallLayout(v: WxView, dims: WidgetDims, preview: Boolean, tab: Strin
     Column(GlanceModifier.fillMaxSize()) {
         PlaceHeader(v, showStatus = false)
         VGap(GAP.dp)
-        Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Image(ImageProvider(v.icon), contentDescription = v.sky, modifier = GlanceModifier.size(34.dp))
-            HGap(6.dp)
-            Text(v.t(v.d.tempC), style = ts(WT.Hero, WK.Text, FontWeight.Bold), maxLines = 1, modifier = GlanceModifier.defaultWeight())
-            HighLow(v)
-        }
+        TempRow(v, dims.innerWidth, 34.dp)
         Text(v.sky, style = ts(WT.Small, WK.Text, FontWeight.Medium), maxLines = 1)
         // Grouped so the column stays within Glance's ten children.
         if ("rain" in opt || "wear" in opt) {
@@ -355,7 +367,8 @@ private fun CompactLayout(v: WxView, dims: WidgetDims) {
     val opt = WeatherLayouts.fit(
         dims.innerHeight.value,
         required,
-        listOf("wear" to 29f, "rich" to WeatherLayouts.RICH_TILE_DP - WeatherLayouts.NORMAL_TILE_DP),
+        // The hours' rain line first: without its room the strip squeezes it to nothing.
+        listOf("rain" to 14f, "wear" to 29f, "rich" to WeatherLayouts.RICH_TILE_DP - WeatherLayouts.NORMAL_TILE_DP),
     )
     val tileH = if ("rich" in opt) WeatherLayouts.RICH_TILE_DP else WeatherLayouts.NORMAL_TILE_DP
     Column(GlanceModifier.fillMaxSize()) {
@@ -363,7 +376,7 @@ private fun CompactLayout(v: WxView, dims: WidgetDims) {
         VGap(GAP.dp)
         NowRow(v)
         VGap(GAP.dp)
-        HourStrip(v, 4, GlanceModifier.fillMaxWidth().defaultWeight())
+        HourStrip(v, 4, GlanceModifier.fillMaxWidth().defaultWeight(), showRain = "rain" in opt)
         VGap(GAP.dp)
         TilePair(v, dims.innerWidth, tileH.dp)
         if ("wear" in opt && v.d.wear != null) {

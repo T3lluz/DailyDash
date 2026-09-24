@@ -24,6 +24,7 @@ import android.widget.RemoteViews
 import android.widget.TextView
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.dp
 import androidx.glance.GlanceTheme
 import androidx.glance.appwidget.ExperimentalGlanceRemoteViewsApi
 import androidx.glance.appwidget.GlanceRemoteViews
@@ -43,12 +44,14 @@ import com.macrotracker.widget.github.GhTab
 import com.macrotracker.widget.github.GitHubRoot
 import com.macrotracker.widget.github.GitHubWidgetSnapshot
 import com.macrotracker.widget.kit.WidgetDims
+import com.macrotracker.widget.kit.WidgetText
 import com.macrotracker.widget.server.ServerRoot
 import com.macrotracker.widget.server.ServerWidgetSnapshot
 import com.macrotracker.widget.server.SrvSample
 import com.macrotracker.widget.server.SrvState
 import com.macrotracker.widget.weather.WeatherTabs
 import kotlinx.coroutines.runBlocking
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -86,6 +89,12 @@ class WidgetShotsTest {
     private val out = File(System.getProperty("widgetShots.dir") ?: "build/widget-shots").apply { mkdirs() }
     private val activity by lazy { Robolectric.buildActivity(Activity::class.java).setup().get() }
     private var lastRoot: View? = null
+
+    /** Pixel text: see [PixelFont]. `-PwidgetShotsRoboto` keeps Robolectric's Roboto. */
+    @Before
+    fun pixelFont() {
+        if (System.getProperty("widgetShots.roboto") == null) PixelFont.install(File(out.parentFile, "widget-shots-fonts"))
+    }
 
     // ── Rendering ────────────────────────────────────────────────────────────────
 
@@ -211,6 +220,80 @@ class WidgetShotsTest {
         }
         File(out, "report_sizes.txt").writeText(report.toString())
     }
+
+    /**
+     * Every widget at the sizes a real launcher hands out, which are not the representative
+     * [WidgetDims.cells]: a Pixel 10 (411 dp wide) on Pixel Launcher's 5-column and 4-column
+     * grids, with rows as short (118 dp pitch) and as tall (130 dp) as launchers make them.
+     * Into `device_<key>.png` and `report_device.txt`.
+     */
+    @Test
+    fun device() = runBlocking {
+        System.getProperty("widgetShots.font")?.toFloatOrNull()?.let { RuntimeEnvironment.setFontScale(it) }
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
+        val report = StringBuilder()
+        for (spec in DashWidgets.all) {
+            val items = mutableListOf<Pair<String, Bitmap>>()
+            for (grid in DEVICE_GRIDS) for (pitch in ROW_PITCHES) for (r in 1..5) for (c in 2..grid.cols) {
+                if (r == 1 && spec.key == "server") continue
+                val size = DpSize((c * grid.pitch - 16).dp, (r * pitch - 16).dp)
+                val label = "${grid.name} ${c}x$r ${size.width.value.toInt()}x${size.height.value.toInt()}"
+                val bmp = draw(spec.renderPreview(ctx, size), size)
+                report.note("${spec.key} $label", problems(lastRoot))
+                items += label to bmp
+            }
+            sheet("device_${spec.key}", items, perRow = 5)
+        }
+        File(out, "report_device.txt").writeText(report.toString())
+    }
+
+    /**
+     * Every widget at the smallest size of each size class ([WidgetDims.minSize]): the
+     * least room each layout is ever given. Into `min_<key>.png` and `report_min.txt`.
+     */
+    @Test
+    fun minimums() = runBlocking {
+        System.getProperty("widgetShots.font")?.toFloatOrNull()?.let { RuntimeEnvironment.setFontScale(it) }
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
+        val report = StringBuilder()
+        for (spec in DashWidgets.all) {
+            val items = mutableListOf<Pair<String, Bitmap>>()
+            for (r in 1..5) for (c in 2..5) {
+                if (r == 1 && spec.key == "server") continue
+                val size = WidgetDims.minSize(c, r)
+                val label = "${c}x$r ${size.width.value.toInt()}x${size.height.value.toInt()}"
+                val bmp = draw(spec.renderPreview(ctx, size), size)
+                report.note("${spec.key} $label", problems(lastRoot))
+                items += label to bmp
+            }
+            sheet("min_${spec.key}", items, perRow = 4)
+        }
+        File(out, "report_min.txt").writeText(report.toString())
+    }
+
+    /**
+     * The widget font's metrics against [WidgetText]'s Roboto reference, into
+     * `report_font.txt`. Under `-PwidgetShotsRoboto` the fit must be 1 (the reference is
+     * right); in Google Sans it is what a Pixel draws widget text at.
+     */
+    @Test
+    fun font() {
+        val ctx = ApplicationProvider.getApplicationContext<Context>()
+        val tf = WidgetText.deviceTypeface(ctx)
+        val (line, width, bold) = WidgetText.measure(tf)
+        File(out, "report_font.txt").writeText(
+            "line=$line width=$width bold=$bold fit=${WidgetText.fitFor(tf)} (reference line=${WidgetText.ROBOTO_LINE} " +
+                "width=${WidgetText.ROBOTO_WIDTH} bold=${WidgetText.ROBOTO_BOLD_WIDTH})\n",
+        )
+    }
+
+    private data class Grid(val name: String, val cols: Int, val pitch: Int)
+
+    /** Pixel Launcher on a 411 dp wide phone: 5 and 4 columns, 16 dp between cells. */
+    private val DEVICE_GRIDS = listOf(Grid("5col", 5, 77), Grid("4col", 4, 95))
+
+    /** Row pitch (cell + gap) from a short launcher to a tall 20:9 phone. */
+    private val ROW_PITCHES = listOf(118, 130)
 
     /** The tabs and states the default previews don't show. */
     @Test

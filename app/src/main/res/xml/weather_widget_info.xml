@@ -9,6 +9,8 @@
     android:description="@string/widget_weather_description"
     android:previewImage="@drawable/widget_preview_weather"
     android:initialLayout="@layout/glance_default_loading_layout"
+    android:configure="com.macrotracker.widget.settings.WidgetSettingsActivity"
+    android:widgetFeatures="reconfigurable|configuration_optional"
     android:minWidth="368dp"
     android:minHeight="220dp"
     android:minResizeWidth="110dp"

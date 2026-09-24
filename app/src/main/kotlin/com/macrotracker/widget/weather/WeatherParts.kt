@@ -298,6 +298,7 @@ internal fun HourStrip(
     iconSize: Dp = 20.dp,
     showRain: Boolean = true,
     framed: Boolean = true,
+    showIcon: Boolean = true,
 ) {
     val hours = v.d.hours.take(count.coerceIn(1, 8))
     val m = if (framed) modifier.panel(WK.Card, 12.dp).padding(horizontal = 2.dp, vertical = 6.dp) else modifier
@@ -311,9 +312,11 @@ internal fun HourStrip(
         hours.forEach { h ->
             Column(GlanceModifier.defaultWeight(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(v.hourLabel(h), style = ts(WT.Micro, WK.Sub, FontWeight.Medium, TextAlign.Center), maxLines = 1)
-                VGap(3.dp)
-                Image(ImageProvider(skyIcon(h.symbol)), contentDescription = null, modifier = GlanceModifier.size(iconSize))
-                VGap(3.dp)
+                if (showIcon) {
+                    VGap(3.dp)
+                    Image(ImageProvider(skyIcon(h.symbol)), contentDescription = null, modifier = GlanceModifier.size(iconSize))
+                    VGap(3.dp)
+                }
                 Text(v.t(h.tempC), style = ts(WT.Small, WK.Text, FontWeight.Bold, TextAlign.Center), maxLines = 1)
                 if (showRain) {
                     val r = WxFormat.hourRain(h)
@@ -653,22 +656,24 @@ internal fun TabbedList(v: WxView, tab: String, preview: Boolean, width: Dp, hei
 internal fun HourList(v: WxView, preview: Boolean, width: Dp, height: Dp) {
     val hours = v.d.hours.take(48)
     val wide = width >= 168.dp
+    // Under ~116 dp the rain column goes: time, sky and temperature keep their room.
+    val rain = width >= 116.dp
     Box(GlanceModifier.fillMaxSize().panel(WK.Card, 12.dp)) {
         when {
             hours.isEmpty() -> EmptyNote("No hourly forecast yet")
             preview -> Column(GlanceModifier.fillMaxSize()) {
                 val rows = ((height.value - 20f) / 26f).toInt().coerceIn(1, 9)
-                hours.take(rows).indices.forEach { i -> HourEntry(v, hours, i, wide) }
+                hours.take(rows).indices.forEach { i -> HourEntry(v, hours, i, wide, rain) }
             }
             else -> LazyColumn(GlanceModifier.fillMaxSize()) {
-                hours.indices.forEach { i -> item { HourEntry(v, hours, i, wide) } }
+                hours.indices.forEach { i -> item { HourEntry(v, hours, i, wide, rain) } }
             }
         }
     }
 }
 
 @Composable
-private fun HourEntry(v: WxView, hours: List<WxHour>, i: Int, wide: Boolean) {
+private fun HourEntry(v: WxView, hours: List<WxHour>, i: Int, wide: Boolean, rain: Boolean) {
     val h = hours[i]
     val newDay = i == 0 || (h.date != null && h.date != hours[i - 1].date)
     Column(GlanceModifier.fillMaxWidth().clickable(v.openApp)) {
@@ -683,13 +688,13 @@ private fun HourEntry(v: WxView, hours: List<WxHour>, i: Int, wide: Boolean) {
                 maxLines = 1,
                 modifier = GlanceModifier.width(if (wide) 36.dp else 32.dp),
             )
-            Image(ImageProvider(skyIcon(h.symbol)), contentDescription = null, modifier = GlanceModifier.size(18.dp))
-            HGap(6.dp)
+            Image(ImageProvider(skyIcon(h.symbol)), contentDescription = null, modifier = GlanceModifier.size(if (rain) 18.dp else 16.dp))
+            HGap(if (rain) 6.dp else 4.dp)
             Text(
                 v.t(h.tempC),
                 style = ts(WT.Small, WK.Text, FontWeight.Bold),
                 maxLines = 1,
-                modifier = GlanceModifier.width(if (wide) 30.dp else 28.dp),
+                modifier = if (rain) GlanceModifier.width(if (wide) 30.dp else 28.dp) else GlanceModifier.defaultWeight(),
             )
             if (wide) {
                 Text(
@@ -699,13 +704,15 @@ private fun HourEntry(v: WxView, hours: List<WxHour>, i: Int, wide: Boolean) {
                     modifier = GlanceModifier.width(40.dp),
                 )
             }
-            val r = WxFormat.hourRain(h)
-            Text(
-                r ?: "–",
-                style = ts(WT.Micro, if (r != null) WK.WeatherRain else WK.Faint, FontWeight.Medium, TextAlign.End),
-                maxLines = 1,
-                modifier = GlanceModifier.defaultWeight(),
-            )
+            if (rain) {
+                val r = WxFormat.hourRain(h)
+                Text(
+                    r ?: "–",
+                    style = ts(WT.Micro, if (r != null) WK.WeatherRain else WK.Faint, FontWeight.Medium, TextAlign.End),
+                    maxLines = 1,
+                    modifier = GlanceModifier.defaultWeight(),
+                )
+            }
         }
     }
 }
@@ -726,8 +733,9 @@ private fun ListDayHeader(label: String, first: Boolean) {
 @Composable
 internal fun DayList(v: WxView, preview: Boolean, width: Dp, rowHeight: Dp, heightDp: Float? = null) {
     val days = v.d.days.take(7)
-    // A preview can't scroll: only the rows that fit whole.
-    val fits = heightDp?.let { ((it - 8f) / rowHeight.value).toInt().coerceIn(1, 7) } ?: 7
+    // A preview can't scroll: only the rows that fit whole, with a little slack for the
+    // sections above running a few dp over their budget in a taller font.
+    val fits = heightDp?.let { ((it - 14f) / rowHeight.value).toInt().coerceIn(1, 7) } ?: 7
     val span = WxDays.span(days)
     val cols = WeatherLayouts.dayColumns(width.value)
     Box(GlanceModifier.fillMaxSize().panel(WK.Card, 12.dp)) {

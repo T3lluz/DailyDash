@@ -181,6 +181,10 @@ class CalendarWidgetLogicTest {
     fun layoutPlansPerSize() {
         assertEquals(Shape.STRIP, planFor(4, 1).shape)
         assertEquals(Shape.COMPACT, planFor(2, 2).shape)
+        // A Pixel's 2×2 (174 × 244 dp) is tall enough for the agenda under a one-line hero.
+        val pixel22 = L.plan(2, 2, 150f, 220f)
+        assertEquals(Shape.NARROW, pixel22.shape)
+        assertEquals(1, pixel22.heroTitleLines)
         assertEquals(Shape.NARROW, planFor(2, 3).shape)
         val s32 = planFor(3, 2)
         assertEquals(Shape.STACK, s32.shape)

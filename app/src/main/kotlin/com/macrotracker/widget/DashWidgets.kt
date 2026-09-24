@@ -7,11 +7,11 @@ import android.content.Context
 import android.os.Build
 import android.util.Log
 import android.widget.RemoteViews
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.DpSize
-import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
-import androidx.glance.appwidget.updateAll
 import com.macrotracker.widget.calendar.CalendarWidgetSpec
 import com.macrotracker.widget.f1.F1WidgetSpec
 import com.macrotracker.widget.github.GitHubWidgetSpec
@@ -28,6 +28,8 @@ interface DashWidgetSpec {
     /** Name on the Widgets screen, e.g. "F1". */
     val title: String
     val description: String
+    /** One line for the widget settings' picker, e.g. "Next Grand Prix countdown and standings". */
+    val tagline: String
     /** "2×2 to 5×4" — what the Widgets screen badge says. */
     val sizeLabel: String
     val accent: Color
@@ -41,7 +43,24 @@ interface DashWidgetSpec {
      */
     val showcase: List<Pair<Int, Int>>
 
-    fun widget(): GlanceAppWidget
+    /**
+     * The widget as a placed copy draws it (inside [DashWidget]'s composition): reads its
+     * cached data with `rememberWidgetData` and its per-copy view state with `currentState`.
+     */
+    @Composable
+    fun Content(context: Context)
+
+    /** Warms the widget's cache before its first draw (cache reads only, no network). */
+    suspend fun prepare(context: Context) {}
+
+    /**
+     * The per-copy choice this widget's settings offer at [size] (which list it shows,
+     * which server), or null when that size has none.
+     */
+    fun viewOption(context: Context, size: DpSize): WidgetViewOption? = null
+
+    /** No placed copy shows this widget any more: stop its own background work. */
+    fun onNoneShown(context: Context) {}
 
     /**
      * Pulls fresh data into the widget's own cache (network allowed; called off the main
@@ -51,8 +70,22 @@ interface DashWidgetSpec {
      */
     suspend fun refresh(context: Context, force: Boolean)
 
-    /** The real widget, from cached data or a sample, for previews. */
-    suspend fun renderPreview(context: Context, size: DpSize = previewSize): RemoteViews
+    /**
+     * The real widget, from cached data or a sample, for previews; [view] is a
+     * [viewOption] choice to show it with (null: the widget's default).
+     */
+    suspend fun renderPreview(context: Context, size: DpSize = previewSize, view: String? = null): RemoteViews
+}
+
+/** A choice each copy of a widget keeps in its Glance state under [stateKey]. */
+data class WidgetViewOption(
+    val stateKey: String,
+    val title: String,
+    val choices: List<Choice>,
+    /** Label for leaving it to the widget (no stored choice), when that differs from the first choice. */
+    val auto: String? = null,
+) {
+    data class Choice(val id: String, val label: String)
 }
 
 object DashWidgets {
@@ -65,18 +98,29 @@ object DashWidgets {
 
     fun byKey(key: String): DashWidgetSpec? = all.firstOrNull { it.key == key }
 
-    fun countPlaced(context: Context, spec: DashWidgetSpec): Int = runCatching {
-        AppWidgetManager.getInstance(context)
-            ?.getAppWidgetIds(ComponentName(context, spec.receiver))?.size ?: 0
-    }.getOrDefault(0)
+    /** How many placed copies show [spec] (whatever they were placed as). */
+    fun countPlaced(context: Context, spec: DashWidgetSpec): Int = WidgetInstances.idsShowing(context, spec).size
 
-    fun placed(context: Context): List<DashWidgetSpec> = all.filter { countPlaced(context, it) > 0 }
+    /** The widgets at least one placed copy shows. */
+    fun placed(context: Context): List<DashWidgetSpec> {
+        val shown = WidgetInstances.placedIds(context).mapTo(HashSet()) { WidgetInstances.specFor(context, it).key }
+        return all.filter { it.key in shown }
+    }
 
-    /** Re-renders every placed copy of [spec] from its cache. */
+    /** Re-renders every placed copy showing [spec], from its cache; no other copy is touched. */
     suspend fun render(context: Context, spec: DashWidgetSpec) {
         WidgetDataBus.bump(spec.key)
-        runCatching { spec.widget().updateAll(context) }
-            .onFailure { Log.w(TAG, "render ${spec.key} failed: ${it.message}") }
+        val manager = GlanceAppWidgetManager(context)
+        for (id in WidgetInstances.idsShowing(context, spec)) {
+            runCatching { DashWidget().update(context, manager.getGlanceIdBy(id)) }
+                .onFailure { Log.w(TAG, "render ${spec.key} #$id failed: ${it.message}") }
+        }
+    }
+
+    /** Lets every widget no copy shows any more stop its background work. */
+    fun forgetUnshown(context: Context) {
+        val shown = placed(context).mapTo(HashSet()) { it.key }
+        all.filter { it.key !in shown }.forEach { runCatching { it.onNoneShown(context) } }
     }
 
     /** Refreshes [spec]'s data, then re-renders it. */

@@ -12,15 +12,15 @@ import android.content.Context
  */
 object WidgetStateProvider {
 
-    /** How many weather widgets are on the home screen right now. */
+    /** How many placed widgets show the weather right now. */
     fun countInstalled(context: Context): Int = DashWidgets.countPlaced(context, WeatherWidgetSpec)
 
-    /** How many copies of [spec] are placed. */
+    /** How many placed copies show [spec]. */
     fun countInstalled(context: Context, spec: DashWidgetSpec): Int = DashWidgets.countPlaced(context, spec)
 
     /** Whether any DailyDash widget is placed. */
-    fun hasAnyWidget(context: Context): Boolean = DashWidgets.all.any { DashWidgets.countPlaced(context, it) > 0 }
+    fun hasAnyWidget(context: Context): Boolean = WidgetInstances.placedIds(context).isNotEmpty()
 
-    /** Whether a weather widget is placed. */
+    /** Whether a placed widget shows the weather. */
     fun hasWeatherWidget(context: Context): Boolean = countInstalled(context) > 0
 }

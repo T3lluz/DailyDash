@@ -1,13 +1,10 @@
 package com.macrotracker.widget.f1
 
-import android.appwidget.AppWidgetManager
-import android.content.ComponentName
 import android.content.Context
 import android.util.Log
-import androidx.compose.ui.unit.DpSize
-import androidx.compose.ui.unit.dp
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.macrotracker.data.f1.F1Standings
+import com.macrotracker.widget.WidgetInstances
 import com.macrotracker.widget.kit.WidgetAi
 import com.macrotracker.widget.kit.WidgetDims
 import com.macrotracker.widget.widgetEntryPoint
@@ -110,21 +107,13 @@ internal object F1WidgetStore {
      * Only the big sizes show the AI line, so a brief is only paid for when a placed copy
      * is big enough in portrait (min width × max height) or landscape (max width × min height).
      */
-    private fun briefShownSomewhere(context: Context): Boolean = runCatching {
-        val manager = AppWidgetManager.getInstance(context) ?: return@runCatching false
-        val ids = manager.getAppWidgetIds(ComponentName(context, F1WidgetReceiver::class.java)) ?: return@runCatching false
-        ids.any { id ->
-            val o = manager.getAppWidgetOptions(id)
-            val minW = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)
-            val maxW = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH)
-            val minH = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)
-            val maxH = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT)
-            listOf(minW to maxH, maxW to minH).any { (w, h) ->
-                val dims = WidgetDims(DpSize(w.dp, h.dp))
+    private fun briefShownSomewhere(context: Context): Boolean =
+        WidgetInstances.idsShowing(context, F1WidgetSpec).any { id ->
+            WidgetInstances.sizes(context, id).any { size ->
+                val dims = WidgetDims(size)
                 F1Layouts.showsBrief(dims.cols, dims.rows)
             }
         }
-    }.getOrDefault(false)
 }
 
 /** The repository's season → the widget's snapshot. */

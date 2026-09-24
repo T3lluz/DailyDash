@@ -174,6 +174,19 @@
         </activity-alias>
 
         <!-- DailyDash home-screen widgets: see widget/DashWidgets.kt -->
+        <!-- Each widget's settings (long-press the widget): switch what it shows, pick its view. -->
+        <activity
+            android:name=".widget.settings.WidgetSettingsActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:label="@string/widget_settings_title"
+            android:theme="@style/Theme.DailyDash">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
         <receiver
             android:name=".widget.WeatherWidgetReceiver"
             android:exported="true"

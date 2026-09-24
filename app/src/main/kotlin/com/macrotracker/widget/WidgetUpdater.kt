@@ -1,17 +1,13 @@
 package com.macrotracker.widget
 
 import android.content.Context
-import androidx.glance.appwidget.updateAll
-import com.macrotracker.widget.kit.WidgetDataBus
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 /**
  * Utility to refresh the weather widget from anywhere in the app. The other widgets
  * refresh through [DashWidgets.refreshAndRender].
  *
- * Does nothing unless a weather widget is placed on the home screen (queried
- * via [WidgetStateProvider]), so we never spin up Glance renders for nothing.
+ * Does nothing unless a placed widget shows the weather (queried via
+ * [WidgetStateProvider]), so we never spin up Glance renders for nothing.
  *
  * Flow:
  * 1. Invalidate in-memory data cache
@@ -32,10 +28,7 @@ object WidgetUpdater {
         WeatherWidgetPreview.publish(context)
         if (!WidgetStateProvider.hasWeatherWidget(context)) return
 
-        withContext(Dispatchers.Main) {
-            WidgetDataBus.bump(WeatherWidgetSpec.key)
-            WeatherWidget().updateAll(context)
-        }
+        DashWidgets.render(context, WeatherWidgetSpec)
 
         WidgetRefreshWorker.enqueueImmediateRefresh(context)
     }
@@ -49,9 +42,6 @@ object WidgetUpdater {
         if (!WidgetStateProvider.hasWeatherWidget(context)) return
         WeatherWidgetDataProvider.invalidate(context, clearWeatherCaches = true)
         WeatherWidgetDataProvider.refreshNow(context, force = true)
-        withContext(Dispatchers.Main) {
-            WidgetDataBus.bump(WeatherWidgetSpec.key)
-            WeatherWidget().updateAll(context)
-        }
+        DashWidgets.render(context, WeatherWidgetSpec)
     }
 }

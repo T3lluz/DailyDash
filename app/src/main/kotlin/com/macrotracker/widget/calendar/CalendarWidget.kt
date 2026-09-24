@@ -14,7 +14,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.glance.ColorFilter
-import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
 import androidx.glance.Image
@@ -23,12 +22,9 @@ import androidx.glance.LocalContext
 import androidx.glance.LocalSize
 import androidx.glance.action.Action
 import androidx.glance.action.clickable
-import androidx.glance.appwidget.GlanceAppWidget
-import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.lazy.items
-import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.currentState
 import androidx.glance.layout.Alignment
@@ -44,8 +40,6 @@ import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
 import androidx.glance.layout.width
-import androidx.glance.state.GlanceStateDefinition
-import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
@@ -112,24 +106,21 @@ import java.time.format.TextStyle as JTextStyle
  * meeting; + creates an event on the day shown; the date opens the calendar app on
  * today; the frame opens it on the day shown.
  */
-class CalendarWidget : GlanceAppWidget() {
-    override val sizeMode: SizeMode = SizeMode.Exact
-    override val stateDefinition: GlanceStateDefinition<*> = PreferencesGlanceStateDefinition
+internal object CalendarWidget {
+    internal const val STATE_DAY = "day"
+    internal val DayKey = stringPreferencesKey(STATE_DAY)
 
-    override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val first = CalendarWidgetData.readNow(context)
-        provideContent {
-            // A live session recomposes on update() without calling provideGlance again,
-            // so the newest read comes in through the flow.
-            val live by CalendarWidgetData.live.collectAsState()
-            val day = currentState(DayKey)
-            GlanceTheme { CalendarRoot(live ?: first, day, preview = false) }
-        }
-    }
-
-    companion object {
-        internal const val STATE_DAY = "day"
-        internal val DayKey = stringPreferencesKey(STATE_DAY)
+    /**
+     * A placed copy, inside [com.macrotracker.widget.DashWidget]'s composition. A live
+     * session recomposes on update() without starting over, so the newest read comes in
+     * through the flow ([CalendarWidgetSpec.prepare] reads before the first draw).
+     */
+    @Composable
+    fun Content(context: Context) {
+        val live by CalendarWidgetData.live.collectAsState()
+        val day = currentState(DayKey)
+        val snap = live ?: remember { CalendarWidgetData.cached(context) ?: CalSnapshot.EMPTY }
+        GlanceTheme { CalendarRoot(snap, day, preview = false) }
     }
 }
 
