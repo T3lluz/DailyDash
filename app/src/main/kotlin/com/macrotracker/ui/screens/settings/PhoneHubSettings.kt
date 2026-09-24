@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import com.macrotracker.data.phone.PhoneExtras
 import com.macrotracker.data.phone.PhoneNotificationListener
 import com.macrotracker.ui.components.PillButton
 import com.macrotracker.ui.components.WidgetExpandSection
@@ -58,6 +59,7 @@ fun PhoneHubSettingsCard(viewModel: PhoneHubViewModel = hiltViewModel()) {
     val config by viewModel.config.collectAsState()
     val status by viewModel.status.collectAsState()
     val access by viewModel.access.collectAsState()
+    val usage by viewModel.usage.collectAsState()
     val haptics = rememberHaptics()
     val context = LocalContext.current
 
@@ -78,9 +80,9 @@ fun PhoneHubSettingsCard(viewModel: PhoneHubViewModel = hiltViewModel()) {
             Column(Modifier.weight(1f)) {
                 Text("Phone hub", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
                 Text(
-                    "Shows this phone on the dashboard (the phone in its top bar): battery, network, what is " +
-                        "playing, notifications. From there you can ring it, turn on the torch, open links, copy " +
-                        "text and answer messages.",
+                    "Shows this phone on the dashboard (the phone in its top bar): notifications, what is " +
+                        "playing with its lyrics, the calendar, health and battery. From there you can ring it, " +
+                        "control music, switch the ringer, open links, copy text and answer messages.",
                     fontSize = 12.sp,
                     color = TextSecondary,
                     lineHeight = 16.sp,
@@ -145,6 +147,35 @@ fun PhoneHubSettingsCard(viewModel: PhoneHubViewModel = hiltViewModel()) {
                     )
                 }
 
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Usage access", fontSize = 14.sp, color = TextPrimary)
+                        Text(
+                            if (usage) "On: today's screen time, unlocks and top apps show on the dashboard"
+                            else "Optional. Lets the dashboard show today's screen time and the apps it went to",
+                            fontSize = 12.sp,
+                            color = TextSecondary,
+                            lineHeight = 16.sp,
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    PillButton(
+                        icon = if (usage) AppIcons.Settings else AppIcons.Key,
+                        label = if (usage) "Manage" else "Grant",
+                        accent = HubAccent,
+                        emphasized = false,
+                        onClick = {
+                            runCatching { context.startActivity(PhoneExtras.usageSettingsIntent(context)) }
+                                .onFailure {
+                                    runCatching {
+                                        context.startActivity(android.content.Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                                    }
+                                }
+                        },
+                    )
+                }
+
                 Spacer(Modifier.height(12.dp))
                 Text("Share with the dashboard", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary)
                 Spacer(Modifier.height(4.dp))
@@ -153,6 +184,9 @@ fun PhoneHubSettingsCard(viewModel: PhoneHubViewModel = hiltViewModel()) {
                 }
                 MetricToggleRow(name = "Today's health", enabled = config.health, icon = AppIcons.Heart) {
                     haptics.tick(); viewModel.update { c -> c.copy(health = it) }
+                }
+                MetricToggleRow(name = "Food log", enabled = config.food, icon = AppIcons.Restaurant) {
+                    haptics.tick(); viewModel.update { c -> c.copy(food = it) }
                 }
                 MetricToggleRow(name = "Next events", enabled = config.calendar, icon = AppIcons.Calendar) {
                     haptics.tick(); viewModel.update { c -> c.copy(calendar = it) }
