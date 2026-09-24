@@ -30,7 +30,6 @@ import androidx.core.graphics.scale
 import com.macrotracker.BuildConfig
 import com.macrotracker.data.calendar.CalendarRepository
 import com.macrotracker.data.health.HealthConnectRepository
-import com.macrotracker.data.local.MacroRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -51,7 +50,7 @@ import javax.inject.Singleton
  * One reading of the phone, in the shape the dashboard's phone view draws: the device,
  * battery, network, storage and memory, screen and sound, volumes, where the audio goes,
  * what is playing (and what else could), the next alarm, and (when shared) today's health
- * with the week behind it, the food log, the next events, screen time, and the weather and
+ * with the week behind it, the next events, screen time, and the weather and
  * place the app last fetched. Nothing here asks for a permission; a reading the phone may
  * not take is left out.
  *
@@ -65,7 +64,6 @@ class PhoneSnapshot @Inject constructor(
     @param:ApplicationContext private val context: Context,
     private val health: HealthConnectRepository,
     private val calendar: CalendarRepository,
-    private val macros: MacroRepository,
 ) {
     /**
      * Album art is the heavy part of a report. It is encoded again only when the picture
@@ -113,7 +111,6 @@ class PhoneSnapshot @Inject constructor(
                     .put("notifications", PhoneNotificationListener.connected && config.notifications)
                     .put("media", PhoneNotificationListener.connected)
                     .put("health", config.health)
-                    .put("food", config.food)
                     .put("calendar", config.calendar)
                     .put("location", config.location)
                     .put("usage", PhoneExtras.usageGranted(context))
@@ -134,7 +131,6 @@ class PhoneSnapshot @Inject constructor(
                     out.put("health", h)
                 }
             }
-            if (config.food) food()?.let { out.put("food", it) }
             extras.usage?.let { out.put("usage", it) }
             if (config.calendar) out.put("calendar", nextEvents())
             if (config.location) weatherAndPlace(out)
@@ -498,26 +494,6 @@ class PhoneSnapshot @Inject constructor(
         if (s.respiratoryRate > 0) o.put("resp", Math.round(s.respiratoryRate * 10) / 10.0)
         return o.takeIf { it.length() > 0 }
     }
-
-    /** Today's food log: what was eaten against the goals set in the app. */
-    private suspend fun food(): JSONObject? = runCatching {
-        val day = LocalDate.now().toString()
-        val s = macros.getDailySummary(day)
-        val logs = macros.getLogsForDate(day)
-        JSONObject()
-            .put("kcal", s.totalCalories)
-            .put("protein", s.totalProtein)
-            .put("kcalGoal", s.calorieGoal)
-            .put("proteinGoal", s.proteinGoal)
-            .put(
-                "items",
-                JSONArray().apply {
-                    logs.takeLast(12).reversed().forEach {
-                        put(JSONObject().put("name", it.foodName).put("kcal", it.calories).put("protein", it.protein))
-                    }
-                },
-            )
-    }.getOrNull()
 
     private suspend fun nextEvents(): JSONArray {
         val out = JSONArray()

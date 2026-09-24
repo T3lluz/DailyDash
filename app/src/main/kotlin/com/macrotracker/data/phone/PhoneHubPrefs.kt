@@ -14,7 +14,6 @@ data class PhoneHubConfig(
     val enabled: Boolean = false,
     val notifications: Boolean = true,
     val health: Boolean = true,
-    val food: Boolean = true,
     val calendar: Boolean = true,
     val location: Boolean = true,
     val commands: Boolean = true,
@@ -46,7 +45,6 @@ class PhoneHubPrefs @Inject constructor(
             putBoolean("enabled", next.enabled)
             putBoolean("notifications", next.notifications)
             putBoolean("health", next.health)
-            putBoolean("food", next.food)
             putBoolean("calendar", next.calendar)
             putBoolean("location", next.location)
             putBoolean("commands", next.commands)
@@ -58,7 +56,6 @@ class PhoneHubPrefs @Inject constructor(
         enabled = prefs.getBoolean("enabled", false),
         notifications = prefs.getBoolean("notifications", true),
         health = prefs.getBoolean("health", true),
-        food = prefs.getBoolean("food", true),
         calendar = prefs.getBoolean("calendar", true),
         location = prefs.getBoolean("location", true),
         commands = prefs.getBoolean("commands", true),

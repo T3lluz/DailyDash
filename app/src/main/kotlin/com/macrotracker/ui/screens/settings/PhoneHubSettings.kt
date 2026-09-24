@@ -185,9 +185,6 @@ fun PhoneHubSettingsCard(viewModel: PhoneHubViewModel = hiltViewModel()) {
                 MetricToggleRow(name = "Today's health", enabled = config.health, icon = AppIcons.Heart) {
                     haptics.tick(); viewModel.update { c -> c.copy(health = it) }
                 }
-                MetricToggleRow(name = "Food log", enabled = config.food, icon = AppIcons.Restaurant) {
-                    haptics.tick(); viewModel.update { c -> c.copy(food = it) }
-                }
                 MetricToggleRow(name = "Next events", enabled = config.calendar, icon = AppIcons.Calendar) {
                     haptics.tick(); viewModel.update { c -> c.copy(calendar = it) }
                 }

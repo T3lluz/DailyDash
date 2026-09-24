@@ -103,7 +103,7 @@ com.macrotracker/
                               the queued commands inline (`cmds`; run straight from the event, deduped by id against
                               `/phone/commands`, which still runs on `hello`). A full PhoneSnapshot report every 30 s
                               in front / 3 min behind and on battery or torch changes; a *light* report (no health,
-                              calendar, food) after commands. Media has its own lane: track, state, queue, volume,
+                              calendar) after commands. Media has its own lane: track, state, queue, volume,
                               ringer, DND, headphone and ringing changes send a media-only report (`collectMedia`) 180
                               ms after the player settles, skipped when nothing the dashboard shows changed and the
                               position did not jump (>1.5 s off its course). Every report carries `sentAt` so the
@@ -116,7 +116,7 @@ com.macrotracker/
                               PhoneHubWorker reports every 15 min otherwise.
                               PhoneSnapshot reads the cheap things every time (device, battery with W/mA/capacity,
                               network with SSID/signal, storage, RAM, system switches, sound and the output device,
-                              every media session, the next alarm, today's health, the food log from MacroRepository,
+                              every media session, the next alarm, today's health,
                               events, weather); PhoneExtras keeps the slow ones (week of health, sleep stages, HR by
                               half hour, workouts, vitals hourly, screen time from UsageStats when Usage access is
                               granted) and refreshes them behind the report, poking a new one when they land.
@@ -129,7 +129,7 @@ com.macrotracker/
                               clipboard, note, volume (media/ring/notif/alarm/call), ringer, dnd, refresh.
                               PhoneShareActivity is "Send to desk" in the share sheet. Location is the weather cache's,
                               never a fresh fix. Settings: Connections → Phone hub (notification access, usage access,
-                              what to share incl. the food log)
+                              what to share). The food log is not shared: the hub sends health, never macros.
     update/                ← GitHub Releases in-app updater (see "In-app updates")
     health/                ← HealthConnectRepository (read-only; lazy client; PERMISSIONS companion set);
                               reads: Steps, HeartRate, RestingHeartRate, OxygenSaturation,
