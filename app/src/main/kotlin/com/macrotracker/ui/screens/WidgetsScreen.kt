@@ -84,7 +84,9 @@ import com.macrotracker.widget.WidgetRefreshWorker
 import com.macrotracker.widget.WidgetStateProvider
 import com.macrotracker.widget.kit.WidgetAi
 import com.macrotracker.widget.kit.WidgetDims
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -483,7 +485,8 @@ private fun LiveWidgetPreview(spec: DashWidgetSpec, cells: Pair<Int, Int>, modif
     var failed by remember { mutableStateOf(false) }
     LaunchedEffect(spec.key, cells) {
         if (renders[cells] == null) {
-            runCatching { spec.renderPreview(context, WidgetDims.cells(cells.first, cells.second)) }
+            // Off the main thread: the calendar's preview reads the calendar provider.
+            runCatching { withContext(Dispatchers.Default) { spec.renderPreview(context, WidgetDims.cells(cells.first, cells.second)) } }
                 .onSuccess { renders[cells] = it }
                 .onFailure { failed = shown == null }
         }

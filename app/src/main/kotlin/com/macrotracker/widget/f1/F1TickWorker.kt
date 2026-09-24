@@ -23,14 +23,18 @@ class F1TickWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         val app = applicationContext
         if (DashWidgets.countPlaced(app, F1WidgetSpec) == 0) return Result.success()
         DashWidgets.render(app, F1WidgetSpec)
-        schedule(app)
+        schedule(app, fromTick = true)
         return Result.success()
     }
 
     companion object {
         private const val WORK_NAME = "f1_widget_session_tick"
 
-        fun schedule(context: Context) {
+        /**
+         * Books the next redraw. From inside a running tick ([fromTick]) the next one queues
+         * behind it: a REPLACE would cancel the running job, as CalendarWidgetWork notes.
+         */
+        fun schedule(context: Context, fromTick: Boolean = false) {
             val app = context.applicationContext
             val work = WorkManager.getInstance(app)
             if (DashWidgets.countPlaced(app, F1WidgetSpec) == 0) {
@@ -49,7 +53,7 @@ class F1TickWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             val request = OneTimeWorkRequestBuilder<F1TickWorker>()
                 .setInitialDelay(delay, TimeUnit.MILLISECONDS)
                 .build()
-            work.enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.REPLACE, request)
+            work.enqueueUniqueWork(WORK_NAME, if (fromTick) ExistingWorkPolicy.APPEND_OR_REPLACE else ExistingWorkPolicy.REPLACE, request)
         }
     }
 }
