@@ -354,18 +354,22 @@ fun ConnectionsSettingsScreen(
         Spacer(modifier = Modifier.height(10.dp))
 
         MacroCard(delayMs = 140) {
-            SettingsCategoryRow(
+            val online = serverRuntimes.values.count { it.isOnline }
+            SettingsNavRow(
                 icon = AppIcons.Server,
+                tint = ServerBrand,
                 title = "Servers",
-                summary = when {
-                    serverProfiles.isEmpty() ->
-                        "Monitor your own machines over SSH — live stats, alerts, updates"
-                    else -> {
-                        val online = serverRuntimes.values.count { it.isOnline }
-                        "${serverProfiles.size} configured · $online online"
-                    }
+                summary = if (serverProfiles.isEmpty()) {
+                    "Monitor your own machines over SSH: live stats, alerts, updates"
+                } else {
+                    "${serverProfiles.size} configured"
                 },
-                iconTint = ServerBrand,
+                status = if (serverProfiles.isEmpty()) null else "$online online",
+                statusTone = if (serverProfiles.isNotEmpty() && online == serverProfiles.size) {
+                    SettingsStatusTone.GOOD
+                } else {
+                    SettingsStatusTone.PLAIN
+                },
                 onClick = onNavigateToServers,
             )
         }

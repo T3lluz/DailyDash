@@ -9,16 +9,20 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.macrotracker.data.health.HealthConnectRepository
 import com.macrotracker.data.local.SettingsRepository
+import com.macrotracker.data.remote.AiCredentialResolver
 import com.macrotracker.data.remote.AiProvider
 import com.macrotracker.data.remote.ClaudeAuthClient
 import com.macrotracker.data.remote.ClaudeAuthOutcome
 import com.macrotracker.data.remote.TempUnit
 import com.macrotracker.data.remote.WindUnit
+import com.macrotracker.widget.WidgetInstances
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
@@ -26,6 +30,7 @@ class SettingsViewModel @Inject constructor(
     private val settings: SettingsRepository,
     private val healthConnectRepository: HealthConnectRepository,
     private val claudeAuth: ClaudeAuthClient,
+    private val aiCredentials: AiCredentialResolver,
     @ApplicationContext private val appContext: Context,
 ) : ViewModel() {
 
@@ -58,6 +63,14 @@ class SettingsViewModel @Inject constructor(
 
     private val _calendarConnected = MutableStateFlow(false)
     val calendarConnected: StateFlow<Boolean> = _calendarConnected
+
+    /** Whether the chosen AI provider has a key or a session, by the resolver every AI feature uses. */
+    private val _aiReady = MutableStateFlow(false)
+    val aiReady: StateFlow<Boolean> = _aiReady
+
+    /** Home-screen widgets placed right now; null until counted. */
+    private val _widgetsPlaced = MutableStateFlow<Int?>(null)
+    val widgetsPlaced: StateFlow<Int?> = _widgetsPlaced
 
     // Master toggles
     val masterHealthConnectEnabled: StateFlow<Boolean> = settings.masterHealthConnectEnabled
@@ -190,6 +203,11 @@ class SettingsViewModel @Inject constructor(
                 appContext, Manifest.permission.READ_CALENDAR,
             ) == PackageManager.PERMISSION_GRANTED
             _calendarConnected.value = settings.calendarEnabled.value && calPerm
+
+            _aiReady.value = aiCredentials.hasCredentials()
+            _widgetsPlaced.value = withContext(Dispatchers.IO) {
+                runCatching { WidgetInstances.placedIds(appContext).size }.getOrNull()
+            }
         }
     }
 }
