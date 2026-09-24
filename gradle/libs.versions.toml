@@ -29,6 +29,8 @@ work = "2.10.0"
 haze = "1.7.2"
 reorderable = "3.1.0"
 jsch = "2.28.7"
+robolectric = "4.16.1"
+androidx-test-core = "1.6.1"
 
 [libraries]
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "compose-bom" }
@@ -81,6 +83,8 @@ haze = { module = "dev.chrisbanes.haze:haze", version.ref = "haze" }
 haze-materials = { module = "dev.chrisbanes.haze:haze-materials", version.ref = "haze" }
 reorderable = { module = "sh.calvin.reorderable:reorderable", version.ref = "reorderable" }
 jsch = { module = "com.github.mwiede:jsch", version.ref = "jsch" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+androidx-test-core = { module = "androidx.test:core", version.ref = "androidx-test-core" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
