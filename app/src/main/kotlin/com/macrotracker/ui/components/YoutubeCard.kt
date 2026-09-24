@@ -71,7 +71,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -2419,7 +2418,10 @@ private fun SuggestionRow(
         // + / check / remove button
         Box(
             modifier = Modifier
-                .scale(btnScale)
+                .graphicsLayer {
+                    scaleX = btnScale
+                    scaleY = btnScale
+                }
                 .size(36.dp)
                 .clip(CircleShape)
                 .background(btnBg)
@@ -2508,7 +2510,10 @@ private fun ChannelListRow(
         // Animated add/check/remove button
         Box(
             modifier = Modifier
-                .scale(btnScale)
+                .graphicsLayer {
+                    scaleX = btnScale
+                    scaleY = btnScale
+                }
                 .size(36.dp)
                 .clip(CircleShape)
                 .background(buttonBg)

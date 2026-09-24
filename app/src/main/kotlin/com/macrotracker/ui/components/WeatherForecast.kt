@@ -32,7 +32,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -70,6 +69,7 @@ import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.WeatherUiState
 import java.util.Locale
 import kotlin.math.roundToInt
+import androidx.compose.ui.graphics.graphicsLayer
 
 /*
  * The weather card opened up, built to be read in one screen: what to wear and the
@@ -563,7 +563,7 @@ private fun DayRow(
                 AppIcons.ChevronDown,
                 contentDescription = if (open) "Hide ${day.date}'s hours" else "Show ${day.date}'s hours",
                 tint = TextTertiary,
-                modifier = Modifier.size(16.dp).rotate(chevron),
+                modifier = Modifier.size(16.dp).graphicsLayer { rotationZ = chevron },
             )
         }
         AnimatedVisibility(open, enter = MacroMotion.expandEnter, exit = MacroMotion.expandExit) {

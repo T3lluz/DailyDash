@@ -18,7 +18,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -135,21 +134,17 @@ fun TypingDots(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         repeat(3) { index ->
-            val y = if (motion != null) {
-                val animated by motion.animateFloat(
-                    initialValue = 0f,
-                    targetValue = -4f,
-                    animationSpec = MacroMotion.pulseSpec(durationMs = 400, delayMs = index * 100),
-                    label = "dot$index",
-                )
-                animated
-            } else {
-                0f
-            }
+            // Read in the layer, so the dots bounce without recomposing.
+            val bounce = motion?.animateFloat(
+                initialValue = 0f,
+                targetValue = -4f,
+                animationSpec = MacroMotion.pulseSpec(durationMs = 400, delayMs = index * 100),
+                label = "dot$index",
+            )
             Box(
                 modifier = Modifier
                     .size(dotSize)
-                    .graphicsLayer { translationY = y }
+                    .graphicsLayer { translationY = bounce?.value ?: 0f }
                     .clip(CircleShape)
                     .background(color),
             )

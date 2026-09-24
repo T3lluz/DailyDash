@@ -5,7 +5,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -63,22 +62,24 @@ fun LivePulseDot(
     style: LivePulseStyle = LivePulseStyle.Halo,
 ) {
     val paused = LocalTickersPaused.current
-    val phase = if (paused) {
-        0f
+    // Kept as a State and read inside the Canvas: the pulse redraws the dot each
+    // frame without recomposing it.
+    val pulse = if (paused) {
+        null
     } else {
         val transition = rememberInfiniteTransition(label = "livePulse")
-        val animated by transition.animateFloat(
+        transition.animateFloat(
             initialValue = 0f,
             targetValue = 1f,
             animationSpec = MacroMotion.livePulseSpec(),
             label = "livePulsePhase",
         )
-        animated
     }
 
     // The whole thing is drawn inside `size`; the halo eats into the core so the
     // dot never overflows the row it sits in.
     Canvas(modifier = modifier.size(size)) {
+        val phase = pulse?.value ?: 0f
         val maxRadius = this.size.minDimension / 2f
         if (style == LivePulseStyle.Rings) {
             val coreRadius = maxRadius * LivePulseSpec.RINGS_CORE

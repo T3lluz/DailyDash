@@ -45,14 +45,16 @@ class DailyDashApp : Application(), ImageLoaderFactory {
         settingsSync.bind()
         phoneHub.bind()
         PackageReplacedReceiver.ensureChannel(this)
-        // Every few hours, even with the app closed: a new build shows up as a notification.
-        AppUpdateWorker.schedule(this)
-        if (WidgetStateProvider.hasAnyWidget(this)) {
-            WidgetRefreshWorker.enqueuePeriodicRefresh(this)
-            // Periodic worker covers freshness; skip an immediate full refresh on every cold start.
-        }
-        // Give the launcher's widget picker a real render of every widget (Android 15+).
+        // Nothing below has to happen before the first frame, so it stays off the main
+        // thread: asking the launcher which widgets are placed is a call per widget kind.
         CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
+            // Every few hours, even with the app closed: a new build shows up as a notification.
+            AppUpdateWorker.schedule(this@DailyDashApp)
+            if (WidgetStateProvider.hasAnyWidget(this@DailyDashApp)) {
+                WidgetRefreshWorker.enqueuePeriodicRefresh(this@DailyDashApp)
+                // Periodic worker covers freshness; skip an immediate full refresh on every cold start.
+            }
+            // Give the launcher's widget picker a real render of every widget (Android 15+).
             DashWidgets.publishAllPreviews(this@DailyDashApp)
         }
     }

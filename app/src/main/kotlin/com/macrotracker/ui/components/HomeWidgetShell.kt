@@ -33,7 +33,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -144,16 +143,16 @@ fun WidgetExpandChevron(
     accentColor: Color = TextSecondary,
 ) {
     val scrollIdle = !LocalTickersPaused.current
-    val rotation = if (scrollIdle) {
+    val target = if (expanded) 180f else 0f
+    // Read in the layer, so the turn animates without recomposing.
+    val turning = if (scrollIdle) {
         animateFloatAsState(
-            targetValue = if (expanded) 180f else 0f,
+            targetValue = target,
             animationSpec = MacroMotion.pressSpring(),
             label = "widget_chevron",
-        ).value
-    } else if (expanded) {
-        180f
+        )
     } else {
-        0f
+        null
     }
 
     Box(
@@ -167,7 +166,7 @@ fun WidgetExpandChevron(
             imageVector = AppIcons.ChevronDown,
             contentDescription = if (expanded) "Collapse" else "Expand",
             tint = accentColor,
-            modifier = Modifier.size(22.dp).rotate(rotation),
+            modifier = Modifier.size(22.dp).graphicsLayer { rotationZ = turning?.value ?: target },
         )
     }
 }

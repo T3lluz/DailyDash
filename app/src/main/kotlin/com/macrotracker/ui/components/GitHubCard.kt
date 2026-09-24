@@ -46,7 +46,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -101,6 +100,7 @@ import com.macrotracker.ui.viewmodel.GitHubUiState
 import com.macrotracker.ui.viewmodel.GitHubViewModel
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.TextTertiary
+import androidx.compose.ui.graphics.graphicsLayer
 
 private val GhAccent = Color(0xFF58A6FF)
 private val GhOpen = Color(0xFF3FB950)
@@ -1415,7 +1415,7 @@ private fun RepoPicker(
                 AppIcons.ChevronDown,
                 contentDescription = if (open) "Close repo list" else "Choose repo",
                 tint = TextSecondary,
-                modifier = Modifier.size(if (compact) 18.dp else 20.dp).rotate(rotation),
+                modifier = Modifier.size(if (compact) 18.dp else 20.dp).graphicsLayer { rotationZ = rotation },
             )
         }
         AnimatedVisibility(visible = open, enter = MacroMotion.expandEnter, exit = MacroMotion.expandExit) {

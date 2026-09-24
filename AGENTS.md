@@ -409,6 +409,8 @@ Briefly tell the user:
 ### Compose Strong Skipping
 Strong skipping is the Compose compiler default on Kotlin 2.x, so there is no flag in `app/build.gradle.kts`. Composables with unstable parameters will skip recomposition automatically — avoid fighting this with `@Stable`/`@Immutable` unless you observe real correctness issues.
 
+**Per-frame values stay out of composition.** Anything that changes every frame (a fade, a pulse, a chevron's turn, a press scale) is kept as a `State` and read inside `graphicsLayer { }`, a `Canvas`/`drawBehind` block or a layout lambda, never as a plain value in the composable body: `MacroCard`'s entrance fade, `LivePulseDot`, `TypingDots` and the expand chevrons do this. `MacroCard` also stops reading `LocalTickersPaused` once its entrance has run, so scroll starts and stops don't recompose every card. The draggable Home/Health lists give each card its own `contentType` (its id), so a slot is only reused for the same card.
+
 ## Important Files to Read First
 - `di/AppModule.kt` — understand what is injected and how
 - `data/local/Entities.kt` — the two Room entities (only calories + protein tracked)

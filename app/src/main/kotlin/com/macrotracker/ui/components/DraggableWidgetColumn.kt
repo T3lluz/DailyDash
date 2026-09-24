@@ -108,6 +108,9 @@ fun <T> LazyListScope.draggableWidgetItems(
     items(
         count = state.workingList.size,
         key = { index -> itemKey(state.workingList[index]) },
+        // Every card is its own kind: a slot a card leaves is kept for that card coming
+        // back into view, never rebuilt as a different one.
+        contentType = { index -> itemKey(state.workingList[index]) },
     ) { index ->
         val item = state.workingList[index]
         val key = itemKey(item)

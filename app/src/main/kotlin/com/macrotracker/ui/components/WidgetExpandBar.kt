@@ -25,7 +25,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -36,6 +35,7 @@ import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.LocalTickersPaused
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.theme.AppIcons
+import androidx.compose.ui.graphics.graphicsLayer
 
 /**
  * Unified expand/collapse bar used at the bottom of every widget.
@@ -53,16 +53,16 @@ fun WidgetExpandBar(
     val haptics = rememberHaptics()
     val scrollIdle = !LocalTickersPaused.current
 
-    val chevronRotation = if (scrollIdle) {
+    val chevronTarget = if (expanded) 180f else 0f
+    // Read in the layer, so the turn animates without recomposing the bar.
+    val chevronTurning = if (scrollIdle) {
         animateFloatAsState(
-            targetValue = if (expanded) 180f else 0f,
+            targetValue = chevronTarget,
             animationSpec = MacroMotion.pressSpring(),
             label = "chevron_rot",
-        ).value
-    } else if (expanded) {
-        180f
+        )
     } else {
-        0f
+        null
     }
 
     val interactionSource = remember { MutableInteractionSource() }
@@ -142,7 +142,9 @@ fun WidgetExpandBar(
                     imageVector = AppIcons.ChevronDown,
                     contentDescription = null,
                     tint = accentColor.copy(alpha = if (expanded) 0.80f else 0.65f),
-                    modifier = Modifier.size(14.dp).rotate(chevronRotation),
+                    modifier = Modifier
+                        .size(14.dp)
+                        .graphicsLayer { rotationZ = chevronTurning?.value ?: chevronTarget },
                 )
             }
         }
