@@ -113,8 +113,9 @@ fun DeltaPill(
 
 /**
  * A small trend line. Zeros are treated as "no reading" and skipped rather
- * than dragging the line to the floor. Draws in once, then follows new values
- * without replaying.
+ * than dragging the line to the floor, unless the values are [signed] (a
+ * change against a baseline, where zero and below are readings too). Draws in
+ * once, then follows new values without replaying.
  */
 @Composable
 fun Sparkline(
@@ -124,6 +125,7 @@ fun Sparkline(
     fill: Boolean = true,
     markLast: Boolean = true,
     strokeWidthDp: Float = 2f,
+    signed: Boolean = false,
 ) {
     val reduced = rememberReducedMotion()
     val reveal = remember { Animatable(if (reduced) 1f else 0f) }
@@ -131,7 +133,7 @@ fun Sparkline(
         if (reveal.value < 1f) reveal.animateTo(1f, MacroMotion.chartRevealTween(600))
     }
     Canvas(modifier = modifier) {
-        val points = values.withIndex().filter { it.value > 0.0 }
+        val points = values.withIndex().filter { signed || it.value > 0.0 }
         if (points.size < 2) {
             points.firstOrNull()?.let {
                 drawCircle(color, 2.5.dp.toPx(), Offset(size.width / 2f, size.height / 2f))

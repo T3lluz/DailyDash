@@ -3,24 +3,32 @@ package com.macrotracker.data.health
 import android.content.Context
 import android.util.Log
 import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.HealthConnectFeatures
+import androidx.health.connect.client.feature.ExperimentalFeatureAvailabilityApi
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.BasalMetabolicRateRecord
+import androidx.health.connect.client.records.BloodGlucoseRecord
 import androidx.health.connect.client.records.BloodPressureRecord
 import androidx.health.connect.client.records.BodyFatRecord
 import androidx.health.connect.client.records.BodyTemperatureRecord
+import androidx.health.connect.client.records.BodyWaterMassRecord
+import androidx.health.connect.client.records.BoneMassRecord
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ElevationGainedRecord
+import androidx.health.connect.client.records.ExerciseSegment
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.FloorsClimbedRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.HeartRateVariabilityRmssdRecord
 import androidx.health.connect.client.records.HeightRecord
 import androidx.health.connect.client.records.HydrationRecord
+import androidx.health.connect.client.records.LeanBodyMassRecord
 import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.RespiratoryRateRecord
 import androidx.health.connect.client.records.RestingHeartRateRecord
+import androidx.health.connect.client.records.SkinTemperatureRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
@@ -107,6 +115,10 @@ class HealthConnectRepository @Inject constructor(
             HealthPermission.getReadPermission(HydrationRecord::class),
             HealthPermission.getReadPermission(BloodPressureRecord::class),
             HealthPermission.getReadPermission(BodyTemperatureRecord::class),
+            HealthPermission.getReadPermission(LeanBodyMassRecord::class),
+            HealthPermission.getReadPermission(BoneMassRecord::class),
+            HealthPermission.getReadPermission(BodyWaterMassRecord::class),
+            HealthPermission.getReadPermission(BloodGlucoseRecord::class),
         )
 
         val STEPS_PERMISSION = HealthPermission.getReadPermission(StepsRecord::class)
@@ -130,6 +142,17 @@ class HealthConnectRepository @Inject constructor(
         val HYDRATION_PERMISSION = HealthPermission.getReadPermission(HydrationRecord::class)
         val BLOOD_PRESSURE_PERMISSION = HealthPermission.getReadPermission(BloodPressureRecord::class)
         val BODY_TEMPERATURE_PERMISSION = HealthPermission.getReadPermission(BodyTemperatureRecord::class)
+        val LEAN_MASS_PERMISSION = HealthPermission.getReadPermission(LeanBodyMassRecord::class)
+        val BONE_MASS_PERMISSION = HealthPermission.getReadPermission(BoneMassRecord::class)
+        val BODY_WATER_PERMISSION = HealthPermission.getReadPermission(BodyWaterMassRecord::class)
+        val BLOOD_GLUCOSE_PERMISSION = HealthPermission.getReadPermission(BloodGlucoseRecord::class)
+
+        /**
+         * Skin temperature is newer than the rest: asked for only where the installed Health
+         * Connect has it ([requestablePermissions]), so an older one never sees a name it
+         * doesn't know.
+         */
+        val SKIN_TEMPERATURE_PERMISSION = HealthPermission.getReadPermission(SkinTemperatureRecord::class)
 
         /** How far back Body & Vitals reads: long enough for a weight trend. */
         const val VITALS_HISTORY_DAYS = 90L
@@ -149,8 +172,32 @@ class HealthConnectRepository @Inject constructor(
         /** Health Connect's page cap; newest first so a chatty watch trims the oldest days. */
         private const val VITALS_PAGE_SIZE = 5000
 
-        /** Everything in [PERMISSIONS] reads data, so this is the whole set. */
-        val DATA_PERMISSIONS: Set<String> = PERMISSIONS
+        /** Everything that reads data: [PERMISSIONS] and skin temperature. */
+        val DATA_PERMISSIONS: Set<String> = PERMISSIONS + SKIN_TEMPERATURE_PERMISSION
+
+        /** Heart rate is read in half hours for resting, sleeping and daily heart rate… */
+        private val HR_BUCKET: Duration = Duration.ofMinutes(30)
+
+        /** …ten days per request, so no one response gets large. */
+        private const val HR_BUCKET_CHUNK_DAYS = 10L
+
+        /** Days of daily heart-rate peaks behind the maximum heart rate. */
+        private const val HR_PEAK_DAYS = 90L
+
+        /** How far back a run counts toward the VO₂ max estimate. */
+        private const val RUN_DAYS = 60L
+
+        /** The newest runs read for it; each is one aggregate call. */
+        private const val RUN_LIMIT = 12
+
+        /** Outdoor runs only: a treadmill's distance is the watch's guess. */
+        private val RUN_TYPES = setOf(ExerciseSessionRecord.EXERCISE_TYPE_RUNNING)
+
+        /** Pauses and rests don't count as running time. */
+        private val STOPPED_SEGMENTS = setOf(
+            ExerciseSegment.EXERCISE_SEGMENT_TYPE_PAUSE,
+            ExerciseSegment.EXERCISE_SEGMENT_TYPE_REST,
+        )
 
         /** Granted-permission snapshots are cheap to re-read but not free. */
         private const val GRANTED_CACHE_TTL = 30_000L
@@ -184,6 +231,23 @@ class HealthConnectRepository @Inject constructor(
     }
 
     fun isAvailable(): Boolean = client != null
+
+    /** Whether this Health Connect has skin temperature. Asked once: it only changes with an update. */
+    @OptIn(ExperimentalFeatureAvailabilityApi::class)
+    private val skinTemperatureAvailable: Boolean by lazy {
+        val hc = client ?: return@lazy false
+        try {
+            hc.features.getFeatureStatus(HealthConnectFeatures.FEATURE_SKIN_TEMPERATURE) ==
+                HealthConnectFeatures.FEATURE_STATUS_AVAILABLE
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to check for skin temperature: ${e.message}")
+            false
+        }
+    }
+
+    /** What the permission sheet asks for: [PERMISSIONS], and skin temperature where Health Connect has it. */
+    fun requestablePermissions(): Set<String> =
+        if (skinTemperatureAvailable) PERMISSIONS + SKIN_TEMPERATURE_PERMISSION else PERMISSIONS
 
     // ── "Granted, but refused" detection ──────────────────────────────────
     //
@@ -1106,6 +1170,11 @@ class HealthConnectRepository @Inject constructor(
      * and a month of rate-like vitals, one range read per type. Each read
      * stands alone, so a type that isn't granted (or that a provider refuses)
      * only leaves its own series empty.
+     *
+     * Heart rate also comes in half hours, for what a watch that writes only heart
+     * rate still tells: resting heart rate (when nothing writes one), heart rate
+     * asleep and each day's range. Daily peaks and recent runs go along for the
+     * VO₂ max estimate the card works out when nothing writes VO₂ max.
      */
     suspend fun readBodyVitals(days: Long = VITALS_HISTORY_DAYS): BodyVitals = withContext(Dispatchers.IO) {
         val hc = client ?: return@withContext BodyVitals()
@@ -1198,21 +1267,74 @@ class HealthConnectRepository @Inject constructor(
             val hydration = async {
                 if (!has(HYDRATION_PERMISSION)) emptyList() else readHydrationByDay(hc, zone)
             }
+            val lean = async {
+                if (!has(LEAN_MASS_PERMISSION)) emptyList()
+                else readSeries(hc, LeanBodyMassRecord::class, bodyRange) { VitalSample(it.time, it.mass.inKilograms) }
+            }
+            val bone = async {
+                if (!has(BONE_MASS_PERMISSION)) emptyList()
+                else readSeries(hc, BoneMassRecord::class, bodyRange) { VitalSample(it.time, it.mass.inKilograms) }
+            }
+            val water = async {
+                if (!has(BODY_WATER_PERMISSION)) emptyList()
+                else readSeries(hc, BodyWaterMassRecord::class, bodyRange) { VitalSample(it.time, it.mass.inKilograms) }
+            }
+            val glucose = async {
+                if (!has(BLOOD_GLUCOSE_PERMISSION)) emptyList()
+                else readSeries(hc, BloodGlucoseRecord::class, bodyRange) {
+                    VitalSample(it.time, it.level.inMillimolesPerLiter)
+                }
+            }
+            val skin = async {
+                if (!skinTemperatureAvailable || !has(SKIN_TEMPERATURE_PERMISSION)) emptyList()
+                else readSkinTemperature(hc, rateRange, zone)
+            }
+            val canHr = has(HEART_RATE_PERMISSION)
+            val hrBuckets = async { if (!canHr) emptyList() else readHeartRateBuckets(hc, rateStart, now) }
+            val peaks = async { if (!canHr) emptyList() else readDailyPeakHeartRate(hc, zone) }
+            val sleeps = async {
+                if (!canHr || !has(SLEEP_PERMISSION)) emptyList()
+                else readSeries(
+                    hc,
+                    SleepSessionRecord::class,
+                    TimeRangeFilter.between(rateStart.minus(Duration.ofHours(12)), now),
+                ) { it.startTime to it.endTime }
+            }
+            val runs = async {
+                if (!canHr || !has(EXERCISE_PERMISSION) || !has(DISTANCE_PERMISSION)) emptyList()
+                else readRuns(hc, now)
+            }
 
+            val buckets = hrBuckets.await()
+            val recordedRhr = rhr.await()
+            val derivedRhr = if (recordedRhr.isEmpty()) derivedRestingHr(buckets, zone) else emptyList()
+            val glucoseReadings = glucose.await()
             BodyVitals(
                 weightKg = weight.await(),
                 bodyFatPct = bodyFat.await(),
                 heightM = height.await(),
                 vo2Max = vo2.await(),
                 hrvMs = hrv.await(),
-                restingHr = rhr.await(),
+                restingHr = recordedRhr.ifEmpty { derivedRhr },
+                restingHrDerived = recordedRhr.isEmpty() && derivedRhr.isNotEmpty(),
                 spo2 = spo2.await(),
                 respiratoryRate = resp.await(),
                 bodyTempC = temp.await(),
                 bmrKcal = bmr.await(),
                 bloodPressure = pressure.await(),
                 hydrationByDay = hydration.await(),
+                heartRateDaily = dailyHeartRate(buckets, zone),
+                sleepingHr = sleepingHeartRate(buckets, sleeps.await(), zone),
+                dailyPeakHr = peaks.await(),
+                runs = runs.await(),
+                leanMassKg = lean.await(),
+                boneMassKg = bone.await(),
+                bodyWaterKg = water.await(),
+                glucose = dailyMeans(glucoseReadings, zone),
+                glucoseLatest = glucoseReadings.lastOrNull(),
+                skinTempDelta = skin.await(),
                 notShared = buildSet {
+                    if (!canHr) add(VitalKind.HEART_RATE)
                     if (!has(WEIGHT_PERMISSION)) add(VitalKind.WEIGHT)
                     if (!has(BODY_FAT_PERMISSION)) add(VitalKind.BODY_FAT)
                     if (!has(HEIGHT_PERMISSION)) add(VitalKind.HEIGHT)
@@ -1225,6 +1347,11 @@ class HealthConnectRepository @Inject constructor(
                     if (!has(BMR_PERMISSION)) add(VitalKind.BMR)
                     if (!has(BLOOD_PRESSURE_PERMISSION)) add(VitalKind.BLOOD_PRESSURE)
                     if (!has(HYDRATION_PERMISSION)) add(VitalKind.HYDRATION)
+                    if (!has(LEAN_MASS_PERMISSION)) add(VitalKind.LEAN_MASS)
+                    if (!has(BODY_WATER_PERMISSION)) add(VitalKind.BODY_WATER)
+                    if (!has(BONE_MASS_PERMISSION)) add(VitalKind.BONE_MASS)
+                    if (!has(BLOOD_GLUCOSE_PERMISSION)) add(VitalKind.GLUCOSE)
+                    if (skinTemperatureAvailable && !has(SKIN_TEMPERATURE_PERMISSION)) add(VitalKind.SKIN_TEMP)
                 },
             )
         }
@@ -1279,6 +1406,126 @@ class HealthConnectRepository @Inject constructor(
             VitalSample(date.atTime(12, 0).atZone(zone).toInstant(), byDay[date] ?: 0.0)
         }
     }
+
+    /**
+     * Heart rate in half hours from [start] to [end] (average, low, high and how many
+     * readings), oldest first, in ten-day requests. Half hours with nothing in them are
+     * left out.
+     */
+    private suspend fun readHeartRateBuckets(hc: HealthConnectClient, start: Instant, end: Instant): List<HrBucket> =
+        coroutineScope {
+            val chunks = generateSequence(start) { it.plus(Duration.ofDays(HR_BUCKET_CHUNK_DAYS)) }
+                .takeWhile { it.isBefore(end) }
+                .map { from -> from to minOf(from.plus(Duration.ofDays(HR_BUCKET_CHUNK_DAYS)), end) }
+                .toList()
+            chunks.map { (from, to) ->
+                async {
+                    try {
+                        hc.aggregateGroupByDuration(
+                            AggregateGroupByDurationRequest(
+                                metrics = setOf(
+                                    HeartRateRecord.BPM_AVG,
+                                    HeartRateRecord.BPM_MIN,
+                                    HeartRateRecord.BPM_MAX,
+                                    HeartRateRecord.MEASUREMENTS_COUNT,
+                                ),
+                                timeRangeFilter = TimeRangeFilter.between(from, to),
+                                timeRangeSlicer = HR_BUCKET,
+                            ),
+                        ).mapNotNull { bucket ->
+                            val avg = bucket.result[HeartRateRecord.BPM_AVG] ?: return@mapNotNull null
+                            HrBucket(
+                                start = bucket.startTime,
+                                avg = avg.toDouble(),
+                                min = (bucket.result[HeartRateRecord.BPM_MIN] ?: avg).toDouble(),
+                                max = (bucket.result[HeartRateRecord.BPM_MAX] ?: avg).toDouble(),
+                                count = bucket.result[HeartRateRecord.MEASUREMENTS_COUNT] ?: 1L,
+                            )
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to read heart rate by half hour: ${e.message}")
+                        noteReadFailure(e)
+                        emptyList()
+                    }
+                }
+            }.awaitAll().flatten().sortedBy { it.start }
+        }
+
+    /** Each day's highest heart rate over the last [HR_PEAK_DAYS] days. */
+    private suspend fun readDailyPeakHeartRate(hc: HealthConnectClient, zone: ZoneId): List<Double> = try {
+        val first = LocalDate.now(zone).minusDays(HR_PEAK_DAYS - 1)
+        hc.aggregateGroupByPeriod(
+            AggregateGroupByPeriodRequest(
+                metrics = setOf(HeartRateRecord.BPM_MAX),
+                timeRangeFilter = TimeRangeFilter.between(first.atStartOfDay(), LocalDateTime.now(zone)),
+                timeRangeSlicer = Period.ofDays(1),
+            ),
+        ).mapNotNull { it.result[HeartRateRecord.BPM_MAX]?.toDouble() }
+    } catch (e: Exception) {
+        Log.w(TAG, "Failed to read daily peak heart rate: ${e.message}")
+        noteReadFailure(e)
+        emptyList()
+    }
+
+    /**
+     * The newest outdoor runs of the last [RUN_DAYS] days, oldest first, with their
+     * running time (pauses and rests taken off), speed and average heart rate.
+     */
+    private suspend fun readRuns(hc: HealthConnectClient, now: Instant): List<RunSample> {
+        val sessions = try {
+            hc.readRecords(
+                ReadRecordsRequest(
+                    recordType = ExerciseSessionRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(now.minus(Duration.ofDays(RUN_DAYS)), now),
+                    ascendingOrder = false,
+                    pageSize = ACTIVITY_HISTORY_LIMIT * 2,
+                ),
+            ).records
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to read runs: ${e.message}")
+            noteReadFailure(e)
+            return emptyList()
+        }
+        val runs = sessions.filter { it.exerciseType in RUN_TYPES && it.startTime.isBefore(it.endTime) }.take(RUN_LIMIT)
+        return coroutineScope {
+            runs.map { run ->
+                async {
+                    val stopped = run.segments
+                        .filter { it.segmentType in STOPPED_SEGMENTS }
+                        .fold(Duration.ZERO) { total, s -> total.plus(Duration.between(s.startTime, s.endTime)) }
+                    val minutes = Duration.between(run.startTime, run.endTime).minus(stopped).seconds / 60.0
+                    if (minutes <= 0.0) return@async null
+                    try {
+                        val agg = hc.aggregate(
+                            AggregateRequest(
+                                metrics = setOf(DistanceRecord.DISTANCE_TOTAL, HeartRateRecord.BPM_AVG),
+                                timeRangeFilter = TimeRangeFilter.between(run.startTime, run.endTime),
+                            ),
+                        )
+                        val metres = agg[DistanceRecord.DISTANCE_TOTAL]?.inMeters?.takeIf { it > 0.0 }
+                        val hr = agg[HeartRateRecord.BPM_AVG]?.toDouble()
+                        if (metres == null || hr == null) null
+                        else RunSample(end = run.endTime, minutes = minutes, speedMps = metres / (minutes * 60.0), avgHr = hr)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to aggregate run ${run.metadata.id}: ${e.message}")
+                        null
+                    }
+                }
+            }.awaitAll().filterNotNull().sortedBy { it.end }
+        }
+    }
+
+    /** Skin temperature against the wearable's baseline: one mean per night, on its sleep day. */
+    private suspend fun readSkinTemperature(hc: HealthConnectClient, range: TimeRangeFilter, zone: ZoneId): List<VitalSample> =
+        readSeries(hc, SkinTemperatureRecord::class, range) { record ->
+            record.deltas.takeIf { it.isNotEmpty() }?.let { deltas ->
+                sleepDayOf(record.endTime, zone) to deltas.map { it.delta.inCelsius }.average()
+            }
+        }
+            .filterNotNull()
+            .groupBy({ it.first }, { it.second })
+            .toSortedMap()
+            .map { (date, nights) -> VitalSample(date.atTime(12, 0).atZone(zone).toInstant(), nights.average()) }
 
     // ── Intraday + multi-night reads ──────────────────────────────────────
 
@@ -1341,14 +1588,4 @@ class HealthConnectRepository @Inject constructor(
                 emptyMap()
             }
         }
-
-    /** Sleep ending before 18:00 belongs to that day; after 18:00, to the next. */
-    private fun sleepDayOf(end: Instant, zone: ZoneId): LocalDate {
-        val local = end.atZone(zone)
-        return if (local.toLocalTime().isBefore(java.time.LocalTime.of(18, 0))) {
-            local.toLocalDate()
-        } else {
-            local.toLocalDate().plusDays(1)
-        }
-    }
 }

@@ -1,5 +1,6 @@
 package com.macrotracker.data.health
 
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -17,7 +18,10 @@ data class VitalSample(val time: Instant, val value: Double)
 
 data class BloodPressureSample(val time: Instant, val systolic: Double, val diastolic: Double)
 
-/** The body and vitals records Body & Vitals can show, one per Health Connect type. */
+/**
+ * The body and vitals records Body & Vitals can show: one per Health Connect type, and
+ * the ones worked out from heart rate ([HEART_RATE], [SLEEPING_HR]).
+ */
 enum class VitalKind(val label: String) {
     WEIGHT("Weight"),
     BODY_FAT("Body fat"),
@@ -25,12 +29,19 @@ enum class VitalKind(val label: String) {
     VO2_MAX("VO₂ max"),
     HRV("HRV"),
     RESTING_HR("Resting HR"),
+    HEART_RATE("Heart rate"),
+    SLEEPING_HR("Sleeping HR"),
     SPO2("SpO₂"),
     RESPIRATORY("Respiration"),
     TEMPERATURE("Body temp"),
+    SKIN_TEMP("Skin temp"),
     BMR("Resting energy"),
     BLOOD_PRESSURE("Blood pressure"),
+    GLUCOSE("Glucose"),
     HYDRATION("Hydration"),
+    LEAN_MASS("Lean mass"),
+    BODY_WATER("Body water"),
+    BONE_MASS("Bone mass"),
 }
 
 /**
@@ -54,14 +65,186 @@ data class BodyVitals(
     val hydrationByDay: List<VitalSample> = emptyList(),
     /** Kinds Health Connect has not granted, so the card can ask for them. */
     val notShared: Set<VitalKind> = emptySet(),
+    /** True when [restingHr] was worked out from heart-rate readings ([derivedRestingHr]). */
+    val restingHrDerived: Boolean = false,
+    /** Mean, low and high heart rate per day over the rate window. */
+    val heartRateDaily: List<HrDay> = emptyList(),
+    /** Mean heart rate while asleep, one per night ([sleepingHeartRate]). */
+    val sleepingHr: List<VitalSample> = emptyList(),
+    /** Each day's highest heart rate over the last few months, for [maxHeartRate]. */
+    val dailyPeakHr: List<Double> = emptyList(),
+    /** Recent runs with pace and heart rate, for [estimateVo2Max]. */
+    val runs: List<RunSample> = emptyList(),
+    val leanMassKg: List<VitalSample> = emptyList(),
+    val boneMassKg: List<VitalSample> = emptyList(),
+    val bodyWaterKg: List<VitalSample> = emptyList(),
+    /** Blood glucose, mmol/L: a mean per day, and the latest reading on its own. */
+    val glucose: List<VitalSample> = emptyList(),
+    val glucoseLatest: VitalSample? = null,
+    /** Skin temperature against the wearable's own baseline, °C, a mean per night. */
+    val skinTempDelta: List<VitalSample> = emptyList(),
 ) {
     val isEmpty: Boolean
         get() = weightKg.isEmpty() && bodyFatPct.isEmpty() && vo2Max.isEmpty() && hrvMs.isEmpty() &&
             restingHr.isEmpty() && spo2.isEmpty() && respiratoryRate.isEmpty() && bodyTempC.isEmpty() &&
-            bmrKcal == null && bloodPressure.isEmpty() && hydrationByDay.none { it.value > 0.0 }
+            bmrKcal == null && bloodPressure.isEmpty() && hydrationByDay.none { it.value > 0.0 } &&
+            heartRateDaily.isEmpty() && sleepingHr.isEmpty() && leanMassKg.isEmpty() && boneMassKg.isEmpty() &&
+            bodyWaterKg.isEmpty() && glucose.isEmpty() && skinTempDelta.isEmpty()
 
     val bmi: Double?
         get() = bmiOf(weightKg.lastOrNull()?.value, heightM)
+}
+
+// ── Worked out from heart rate ────────────────────────────────────────────
+
+/** One half hour of heart-rate readings, as Health Connect aggregates it. */
+data class HrBucket(val start: Instant, val avg: Double, val min: Double, val max: Double, val count: Long)
+
+/** One day of heart rate: the mean of every reading, the lowest and the highest. */
+data class HrDay(val date: LocalDate, val avg: Double, val min: Double, val max: Double)
+
+/** A run as an estimate needs it: when it ended, how long, how fast, and the heart rate it cost. */
+data class RunSample(val end: Instant, val minutes: Double, val speedMps: Double, val avgHr: Double)
+
+private const val MIN_BUCKET_READINGS = 3
+
+/** Six hours of wear before a day's lowest half hour means anything. */
+private const val MIN_BUCKETS_FOR_RESTING = 12
+
+private fun noonOf(date: LocalDate, zone: ZoneId): Instant = date.atTime(LocalTime.NOON).atZone(zone).toInstant()
+
+/** Sleep ending before 18:00 belongs to that day; after 18:00, to the next (as everywhere in Health). */
+fun sleepDayOf(end: Instant, zone: ZoneId): LocalDate {
+    val local = end.atZone(zone)
+    return if (local.toLocalTime().isBefore(LocalTime.of(18, 0))) local.toLocalDate() else local.toLocalDate().plusDays(1)
+}
+
+/**
+ * Resting heart rate for a phone whose watch doesn't write one: each day's lowest
+ * half-hour average (the definition Garmin uses), from days with six hours of readings or
+ * more. Half hours holding only a stray reading or two are left out, so a single low
+ * blip can't set the day.
+ */
+fun derivedRestingHr(buckets: List<HrBucket>, zone: ZoneId): List<VitalSample> =
+    buckets.filter { it.count >= MIN_BUCKET_READINGS && it.avg in 30.0..200.0 }
+        .groupBy { it.start.atZone(zone).toLocalDate() }
+        .filterValues { it.size >= MIN_BUCKETS_FOR_RESTING }
+        .toSortedMap()
+        .map { (date, day) -> VitalSample(noonOf(date, zone), day.minOf { it.avg }) }
+
+/** Each day's mean (weighted by how many readings each half hour holds), low and high. */
+fun dailyHeartRate(buckets: List<HrBucket>, zone: ZoneId): List<HrDay> =
+    buckets.filter { it.count > 0 }
+        .groupBy { it.start.atZone(zone).toLocalDate() }
+        .toSortedMap()
+        .map { (date, day) ->
+            val readings = day.sumOf { it.count }.toDouble()
+            HrDay(date, day.sumOf { it.avg * it.count } / readings, day.minOf { it.min }, day.maxOf { it.max })
+        }
+
+/**
+ * Heart rate asleep: for each night in [sleeps] (start to end, three hours or more), the
+ * mean of the half hours wholly inside it, on the night's sleep day ([sleepDayOf]).
+ */
+fun sleepingHeartRate(buckets: List<HrBucket>, sleeps: List<Pair<Instant, Instant>>, zone: ZoneId): List<VitalSample> {
+    val nights = sortedMapOf<LocalDate, MutableList<HrBucket>>()
+    for ((start, end) in sleeps) {
+        if (Duration.between(start, end) < Duration.ofHours(3)) continue
+        val inside = buckets.filter {
+            it.count > 0 && !it.start.isBefore(start) && !it.start.plus(Duration.ofMinutes(30)).isAfter(end)
+        }
+        if (inside.size < 4) continue
+        nights.getOrPut(sleepDayOf(end, zone)) { mutableListOf() }.addAll(inside)
+    }
+    return nights.map { (date, b) -> VitalSample(noonOf(date, zone), b.sumOf { it.avg * it.count } / b.sumOf { it.count }) }
+}
+
+/**
+ * The highest heart rate the person reaches: the second-highest daily peak of recent
+ * months (a lone spike is often a strap glitch), never under the age-predicted maximum
+ * (Tanaka: 208 − 0.7 × age) when the birth year is known. Without an age, a peak under
+ * 150 bpm is too far off a real maximum to estimate from, so null.
+ */
+fun maxHeartRate(dailyPeaks: List<Double>, birthYear: Int?, today: LocalDate): Double? {
+    val peaks = dailyPeaks.filter { it in 100.0..225.0 }.sortedDescending()
+    val observed = peaks.getOrNull(1) ?: peaks.firstOrNull()
+    val age = birthYear?.let { today.year - it }?.takeIf { it in 10..100 }
+    val predicted = age?.let { 208.0 - 0.7 * it }
+    return when {
+        predicted != null -> maxOf(predicted, observed ?: 0.0)
+        observed != null && observed >= 150.0 -> observed
+        else -> null
+    }
+}
+
+/**
+ * VO₂ max from one steady run: the oxygen its pace costs on the flat (the ACSM running
+ * equation, 0.2 ml/kg/min per m/min plus 3.5 at rest), divided by the share of the
+ * heart-rate reserve the run used (Swain: the share of HR reserve tracks the share of
+ * VO₂ reserve). Runs too short, too easy or too hard to project from give nothing.
+ */
+fun vo2FromRun(run: RunSample, restHr: Double, maxHr: Double): Double? {
+    if (run.minutes < 12.0) return null
+    val metresPerMinute = run.speedMps * 60.0
+    if (metresPerMinute !in 100.0..420.0) return null
+    val reserve = maxHr - restHr
+    if (reserve < 60.0) return null
+    val share = (run.avgHr - restHr) / reserve
+    if (share !in 0.55..0.97) return null
+    val cost = 3.5 + 0.2 * metresPerMinute
+    return (3.5 + (cost - 3.5) / share).takeIf { it in 20.0..90.0 }
+}
+
+/** The Uth–Sørensen ratio: VO₂ max ≈ 15.3 × maximum over resting heart rate. */
+fun vo2FromHeartRate(maxHr: Double, restHr: Double): Double? =
+    if (restHr in 30.0..110.0 && maxHr > restHr) (15.3 * maxHr / restHr).takeIf { it in 15.0..90.0 } else null
+
+enum class Vo2Method { RUNS, HEART_RATE }
+
+data class Vo2Estimate(
+    val value: Double,
+    val method: Vo2Method,
+    /** Oldest first: one per usable run, or one per day of resting heart rate. */
+    val series: List<VitalSample>,
+    val runs: Int,
+    val maxHr: Double,
+)
+
+/**
+ * VO₂ max for when no device writes one. Runs from the last 60 days win: the median of
+ * their three best estimates ([vo2FromRun], against the usual resting heart rate). With
+ * no usable run, the heart-rate ratio ([vo2FromHeartRate]) on the last week's resting
+ * heart rate. Null without a trustworthy maximum or any resting heart rate.
+ */
+fun estimateVo2Max(runs: List<RunSample>, restingHr: List<VitalSample>, maxHr: Double?, now: Instant): Vo2Estimate? {
+    val max = maxHr ?: return null
+    if (restingHr.isEmpty()) return null
+    val usualRest = vitalBaseline(restingHr, minDays = 3)?.mean ?: restingHr.last().value
+    val perRun = runs
+        .filter { !it.end.isAfter(now) && ChronoUnit.DAYS.between(it.end, now) <= 60 }
+        .sortedBy { it.end }
+        .mapNotNull { r -> vo2FromRun(r, usualRest, max)?.let { VitalSample(r.end, it) } }
+    if (perRun.isNotEmpty()) {
+        val best = perRun.map { it.value }.sortedDescending().take(3).sorted()
+        return Vo2Estimate(best[best.size / 2], Vo2Method.RUNS, perRun, perRun.size, max)
+    }
+    val lastWeek = restingHr.takeLast(7).map { it.value }.average()
+    val value = vo2FromHeartRate(max, lastWeek) ?: return null
+    val series = restingHr.mapNotNull { s -> vo2FromHeartRate(max, s.value)?.let { VitalSample(s.time, it) } }
+    return Vo2Estimate(value, Vo2Method.HEART_RATE, series, 0, max)
+}
+
+/**
+ * Resting energy from the body: Katch–McArdle on lean mass when body fat is known
+ * (370 + 21.6 × lean kg); else Mifflin–St Jeor from weight, height and age, sex-neutral
+ * (the midpoint of its male and female forms). Null without enough to go on.
+ */
+fun estimateBmr(weightKg: Double?, bodyFatPct: Double?, heightM: Double?, birthYear: Int?, today: LocalDate): Double? {
+    val weight = weightKg?.takeIf { it in 25.0..300.0 } ?: return null
+    bodyFatPct?.takeIf { it in 3.0..70.0 }?.let { return 370.0 + 21.6 * weight * (1 - it / 100.0) }
+    val heightCm = heightM?.takeIf { it in 1.0..2.5 }?.times(100.0) ?: return null
+    val age = birthYear?.let { today.year - it }?.takeIf { it in 12..100 } ?: return null
+    return 10.0 * weight + 6.25 * heightCm - 5.0 * age - 78.0
 }
 
 /** Mean and spread of a series, the band a new reading is judged against. */
@@ -127,6 +310,14 @@ fun bloodPressureCategory(systolic: Double, diastolic: Double): String = when {
     systolic >= 130 || diastolic >= 80 -> "Stage 1"
     systolic >= 120 -> "Elevated"
     else -> "Normal"
+}
+
+/** A glucose reading in mmol/L against the usual range outside meals (3.9–7.8). */
+fun glucoseCategory(mmol: Double): String = when {
+    mmol < 3.9 -> "Low"
+    mmol <= 7.8 -> "In range"
+    mmol <= 11.0 -> "Raised"
+    else -> "High"
 }
 
 /** Cooper Institute style bands, sex-neutral (the app does not know it). */

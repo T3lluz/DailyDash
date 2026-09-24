@@ -87,6 +87,11 @@ val HealthTemperature = Color(0xFFFF9F68)
 val HealthBloodPressure = Color(0xFFFF6B8B)
 val HealthHydration = Color(0xFF4FC3F7)
 val HealthBmr = HealthEnergy
+val HealthLeanMass = Color(0xFF6EE7B7)
+val HealthBodyWater = Color(0xFF60A5FA)
+val HealthBoneMass = Color(0xFFD6CFC4)
+val HealthGlucose = Color(0xFFF472B6)
+val HealthSkinTemp = Color(0xFFFFB38A)
 
 /** Sleep stages — hypnogram, stage strip and legend share these. */
 val SleepStageAwake = Color(0xFFFF8A65)
