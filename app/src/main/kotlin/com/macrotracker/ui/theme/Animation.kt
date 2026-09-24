@@ -192,6 +192,20 @@ object MacroMotion {
         const val MIN_ALPHA = 0.3f
     }
 
+    /**
+     * Essentials' liquid ripple (`ui/components/LiquidRipple.kt`), with the values its home
+     * uses when a pull passes the refresh threshold: one wave out from the header in 2.8 s.
+     * The pull ticks every tenth of the way there, as Essentials does.
+     */
+    object LiquidRipple {
+        const val DURATION_MS = 2800
+        const val AMPLITUDE_DP = 34f
+        const val FREQUENCY = 12f
+        const val DECAY = 4.5f
+        const val SPEED_DP = 1400f
+        const val PULL_TICKS = 10
+    }
+
     /** The navbar's activity tab rising out of the pill and settling back into it: a touch of give, no wobble. */
     fun <T> navTabSpring() = spring<T>(dampingRatio = 0.82f, stiffness = 420f)
 

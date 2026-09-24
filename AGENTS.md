@@ -312,6 +312,11 @@ and `MacroMotion.Snake`. Both run off a clock read only in the draw phase (a red
 recomposition), take frames only while on screen (`Modifier.trackOnScreen`) and the app is resumed
 (`rememberIsResumed`), and show their finished state when animations are off (`rememberReducedMotion`).
 
+Home's pull to refresh is Essentials' (sameerasw/essentials): a tick every tenth of the pull, then a click and
+`Modifier.liquidRipple` (components/LiquidRipple.kt, its AGSL shader ported as is; Android 13+, off with
+animations off) out from the header (`rippleAnchor`) the moment the pull passes the threshold, only while a
+finger drives it. Specs in `MacroMotion.LiquidRipple`.
+
 ### Home Screen Widgets (draggable)
 Widget order and visibility are persisted as a single colon-and-comma encoded string in SharedPrefs:
 ```
