@@ -86,6 +86,7 @@ class WidgetClr {
 fun greeting(): String {
     val h = LocalTime.now().hour
     return when {
+        h < 5 -> "Good night"
         h < 12 -> "Good morning"
         h < 17 -> "Good afternoon"
         else   -> "Good evening"

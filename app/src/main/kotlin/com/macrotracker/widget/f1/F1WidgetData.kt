@@ -87,7 +87,7 @@ internal object F1WidgetStore {
                 ?.getOrNull()
                 ?.let { F1SnapshotMapper.from(it, repo.lastFetchTimeMs.takeIf { t -> t > 0L } ?: now, now) }
             // The app fetched since we did: take it, no network.
-            current != null && repo.lastFetchTimeMs > current.fetchedAt ->
+            repo.lastFetchTimeMs > current.fetchedAt ->
                 repo.getCachedF1Data()?.let { F1SnapshotMapper.from(it, repo.lastFetchTimeMs, now) }
             else -> null
         }?.takeIf { it.hasContent }

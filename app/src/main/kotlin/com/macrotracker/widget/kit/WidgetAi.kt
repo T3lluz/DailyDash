@@ -128,6 +128,24 @@ Rules: plain text only, no markdown, no emoji, no quotes, no preamble like "Here
 One or two short sentences, conversational, specific, and useful at a glance.
 Never invent facts that are not in the data below."""
 
+    /**
+     * [text] cut to the whole sentences that fit [capacity] characters (roughly what a
+     * brief's lines hold, a little under so wrapping doesn't spill); the text itself when
+     * it fits or when not even its first sentence does.
+     */
+    fun fitSentences(text: String, capacity: Float): String {
+        val limit = (capacity * 0.92f).toInt()
+        if (text.length <= limit) return text
+        val sentences = text.split(Regex("""(?<=[.!?])\s+""")).filter { it.isNotBlank() }
+        var out = ""
+        for (s in sentences) {
+            val next = if (out.isEmpty()) s else "$out $s"
+            if (next.length > limit) break
+            out = next
+        }
+        return out.ifEmpty { text }
+    }
+
     /** Strips markdown and chatter, joins lines, and cuts at a sentence end under [maxChars]. */
     internal fun clean(raw: String, maxChars: Int): String {
         var s = raw.trim()

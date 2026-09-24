@@ -191,7 +191,7 @@ private fun StackLayout(ui: GhUi) {
         GhHeader(ui)
         if (p.ai) {
             VGap(GhLayout.GAP.dp)
-            AiBriefLine(ui.d.brief.orEmpty(), maxLines = p.aiLines)
+            AiBriefLine(ui.d.brief.orEmpty(), maxLines = p.aiLines, widthDp = p.width)
         }
         if (tiles.isNotEmpty()) {
             VGap(GhLayout.GAP.dp)
@@ -462,29 +462,67 @@ private fun GraphImage(ui: GhUi, bg: Color) {
 private fun ListSection(ui: GhUi, modifier: GlanceModifier) {
     val rows = GhRows.build(ui.d, ui.tab, ui.now)
     val chips = ui.plan.chips
+    val fit = ui.plan.listRows.coerceIn(1, 8)
+    // A short list leaves room: the next list fills it, under its own label (a row's worth).
+    val fill = if (rows.isNotEmpty() && rows.size + 1 < fit) GhRows.fill(ui.d, ui.tab, rows, ui.now) else null
     Column(modifier) {
         ListLabel(ui)
         VGap(4.dp)
         when {
             rows.isEmpty() -> EmptyList(ui, GlanceModifier.fillMaxWidth().defaultWeight())
             ui.preview -> Column(GlanceModifier.fillMaxWidth()) {
-                rows.take(ui.plan.listRows.coerceIn(1, 8)).forEach { RowCard(it, chips) }
+                rows.take(fit).forEach { RowCard(it, chips) }
+                if (fill != null) {
+                    FillLabel(ui, fill.first)
+                    fill.second.take(fit - rows.size - 1).forEach { RowCard(it, chips) }
+                }
             }
             else -> LazyColumn(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) {
                 items(rows, itemId = { it.id }) { row -> RowCard(row, chips) }
+                if (fill != null) {
+                    item(itemId = -1L) { FillLabel(ui, fill.first) }
+                    items(fill.second.take(10), itemId = { it.id }) { row -> RowCard(row, chips) }
+                }
             }
         }
+    }
+}
+
+/** The label over the list that fills a short one; tapping it makes that list the selected one. */
+@Composable
+private fun FillLabel(ui: GhUi, tab: GhTab) {
+    val tone = GhColors.tone(GhRows.tabTone(tab))
+    val count = GhRows.countLabel(tab, ui.d)
+    Row(
+        GlanceModifier.fillMaxWidth()
+            .clickable(setStateAction(GitHubWidgetSpec.KEY, GitHubWidget.STATE_TAB, tab.key))
+            .padding(top = 3.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(GlanceModifier.width(8.dp).height(2.dp).cornerRadius(1.dp).background(tone.cp())) {}
+        HGap(5.dp)
+        Text(GhRows.title(tab, short = true).uppercase(), style = ts(WT.Micro, WK.Sub, FontWeight.Bold), maxLines = 1)
+        Text(
+            if (count != null) "  ·  $count" else "",
+            style = ts(WT.Micro, WK.Muted, FontWeight.Medium),
+            maxLines = 1,
+            modifier = GlanceModifier.defaultWeight(),
+        )
+        Text("›", style = ts(WT.Small, WK.GitHub, FontWeight.Bold), maxLines = 1)
     }
 }
 
 @Composable
 private fun ListLabel(ui: GhUi) {
     val tone = GhColors.tone(GhRows.tabTone(ui.tab))
-    val count = GhRows.countLabel(ui.tab, ui.d)
+    // The list's width: all of it stacked, what the tiles leave when split.
+    val width = if (ui.plan.mode == GhMode.SPLIT) ui.plan.width - ui.plan.paneW - GhLayout.GAP else ui.plan.width
+    val narrow = width < 190f
+    val count = GhRows.countLabel(ui.tab, ui.d)?.takeIf { width >= 150f }
     Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Box(GlanceModifier.width(8.dp).height(2.dp).cornerRadius(1.dp).background(tone.cp())) {}
         HGap(5.dp)
-        Text(GhRows.title(ui.tab).uppercase(), style = ts(WT.Micro, WK.Sub, FontWeight.Bold), maxLines = 1)
+        Text(GhRows.title(ui.tab, short = narrow).uppercase(), style = ts(WT.Micro, WK.Sub, FontWeight.Bold), maxLines = 1)
         Text(
             if (count != null) "  ·  $count" else "",
             style = ts(WT.Micro, WK.Muted, FontWeight.Medium),

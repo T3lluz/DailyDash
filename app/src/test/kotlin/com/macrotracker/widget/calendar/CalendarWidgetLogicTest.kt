@@ -282,4 +282,56 @@ class CalendarWidgetLogicTest {
         val h = L.hero(all, now)
         assertEquals("3 more today · 1 tomorrow", L.compactFooter(all, now, h))
     }
+
+    @Test
+    fun timelineSpansTheWeeksHours() {
+        val days = L.stripDays(today, 7)
+        assertEquals(8 to 20, L.timelineHours(listOf(standup, lunch), days))
+        val early = ev(20, "Flight", at(today.plusDays(3), 6, 10), at(today.plusDays(3), 7, 30))
+        val late = ev(21, "Gig", at(today.plusDays(5), 21), at(today.plusDays(5), 22, 45))
+        assertEquals(6 to 23, L.timelineHours(listOf(early, late), days))
+        // An overnight event starts the next day at midnight; all-day ones don't count.
+        val overnight = ev(22, "Night shift", at(today, 22), at(today.plusDays(1), 6))
+        assertEquals(0 to 24, L.timelineHours(listOf(overnight, birthday), days))
+    }
+
+    @Test
+    fun overlapsGetSideBySideLanes() {
+        val a = at(today, 9) to at(today, 12)
+        val b = at(today, 9) to at(today, 9, 15)
+        val c = at(today, 10) to at(today, 10, 45)
+        val d = at(today, 13) to at(today, 14)
+        val lanes = L.lanes(listOf(a, b, c, d))
+        assertEquals(0 to 2, lanes[0])
+        assertEquals(1 to 2, lanes[1])
+        // c reuses b's lane once b is over; d starts a cluster of its own.
+        assertEquals(1 to 2, lanes[2])
+        assertEquals(0 to 1, lanes[3])
+        val five = (0 until 5).map { at(today, 9) to at(today, 10) }
+        assertEquals(listOf(0, 1, 2, 2, 2), L.lanes(five).map { it.first })
+        assertTrue(L.lanes(five).all { it.second == 3 })
+    }
+
+    @Test
+    fun previewRowsFitByHeight() {
+        val rows = L.agenda(all, now, null, null, showPast = false, locale = en)
+        val fit = L.fitItems(rows, 80f)
+        assertTrue(fit.sumOf { L.itemHeight(it).toDouble() } <= 80.0)
+        assertTrue(fit.isNotEmpty())
+        assertTrue(L.fitItems(rows, 10_000f, max = 10).size <= 10)
+        // Never ends on a day header with nothing under it.
+        val header = rows.first { it is AgendaItem.DayHeader }
+        assertTrue(L.fitItems(listOf(header), 100f).isEmpty())
+    }
+
+    @Test
+    fun heroHeightCountsOnlyTheLinesItHas() {
+        val later = L.hero(listOf(lunch), now)!!
+        val running = L.hero(listOf(review, lunch), now.withHour(10).withMinute(20))!!
+        assertEquals(HeroKind.LATER_TODAY, later.kind)
+        assertEquals(HeroKind.NOW, running.kind)
+        val base = L.heroHeightFor(later, HeroSize.FULL, 1, notes = false, hasNotes = false)
+        assertEquals(base + 9f + 16.5f, L.heroHeightFor(running, HeroSize.FULL, 1, notes = false, hasNotes = false))
+        assertEquals(L.heroHeight(HeroSize.FULL, 2, true), L.heroHeightFor(running, HeroSize.FULL, 2, notes = true, hasNotes = true))
+    }
 }

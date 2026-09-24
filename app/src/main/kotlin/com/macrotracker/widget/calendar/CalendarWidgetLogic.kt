@@ -156,10 +156,27 @@ internal object CalendarLogic {
     const val MIN_LIST = 64f
     const val WEEK_LOAD_H = 64f
 
+    /**
+     * The hero card's height, measured from renders: padding 16, chip row 15, title
+     * (3 + a line each), time and place 12.5, then a running event's bar 9 and, on the
+     * full card, "Then …" 16.5 and two lines of notes 29. Budgets assume the tallest
+     * case; [heroHeightFor] is the exact one for a known event.
+     */
     fun heroHeight(size: HeroSize, titleLines: Int, notes: Boolean): Float = when (size) {
         HeroSize.NONE -> 0f
-        HeroSize.MINI -> 60f
-        HeroSize.FULL -> 55f + 17f * titleLines + if (notes) 26f else 0f
+        HeroSize.MINI -> 16f + 15f + 3f + 16.5f * titleLines + 12.5f + 9f
+        HeroSize.FULL -> 16f + 15f + 3f + 18.5f * titleLines + 12.5f + 9f + 16.5f + if (notes) 29f else 0f
+    }
+
+    /** [heroHeight] for [h]: only the lines it really has. */
+    fun heroHeightFor(h: Hero, size: HeroSize, titleLines: Int, notes: Boolean, hasNotes: Boolean): Float {
+        if (size == HeroSize.NONE) return 0f
+        val line = if (size == HeroSize.FULL) 18.5f else 16.5f
+        var height = 16f + 15f + 3f + line * titleLines + 12.5f
+        if (h.kind == HeroKind.NOW) height += 9f
+        if (size == HeroSize.FULL && h.then != null) height += 16.5f
+        if (size == HeroSize.FULL && notes && hasNotes) height += 29f
+        return height
     }
 
     fun briefHeight(lines: Int): Float = 12f + 14f * lines
@@ -491,6 +508,62 @@ internal object CalendarLogic {
     fun weekLoad(events: List<CalEvent>, now: LocalDateTime, days: Int = 7): List<Long> =
         (0 until days).map { dayStats(events, now.toLocalDate().plusDays(it.toLong()), now).busyMinutes }
 
+    /**
+     * The hours the week timeline spans: 08–20, stretched (whole hours) to take in every
+     * timed event on [days]. A day an event runs into from the day before starts at 00.
+     */
+    fun timelineHours(events: List<CalEvent>, days: List<LocalDate>): Pair<Int, Int> {
+        var from = 8
+        var to = 20
+        for (e in events) {
+            if (e.allDay) continue
+            for (d in days) {
+                if (!occursOn(e, d)) continue
+                val start = if (e.start.toLocalDate().isBefore(d)) 0 else e.start.hour
+                val end = if (e.end.toLocalDate().isAfter(d)) 24 else e.end.hour + if (e.end.minute > 0) 1 else 0
+                from = minOf(from, start)
+                to = maxOf(to, end)
+            }
+        }
+        from = from.coerceIn(0, 23)
+        return from to to.coerceIn(from + 1, 24)
+    }
+
+    /**
+     * Side-by-side lanes for one day's timed events, so overlaps show as columns rather
+     * than hiding each other: for each interval (in input order), its lane and how many
+     * lanes its cluster of overlapping events uses. At most [maxLanes]; the rest share the last.
+     */
+    fun lanes(intervals: List<Pair<LocalDateTime, LocalDateTime>>, maxLanes: Int = 3): List<Pair<Int, Int>> {
+        // The longer of two that start together takes the left lane, as calendar apps draw it.
+        val order = intervals.indices.sortedWith(
+            compareBy<Int> { intervals[it].first }.thenByDescending { intervals[it].second },
+        )
+        val lane = IntArray(intervals.size)
+        val count = IntArray(intervals.size)
+        var cluster = mutableListOf<Int>()
+        var clusterEnd: LocalDateTime? = null
+        val laneEnds = mutableListOf<LocalDateTime>()
+        fun close() {
+            val n = (laneEnds.size).coerceIn(1, maxLanes)
+            cluster.forEach { count[it] = n }
+            cluster = mutableListOf()
+            laneEnds.clear()
+        }
+        for (i in order) {
+            val (s, e) = intervals[i]
+            if (clusterEnd != null && !s.isBefore(clusterEnd)) close()
+            val free = laneEnds.indexOfFirst { !s.isBefore(it) }
+            val l = if (free >= 0) free else laneEnds.size
+            if (l == laneEnds.size) laneEnds += e else laneEnds[l] = e
+            lane[i] = l.coerceAtMost(maxLanes - 1)
+            cluster += i
+            clusterEnd = if (clusterEnd == null || e.isAfter(clusterEnd)) e else clusterEnd
+        }
+        close()
+        return intervals.indices.map { lane[it] to count[it] }
+    }
+
     // ── Agenda ───────────────────────────────────────────────────────────────────
 
     /**
@@ -592,7 +665,7 @@ internal object CalendarLogic {
             val two = fitTwoPane(
                 Plan(
                     Shape.TWO_PANE, gridWeeks = if (r >= 5) 5 else 4, hero = HeroSize.FULL, heroTitleLines = 2,
-                    brief = true, briefLines = 3, bigDate = true, showPast = true, notesLine = true, weekLoad = true,
+                    brief = true, briefLines = if (r >= 5) 6 else 5, bigDate = true, showPast = true, notesLine = true, weekLoad = true,
                 ),
                 innerH,
             )
@@ -610,7 +683,8 @@ internal object CalendarLogic {
                 heroTitleLines = if (r >= 4) 2 else 1,
                 brief = brief,
                 briefBeside = brief && wide,
-                briefLines = if (wide) 4 else if (c <= 3) 3 else 2,
+                // A 160-character brief is three lines at four cells, four at three.
+                briefLines = if (wide) 4 else if (c <= 3) 4 else 3,
                 bigDate = r >= 4,
                 showPast = r >= 4,
                 notesLine = r >= 4 && !wide,
@@ -679,16 +753,41 @@ internal object CalendarLogic {
         return p
     }
 
-    /** Roughly how many rows fit in the list, for previews (which can't scroll). */
-    fun previewRows(p: Plan, innerH: Float): Int {
-        val listH = when (p.shape) {
-            Shape.STACK -> innerH - stackUsed(p) - if (p.heroInList) heroHeight(HeroSize.MINI, 1, false) else 0f
-            Shape.WIDE -> innerH - HEADER_SMALL - GAP - STRIP_H - GAP
-            Shape.NARROW -> innerH - 50f - GAP - heroHeight(HeroSize.FULL, p.heroTitleLines, false) - GAP
-            Shape.TWO_PANE -> innerH - HEADER_BIG - 8f - briefHeight(p.briefLines) - GAP
-            else -> 0f
+    /** How tall the agenda list is at this plan, for previews (which can't scroll). */
+    fun previewListHeight(p: Plan, innerH: Float): Float = when (p.shape) {
+        Shape.STACK -> innerH - stackUsed(p) - if (p.heroInList) heroHeight(HeroSize.MINI, 1, false) + 4f else 0f
+        Shape.WIDE -> innerH - HEADER_SMALL - GAP - STRIP_H - GAP
+        Shape.NARROW -> innerH - 50f - GAP - heroHeight(HeroSize.FULL, p.heroTitleLines, false) - GAP
+        Shape.TWO_PANE -> innerH - HEADER_BIG - 8f - (if (p.brief) briefHeight(p.briefLines) + GAP else 0f)
+        else -> 0f
+    }
+
+    /** A row's height in dp, measured from renders. */
+    fun itemHeight(item: AgendaItem): Float = when (item) {
+        is AgendaItem.DayHeader -> 22.5f
+        is AgendaItem.AllDay -> 22.5f
+        is AgendaItem.Earlier -> 18.5f
+        is AgendaItem.Timed -> 33f
+        is AgendaItem.Empty -> 81f
+    }
+
+    /**
+     * The leading rows that fit whole in [heightDp], at most [max] (a preview is a plain
+     * Column, and Glance drops a Column's children past ten); at least one unless that
+     * one is a day header with nothing under it.
+     */
+    fun fitItems(items: List<AgendaItem>, heightDp: Float, max: Int = 10): List<AgendaItem> {
+        var used = 0f
+        val out = ArrayList<AgendaItem>()
+        for (item in items) {
+            val h = itemHeight(item)
+            if (out.size >= max || (out.isNotEmpty() && used + h > heightDp)) break
+            out += item
+            used += h
         }
-        return (listH / ROW_H).toInt().coerceIn(1, 8)
+        // A day header with nothing under it reads as a mistake.
+        if (out.lastOrNull() is AgendaItem.DayHeader) out.removeAt(out.lastIndex)
+        return out
     }
 
     // ── AI brief ─────────────────────────────────────────────────────────────────

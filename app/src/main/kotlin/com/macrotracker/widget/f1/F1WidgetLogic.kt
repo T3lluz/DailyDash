@@ -366,16 +366,24 @@ object F1Format {
         }
     }
 
+    /** [clock] for a narrow cell: "9:30p" rather than "9:30 PM"; on the hour and 24-hour times are short already. */
+    fun clockTight(ms: Long, zone: ZoneId, is24h: Boolean, locale: Locale = Locale.getDefault()): String {
+        val t = Instant.ofEpochMilli(ms).atZone(zone)
+        if (is24h || t.minute == 0) return clock(ms, zone, is24h, locale)
+        val half = DateTimeFormatter.ofPattern("a", locale).format(t).lowercase(locale).take(1)
+        return DateTimeFormatter.ofPattern("h:mm", locale).format(t) + half
+    }
+
     fun weekday(ms: Long, zone: ZoneId, locale: Locale = Locale.getDefault()): String =
         DateTimeFormatter.ofPattern("EEE", locale).format(Instant.ofEpochMilli(ms).atZone(zone))
 
-    /** "Today 14:00", "Tomorrow 2 PM", "Sat 14:00". */
-    fun whenLabel(ms: Long, now: Long, zone: ZoneId, is24h: Boolean, locale: Locale = Locale.getDefault()): String {
+    /** "Today 14:00", "Tomorrow 2 PM", "Sat 14:00"; [short] says "Fri" for tomorrow too. */
+    fun whenLabel(ms: Long, now: Long, zone: ZoneId, is24h: Boolean, locale: Locale = Locale.getDefault(), short: Boolean = false): String {
         val day = Instant.ofEpochMilli(ms).atZone(zone).toLocalDate()
         val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
         val d = when (ChronoUnit.DAYS.between(today, day)) {
             0L -> "Today"
-            1L -> "Tomorrow"
+            1L -> if (short) weekday(ms, zone, locale) else "Tomorrow"
             else -> weekday(ms, zone, locale)
         }
         return "$d ${clock(ms, zone, is24h, locale)}"
@@ -452,6 +460,9 @@ enum class F1Tab(val id: String, val label: String, val short: String) {
     }
 }
 
+/** How a constructors list fits its column: team names or codes, and whether the gap to the leader shows. */
+data class TeamColumns(val names: Boolean, val gap: Boolean)
+
 object F1Layouts {
     fun layoutFor(cols: Int, rows: Int): F1Layout = when {
         rows <= 1 -> F1Layout.STRIP
@@ -499,6 +510,25 @@ object F1Layouts {
     /** Whole rows of [rowDp] that fit in [availDp]. */
     fun fitRows(availDp: Float, rowDp: Float, min: Int = 0, max: Int = 30): Int =
         floor(availDp / rowDp).toInt().coerceIn(min, max)
+
+    /**
+     * How a constructors list fits a [colDp] column. A list uses names for all its rows or
+     * codes for all, never a mix: names with the gap to the leader where both fit, names
+     * alone where only they do (a team name says more than "AMR"), else codes (with the
+     * gap from 150 dp). Widths are the row's own, measured from renders.
+     */
+    fun teamColumns(teams: List<WTeam>, colDp: Float): TeamColumns {
+        val narrow = colDp < 120f
+        val gapFits = colDp >= 150f
+        val room = colDp - 8f - (if (narrow) 24f else 30f) - (if (colDp >= 210f) 24f else 0f) - (if (narrow) 30f else 36f)
+        val perChar = if (narrow) 6f else 6.6f
+        val longest = teams.maxOfOrNull { F1Format.teamShort(it.name).length } ?: 0
+        return when {
+            gapFits && longest * perChar <= room - 34f -> TeamColumns(names = true, gap = true)
+            longest * perChar <= room -> TeamColumns(names = true, gap = false)
+            else -> TeamColumns(names = false, gap = gapFits)
+        }
+    }
 
     /** Mini standings on a short, wide widget: drivers first, teams share what's left. */
     fun splitMini(totalRows: Int): Pair<Int, Int> {

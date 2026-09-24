@@ -341,8 +341,8 @@ fun factsLine(c: SrvCard, withNet: Boolean = true, withUptime: Boolean = false):
 /** The header's second line: which of how many, the OS, and the uptime. */
 fun subtitleLine(c: SrvCard, index: Int, of: Int): String = buildList {
     if (of > 1) add("${index + 1}/$of")
-    add(c.os.ifBlank { c.target })
     c.uptimeSec?.let { add("up ${fmtUptime(it)}") }
+    add(c.os.ifBlank { c.target })
 }.filter { it.isNotBlank() }.joinToString(" · ")
 
 // ─────────────────────────────────────────────────────────────────

@@ -874,6 +874,24 @@ object GhRows {
         }
     }.distinctBy { it.id }
 
+    /**
+     * The list that fills the room a short [tab] leaves: the first other list, most urgent
+     * first, with rows not already in [shown] (review requests are pull requests too).
+     */
+    fun fill(s: GitHubWidgetSnapshot, tab: GhTab, shown: List<GhRow>, now: Long): Pair<GhTab, List<GhRow>>? {
+        // The same pull request as a review request and as its notification: shown once.
+        val ids = shown.mapTo(HashSet()) { it.id }
+        val urls = shown.mapNotNullTo(HashSet()) { it.url }
+        val titles = shown.mapTo(HashSet()) { it.title.lowercase() }
+        return listOf(GhTab.REVIEW, GhTab.INBOX, GhTab.PRS, GhTab.ISSUES, GhTab.ACTIVITY)
+            .asSequence()
+            .filter { it != tab }
+            .map { t ->
+                t to build(s, t, now).filter { it.id !in ids && it.url !in urls && it.title.lowercase() !in titles }
+            }
+            .firstOrNull { it.second.isNotEmpty() }
+    }
+
     /** Review requests, then your open PRs, others' open PRs, drafts, the rest. */
     private fun prRank(p: GhPrItem): Int = when {
         p.review || p.status == "review" -> 0
@@ -956,10 +974,10 @@ object GhRows {
         else -> GhTone.MUTED
     }
 
-    fun title(tab: GhTab): String = when (tab) {
+    fun title(tab: GhTab, short: Boolean = false): String = when (tab) {
         GhTab.INBOX -> "Inbox"
-        GhTab.REVIEW -> "Review requests"
-        GhTab.PRS -> "Pull requests"
+        GhTab.REVIEW -> if (short) "Reviews" else "Review requests"
+        GhTab.PRS -> if (short) "PRs" else "Pull requests"
         GhTab.ISSUES -> "Issues"
         GhTab.ACTIVITY -> "Activity"
     }

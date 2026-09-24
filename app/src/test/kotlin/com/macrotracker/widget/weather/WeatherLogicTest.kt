@@ -344,4 +344,26 @@ class WeatherLogicTest {
         assertTrue(p.contains("Tomorrow: 46° to 59°, rain, 3.2 mm rain (70%)."))
         assertTrue(p.contains("Sunset 7:02 PM"))
     }
+
+    @Test
+    fun sunTimesCantBeMisread() {
+        assertEquals("18:57", WxFormat.clockSun(LocalTime.of(18, 57), is24h = true))
+        assertEquals("6:57p", WxFormat.clockSun(LocalTime.of(18, 57), is24h = false))
+        assertEquals("6:48a", WxFormat.clockSun(LocalTime.of(6, 48), is24h = false))
+        val noon = LocalDateTime.of(2026, 9, 23, 12, 0)
+        val dl = Daylight.of(noon, LocalTime.of(6, 48), LocalTime.of(18, 57))!!
+        assertEquals(LocalTime.of(18, 57), dl.next)
+        assertEquals("sets in 6h 57m", dl.caption())
+        assertEquals("↓ in 6h 57m", dl.caption(narrow = true))
+        val night = Daylight.of(LocalDateTime.of(2026, 9, 23, 22, 0), LocalTime.of(6, 48), LocalTime.of(18, 57))!!
+        assertEquals(LocalTime.of(6, 48), night.next)
+    }
+
+    @Test
+    fun narrowRainDetailDropsTheUnit() {
+        val hours = (0 until 12).map { i -> if (i in 2..4) hour(i, pop = 60, mm = 0.7) else hour(i) }
+        val r = RainOutlook.of(hours)
+        assertEquals("60% · 2.1 mm", r.detail(zone, true))
+        assertEquals("60% · 2.1", r.detail(zone, true, narrow = true))
+    }
 }

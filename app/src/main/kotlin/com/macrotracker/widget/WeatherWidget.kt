@@ -407,7 +407,7 @@ private fun NarrowTallLayout(v: WxView, dims: WidgetDims, preview: Boolean) {
             TilePair(v, dims.innerWidth, tileH.dp)
             if ("ai" in opt && brief != null) {
                 VGap(GAP.dp)
-                AiBriefLine(brief, maxLines = 4)
+                AiBriefLine(brief, maxLines = 4, widthDp = dims.innerWidth.value)
             }
             if ("wear" in opt && v.d.wear != null) {
                 VGap(GAP.dp)
@@ -433,8 +433,8 @@ private fun FullLayout(v: WxView, dims: WidgetDims, preview: Boolean, tab: Strin
     }
     val leftW = w - GAP - listW
     val bodyH = dims.innerHeight.value - 34f
-    // Left column: the hero (58), then the tiles; what to wear only while the tiles keep their detail line.
-    val tilesRoom = bodyH - 58f - GAP
+    // Left column: the hero (66, measured), then the tiles; what to wear only while the tiles keep their detail line.
+    val tilesRoom = bodyH - 66f - GAP
     val wear = v.d.wear != null && tilesRoom - 29f >= 2 * WeatherLayouts.NORMAL_TILE_DP + GAP
     val tileH = (tilesRoom - (if (wear) 29f else 0f) - GAP) / 2f
     Column(GlanceModifier.fillMaxSize()) {
@@ -486,7 +486,7 @@ private fun FullTallLayout(v: WxView, dims: WidgetDims, preview: Boolean) {
         if ("ai" in opt || "wear" in opt) {
             Column(GlanceModifier.fillMaxWidth()) {
                 if ("ai" in opt && brief != null) {
-                    AiBriefLine(brief, maxLines = 2)
+                    AiBriefLine(brief, maxLines = 2, widthDp = w.value)
                     VGap(GAP.dp)
                 }
                 if ("wear" in opt) {

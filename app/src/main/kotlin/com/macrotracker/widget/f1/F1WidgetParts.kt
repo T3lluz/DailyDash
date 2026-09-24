@@ -89,10 +89,10 @@ internal object F1C {
 /** Row heights (dp) the layouts budget with when they choose how many rows fit. */
 internal object F1Rows {
     const val MINI = 17f
-    const val DRIVER = 21f
-    const val TEAM = 25f
-    const val RESULT = 21f
-    const val CALENDAR = 30f
+    const val DRIVER = 23f
+    const val TEAM = 27f
+    const val RESULT = 23f
+    const val CALENDAR = 32f
     const val PODIUM = 58f
     const val LABEL = 17f
 }
@@ -194,11 +194,11 @@ internal fun CountdownStack(
                     Text("${F1Format.points(champ.points)} pts", style = ts(WT.Tiny, WK.Sub, align = align), maxLines = 1)
                 }
             }
-            w != null && w.live && f != null && !showCaption -> {
+            w.live && f != null && !showCaption -> {
                 // One-line strips: the chip says it all.
                 Chip("● LIVE ${f.kind.short.uppercase()}", F1C.Red, filled = true)
             }
-            w != null && w.live && f != null -> {
+            w.live && f != null -> {
                 Chip("● LIVE", F1C.Red, filled = true)
                 Text(f.kind.label, style = ts(WT.Title, WK.Text, FontWeight.Bold, align), maxLines = 1)
                 if (showWhen) {
@@ -239,12 +239,34 @@ internal fun CountdownStack(
     }
 }
 
-/** The countdown on one line: big number, then what and when stacked beside it. */
+/**
+ * The countdown on one line: big number, then what and when stacked beside it. [stacked]
+ * (narrow heroes) puts "FP3 · Today 14:00" under the number instead of beside it.
+ */
 @Composable
-internal fun CountdownLine(v: F1View) {
+internal fun CountdownLine(v: F1View, stacked: Boolean = false, short: Boolean = false) {
     val w = v.week
     val f = w?.focus
     val start = f?.startMs
+    if (stacked && w != null && f != null && !w.live) {
+        Column {
+            Text(
+                if (start != null) F1Clock.countdown(start - v.now) else F1Format.shortDate(f.date, v.locale),
+                style = ts(WT.Big, WK.Text, FontWeight.Bold, mono = start != null),
+                maxLines = 1,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(f.kind.short.uppercase(), style = ts(WT.Micro, F1C.Red, FontWeight.Bold), maxLines = 1)
+                HGap(4.dp)
+                Text(
+                    if (start != null) F1Format.whenLabel(start, v.now, v.zone, v.is24h, v.locale) else "Time TBC",
+                    style = ts(WT.Tiny, WK.Sub),
+                    maxLines = 1,
+                )
+            }
+        }
+        return
+    }
     Row(verticalAlignment = Alignment.CenterVertically) {
         when {
             w == null -> {
@@ -270,7 +292,7 @@ internal fun CountdownLine(v: F1View) {
                     }
                 }
             }
-            w != null && w.live && f != null -> {
+            w.live && f != null -> {
                 Chip("● LIVE", F1C.Red, filled = true)
                 HGap(8.dp)
                 Column {
@@ -292,7 +314,7 @@ internal fun CountdownLine(v: F1View) {
                 Column {
                     Text(f.kind.label.uppercase(), style = ts(WT.Micro, F1C.Red, FontWeight.Bold), maxLines = 1)
                     Text(
-                        if (start != null) F1Format.whenLabel(start, v.now, v.zone, v.is24h, v.locale) else "Time TBC",
+                        if (start != null) F1Format.whenLabel(start, v.now, v.zone, v.is24h, v.locale, short) else "Time TBC",
                         style = ts(WT.Tiny, WK.Sub),
                         maxLines = 1,
                     )
@@ -390,13 +412,19 @@ internal object F1Art {
 
 /** The weekend at a glance: one cell per session, done ones faded, the next one lit, a live one filled. */
 @Composable
-internal fun SessionStrip(v: F1View) {
-    val slots = v.week?.slots.orEmpty().takeLast(5)
+internal fun SessionStrip(v: F1View, width: Dp) {
+    val all = v.week?.slots.orEmpty().takeLast(5)
+    // "9:30 PM" needs ~40 dp and "10:30a" ~34 dp: under that, the first finished session goes.
+    val slots = if (all.size == 5 && (width - 16.dp) / 5 < 38.dp && all.first().second == SlotState.DONE) all.drop(1) else all
     if (slots.isNotEmpty()) {
+        val cell = (width - 4.dp * (slots.size - 1)) / slots.size
+        val tight = cell < 44.dp
+        // Five cells in a 3-wide hero: closer together and a size down, so "10:30a" fits.
+        val cramped = cell < 36.dp
         Row(GlanceModifier.fillMaxWidth()) {
             slots.forEachIndexed { i, (s, state) ->
-                Box(GlanceModifier.defaultWeight().padding(start = if (i == 0) 0.dp else 4.dp)) {
-                    SessionCell(v, s, state)
+                Box(GlanceModifier.defaultWeight().padding(start = if (i == 0) 0.dp else if (cramped) 2.dp else 4.dp)) {
+                    SessionCell(v, s, state, tight, cramped)
                 }
             }
         }
@@ -404,7 +432,7 @@ internal fun SessionStrip(v: F1View) {
 }
 
 @Composable
-private fun SessionCell(v: F1View, s: WSession, state: SlotState) {
+private fun SessionCell(v: F1View, s: WSession, state: SlotState, tight: Boolean, cramped: Boolean) {
     val bg = when (state) {
         SlotState.LIVE -> F1C.Red
         SlotState.NEXT -> F1C.RedTint
@@ -440,7 +468,8 @@ private fun SessionCell(v: F1View, s: WSession, state: SlotState) {
         }.getOrDefault("")
     }
     Column(
-        GlanceModifier.fillMaxWidth().cornerRadius(10.dp).background(bg.cp()).padding(horizontal = 2.dp, vertical = 4.dp),
+        GlanceModifier.fillMaxWidth().cornerRadius(10.dp).background(bg.cp())
+            .padding(horizontal = if (cramped) 1.dp else 2.dp, vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
@@ -450,8 +479,12 @@ private fun SessionCell(v: F1View, s: WSession, state: SlotState) {
         )
         Text(day, style = ts(WT.Micro, sub, FontWeight.Medium, TextAlign.Center), maxLines = 1)
         Text(
-            if (start != null) F1Format.clock(start, v.zone, v.is24h, v.locale) else "TBC",
-            style = ts(WT.Tiny, main, FontWeight.Bold, TextAlign.Center),
+            when {
+                start == null -> "TBC"
+                tight -> F1Format.clockTight(start, v.zone, v.is24h, v.locale)
+                else -> F1Format.clock(start, v.zone, v.is24h, v.locale)
+            },
+            style = ts(if (cramped) WT.Micro else WT.Tiny, main, FontWeight.Bold, TextAlign.Center),
             maxLines = 1,
         )
     }
@@ -512,13 +545,15 @@ internal fun DriverRow(v: F1View, d: WDriver, colW: Dp) {
         HGap(if (narrow) 4.dp else 5.dp)
         ColorBar(F1C.team(d.color), 13.dp)
         HGap(if (narrow) 4.dp else 6.dp)
+        // Surnames need ~80 dp beside the gap and points; below that the code, and below
+        // ~150 dp the gap goes so the code keeps its room.
         Text(
-            if (colW >= 165.dp) F1Format.surname(d.name) else d.code,
+            if (colW >= 190.dp) F1Format.surname(d.name) else d.code,
             style = ts(if (narrow) WT.Small else WT.Body, WK.Text, if (leader) FontWeight.Bold else FontWeight.Medium),
             maxLines = 1,
             modifier = GlanceModifier.defaultWeight(),
         )
-        if (colW >= 200.dp) {
+        if (colW >= 220.dp) {
             Text(
                 if (d.wins > 0) "${d.wins}W" else "",
                 style = ts(WT.Micro, WK.Muted, FontWeight.Medium, TextAlign.End, mono = true),
@@ -526,7 +561,7 @@ internal fun DriverRow(v: F1View, d: WDriver, colW: Dp) {
                 modifier = GlanceModifier.width(24.dp),
             )
         }
-        if (colW >= 118.dp) {
+        if (colW >= 150.dp) {
             Text(
                 F1Format.gap(v.leaderPts, d.points),
                 style = ts(WT.Tiny, WK.Muted, FontWeight.Medium, TextAlign.End, mono = true),
@@ -543,9 +578,15 @@ internal fun DriverRow(v: F1View, d: WDriver, colW: Dp) {
     }
 }
 
+/** Whether every team's short name fits a [MiniRow] at [colW]. */
+internal fun miniNamesFit(teams: List<WTeam>, colW: Dp): Boolean {
+    val room = colW.value - 12f - 4f - 3f - 5f - (if (colW >= 104.dp) 28f else 0f) - 30f
+    return teams.all { F1Format.teamShort(it.name).length * 6f <= room }
+}
+
 /** A constructors row with a thin bar of its points against the leader's. */
 @Composable
-internal fun TeamRow(v: F1View, t: WTeam, colW: Dp) {
+internal fun TeamRow(v: F1View, t: WTeam, colW: Dp, cols: TeamColumns) {
     val narrow = colW < 120.dp
     val leader = t.pos == 1
     val color = F1C.team(t.color)
@@ -565,7 +606,7 @@ internal fun TeamRow(v: F1View, t: WTeam, colW: Dp) {
             ColorBar(color, 13.dp)
             HGap(if (narrow) 4.dp else 6.dp)
             Text(
-                if (colW >= 112.dp) F1Format.teamShort(t.name) else F1Format.teamCode(t.name),
+                if (cols.names) F1Format.teamShort(t.name) else F1Format.teamCode(t.name),
                 style = ts(if (narrow) WT.Small else WT.Body, WK.Text, if (leader) FontWeight.Bold else FontWeight.Medium),
                 maxLines = 1,
                 modifier = GlanceModifier.defaultWeight(),
@@ -578,7 +619,7 @@ internal fun TeamRow(v: F1View, t: WTeam, colW: Dp) {
                     modifier = GlanceModifier.width(24.dp),
                 )
             }
-            if (colW >= 150.dp) {
+            if (cols.gap) {
                 Text(
                     F1Format.gap(v.teamLeaderPts, t.points),
                     style = ts(WT.Tiny, WK.Muted, FontWeight.Medium, TextAlign.End, mono = true),
@@ -652,12 +693,14 @@ internal fun MiniDrivers(v: F1View, count: Int, colW: Dp) {
 
 @Composable
 internal fun MiniTeams(v: F1View, count: Int, colW: Dp) {
+    val shown = v.s.teams.take(count.coerceIn(0, 10))
+    val names = miniNamesFit(shown, colW)
     Column(GlanceModifier.fillMaxWidth()) {
-        v.s.teams.take(count.coerceIn(0, 10)).forEach { t ->
+        shown.forEach { t ->
             MiniRow(
                 t.pos,
                 F1C.team(t.color),
-                if (colW >= 110.dp) F1Format.teamShort(t.name) else F1Format.teamCode(t.name),
+                if (names) F1Format.teamShort(t.name) else F1Format.teamCode(t.name),
                 F1Format.points(t.points),
                 F1Format.gap(v.teamLeaderPts, t.points),
                 colW,
@@ -710,14 +753,15 @@ internal fun DriverList(v: F1View, colW: Dp, previewRows: Int) {
 @Composable
 internal fun TeamList(v: F1View, colW: Dp, previewRows: Int) {
     val teams = v.s.teams
+    val cols = F1Layouts.teamColumns(teams, colW.value)
     when {
         teams.isEmpty() -> EmptyNote("Standings start after round 1")
         v.preview -> Column(GlanceModifier.fillMaxSize()) {
-            teams.take(previewRows.coerceIn(1, 10)).forEach { TeamRow(v, it, colW) }
+            teams.take(previewRows.coerceIn(1, 10)).forEach { TeamRow(v, it, colW, cols) }
         }
         else -> LazyColumn(GlanceModifier.fillMaxSize()) {
             teams.forEach { t ->
-                item { Box(GlanceModifier.fillMaxWidth().clickable(v.open)) { TeamRow(v, t, colW) } }
+                item { Box(GlanceModifier.fillMaxWidth().clickable(v.open)) { TeamRow(v, t, colW, cols) } }
             }
         }
     }

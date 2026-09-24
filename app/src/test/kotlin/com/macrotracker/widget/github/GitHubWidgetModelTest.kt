@@ -350,4 +350,17 @@ class GitHubWidgetModelTest {
         counts: List<Int>,
         levels: List<Int> = counts.map { if (it > 0) 2 else 0 },
     ): GhContrib = GhContrib(end.minusDays((counts.size - 1).toLong()).toString(), counts, levels, counts.sum())
+
+    @Test
+    fun aShortListIsFilledWithTheNextOneWithoutRepeats() {
+        val s = GhSample.snapshot(now, today)
+        val reviews = GhRows.build(s, GhTab.REVIEW, now)
+        val (tab, rows) = GhRows.fill(s, GhTab.REVIEW, reviews, now)!!
+        assertEquals(GhTab.INBOX, tab)
+        // The review request's own notification isn't listed twice.
+        assertTrue(rows.none { r -> reviews.any { it.title.equals(r.title, ignoreCase = true) } })
+        assertTrue(rows.isNotEmpty())
+        val empty = s.copy(inbox = emptyList(), prs = emptyList(), issues = emptyList(), events = emptyList())
+        assertNull(GhRows.fill(empty, GhTab.REVIEW, emptyList(), now))
+    }
 }

@@ -14,7 +14,9 @@ import com.macrotracker.widget.kit.WidgetCanvas
 import com.macrotracker.widget.kit.onAccent
 import com.macrotracker.widget.kit.paint
 import java.time.DayOfWeek
+import java.time.Duration
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.format.TextStyle
 import java.util.Locale
 
@@ -111,6 +113,85 @@ internal object CalendarWidgetCharts {
                     val dy = top + rowH * 0.83f
                     val x0 = cx - (dots.size - 1) * 2.5f
                     dots.forEachIndexed { k, e -> canvas.drawCircle(x0 + k * 5f, dy, 1.5f, paint(calColor(e))) }
+                }
+            }
+        }
+        return wc.bitmap
+    }
+
+    /**
+     * The week as seven columns of the day's hours ([hours], from `timelineHours`): each
+     * timed event a block in its calendar's colour (overlaps side by side, finished ones
+     * faded), all-day events a strip along the top, a faint rule every three hours, the
+     * [lit] day's column tinted and, on today, a line at [now].
+     */
+    fun weekTimeline(
+        context: Context,
+        width: Dp,
+        height: Dp,
+        days: List<LocalDate>,
+        events: List<CalEvent>,
+        now: LocalDateTime,
+        lit: Int,
+        hours: Pair<Int, Int>,
+    ): Bitmap {
+        val wc = WidgetCanvas.create(context, width, height)
+        if (days.isEmpty()) return wc.bitmap
+        val canvas = wc.canvas
+        val w = wc.widthDp
+        val h = wc.heightDp
+        val gap = 4f
+        val colW = (w - gap * (days.size - 1)) / days.size
+        val strip = 3f
+        val bodyTop = strip + 2f
+        val (fromHour, toHour) = hours
+        val span = (toHour - fromHour) * 60f
+        fun y(day: LocalDate, t: LocalDateTime): Float {
+            val m = Duration.between(day.atTime(fromHour, 0), t).toMinutes().toFloat().coerceIn(0f, span)
+            return bodyTop + (h - bodyTop) * m / span
+        }
+        val today = now.toLocalDate()
+        days.forEachIndexed { i, day ->
+            val left = i * (colW + gap)
+            val right = left + colW
+            val bg = if (i == lit) tinted(WK.Calendar, 0.16f, WK.Bg) else WK.CardAlt
+            canvas.drawRoundRect(RectF(left, bodyTop, right, h), 3f, 3f, paint(bg))
+            // Rules every three hours, inside the column only.
+            for (hr in fromHour + 1 until toHour) {
+                if (hr % 3 != 0) continue
+                val ry = y(day, day.atTime(hr, 0))
+                canvas.drawLine(left + 2f, ry, right - 2f, ry, paint(WK.Divider, 0.8f))
+            }
+            val on = CalendarLogic.eventsOn(events, day)
+            on.firstOrNull { it.allDay }?.let { e ->
+                canvas.drawRoundRect(RectF(left, 0f, right, strip), 1.5f, 1.5f, paint(calColor(e)))
+            }
+            val timed = on.filter { !it.allDay }
+            val spans = timed.map { e ->
+                val s = if (e.start.isBefore(day.atStartOfDay())) day.atStartOfDay() else e.start
+                val end = if (e.end.isAfter(day.plusDays(1).atStartOfDay())) day.plusDays(1).atStartOfDay() else e.end
+                s to end
+            }
+            val lanes = CalendarLogic.lanes(spans)
+            timed.forEachIndexed { k, e ->
+                val (s, end) = spans[k]
+                val (lane, count) = lanes[k]
+                val laneW = (colW - 2f) / count
+                val x0 = left + 1f + lane * laneW
+                val top = y(day, s)
+                val bottom = maxOf(y(day, end), top + 2.5f)
+                val faded = CalendarLogic.isPast(e, now)
+                canvas.drawRoundRect(
+                    RectF(x0 + 0.5f, top + 0.5f, x0 + laneW - 0.5f, bottom - 0.5f),
+                    1.5f, 1.5f,
+                    paint(calColor(e), alpha = if (faded) 0.4f else 0.9f),
+                )
+            }
+            if (day == today) {
+                val ny = y(day, now)
+                if (ny > bodyTop && ny < h) {
+                    canvas.drawLine(left, ny, right, ny, paint(WK.Text, 1.2f))
+                    canvas.drawCircle(left + 1.5f, ny, 2.2f, paint(WK.Text))
                 }
             }
         }

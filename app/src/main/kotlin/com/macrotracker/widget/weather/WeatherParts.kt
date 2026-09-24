@@ -198,7 +198,8 @@ internal fun HeroCard(v: WxView, roomy: Boolean = true) {
         HGap(if (roomy) 8.dp else 6.dp)
         Column(GlanceModifier.defaultWeight()) {
             Text(v.t(v.d.tempC), style = ts(if (roomy) 28.sp else 24.sp, WK.Text, FontWeight.Bold), maxLines = 1)
-            Text(v.sky.uppercase(), style = ts(WT.Micro, WK.Sub, FontWeight.Bold), maxLines = 1)
+            // Two lines in the 4×3's narrower column, so "PARTLY CLOUDY" isn't cut.
+            Text(v.sky.uppercase(), style = ts(WT.Micro, WK.Sub, FontWeight.Bold), maxLines = if (roomy) 1 else 2)
         }
         HGap(4.dp)
         Column(horizontalAlignment = Alignment.End) {
@@ -384,7 +385,8 @@ internal fun FeelsTile(v: WxView, spec: TileSpec, modifier: GlanceModifier) {
     WxTile(if (spec.narrow) "Feels" else "Feels like", R.drawable.ic_w_weather_thermometer, WK.Weather, modifier) {
         Text(v.t(feels), style = ts(spec.valueSize, color, FontWeight.Bold), maxLines = 1)
         if (spec.mode != TileMode.MINI) {
-            TileSub(v.d.humidity?.let { "Humidity ${it.roundToInt()}%" } ?: "Air ${v.t(air)}")
+            val humid = if (spec.narrow) "Humid" else "Humidity"
+            TileSub(v.d.humidity?.let { "$humid ${it.roundToInt()}%" } ?: "Air ${v.t(air)}")
         }
         val uv = v.d.uvIndex
         if (spec.mode == TileMode.RICH && uv != null && uv >= 1.0) {
@@ -430,7 +432,7 @@ internal fun RainTile(v: WxView, spec: TileSpec, modifier: GlanceModifier) {
             style = ts(spec.valueSize, if (wet) WK.WeatherRain else WK.Text, FontWeight.Bold),
             maxLines = 1,
         )
-        if (spec.mode != TileMode.MINI && r != null) TileSub(r.detail(v.zone, v.is24h))
+        if (spec.mode != TileMode.MINI && r != null) TileSub(r.detail(v.zone, v.is24h, narrow = spec.narrow))
         if (spec.mode == TileMode.RICH && r != null) {
             val context = LocalContext.current
             val mm = v.d.hours.take(12).map { it.precipMm }
@@ -447,18 +449,23 @@ internal fun RainTile(v: WxView, spec: TileSpec, modifier: GlanceModifier) {
 }
 
 /**
- * Sunrise and sunset in one tile: the sun on its arc, both times, and how long until the
- * next one — the space the 5×3's separate sunrise and sunset tiles used to take.
+ * Sunrise and sunset in one tile: the sun on its arc with both times under it and how
+ * long until the next one — the space the 5×3's separate sunrise and sunset tiles used
+ * to take. Without room for the arc it names the next one ("SUNSET 18:57, in 2h 10m"),
+ * so a 12-hour "6:48–6:57" can't read as nine minutes of daylight.
  */
 @Composable
 internal fun DaylightTile(v: WxView, spec: TileSpec, modifier: GlanceModifier) {
     val dl = v.daylight
-    WxTile(if (spec.narrow) "Sun" else "Daylight", R.drawable.ic_sunrise, WK.Weather, modifier) {
+    val label = when {
+        dl == null || spec.mode == TileMode.RICH -> if (spec.narrow) "Sun" else "Daylight"
+        dl.up -> "Sunset"
+        else -> "Sunrise"
+    }
+    WxTile(label, if (dl?.up == true && spec.mode != TileMode.RICH) R.drawable.ic_sunset else R.drawable.ic_sunrise, WK.Weather, modifier) {
         if (dl == null) {
             Text("--", style = ts(spec.valueSize, WK.Text, FontWeight.Bold), maxLines = 1)
         } else {
-            val rise = WxFormat.clockShort(dl.sunrise, v.is24h)
-            val set = WxFormat.clockShort(dl.sunset, v.is24h)
             when (spec.mode) {
                 TileMode.RICH -> {
                     val context = LocalContext.current
@@ -469,19 +476,28 @@ internal fun DaylightTile(v: WxView, spec: TileSpec, modifier: GlanceModifier) {
                         modifier = GlanceModifier.fillMaxWidth().height(20.dp),
                         contentScale = ContentScale.FillBounds,
                     )
-                    val timeSize = if (spec.narrow) WT.Micro else WT.Tiny
-                    Row(GlanceModifier.fillMaxWidth()) {
-                        Text(rise, style = ts(timeSize, WK.Sub, FontWeight.Medium, mono = true), maxLines = 1)
-                        Spacer(GlanceModifier.defaultWeight())
-                        Text(set, style = ts(timeSize, WK.Sub, FontWeight.Medium, TextAlign.End, mono = true), maxLines = 1)
+                    if (spec.narrow) {
+                        // No room for both under the arc: the next one, and how long until it.
+                        val arrow = if (dl.up) "↓" else "↑"
+                        Text(arrow + WxFormat.clockSun(dl.next, v.is24h), style = ts(WT.Tiny, WK.Text, FontWeight.Bold), maxLines = 1)
+                        TileSub("in ${WxFormat.duration(dl.minutesToNext)}")
+                    } else {
+                        Row(GlanceModifier.fillMaxWidth()) {
+                            Text("↑" + WxFormat.clockSun(dl.sunrise, v.is24h), style = ts(WT.Tiny, WK.Sub, FontWeight.Medium), maxLines = 1)
+                            Spacer(GlanceModifier.defaultWeight())
+                            Text("↓" + WxFormat.clockSun(dl.sunset, v.is24h), style = ts(WT.Tiny, WK.Sub, FontWeight.Medium, TextAlign.End), maxLines = 1)
+                        }
+                        TileSub(dl.caption())
                     }
-                    TileSub(dl.caption())
                 }
                 TileMode.NORMAL -> {
-                    Text("$rise–$set", style = ts(WT.Body, WK.Text, FontWeight.Bold), maxLines = 1)
-                    TileSub(dl.caption())
+                    // "6:57 PM" at the big size would clip in a two-tile row; "6:57p" where it's narrow.
+                    val size = if (!v.is24h && spec.valueSize == WT.Big) WT.Title else spec.valueSize
+                    val next = if (spec.content < 64.dp) WxFormat.clockSun(dl.next, v.is24h) else WxFormat.clock(dl.next, v.is24h)
+                    Text(next, style = ts(size, WK.Text, FontWeight.Bold), maxLines = 1)
+                    TileSub(if (spec.narrow) "in ${WxFormat.duration(dl.minutesToNext)}" else dl.caption())
                 }
-                TileMode.MINI -> Text("$rise–$set", style = ts(WT.Small, WK.Text, FontWeight.Bold), maxLines = 1)
+                TileMode.MINI -> Text(WxFormat.clock(dl.next, v.is24h), style = ts(spec.valueSize, WK.Text, FontWeight.Bold), maxLines = 1)
             }
         }
     }

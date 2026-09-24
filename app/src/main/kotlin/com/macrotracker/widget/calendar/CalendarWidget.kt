@@ -258,34 +258,40 @@ private fun StripLayout(snap: CalSnapshot, env: CalEnv, plan: Plan) {
         if (hero != null) {
             val e = hero.event
             val color = calColor(e)
-            ColorBar(color, if (twoLines) 30.dp else 18.dp)
-            HGap(8.dp)
-            Column(GlanceModifier.defaultWeight().clickable(openEventAction(e))) {
-                Text(e.title, style = ts(WT.Body, WK.Text, FontWeight.Bold), maxLines = 1)
-                if (twoLines) {
-                    Text(
-                        CalendarLogic.stripLine(hero, env.now, env.h24, env.locale),
-                        style = ts(WT.Tiny, if (hero.kind == HeroKind.NOW) color else WK.Sub, FontWeight.Medium),
-                        maxLines = 1,
-                    )
+            // The event and what follows it each in their own row: the strip's Row stays
+            // within Glance's ten children (it drops the rest, the + button included).
+            Row(GlanceModifier.defaultWeight().clickable(openEventAction(e)), verticalAlignment = Alignment.CenterVertically) {
+                ColorBar(color, if (twoLines) 30.dp else 18.dp)
+                HGap(8.dp)
+                Column(GlanceModifier.defaultWeight()) {
+                    Text(e.title, style = ts(WT.Body, WK.Text, FontWeight.Bold), maxLines = 1)
+                    if (twoLines) {
+                        Text(
+                            CalendarLogic.stripLine(hero, env.now, env.h24, env.locale),
+                            style = ts(WT.Tiny, if (hero.kind == HeroKind.NOW) color else WK.Sub, FontWeight.Medium),
+                            maxLines = 1,
+                        )
+                    }
                 }
-            }
-            if (env.cols >= 3 && CalendarLogic.joinable(hero, env.now)) {
-                HGap(6.dp)
-                JoinChip(e, color)
+                if (env.cols >= 3 && CalendarLogic.joinable(hero, env.now)) {
+                    HGap(6.dp)
+                    JoinChip(e, color)
+                }
             }
             val after = if (env.cols >= 5 && twoLines) CalendarLogic.following(snap.events, e) else null
             if (after != null) {
-                HGap(8.dp)
-                Box(GlanceModifier.width(1.dp).height(28.dp).background(WK.Divider.cp())) {}
-                HGap(8.dp)
-                Column(GlanceModifier.width(96.dp).clickable(openEventAction(after))) {
-                    Text(
-                        "THEN " + CalendarLogic.whenShort(after.start, env.now, env.h24, env.locale).uppercase(env.locale),
-                        style = ts(WT.Micro, WK.Muted, FontWeight.Bold),
-                        maxLines = 1,
-                    )
-                    Text(after.title, style = ts(WT.Small, WK.Text, FontWeight.Bold), maxLines = 1)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    HGap(8.dp)
+                    Box(GlanceModifier.width(1.dp).height(28.dp).background(WK.Divider.cp())) {}
+                    HGap(8.dp)
+                    Column(GlanceModifier.width(96.dp).clickable(openEventAction(after))) {
+                        Text(
+                            "THEN " + CalendarLogic.whenShort(after.start, env.now, env.h24, env.locale).uppercase(env.locale),
+                            style = ts(WT.Micro, WK.Muted, FontWeight.Bold),
+                            maxLines = 1,
+                        )
+                        Text(after.title, style = ts(WT.Small, WK.Text, FontWeight.Bold), maxLines = 1)
+                    }
                 }
             }
         } else {
@@ -312,7 +318,7 @@ private fun CompactLayout(snap: CalSnapshot, env: CalEnv) {
         VGap(if (tight) 4.dp else 6.dp)
         Box(GlanceModifier.fillMaxWidth().defaultWeight()) {
             if (hero != null) {
-                HeroCard(hero, snap, env, HeroSize.MINI, if (tight) 1 else 3, notes = false, cardWidth = env.innerW, modifier = GlanceModifier.fillMaxSize())
+                HeroCard(hero, snap, env, HeroSize.MINI, if (tight) 1 else 3, notes = false, cardWidth = env.innerW, modifier = GlanceModifier.fillMaxSize(), fill = true)
             } else {
                 FreeCard(snap, env, GlanceModifier.fillMaxSize())
             }
@@ -370,11 +376,19 @@ private fun StackLayout(snap: CalSnapshot, env: CalEnv, plan: Plan, selected: Lo
         }
         if (heroFixed && plan.briefBeside && brief != null) {
             VGap(6.dp)
-            Row(GlanceModifier.fillMaxWidth()) {
+            // A fixed height: its two panels fill it, and filling children would otherwise
+            // make the row fill the column (see HeroCard).
+            val hasNotes = snap.about?.takeIf { snap.aboutFor == hero!!.event.key } != null || hero!!.event.notes.isNotBlank()
+            val rowH = maxOf(
+                CalendarLogic.heroHeightFor(hero, HeroSize.FULL, plan.heroTitleLines, plan.notesLine, hasNotes),
+                CalendarLogic.briefHeight(plan.briefLines),
+            )
+            Row(GlanceModifier.fillMaxWidth().height(rowH.dp)) {
                 HeroCard(
                     hero!!, snap, env, HeroSize.FULL, plan.heroTitleLines, plan.notesLine,
                     cardWidth = (env.innerW - 6f) / 2f,
                     modifier = GlanceModifier.defaultWeight().fillMaxHeight(),
+                    fill = true,
                 )
                 HGap(6.dp)
                 BriefPanel(brief, plan.briefLines, GlanceModifier.defaultWeight().fillMaxHeight())
@@ -386,7 +400,7 @@ private fun StackLayout(snap: CalSnapshot, env: CalEnv, plan: Plan, selected: Lo
             }
             if (brief != null) {
                 VGap(6.dp)
-                AiBriefLine(brief, maxLines = if (plan.briefBeside) 2 else plan.briefLines)
+                AiBriefLine(brief, maxLines = if (plan.briefBeside) 2 else plan.briefLines, widthDp = env.innerW)
             }
         }
         VGap(6.dp)
@@ -415,7 +429,7 @@ private fun WideLayout(snap: CalSnapshot, env: CalEnv, plan: Plan, selected: Loc
         if (hero != null) {
             val leftW = (env.innerW - 8f) * 0.46f
             Row(GlanceModifier.fillMaxWidth().defaultWeight()) {
-                HeroCard(hero, snap, env, HeroSize.MINI, plan.heroTitleLines, notes = false, cardWidth = leftW, modifier = GlanceModifier.width(leftW.dp).fillMaxHeight())
+                HeroCard(hero, snap, env, HeroSize.MINI, plan.heroTitleLines, notes = false, cardWidth = leftW, modifier = GlanceModifier.width(leftW.dp).fillMaxHeight(), fill = true)
                 HGap(8.dp)
                 AgendaList(rows, snap, env, plan, listHero = null, compact = false, modifier = GlanceModifier.defaultWeight().fillMaxHeight())
             }
@@ -438,20 +452,30 @@ private fun TwoPaneLayout(snap: CalSnapshot, env: CalEnv, plan: Plan, selected: 
             Column(GlanceModifier.width(leftW.dp).fillMaxHeight()) {
                 MonthGrid(snap, env, plan.gridWeeks, selected, leftW)
                 VGap(6.dp)
+                // With the week below, the hero keeps its own height and the week takes
+                // the rest; without it the hero fills the pane.
+                val heroMod = if (plan.weekLoad) GlanceModifier.fillMaxWidth() else GlanceModifier.fillMaxWidth().defaultWeight()
                 if (hero != null) {
-                    HeroCard(hero, snap, env, HeroSize.FULL, plan.heroTitleLines, plan.notesLine, leftW, GlanceModifier.fillMaxWidth().defaultWeight())
+                    HeroCard(hero, snap, env, HeroSize.FULL, plan.heroTitleLines, plan.notesLine, leftW, heroMod, fill = !plan.weekLoad)
                 } else {
-                    FreeCard(snap, env, GlanceModifier.fillMaxWidth().defaultWeight())
+                    FreeCard(snap, env, heroMod)
                 }
                 if (plan.weekLoad) {
                     VGap(6.dp)
-                    WeekLoad(snap, env, selected, leftW)
+                    val heroH = if (hero != null) CalendarLogic.heroHeight(HeroSize.FULL, plan.heroTitleLines, plan.notesLine) else 52f
+                    val room = env.innerH - CalendarLogic.HEADER_BIG - 8f - CalendarLogic.twoPaneLeftFixed(plan) - heroH
+                    val chartH = room + CalendarLogic.WEEK_LOAD_H - 30f
+                    // The timeline takes the pane's leftover height; the bars keep theirs.
+                    WeekLoad(
+                        snap, env, selected, leftW, chartH,
+                        if (chartH >= 44f) GlanceModifier.fillMaxWidth().defaultWeight() else GlanceModifier.fillMaxWidth(),
+                    )
                 }
             }
             HGap(10.dp)
             Column(GlanceModifier.defaultWeight().fillMaxHeight()) {
                 if (brief != null) {
-                    AiBriefLine(brief, maxLines = plan.briefLines)
+                    AiBriefLine(brief, maxLines = plan.briefLines, widthDp = env.innerW - 10f - leftW)
                     VGap(6.dp)
                 }
                 if (selected != null) {
@@ -676,31 +700,46 @@ private fun MonthGrid(snap: CalSnapshot, env: CalEnv, weeks: Int, selected: Loca
     }
 }
 
-/** Busy hours for the next seven days, the picked day (or today) lit. */
+/**
+ * The next seven days. With room ([chartH] of 44 dp or more) a week timeline, each event
+ * a block at its time of day; otherwise busy hours as bars. The picked day (or today) is lit.
+ */
 @Composable
-private fun WeekLoad(snap: CalSnapshot, env: CalEnv, selected: LocalDate?, width: Float) {
+private fun WeekLoad(snap: CalSnapshot, env: CalEnv, selected: LocalDate?, width: Float, chartH: Float, modifier: GlanceModifier) {
     val context = LocalContext.current
     val minutes = CalendarLogic.weekLoad(snap.events, env.now)
     val days = CalendarLogic.stripDays(env.today, minutes.size)
     val lit = days.indexOf(selected ?: env.today).coerceAtLeast(0)
-    val top = maxOf(6f, (minutes.maxOrNull() ?: 0L) / 60f)
-    val bitmap = remember(minutes, lit, width) {
-        WidgetCharts.bars(
-            context, width.dp, 28.dp, minutes.map { it / 60f },
-            color = tinted(WK.Calendar, 0.5f),
-            max = top,
-            gapDp = 6f,
-            highlight = lit,
-            highlightColor = WK.Calendar,
-        )
+    val timeline = chartH >= 44f // keep in step with the caller's modifier
+    val hours = CalendarLogic.timelineHours(snap.events, days)
+    val drawH = if (timeline) chartH else 28f
+    val bitmap = remember(snap.events, lit, width, drawH, env.now.toLocalDate(), env.now.hour, env.now.minute / 10) {
+        if (timeline) {
+            CalendarWidgetCharts.weekTimeline(context, width.dp, drawH.dp, days, snap.events, env.now, lit, hours)
+        } else {
+            val top = maxOf(6f, (minutes.maxOrNull() ?: 0L) / 60f)
+            WidgetCharts.bars(
+                context, width.dp, 28.dp, minutes.map { it / 60f },
+                color = tinted(WK.Calendar, 0.5f),
+                max = top,
+                gapDp = 6f,
+                highlight = lit,
+                highlightColor = WK.Calendar,
+            )
+        }
     }
-    Column(GlanceModifier.fillMaxWidth()) {
-        SectionLabel("Next 7 days", WK.Calendar, trailing = CalendarLogic.fmtHm(minutes.sum()) + " busy")
+    val range = "%02d–%02d".format(hours.first, hours.second % 24)
+    Column(modifier) {
+        SectionLabel(
+            "Next 7 days",
+            WK.Calendar,
+            trailing = CalendarLogic.fmtHm(minutes.sum()) + " busy" + if (timeline) " · $range" else "",
+        )
         VGap(4.dp)
         Image(
             provider = ImageProvider(bitmap),
-            contentDescription = "Busy hours over the next seven days",
-            modifier = GlanceModifier.fillMaxWidth().height(28.dp),
+            contentDescription = "What's on over the next seven days",
+            modifier = GlanceModifier.fillMaxWidth().then(if (timeline) GlanceModifier.defaultWeight() else GlanceModifier.height(28.dp)),
             contentScale = ContentScale.FillBounds,
         )
         VGap(2.dp)
@@ -736,15 +775,22 @@ private fun HeroCard(
     notes: Boolean,
     cardWidth: Float,
     modifier: GlanceModifier,
+    fill: Boolean = false,
 ) {
     val e = hero.event
     val color = calColor(e)
     val running = hero.kind == HeroKind.NOW
     val full = size == HeroSize.FULL
-    Row(modifier.cornerRadius(12.dp).background(tinted(color, 0.10f).cp()).clickable(openEventAction(e)).padding(8.dp)) {
-        Box(GlanceModifier.width(3.dp).fillMaxHeight().cornerRadius(2.dp).background(color.cp())) {}
-        HGap(8.dp)
-        Column(GlanceModifier.defaultWeight()) {
+    // The calendar's colour is the card's left edge: the outer box in that colour shows
+    // 3 dp of itself beside the tinted inner one. A fillMaxHeight() bar would do it too,
+    // but Glance turns any wrap-content parent of a filling child into a filling one, so
+    // the card would swallow the agenda below it.
+    Box(modifier.cornerRadius(12.dp).background(color.cp()).clickable(openEventAction(e)).padding(start = 3.dp)) {
+        Column(
+            (if (fill) GlanceModifier.fillMaxSize() else GlanceModifier.fillMaxWidth())
+                .background(tinted(color, 0.10f).cp())
+                .padding(start = 9.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+        ) {
             Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Chip(
                     CalendarLogic.heroChip(hero, env.now, env.locale),
@@ -894,10 +940,10 @@ private fun AgendaList(
     modifier: GlanceModifier,
 ) {
     if (env.preview) {
-        val fit = CalendarLogic.previewRows(plan, env.innerH)
+        val room = CalendarLogic.previewListHeight(plan, env.innerH)
         Column(modifier) {
             if (listHero != null) ListHero(listHero, snap, env)
-            rows.take(if (listHero != null) (fit - 1).coerceAtLeast(1) else fit).forEach { AgendaRow(it, env, compact) }
+            CalendarLogic.fitItems(rows, room, max = if (listHero != null) 9 else 10).forEach { AgendaRow(it, env, compact) }
         }
     } else {
         LazyColumn(modifier = modifier) {

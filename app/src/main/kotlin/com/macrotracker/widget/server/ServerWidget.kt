@@ -227,7 +227,7 @@ private fun Full(v: SrvView) {
                 val brief = c.brief
                 if (p.briefLines > 0 && brief != null) {
                     VGap(g)
-                    AiBriefLine(brief, maxLines = p.briefLines)
+                    AiBriefLine(brief, maxLines = p.briefLines, widthDp = v.dims.innerWidth.value)
                 }
             }
         }
@@ -404,7 +404,14 @@ private fun TilesRow(v: SrvView) {
                 Text(t.label, style = ts(WT.Micro, WK.Sub, FontWeight.Bold), maxLines = 1)
                 Text(
                     t.value,
-                    style = ts(if (roomy) WT.Body else WT.Small, tileColor(t, v.dim), FontWeight.Bold, mono = roomy),
+                    style = ts(
+                        when {
+                            roomy -> WT.Body
+                            t.value.length > 7 -> WT.Tiny
+                            else -> WT.Small
+                        },
+                        tileColor(t, v.dim), FontWeight.Bold, mono = roomy,
+                    ),
                     maxLines = 1,
                 )
             }
@@ -597,7 +604,7 @@ private fun Compact(v: SrvView) {
             val brief = c.brief
             if (p.briefLines > 0 && brief != null) {
                 VGap(g)
-                AiBriefLine(brief, maxLines = p.briefLines)
+                AiBriefLine(brief, maxLines = p.briefLines, widthDp = v.dims.innerWidth.value)
             }
             if (p.statusLines == 1) {
                 VGap(g)

@@ -434,18 +434,23 @@ fun ColorBar(color: Color, height: Dp, width: Dp = 3.dp) {
 /**
  * The AI line: a sparkle, then one or two sentences. Rendered only when a brief exists;
  * a widget never waits on AI or shows a spinner for it.
+ *
+ * @param widthDp the line's width, when known: a brief too long for [maxLines] then
+ *   keeps the whole sentences that fit ([WidgetAi.fitSentences]) rather than stopping mid-word.
  */
 @Composable
-fun AiBriefLine(text: String, maxLines: Int = 2, modifier: GlanceModifier = GlanceModifier) {
+fun AiBriefLine(text: String, maxLines: Int = 2, modifier: GlanceModifier = GlanceModifier, widthDp: Float? = null) {
+    val shown = if (widthDp != null) WidgetAi.fitSentences(text, (widthDp - 29f) / 5.4f * maxLines) else text
     Row(
         modifier.fillMaxWidth().panel(WK.CardAlt, 12.dp).padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.Top,
     ) {
         Text("✦", style = ts(WT.Small, WK.Ai, FontWeight.Bold))
         Spacer(GlanceModifier.width(5.dp))
-        Text(text, style = ts(WT.Small, WK.Text), maxLines = maxLines, modifier = GlanceModifier.defaultWeight())
+        Text(shown, style = ts(WT.Small, WK.Text), maxLines = maxLines, modifier = GlanceModifier.defaultWeight())
     }
 }
+
 
 /**
  * The non-success panel: never a blank widget. "Not connected", "No permission",

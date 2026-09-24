@@ -212,4 +212,37 @@ class F1WidgetLogicTest {
         assertNull(F1SnapshotCodec.decode("{\"v\":99}"))
         assertNull(F1SnapshotCodec.decode("garbage"))
     }
+
+    @Test fun tightClockAndShortWhen() {
+        val t = at("2026-09-26T10:30:00")
+        assertEquals("10:30a", F1Format.clockTight(t, utc, is24h = false, locale = java.util.Locale.US))
+        assertEquals("2 PM", F1Format.clockTight(at("2026-09-26T14:00:00"), utc, is24h = false, locale = java.util.Locale.US))
+        assertEquals("10:30", F1Format.clockTight(t, utc, is24h = true, locale = java.util.Locale.US))
+        val eve = at("2026-09-25T20:00:00")
+        assertEquals("Tomorrow 10:30", F1Format.whenLabel(t, eve, utc, true, java.util.Locale.US))
+        assertEquals("Sat 10:30", F1Format.whenLabel(t, eve, utc, true, java.util.Locale.US, short = true))
+    }
+
+    @Test fun teamListsUseNamesOrCodesThroughout() {
+        val teams = F1WidgetSample.snapshot(at("2026-09-25T10:00:00"), utc).teams
+        // "Aston Martin" doesn't fit beside the gap at 5 cells, so the gap goes, not the names.
+        assertEquals(TeamColumns(names = true, gap = false), F1Layouts.teamColumns(teams, 167f))
+        assertEquals(TeamColumns(names = true, gap = true), F1Layouts.teamColumns(teams, 260f))
+        assertEquals(TeamColumns(names = false, gap = false), F1Layouts.teamColumns(teams, 131f))
+        assertEquals(TeamColumns(names = true, gap = true), F1Layouts.teamColumns(teams.take(3), 167f))
+    }
+
+    @Test fun sampleIsARealWeekend() {
+        val thursday = at("2026-09-24T09:00:00")
+        val race = F1WidgetSample.snapshot(thursday, utc).races.first { it.round == 17 }
+        assertEquals("2026-09-27", race.date)
+        val days = race.sessions.map { java.time.Instant.ofEpochMilli(it.startMs!!).atZone(utc).dayOfWeek }
+        assertEquals(
+            listOf(java.time.DayOfWeek.FRIDAY, java.time.DayOfWeek.FRIDAY, java.time.DayOfWeek.SATURDAY, java.time.DayOfWeek.SATURDAY, java.time.DayOfWeek.SUNDAY),
+            days,
+        )
+        // Once Sunday's race is over the sample moves on to the next weekend.
+        val sundayNight = at("2026-09-27T20:00:00")
+        assertEquals("2026-10-04", F1WidgetSample.snapshot(sundayNight, utc).races.first { it.round == 17 }.date)
+    }
 }

@@ -195,6 +195,17 @@ object WxFormat {
     fun clockShort(t: LocalTime, is24h: Boolean): String =
         t.format(DateTimeFormatter.ofPattern(if (is24h) "H:mm" else "h:mm", Locale.US))
 
+    /**
+     * A sun time that can't be misread in 12-hour time: "18:57" on a 24-hour clock,
+     * "6:57p" on a 12-hour one (the widget's tiles have no room for " PM").
+     */
+    fun clockSun(t: LocalTime, is24h: Boolean): String =
+        if (is24h) {
+            t.format(DateTimeFormatter.ofPattern("H:mm", Locale.US))
+        } else {
+            t.format(DateTimeFormatter.ofPattern("h:mm", Locale.US)) + if (t.hour < 12) "a" else "p"
+        }
+
     /** "2h 10m", "45m", "14h". */
     fun duration(minutes: Long): String {
         val m = minutes.coerceAtLeast(0)
@@ -340,17 +351,20 @@ data class RainOutlook(
         Kind.LATER -> startEpoch?.let { WxFormat.hour(it, zone, is24h) } ?: "Later"
     }
 
-    /** The tile's small line: "next 12 h", "until 5 PM", "60% · 1.2 mm". */
-    fun detail(zone: ZoneId, is24h: Boolean): String = when (kind) {
+    /**
+     * The tile's small line: "next 12 h", "until 5 PM", "60% · 1.2 mm". [narrow] tiles
+     * drop the unit: "60% · 1.2".
+     */
+    fun detail(zone: ZoneId, is24h: Boolean, narrow: Boolean = false): String = when (kind) {
         Kind.DRY -> "next $windowHours h"
-        Kind.NOW -> endEpoch?.let { "until ${WxFormat.hour(it, zone, is24h)}" } ?: amount() ?: "all $windowHours h"
-        Kind.LATER -> amount() ?: endEpoch?.let { "until ${WxFormat.hour(it, zone, is24h)}" } ?: "in the next $windowHours h"
+        Kind.NOW -> endEpoch?.let { "until ${WxFormat.hour(it, zone, is24h)}" } ?: amount(narrow) ?: "all $windowHours h"
+        Kind.LATER -> amount(narrow) ?: endEpoch?.let { "until ${WxFormat.hour(it, zone, is24h)}" } ?: "in the next $windowHours h"
     }
 
-    private fun amount(): String? {
+    private fun amount(narrow: Boolean): String? {
         val parts = buildList {
             if (maxPop > 0) add("$maxPop%")
-            if (totalMm >= 0.1) add(WxFormat.mm(totalMm))
+            if (totalMm >= 0.1) add(if (narrow) WxFormat.mmShort(totalMm) else WxFormat.mm(totalMm))
         }
         return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
     }
@@ -423,8 +437,18 @@ data class Daylight(
     /** Minutes to the next sunset (while up) or sunrise (while down). */
     val minutesToNext: Long,
 ) {
-    /** "sets in 2h 10m" / "rises in 7h 5m". */
-    fun caption(): String = if (up) "sets in ${WxFormat.duration(minutesToNext)}" else "rises in ${WxFormat.duration(minutesToNext)}"
+    /** "sets in 2h 10m" / "rises in 7h 5m"; [narrow]: "↓ in 2h 10m" / "↑ in 7h 5m". */
+    fun caption(narrow: Boolean = false): String {
+        val left = WxFormat.duration(minutesToNext)
+        return when {
+            narrow -> (if (up) "↓ in " else "↑ in ") + left
+            up -> "sets in $left"
+            else -> "rises in $left"
+        }
+    }
+
+    /** The next of the two: sunset while the sun is up, else sunrise. */
+    val next: LocalTime get() = if (up) sunset else sunrise
 
     companion object {
         /**

@@ -254,7 +254,7 @@ private fun TallLayout(v: F1View, tabs: List<F1Tab>, tab: F1Tab?) {
             Text(v.title(), style = ts(WT.Title, WK.Text, FontWeight.Bold), maxLines = if (v.dims.rows >= 4) 2 else 1)
             VGap(4.dp)
             CountdownStack(v, WT.Big, showCaption = true, showWhen = true)
-            if (showMap && race != null) {
+            if (showMap) {
                 VGap(6.dp)
                 CircuitImage(race, innerW, mapH)
             }
@@ -312,14 +312,14 @@ private fun MediumLayout(v: F1View, tabs: List<F1Tab>, tab: F1Tab?) {
     val strip = v.dims.rows >= 4 && innerH >= 330f
     val brief = v.brief?.takeIf { v.dims.rows >= 5 }
     val used = 30f + heroHeight(big = false, showSub = showSub, strip = strip) +
-        (if (brief != null) 46f else 0f) + 8f + 22f + 4f
+        (if (brief != null) 6f + 14f * 3 + 12f else 0f) + 8f + 22f + 4f
     Column(GlanceModifier.fillMaxSize()) {
         F1Header(v)
         VGap(6.dp)
         HeroCard(v, innerW, big = false, showSub = showSub, strip = strip)
         if (brief != null) {
             VGap(6.dp)
-            AiBriefLine(brief, maxLines = 2)
+            AiBriefLine(brief, maxLines = 3, widthDp = innerW.value)
         }
         VGap(8.dp)
         F1TabsRow(
@@ -372,7 +372,7 @@ private fun WideShortLayout(v: F1View) {
                     Text(v.place(withCircuit = false), style = ts(WT.Tiny, WK.Sub), maxLines = 1)
                 }
                 Spacer(GlanceModifier.defaultWeight())
-                CountdownLine(v)
+                CountdownLine(v, stacked = heroW - 18.dp < 180.dp)
             }
         }
         HGap(8.dp)
@@ -429,7 +429,7 @@ private fun LargeLayout(v: F1View, tabs: List<F1Tab>, tab: F1Tab?) {
     val innerW = v.dims.innerWidth
     val innerH = v.dims.innerHeight.value
     val brief = v.brief?.takeIf { innerH >= 340f }
-    val briefLines = if (innerH >= 440f) 3 else 2
+    val briefLines = if (innerH >= 440f) 4 else 3
     val used = 30f + heroHeight(big = true, showSub = true, strip = true) +
         (if (brief != null) 6f + 14f * briefLines + 12f else 0f) + 8f + 24f + 4f
     Column(GlanceModifier.fillMaxSize()) {
@@ -438,7 +438,7 @@ private fun LargeLayout(v: F1View, tabs: List<F1Tab>, tab: F1Tab?) {
         HeroCard(v, innerW, big = true, showSub = true, strip = true)
         if (brief != null) {
             VGap(6.dp)
-            AiBriefLine(brief, maxLines = briefLines)
+            AiBriefLine(brief, maxLines = briefLines, widthDp = innerW.value)
         }
         VGap(8.dp)
         F1TabsRow(v, tabs, tab, compact = false, short = false, trailing = tabCaption(v, tab))
@@ -494,7 +494,8 @@ private fun HeroCard(v: F1View, width: Dp, big: Boolean, showSub: Boolean, strip
     Column(GlanceModifier.fillMaxWidth().panel(WK.Card, 14.dp).padding(horizontal = 10.dp, vertical = 8.dp)) {
         if (wide) {
             Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(GlanceModifier.defaultWeight()) { HeroWords(v, big, showSub, withCircuit = true) }
+                val words = width - 20.dp - if (race?.outline != null) mapW + 8.dp else 0.dp
+                Column(GlanceModifier.defaultWeight()) { HeroWords(v, big, showSub, withCircuit = true, short = words < 200.dp) }
                 if (race?.outline != null) {
                     HGap(8.dp)
                     CircuitImage(race, mapW, mapH, stroke = if (big) 2f else 1.8f)
@@ -507,26 +508,26 @@ private fun HeroCard(v: F1View, width: Dp, big: Boolean, showSub: Boolean, strip
                         CircuitBackdrop(race, (width - 20.dp) * 0.6f, (contentH - 2f).dp)
                     }
                 }
-                Column(GlanceModifier.fillMaxWidth()) { HeroWords(v, big, showSub, withCircuit = false) }
+                Column(GlanceModifier.fillMaxWidth()) { HeroWords(v, big, showSub, withCircuit = false, short = width < 220.dp) }
             }
         }
         if (strip && !v.week?.slots.isNullOrEmpty()) {
             VGap(8.dp)
-            SessionStrip(v)
+            SessionStrip(v, width - 20.dp)
         }
     }
 }
 
 /** Caption, race, place and countdown: the words of the hero card. */
 @Composable
-private fun HeroWords(v: F1View, big: Boolean, showSub: Boolean, withCircuit: Boolean) {
+private fun HeroWords(v: F1View, big: Boolean, showSub: Boolean, withCircuit: Boolean, short: Boolean) {
     RaceCaption(v, long = withCircuit)
     Text(v.title(), style = ts(if (big) WT.Big else WT.Title, WK.Text, FontWeight.Bold), maxLines = 1)
     if (showSub) {
         Text(v.place(withCircuit = withCircuit), style = ts(WT.Tiny, WK.Sub), maxLines = 1)
     }
     VGap(5.dp)
-    CountdownLine(v)
+    CountdownLine(v, short = short)
 }
 
 @Composable

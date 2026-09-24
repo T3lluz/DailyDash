@@ -1,11 +1,14 @@
 package com.macrotracker.widget.f1
 
+import java.time.DayOfWeek
 import java.time.Instant
+import java.time.ZoneId
 import java.time.ZoneOffset
+import java.time.temporal.TemporalAdjusters
 
 /**
  * A realistic weekend for previews when nothing is cached yet: a fresh install shows a
- * filled widget in the picker, mid-weekend with practice done and FP3 coming up, rather
+ * filled widget in the picker, counting down to this weekend's next session, rather
  * than "No F1 data yet".
  */
 object F1WidgetSample {
@@ -13,15 +16,21 @@ object F1WidgetSample {
     const val BRIEF =
         "Norris leads Piastri by 21 with eight rounds left. Baku's long straight suits Ferrari, so watch Leclerc in qualifying."
 
-    fun snapshot(now: Long): F1Snapshot {
-        val hour = F1Clock.HOUR
-        val base = now - now % (10 * F1Clock.MIN)
-        fun session(kind: F1SessionKind, offsetMin: Long): WSession {
-            val at = base + offsetMin * F1Clock.MIN
-            return WSession(kind, Instant.ofEpochMilli(at).atZone(ZoneOffset.UTC).toLocalDate().toString(), at)
+    fun snapshot(now: Long, zone: ZoneId = ZoneId.systemDefault()): F1Snapshot {
+        // This weekend (or the next one once Sunday's race is over), at a European round's
+        // usual local times, so the picker shows a weekend that could be real.
+        val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+        var friday = when (today.dayOfWeek) {
+            DayOfWeek.SATURDAY, DayOfWeek.SUNDAY -> today.with(TemporalAdjusters.previous(DayOfWeek.FRIDAY))
+            else -> today.with(TemporalAdjusters.nextOrSame(DayOfWeek.FRIDAY))
         }
-        fun date(offsetDays: Long) =
-            Instant.ofEpochMilli(now + offsetDays * F1Clock.DAY).atZone(ZoneOffset.UTC).toLocalDate().toString()
+        if (friday.plusDays(2).atTime(17, 0).atZone(zone).toInstant().toEpochMilli() <= now) friday = friday.plusWeeks(1)
+        fun session(kind: F1SessionKind, day: Long, hour: Int, minute: Int): WSession {
+            val at = friday.plusDays(day).atTime(hour, minute).atZone(zone).toInstant()
+            return WSession(kind, at.atZone(ZoneOffset.UTC).toLocalDate().toString(), at.toEpochMilli())
+        }
+        val sunday = friday.plusDays(2)
+        fun date(weeks: Long) = sunday.plusWeeks(weeks).toString()
 
         val baku = WRace(
             round = 17,
@@ -30,27 +39,27 @@ object F1WidgetSample {
             locality = "Baku",
             country = "Azerbaijan",
             flag = "🇦🇿",
-            date = Instant.ofEpochMilli(base + 30 * hour).atZone(ZoneOffset.UTC).toLocalDate().toString(),
+            date = sunday.toString(),
             sessions = listOf(
-                session(F1SessionKind.FP1, -27 * 60),
-                session(F1SessionKind.FP2, -23 * 60),
-                session(F1SessionKind.FP3, 3 * 60 + 20),
-                session(F1SessionKind.QUALI, 7 * 60 + 20),
-                session(F1SessionKind.RACE, 30 * 60),
+                session(F1SessionKind.FP1, 0, 10, 30),
+                session(F1SessionKind.FP2, 0, 14, 0),
+                session(F1SessionKind.FP3, 1, 10, 30),
+                session(F1SessionKind.QUALI, 1, 14, 0),
+                session(F1SessionKind.RACE, 2, 13, 0),
             ),
             laps = 51,
             lengthM = 6003,
             outline = SAMPLE_TRACK,
         )
         val later = listOf(
-            Triple("Singapore Grand Prix", "Marina Bay", "🇸🇬") to 16L,
-            Triple("United States Grand Prix", "Austin", "🇺🇸") to 30L,
-            Triple("Mexico City Grand Prix", "Mexico City", "🇲🇽") to 37L,
-            Triple("São Paulo Grand Prix", "São Paulo", "🇧🇷") to 44L,
-            Triple("Las Vegas Grand Prix", "Las Vegas", "🇺🇸") to 58L,
-            Triple("Qatar Grand Prix", "Lusail", "🇶🇦") to 65L,
-            Triple("Abu Dhabi Grand Prix", "Yas Marina", "🇦🇪") to 72L,
-        ).mapIndexed { i, (race, days) ->
+            Triple("Singapore Grand Prix", "Marina Bay", "🇸🇬") to 2L,
+            Triple("United States Grand Prix", "Austin", "🇺🇸") to 4L,
+            Triple("Mexico City Grand Prix", "Mexico City", "🇲🇽") to 5L,
+            Triple("São Paulo Grand Prix", "São Paulo", "🇧🇷") to 6L,
+            Triple("Las Vegas Grand Prix", "Las Vegas", "🇺🇸") to 8L,
+            Triple("Qatar Grand Prix", "Lusail", "🇶🇦") to 9L,
+            Triple("Abu Dhabi Grand Prix", "Yas Marina", "🇦🇪") to 10L,
+        ).mapIndexed { i, (race, weeks) ->
             WRace(
                 round = 18 + i,
                 name = race.first,
@@ -58,15 +67,15 @@ object F1WidgetSample {
                 locality = race.second,
                 country = "",
                 flag = race.third,
-                date = date(days),
-                sessions = listOf(WSession(F1SessionKind.RACE, date(days), null)),
+                date = date(weeks),
+                sessions = listOf(WSession(F1SessionKind.RACE, date(weeks), null)),
             )
         }
         val done = listOf(
-            Triple("Dutch Grand Prix", "Zandvoort", "🇳🇱") to -21L,
-            Triple("Italian Grand Prix", "Monza", "🇮🇹") to -14L,
-            Triple("Madrid Grand Prix", "Madrid", "🇪🇸") to -7L,
-        ).mapIndexed { i, (race, days) ->
+            Triple("Dutch Grand Prix", "Zandvoort", "🇳🇱") to -3L,
+            Triple("Italian Grand Prix", "Monza", "🇮🇹") to -2L,
+            Triple("Madrid Grand Prix", "Madrid", "🇪🇸") to -1L,
+        ).mapIndexed { i, (race, weeks) ->
             WRace(
                 round = 14 + i,
                 name = race.first,
@@ -74,8 +83,8 @@ object F1WidgetSample {
                 locality = race.second,
                 country = "",
                 flag = race.third,
-                date = date(days),
-                sessions = listOf(WSession(F1SessionKind.RACE, date(days), null)),
+                date = date(weeks),
+                sessions = listOf(WSession(F1SessionKind.RACE, date(weeks), null)),
             )
         }
 
