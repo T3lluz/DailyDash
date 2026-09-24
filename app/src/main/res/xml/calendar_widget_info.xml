@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    DailyDash — Calendar. Resizes from a one-row "next up" strip (2×1) to 5×5; each size
+    has its own layout (see CalendarWidget's KDoc). Placed at 4×3: date and summary, the
+    week strip, now/next, the AI brief and the agenda. No update period: the shared
+    15-minute worker, a calendar-change trigger and event-boundary ticks keep it current.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_calendar_description"
+    android:previewImage="@drawable/widget_preview_calendar"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:minWidth="250dp"
+    android:minHeight="180dp"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="40dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="3"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen" />

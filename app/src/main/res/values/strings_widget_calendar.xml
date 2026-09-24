@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_calendar_name">DailyDash — Calendar</string>
+    <string name="widget_calendar_description">What\'s on now and next with a live countdown and Join button, a week strip or month grid to pick a day, the agenda by day, and an AI brief of your day</string>
+</resources>

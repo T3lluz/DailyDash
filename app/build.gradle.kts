@@ -1,5 +1,11 @@
 import java.util.Properties
 
+// Widget renders (every size, the tabs and states, the static picker previews) for checking
+// layouts off-device. Opt-in, so everyday builds and CI don't pull Robolectric:
+//   ./gradlew :app:testDebugUnitTest -PwidgetShots --tests '*WidgetShotsTest*'
+// Output lands in app/build/widget-shots; see AGENTS.md → App Widgets.
+val widgetShots = providers.gradleProperty("widgetShots").isPresent
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -88,6 +94,11 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    if (widgetShots) {
+        sourceSets.getByName("test").kotlin.srcDir("src/widgetShots/kotlin")
+        testOptions.unitTests.isIncludeAndroidResources = true
     }
 
     packaging {
@@ -188,4 +199,17 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     // Android's org.json is a stub on the JVM; the real one lets the bridge and dashboard parsers be tested.
     testImplementation("org.json:json:20240303")
+    if (widgetShots) {
+        testImplementation(libs.robolectric)
+        testImplementation(libs.androidx.test.core)
+    }
+}
+
+if (widgetShots) {
+    tasks.withType<Test>().configureEach {
+        // Hardware drawing, so rounded corners (clipToOutline) show in the renders.
+        systemProperty("robolectric.pixelCopyRenderMode", "hardware")
+        systemProperty("widgetShots.dir", layout.buildDirectory.dir("widget-shots").get().asFile.path)
+        providers.gradleProperty("widgetShotsFont").orNull?.let { systemProperty("widgetShots.font", it) }
+    }
 }

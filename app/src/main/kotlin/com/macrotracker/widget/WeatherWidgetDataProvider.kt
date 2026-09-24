@@ -1,20 +1,42 @@
 package com.macrotracker.widget
 
 import android.Manifest
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
+import android.text.format.DateFormat
 import android.util.Log
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.macrotracker.data.local.SettingsRepository
+import com.macrotracker.data.remote.ClothingAdvisor
+import com.macrotracker.data.remote.DailyForecast
 import com.macrotracker.data.remote.WeatherInfo
 import com.macrotracker.data.remote.WeatherRepository
+import com.macrotracker.util.SunCalculator
+import com.macrotracker.widget.kit.WidgetAi
+import com.macrotracker.widget.kit.WidgetDims
+import com.macrotracker.widget.weather.Daylight
+import com.macrotracker.widget.weather.RainOutlook
+import com.macrotracker.widget.weather.WeatherBrief
+import com.macrotracker.widget.weather.WeatherCacheCodec
+import com.macrotracker.widget.weather.WeatherLayouts
+import com.macrotracker.widget.weather.WxConditions
+import com.macrotracker.widget.weather.WxDay
+import com.macrotracker.widget.weather.WxDays
+import com.macrotracker.widget.weather.WxHour
+import com.macrotracker.widget.weather.WxUnits
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
-import java.time.format.DateTimeFormatter
+import java.time.ZoneId
 import java.util.Locale
+import com.macrotracker.data.remote.HourlyForecast as RemoteHour
 
 /**
  * Reads the weather widget's data directly (no Hilt available in Glance).
@@ -24,13 +46,25 @@ import java.util.Locale
  *   forecast cached in SharedPrefs. **Never** makes network calls.
  * - [refreshNow] — full, for background workers. Fetches a live forecast first,
  *   then re-reads it. Updates memory + disk caches.
+ *
+ * The cache (`daily_dash_weather_cache`) is shared with the app, which writes the same
+ * keys whenever Home refreshes its weather card. Only the widget writes the keys the
+ * app has no use for — `daily_forecast`, `gust`, `uv` — so every read tolerates their
+ * absence.
  */
 object WeatherWidgetDataProvider {
 
     private const val TAG = "WeatherWidgetData"
     private const val WEATHER_PREFS = "daily_dash_weather_cache"
     private const val WIDGET_PREFS = "daily_dash_widget"
+    private const val SETTINGS_PREFS = "macro_tracker_settings"
     private const val LAST_UPDATED_KEY = "last_updated_at"
+
+    /** When the widget's own keys (days, gusts, UV) were written. */
+    private const val EXTRAS_FETCHED_AT = "extras_fetched_at"
+
+    /** Gusts and UV are "right now" readings; older than this they are left out. */
+    private const val EXTRAS_TTL_MS = 90 * 60 * 1000L
 
     /** In-memory cache — avoids redundant reads across widget renders. */
     private const val MEMORY_TTL = 30_000L // 30 seconds
@@ -102,18 +136,84 @@ object WeatherWidgetDataProvider {
         return result
     }
 
+    /**
+     * Brings the AI line up to date, when briefs are on, a provider is set up and a placed
+     * copy of the widget is big enough to show it. [WidgetAi] regenerates only when the
+     * day's shape changed (see [WeatherBrief.fingerprint]) or the brief is old, so most
+     * passes cost nothing. Never throws.
+     */
+    suspend fun refreshBrief(context: Context) {
+        runCatching {
+            if (!WidgetAi.isEnabled(context) || !anyPlacedCopyShowsBrief(context)) return
+            val d = loadWeather(context)
+            if (!d.hasWeatherData || d.weatherDisabled || d.hours.isEmpty()) return
+            val zone = ZoneId.systemDefault()
+            val now = LocalDateTime.now(zone)
+            val rain = RainOutlook.of(d.hours, 12, d.symbol)
+            val fingerprint = WeatherBrief.fingerprint(now.toLocalDate(), d.tempC, d.highC, d.lowC, rain, d.hours, zone)
+            val text = WidgetAi.brief(
+                context = context,
+                key = WeatherBrief.KEY,
+                fingerprint = fingerprint,
+                minIntervalMs = WeatherBrief.MIN_INTERVAL_MS,
+                maxAgeMs = WeatherBrief.MAX_AGE_MS,
+                maxChars = WeatherBrief.MAX_CHARS,
+            ) {
+                WeatherBrief.prompt(
+                    now = now,
+                    location = d.location,
+                    units = d.units,
+                    is24h = d.is24h,
+                    zone = zone,
+                    description = d.description,
+                    tempC = d.tempC,
+                    feelsC = d.feelsLikeC,
+                    highC = d.highC,
+                    lowC = d.lowC,
+                    windMs = d.windMs,
+                    gustMs = d.gustMs,
+                    sunset = d.sunset,
+                    hours = d.hours,
+                    days = d.days,
+                    wearHeadline = d.wear?.headline,
+                )
+            }
+            if (text != cached?.aiBrief) invalidate(context)
+        }.onFailure { Log.w(TAG, "brief failed: ${it.message}") }
+    }
+
+    /**
+     * Whether any placed copy is at a size whose layout has room for the AI line, in
+     * portrait (min width × max height) or landscape (max width × min height). A 5×3
+     * on its own never pays for a brief it can't show.
+     */
+    private fun anyPlacedCopyShowsBrief(context: Context): Boolean = runCatching {
+        val manager = AppWidgetManager.getInstance(context)
+        val ids = manager.getAppWidgetIds(ComponentName(context, WeatherWidgetReceiver::class.java))
+        ids.any { id ->
+            val o = manager.getAppWidgetOptions(id)
+            val portrait = DpSize(
+                o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH).dp,
+                o.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT).dp,
+            )
+            val landscape = DpSize(
+                o.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH).dp,
+                o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT).dp,
+            )
+            listOf(portrait, landscape).any { size ->
+                val dims = WidgetDims(size)
+                WeatherLayouts.showsBrief(WeatherLayouts.forCells(dims.cols, dims.rows))
+            }
+        }
+    }.getOrDefault(false)
+
     private suspend fun fetchLiveWeather(context: Context, force: Boolean = false) {
         try {
             val hiltEntryPoint = context.widgetEntryPoint()
             val settings = hiltEntryPoint.settingsRepository()
             if (!settings.weatherEnabled.value) return
 
-            val hasPermission = ContextCompat.checkSelfPermission(
-                context, Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(
-                context, Manifest.permission.ACCESS_COARSE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
-            if (!hasPermission) return
+            if (!hasLocationPermission(context)) return
 
             val locationProvider = hiltEntryPoint.locationProvider()
             val weatherRepository = hiltEntryPoint.weatherRepository()
@@ -140,6 +240,7 @@ object WeatherWidgetDataProvider {
                 ?: weather.dailyForecasts.firstOrNull()
 
             val hourlyStr = buildHourlyForecastJson(weather)
+            val now = System.currentTimeMillis()
 
             prefs.edit().apply {
                 putString("latitude", String.format(Locale.US, "%.6f", location.latitude))
@@ -152,15 +253,39 @@ object WeatherWidgetDataProvider {
                 putString("low", todayForecast?.minTemp?.toInt()?.toString())
                 putString("feels_like", (weather.feelsLike ?: weather.temperature).toInt().toString())
                 putString("humidity", weather.humidity?.toInt()?.toString())
-                putString("wind_speed", weather.windSpeed.toInt().toString()) // Storing raw number, but formatted string below uses "m/s"
+                putString("wind_speed", weather.windSpeed.toInt().toString())
                 putString("sunrise", weather.sunrise)
                 putString("sunset", weather.sunset)
                 putString("hourly_forecast", hourlyStr.ifEmpty { null })
-                putLong("fetched_at", System.currentTimeMillis())
+                putLong("fetched_at", now)
+                // The widget's own keys: the app never writes these.
+                putString("temp_exact", String.format(Locale.US, "%.1f", weather.temperature))
+                putString("wind_exact", String.format(Locale.US, "%.1f", weather.windSpeed))
+                putString("gust", weather.windGust?.let { String.format(Locale.US, "%.1f", it) })
+                putString("uv", weather.uvIndex?.let { String.format(Locale.US, "%.1f", it) })
+                putString(
+                    "daily_forecast",
+                    weather.dailyForecasts.mapNotNull { it.toWxDay() }
+                        .takeIf { it.isNotEmpty() }
+                        ?.let(WeatherCacheCodec::encodeDaily),
+                )
+                putLong(EXTRAS_FETCHED_AT, now)
             }.apply()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to fetch live weather in widget refresh: ${e.message}")
         }
+    }
+
+    private fun DailyForecast.toWxDay(): WxDay? {
+        val date = runCatching { LocalDate.parse(dateFull) }.getOrNull() ?: return null
+        return WxDay(
+            date = date,
+            minC = minTemp,
+            maxC = maxTemp,
+            symbol = symbolCode,
+            precipMm = precipitation,
+            pop = precipProbability,
+        )
     }
 
     private fun cache(data: WeatherWidgetData) {
@@ -171,36 +296,62 @@ object WeatherWidgetDataProvider {
     private fun loadWeather(context: Context): WeatherWidgetData {
         return try {
             val prefs = context.getSharedPreferences(WEATHER_PREFS, Context.MODE_PRIVATE)
-            val temp = prefs.getString("temp", null)
-            val symbolCode = prefs.getString("symbol_code", "clearsky") ?: "clearsky"
-            val iconRes = WeatherRepository.mapSymbolCode(symbolCode).second
-            val desc = prefs.getString("description", null)
-            val location = prefs.getString("location", null)
-            val humidity = prefs.getString("humidity", null)
-            val windSpeed = prefs.getString("wind_speed", null)
-            val sunrise = prefs.getString("sunrise", null)
-            val sunset = prefs.getString("sunset", null)
+            val settings = context.getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
+            val zone = ZoneId.systemDefault()
+            val nowInstant = Instant.now()
+            val today = LocalDate.now(zone)
 
-            val hourlyRaw = prefs.getString("hourly_forecast", null)
-            val parsedHourly = parseHourlyForecast(hourlyRaw)
-            val hourlyForecast = parsedHourly.filterFutureHourlySlots()
-            if (parsedHourly.isNotEmpty() && hourlyForecast.size != parsedHourly.size) {
-                requestWeatherRefreshForStaleCache(context)
-            }
+            val units = WxUnits(
+                fahrenheit = settings.getString(SettingsRepository.KEY_TEMP_UNIT, "c") == "f",
+                kmh = settings.getString(SettingsRepository.KEY_WIND_UNIT, "ms") == "kmh",
+            )
+            val weatherEnabled = settings.getBoolean("weather_enabled", true)
             val fetchedAt = prefs.getLong("fetched_at", 0L)
-            if (fetchedAt > 0L && System.currentTimeMillis() - fetchedAt > WEATHER_DISK_STALE_MS) {
+            val extrasAt = prefs.getLong(EXTRAS_FETCHED_AT, 0L)
+            // Exact readings are the widget's own; when the app wrote the cache since, its
+            // whole degrees are newer, so they win.
+            val exactFresh = extrasAt >= fetchedAt
+            val tempWhole = prefs.getString("temp", null)?.toDoubleOrNull()
+            val temp = prefs.getString("temp_exact", null)?.toDoubleOrNull()?.takeIf { exactFresh } ?: tempWhole
+            val wind = prefs.getString("wind_exact", null)?.toDoubleOrNull()?.takeIf { exactFresh }
+                ?: prefs.getString("wind_speed", null)?.toDoubleOrNull()
+            val humidity = prefs.getString("humidity", null)?.toDoubleOrNull()
+            val symbol = prefs.getString("symbol_code", null)?.takeIf { it.isNotBlank() } ?: "cloudy"
+            val description = prefs.getString("description", null)
+            val extrasFresh = nowInstant.toEpochMilli() - extrasAt < EXTRAS_TTL_MS
+            val gust = prefs.getString("gust", null)?.toDoubleOrNull()?.takeIf { extrasFresh }
+            val uv = prefs.getString("uv", null)?.toDoubleOrNull()?.takeIf { extrasFresh }
+
+            val parsedHours = WeatherCacheCodec.parseHourly(prefs.getString("hourly_forecast", null))
+            val hours = WeatherCacheCodec.future(parsedHours, nowInstant, zone)
+            if (parsedHours.isNotEmpty() && hours.size != parsedHours.size) {
                 requestWeatherRefreshForStaleCache(context)
             }
+            if (fetchedAt > 0L && nowInstant.toEpochMilli() - fetchedAt > WEATHER_DISK_STALE_MS) {
+                requestWeatherRefreshForStaleCache(context)
+            }
+
+            val days = WxDays.fromToday(WeatherCacheCodec.parseDaily(prefs.getString("daily_forecast", null)), today)
+            val todayDay = days.firstOrNull { it.date == today }
+            // Today's range from the days when they're from today, else the app's whole
+            // degrees; widened to take in the temperature right now.
+            val high = listOfNotNull(todayDay?.maxC ?: prefs.getString("high", null)?.toDoubleOrNull(), temp).maxOrNull()
+            val low = listOfNotNull(todayDay?.minC ?: prefs.getString("low", null)?.toDoubleOrNull(), temp).minOrNull()
+
+            // Sun times for today at the cached position, so they roll over at midnight;
+            // the stored strings when there is no position.
+            val lat = prefs.getString("latitude", null)?.toDoubleOrNull()
+            val lon = prefs.getString("longitude", null)?.toDoubleOrNull()
+            val sunToday = sunTimes(lat, lon, today, zone)
+            val sunrise = sunToday?.first ?: Daylight.parseClock(prefs.getString("sunrise", null))
+            val sunset = sunToday?.second ?: Daylight.parseClock(prefs.getString("sunset", null))
+            val tomorrowSunrise = sunTimes(lat, lon, today.plusDays(1), zone)?.first
+
+            val brief = WidgetAi.cached(context, WeatherBrief.KEY)
+                ?.takeIf { nowInstant.toEpochMilli() - it.at < WeatherBrief.SHOW_FOR_MS }
+                ?.text
 
             WeatherWidgetData(
-                weatherTemp = temp,
-                weatherIconRes = iconRes,
-                weatherDescription = desc,
-                weatherLocation = location,
-                weatherHumidity = humidity,
-                weatherWindSpeed = windSpeed,
-                weatherSunrise = sunrise,
-                weatherSunset = sunset,
                 weatherFetchedAt = fetchedAt,
                 hasWeatherData = temp != null,
                 // Without a location fix there is nothing to fetch, so say that
@@ -210,13 +361,66 @@ object WeatherWidgetDataProvider {
                     !hasLocationPermission(context) -> WidgetSourceState.NO_PERMISSION
                     else -> WidgetSourceState.OK
                 },
-                hourlyForecast = hourlyForecast,
+                weatherDisabled = !weatherEnabled,
+                location = prefs.getString("location", null)?.takeIf { it.isNotBlank() },
+                tempC = temp,
+                symbol = symbol,
+                description = description,
+                highC = high,
+                lowC = low,
+                feelsLikeC = temp?.let { WxConditions.feelsLikeC(it, humidity, wind) },
+                humidity = humidity,
+                windMs = wind,
+                gustMs = gust?.takeIf { wind == null || it > wind },
+                uvIndex = uv,
+                sunrise = sunrise,
+                sunset = sunset,
+                tomorrowSunrise = tomorrowSunrise,
+                hours = hours,
+                days = days,
+                units = units,
+                is24h = DateFormat.is24HourFormat(context),
+                wear = temp?.let { wearLine(it, wind ?: 0.0, symbol, description, hours) },
+                aiBrief = brief,
             )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load weather: ${e.message}", e)
             WeatherWidgetData(weatherState = WidgetSourceState.ERROR)
         }
     }
+
+    private fun sunTimes(lat: Double?, lon: Double?, date: LocalDate, zone: ZoneId): Pair<LocalTime, LocalTime>? {
+        if (lat == null || lon == null) return null
+        val (rise, set) = SunCalculator.calculate(lat, lon, date, zone) ?: return null
+        val r = Daylight.parseClock(rise) ?: return null
+        val s = Daylight.parseClock(set) ?: return null
+        return r to s
+    }
+
+    /** The in-app card's "what to wear" rule, run on the cached conditions. */
+    private fun wearLine(tempC: Double, windMs: Double, symbol: String, description: String?, hours: List<WxHour>): WearLine? =
+        runCatching {
+            val (skyName, skyIcon) = WeatherRepository.mapSymbolCode(symbol)
+            val info = WeatherInfo(
+                temperature = tempC,
+                windSpeed = windMs,
+                symbolCode = symbol,
+                description = description ?: skyName,
+                iconRes = skyIcon,
+                hourlyForecasts = hours.take(3).map { h ->
+                    RemoteHour(
+                        time = h.label,
+                        temperature = h.tempC,
+                        iconRes = 0,
+                        windSpeed = h.windMs ?: windMs,
+                        description = WeatherRepository.mapSymbolCode(h.symbol).first,
+                        symbolCode = h.symbol,
+                    )
+                },
+            )
+            val advice = ClothingAdvisor.advise(info)
+            WearLine(advice.headline, advice.items.map { it.icon.iconRes to it.label })
+        }.getOrNull()
 
     /** Fine or coarse location — either is enough for a forecast. */
     private fun hasLocationPermission(context: Context): Boolean =
@@ -225,6 +429,10 @@ object WeatherWidgetDataProvider {
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) ==
             PackageManager.PERMISSION_GRANTED
 
+    /**
+     * Same shape the app writes (so either can read the other's), plus exact `t` and `mm`
+     * which only the widget reads.
+     */
     private fun buildHourlyForecastJson(weather: WeatherInfo): String {
         val arr = JSONArray()
         weather.hourlyForecasts.take(72).forEach { h ->
@@ -232,81 +440,17 @@ object WeatherWidgetDataProvider {
                 .put("time", h.time)
                 .put("symbol", h.symbolCode)
                 .put("temp", h.temperature.toInt().toString())
+                .put("t", h.temperature)
                 .put("pop", h.precipProbability ?: 0)
                 .put("wind", "${h.windSpeed.toInt()} m/s")
                 .put("description", h.description.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() })
                 .put("date", h.dateStr ?: "")
                 .put("precipitation", if (h.precipitation != null && h.precipitation > 0) "${h.precipitation}mm" else "")
+                .put("mm", h.precipitation ?: 0.0)
                 .put("epochMillis", h.epochMillis ?: 0L)
             arr.put(obj)
         }
         return arr.toString()
-    }
-
-    private fun parseHourlyForecast(raw: String?): List<HourlyForecast> {
-        if (raw.isNullOrBlank()) return emptyList()
-        return if (raw.trimStart().startsWith("[")) {
-            parseHourlyForecastJson(raw)
-        } else {
-            parseLegacyHourlyForecast(raw)
-        }.sortedWith(compareBy<HourlyForecast, Long?>(nullsLast()) { it.epochMillis })
-            .takeContiguousHourlyCadence()
-    }
-
-    private fun parseHourlyForecastJson(raw: String): List<HourlyForecast> {
-        val arr = JSONArray(raw)
-        return (0 until arr.length()).mapNotNull { i ->
-            val obj = arr.optJSONObject(i) ?: return@mapNotNull null
-            val sym = obj.optString("symbol", "clearsky")
-            HourlyForecast(
-                hour = obj.optString("time"),
-                iconRes = WeatherRepository.mapSymbolCode(sym).second,
-                temp = obj.optString("temp"),
-                pop = obj.optInt("pop", 0).takeIf { it > 0 },
-                windSpeed = obj.optString("wind").takeIf { it.isNotBlank() },
-                description = obj.optString("description").takeIf { it.isNotBlank() },
-                dayName = obj.optString("date").takeIf { it.isNotBlank() },
-                precipitation = obj.optString("precipitation").takeIf { it.isNotBlank() },
-                epochMillis = obj.optLong("epochMillis", 0L).takeIf { it > 0L },
-            )
-        }
-    }
-
-    private fun parseLegacyHourlyForecast(raw: String): List<HourlyForecast> =
-        raw.split("|").chunked(8).mapNotNull { seg ->
-            if (seg.size < 3) null
-            else {
-                val sym = seg[1]
-                HourlyForecast(
-                    hour = seg[0],
-                    iconRes = WeatherRepository.mapSymbolCode(sym).second,
-                    temp = seg[2],
-                    pop = seg.getOrNull(3)?.toIntOrNull(),
-                    windSpeed = seg.getOrNull(4)?.takeIf { it.isNotBlank() },
-                    description = seg.getOrNull(5)?.takeIf { it.isNotBlank() },
-                    dayName = seg.getOrNull(6)?.takeIf { it.isNotBlank() },
-                    precipitation = seg.getOrNull(7)?.takeIf { it.isNotBlank() },
-                )
-            }
-        }
-
-    private fun List<HourlyForecast>.takeContiguousHourlyCadence(): List<HourlyForecast> {
-        if (size <= 1) return this
-        val result = mutableListOf<HourlyForecast>()
-        var previousEpoch: Long? = null
-        for (slot in this) {
-            val epoch = slot.epochMillis
-            if (previousEpoch != null && epoch != null) {
-                val gapMinutes = java.time.Duration.between(
-                    Instant.ofEpochMilli(previousEpoch),
-                    Instant.ofEpochMilli(epoch),
-                ).toMinutes()
-                if (gapMinutes > 90) break
-            }
-            result.add(slot)
-            if (epoch != null) previousEpoch = epoch
-        }
-        return result
     }
 
     private fun requestWeatherRefreshForStaleCache(context: Context) {
@@ -314,22 +458,5 @@ object WeatherWidgetDataProvider {
         if (now - lastWeatherStaleRefreshRequestAt < STALE_WEATHER_REFRESH_REQUEST_THROTTLE_MS) return
         lastWeatherStaleRefreshRequestAt = now
         WidgetRefreshWorker.enqueueImmediateRefresh(context)
-    }
-
-    private fun List<HourlyForecast>.filterFutureHourlySlots(): List<HourlyForecast> {
-        val now = LocalDateTime.now()
-        val hourFormatter = DateTimeFormatter.ofPattern("h a", Locale.US)
-        return filter { slot ->
-            slot.epochMillis?.let { return@filter Instant.ofEpochMilli(it).isAfter(Instant.now()) }
-
-            val date = slot.dayName?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
-            val time = runCatching { LocalTime.parse(slot.hour.uppercase(Locale.US), hourFormatter) }.getOrNull()
-
-            // Old cache entries without date/time should not blank the widget, but all
-            // current cached weather writes include both, so normal rows are filtered.
-            if (date == null || time == null) return@filter true
-
-            LocalDateTime.of(date, time).isAfter(now)
-        }
     }
 }

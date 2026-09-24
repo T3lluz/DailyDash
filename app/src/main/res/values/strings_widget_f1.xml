@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_f1_name">DailyDash — F1</string>
+    <string name="widget_f1_description">The next Grand Prix with a live countdown to each session, the weekend schedule and circuit, drivers\' and constructors\' standings, the last result and the calendar.</string>
+</resources>

@@ -173,7 +173,7 @@
             </intent-filter>
         </activity-alias>
 
-        <!-- DailyDash Widget — Weather (the only home-screen widget) -->
+        <!-- DailyDash home-screen widgets: see widget/DashWidgets.kt -->
         <receiver
             android:name=".widget.WeatherWidgetReceiver"
             android:exported="true"
@@ -184,6 +184,54 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/weather_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.calendar.CalendarWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_calendar_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/calendar_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.f1.F1WidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_f1_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/f1_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.server.ServerWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_server_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/server_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.github.GitHubWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_github_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/github_widget_info" />
         </receiver>
 
 

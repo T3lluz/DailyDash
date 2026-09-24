@@ -1,23 +1,9 @@
 package com.macrotracker.widget
 
-/**
- * A single hourly weather forecast slot.
- * @param hour  Display label like "3 PM"
- * @param iconRes Weather icon drawable
- * @param temp  Temperature as a string (e.g. "18")
- * @param pop   Probability of precipitation 0–100 (null if unavailable)
- */
-data class HourlyForecast(
-    val hour: String,
-    val iconRes: Int,
-    val temp: String,
-    val pop: Int? = null,
-    val windSpeed: String? = null,
-    val description: String? = null,
-    val dayName: String? = null, // ISO date "yyyy-MM-dd"
-    val precipitation: String? = null, // e.g. "1.2 mm"
-    val epochMillis: Long? = null,
-)
+import com.macrotracker.widget.weather.WxDay
+import com.macrotracker.widget.weather.WxHour
+import com.macrotracker.widget.weather.WxUnits
+import java.time.LocalTime
 
 /**
  * Why the widget has nothing to show.
@@ -36,25 +22,56 @@ enum class WidgetSourceState {
     ERROR,
 }
 
-/** Data snapshot for the weather widget, read from the cached forecast. */
+/** The local "what to wear" rule's answer (ClothingAdvisor), as one line with its item icons. */
+data class WearLine(
+    val headline: String,
+    /** Item icons (drawables) and labels, most important first. */
+    val items: List<Pair<Int, String>>,
+)
+
+/**
+ * Data snapshot for the weather widget, read from the cached forecast. Temperatures are
+ * °C and wind m/s; the widget converts to [units] as it draws.
+ */
 data class WeatherWidgetData(
-    // Timestamp of when the data was last refreshed
-    val lastUpdatedAt: Long = 0L, // epoch millis
-    val weatherTemp: String? = null,
-    val weatherIconRes: Int? = null,
-    val weatherDescription: String? = null,
-    val weatherLocation: String? = null,
-    val weatherHumidity: String? = null,
-    val weatherWindSpeed: String? = null,
-    val weatherSunrise: String? = null,
-    val weatherSunset: String? = null,
-    val hasWeatherData: Boolean = false,
-    val weatherState: WidgetSourceState = WidgetSourceState.OK,
+    /** When the widget last ran a refresh. */
+    val lastUpdatedAt: Long = 0L,
     /**
      * When the forecast itself was fetched — not when the widget last rendered.
      * The weather widget used to stamp every render as "now" even when the
      * forecast behind it was hours old.
      */
     val weatherFetchedAt: Long = 0L,
-    val hourlyForecast: List<HourlyForecast> = emptyList(),
+    val hasWeatherData: Boolean = false,
+    val weatherState: WidgetSourceState = WidgetSourceState.OK,
+    /** Weather is switched off in Settings, so nothing refreshes it. */
+    val weatherDisabled: Boolean = false,
+
+    val location: String? = null,
+    val tempC: Double? = null,
+    /** Yr symbol code for the sky now, e.g. `partlycloudy_day`. */
+    val symbol: String = "cloudy",
+    val description: String? = null,
+    val highC: Double? = null,
+    val lowC: Double? = null,
+    val feelsLikeC: Double? = null,
+    val humidity: Double? = null,
+    val windMs: Double? = null,
+    val gustMs: Double? = null,
+    val uvIndex: Double? = null,
+
+    val sunrise: LocalTime? = null,
+    val sunset: LocalTime? = null,
+    val tomorrowSunrise: LocalTime? = null,
+
+    /** Hours still to come, soonest first (up to ~72). */
+    val hours: List<WxHour> = emptyList(),
+    /** Days from today on (up to 7). Empty for caches written before the widget stored them. */
+    val days: List<WxDay> = emptyList(),
+
+    val units: WxUnits = WxUnits(),
+    val is24h: Boolean = true,
+    val wear: WearLine? = null,
+    /** The AI line, when briefs are on and one is fresh enough. */
+    val aiBrief: String? = null,
 )

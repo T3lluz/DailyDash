@@ -4,7 +4,7 @@
 
     <!-- Weather widget -->
     <string name="widget_weather_name">DailyDash — Weather</string>
-    <string name="widget_weather_description">Current conditions, wind, humidity, sunrise and sunset, plus an hourly forecast</string>
+    <string name="widget_weather_description">Now, feels like, wind, rain and daylight, with the coming hours and the week. Resizes from a 2×1 strip to 5×5</string>
 
     <!-- Server monitor -->
     <string name="server_channel_group">Servers</string>
