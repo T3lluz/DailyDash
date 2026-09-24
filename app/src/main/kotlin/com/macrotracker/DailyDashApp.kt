@@ -10,7 +10,7 @@ import com.macrotracker.data.phone.PhoneHub
 import com.macrotracker.data.server.DashboardSettingsSync
 import com.macrotracker.data.update.AppUpdateWorker
 import com.macrotracker.data.update.PackageReplacedReceiver
-import com.macrotracker.widget.WeatherWidgetPreview
+import com.macrotracker.widget.DashWidgets
 import com.macrotracker.widget.WidgetRefreshWorker
 import com.macrotracker.widget.WidgetStateProvider
 import dagger.hilt.android.HiltAndroidApp
@@ -51,9 +51,9 @@ class DailyDashApp : Application(), ImageLoaderFactory {
             WidgetRefreshWorker.enqueuePeriodicRefresh(this)
             // Periodic worker covers freshness; skip an immediate full refresh on every cold start.
         }
-        // Give the launcher's widget picker a real render of the weather widget (Android 15+).
+        // Give the launcher's widget picker a real render of every widget (Android 15+).
         CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
-            WeatherWidgetPreview.publish(this@DailyDashApp)
+            DashWidgets.publishAllPreviews(this@DailyDashApp)
         }
     }
 

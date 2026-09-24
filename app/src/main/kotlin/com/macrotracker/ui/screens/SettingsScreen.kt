@@ -68,7 +68,7 @@ fun SettingsScreen(
                 SettingsCategoryItem(
                     icon = AppIcons.Blocks,
                     title = "Widgets",
-                    summary = "Pin the weather widget to your home screen",
+                    summary = "Weather, calendar, F1, servers and GitHub",
                     onClick = onNavigateToWidgets,
                 ),
             ),

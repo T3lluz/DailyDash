@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  F1: placed at 4×3 (hero, weekend strip, drivers | constructors). Resizes from a 2×1
+  strip up to 5×5; every cell range has its own layout (see F1Widget's KDoc).
+  minWidth/minHeight use the pre-Android-12 70n − 30 dp cell formula.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_f1_description"
+    android:minWidth="250dp"
+    android:minHeight="180dp"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="40dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="3"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen" />

@@ -237,15 +237,18 @@ com.macrotracker/
                               `TextSecondary` / `TextTertiary`, never `TextSecondary.copy(alpha = …)`
     util/                  ← HapticHelper (Compose-friendly performHapticFeedback wrapper, ui/util/Haptics.kt)
                               + LastUpdatedText composable + rememberRelativeTime (ui/util/LastUpdated.kt)
-  widget/                  ← The one Glance home-screen widget, weather (fixed 5×3):
-                              WeatherWidget + WeatherWidgetReceiver;
-                              WidgetComponents.kt (`WidgetHeader`, `WidgetStateMessage`, `WScale`/`WidgetClr`
-                              tokens, `WEATHER_WIDGET_PREVIEW_SIZE`);
-                              WeatherWidgetDataProvider (reads the cached forecast directly — no Hilt);
-                              WeatherWidgetData.kt (WeatherWidgetData snapshot + HourlyForecast + WidgetSourceState);
-                              WeatherWidgetPreview (real render for the widget picker + in-app Widgets screen);
-                              RefreshWidgetAction (Glance ActionCallback); WidgetUpdater + WidgetRefreshWorker;
-                              WidgetStateProvider (is a widget placed?)
+  widget/                  ← Five Glance home-screen widgets, all resizable (`SizeMode.Exact`), listed in
+                              DashWidgets.kt (`DashWidgetSpec`: key, receiver, `refresh`, `renderPreview`).
+                              Weather (this package), calendar/, f1/, server/, github/: each has a Spec + Receiver
+                              (extends DashWidgetReceiver), a Widget, a store that snapshots its data into prefs
+                              `daily_dash_widget_<key>`, and a pure *Logic/*Model file with a size planner + tests.
+                              kit/: WidgetKit (WK palette, WT type, `WidgetDims` cells, frame/header/tabs/chips/tiles,
+                              `openUrlAction`/`openAppAction`/`refreshAction`), WidgetCharts (bitmap charts),
+                              WidgetAi (cached AI briefs), WidgetStateAction (`setStateAction` per-copy tab state),
+                              WidgetData (`rememberWidgetData`: read snapshots in composition, never before
+                              `provideContent`, or a live session draws stale data).
+                              WidgetRefreshWorker refreshes every placed widget every 15 min (each honours its own
+                              TTL) and runs refresh-button taps; WidgetStateProvider (what is placed?)
   util/                    ← HapticUtils (raw VibrationEffect-based haptics, used outside Compose)
 ```
 
@@ -307,10 +310,10 @@ The **Health screen** uses the same draggable pattern with a separate key (`heal
 ```
 A card missing from a saved order (one added in an update) is slotted in after the card that precedes it by default (`parseWidgetConfig`), not appended. `DAILY_HEALTH` is the hero Daily Health card (Apple-style activity rings, readiness from last night's sleep + HRV + resting HR against the person's own 30-day baseline, today's steps hour by hour, and dynamic today metrics). **`SLEEP`** is last night in full (score, bed → wake, stage mix, hypnogram) over a two-week schedule chart; tap or drag a night to read it, with bedtime/wake regularity and sleep debt below. **`VITALS`** (Body & Vitals) is one tile per measure Health Connect has (HRV, resting HR, weight + BMI, body fat, VO₂ max, blood pressure, SpO₂, respiration, temperature, hydration, resting energy); a tile opens its scrubbable trend with the person's usual range. Shared pieces (chips, delta pills that know which way is good, sparklines, stat tiles) live in `health/HealthUiKit.kt`. The tab pulls to refresh (`HealthViewModel.refresh()`), and Trends pages back `HealthViewModel.MAX_WEEKS_BACK` weeks with week-over-week deltas. **`ACTIVITIES`** lists the **last month** of workouts synced through Health Connect (Garmin Connect, Google Fit, Samsung Health, Strava, and others): type, source, duration, distance, pace, heart rate, elevation, and a GPS route map when the session includes one. A featured hero card sits above three compact rows, with **Show N more** revealing the rest in a scroll box. GPS is read up front only for the newest `EAGER_ROUTE_COUNT` sessions; the rest resolve through `HealthViewModel.onActivityExpanded()` when a row is opened (`routeResolved` gates the "Loading map…" placeholder). `WEEK_AT_A_GLANCE` is the Macro Trends widget (7/14/30-day nutrition chart + per-day food logs), moved from the former History tab.
 
-### App Widget (Glance)
-The only home-screen widget is **`WeatherWidget`** (fixed 5×3, `SizeMode.Single`). It is refreshed via `WidgetUpdater.updateAllWidgets(context)` (call from the app when weather changes) or `WidgetRefreshWorker` (periodic WorkManager task, 15-min interval, no network constraint). `WeatherWidgetDataProvider` reads the forecast the app caches in the `daily_dash_weather_cache` SharedPrefs without Hilt (use `EntryPointAccessors` / `WidgetEntryPoint` when an injected dependency is needed).
+### App Widgets (Glance)
+Five home-screen widgets: **Weather**, **Calendar**, **F1**, **Server** and **GitHub**, registered in `DashWidgets.all` and the manifest. Every one is resizable and switches layout on `WidgetDims(LocalSize.current).cols/rows`: a smaller size drops whole sections, never squeezes them. `WidgetRefreshWorker` (periodic, 15 min, no network constraint) calls each placed widget's `refresh()`, which honours its own TTL; the header's refresh button enqueues a forced refresh of that widget (`enqueueForcedRefresh`) rather than running it inside the tap's broadcast. Widgets read only their own cached snapshot while rendering, inside composition via `rememberWidgetData`; `DashWidgets.render` bumps it. The server widget borrows SSH polling with `acquire("widget")` only when nothing else is polling and always releases it. AI lines come from `WidgetAi.brief` in `refresh` only (fingerprinted, rate-limited, off with Settings → Widgets). `WidgetUpdater.updateAllWidgets(context)` is still the weather hook the app calls when the forecast changes.
 
-**Previews are the widget itself.** `WeatherWidgetPreview.render()` composes `WeatherRoot(data, preview = true)` into `RemoteViews` through `GlanceRemoteViews` — using the cached forecast, or sample data when there is none. It feeds the in-app Widgets screen and, on Android 15+, `AppWidgetManager.setWidgetPreview` for the launcher picker (`publish()`, self-throttled to 30 min; the system rate-limits it). Preview hosts can't show a collection, so `preview = true` swaps the hourly `LazyColumn` for a plain `Column`. Older launchers and the pin dialog use the static `drawable-nodpi/widget_preview_weather.png` — a capture of the real widget; re-capture it whenever the widget layout changes, never hand-draw it.
+**Previews are the widget itself.** Each spec's `renderPreview` (e.g. `WeatherWidgetPreview.render()`, which composes `WeatherRoot(data, preview = true)`) into `RemoteViews` through `GlanceRemoteViews` — using the cached forecast, or sample data when there is none. It feeds the in-app Widgets screen and, on Android 15+, `AppWidgetManager.setWidgetPreview` for the launcher picker (`DashWidgets.publishPreview`, self-throttled to 30 min per widget; the system rate-limits it). Preview hosts can't show a collection, so `preview = true` swaps every `LazyColumn` for a plain `Column`. Older launchers and the pin dialog use the static `drawable-nodpi/widget_preview_weather.png` — a capture of the real widget; re-capture it whenever the widget layout changes, never hand-draw it.
 
 Glance text does ellipsize, but a wrap-content `Text` in a `Row` still pushes later siblings off-edge — weight it or clip it.
 

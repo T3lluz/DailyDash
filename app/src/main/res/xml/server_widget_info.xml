@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Server dashboard widget. Placed at 4 × 3 (dials, status, history, tiles); resizes from a
+    2 × 2 (status and CPU / memory dials) up to 5 × 5 (fleet, services wall, advisories, AI
+    brief). Layouts are chosen from the real size in ServerWidget; the shared 15-minute worker
+    refreshes it, so updatePeriodMillis is off. No previewImage: Android 15+ gets the real
+    render through setWidgetPreview.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_server_description"
+    android:minWidth="250dp"
+    android:minHeight="180dp"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="110dp"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellWidth="4"
+    android:targetCellHeight="3"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen" />

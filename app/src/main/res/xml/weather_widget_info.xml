@@ -1,11 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Placed at 5×3 (the size it has always had); resizes from a 2×1 strip up to 5×5, with a
+    layout made for each size (see WeatherLayout). The shared 15-minute worker refreshes it,
+    so updatePeriodMillis stays 0. previewImage is for launchers before Android 15 and the
+    pin dialog; newer pickers get the real render through setWidgetPreview.
+-->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/widget_weather_description"
     android:previewImage="@drawable/widget_preview_weather"
     android:minWidth="368dp"
     android:minHeight="220dp"
-    android:resizeMode="none"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="50dp"
+    android:resizeMode="horizontal|vertical"
     android:targetCellWidth="5"
     android:targetCellHeight="3"
-    android:updatePeriodMillis="1800000"
+    android:updatePeriodMillis="0"
     android:widgetCategory="home_screen" />

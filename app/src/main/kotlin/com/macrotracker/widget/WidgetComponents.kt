@@ -35,14 +35,14 @@ import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.ColorFilter
 import com.macrotracker.R
+import com.macrotracker.widget.kit.WidgetDims
 import java.time.LocalTime
 
 /**
- * The size previews render the weather widget at: what Pixel Launcher gives a
- * 5×3 widget. Taller than the 368×220 dp minimum in `weather_widget_info.xml`,
- * which squeezes the metric tiles until their values clip.
+ * The size previews render the weather widget at: its default 5×3, as Pixel
+ * Launcher sizes it (the same model every widget's preview uses).
  */
-val WEATHER_WIDGET_PREVIEW_SIZE = DpSize(372.dp, 310.dp)
+val WEATHER_WIDGET_PREVIEW_SIZE: DpSize = WidgetDims.cells(5, 3)
 
 // ─────────────────────────────────────────────────────────────────
 //  SCALE TOKENS

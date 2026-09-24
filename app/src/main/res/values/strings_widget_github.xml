@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_github_name">DailyDash — GitHub</string>
+    <string name="widget_github_description">Reviews waiting on you, your inbox, pull requests and issues, over your contribution graph and streak.</string>
+</resources>
