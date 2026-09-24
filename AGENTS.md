@@ -229,7 +229,10 @@ com.macrotracker/
                               only; tap a peek to bring it in). F1CircuitMap.kt: the dashboard's four-pass circuit
                               (kerb, bed, marque line, car) that paints its lap on screen, with a
                               `CircuitMapWeight` per place and `CircuitMotion` STILL / PAINT_ONCE / BACKDROP
-                              (replays, and keeps a dim car lapping). GitHubContributionGraph.kt: the year with
+                              (replays, and keeps a dim car lapping). F1Card.kt: the F1 hub in the app's look
+                              (inset wells, stat tiles and pills like Health; round team-ringed faces; logo tiles
+                              that fall back to `F1Format.teamCode`), its five tabs a `SegmentedTabs(stacked =
+                              true)` (icon over label). GitHubContributionGraph.kt: the year with
                               the snake. ServerCharts.kt / ServerVitals.kt: 270° dials with an average notch,
                               mirrored area charts, the scrubbable history chart, stacked meters, uptime bars,
                               fact chips. DeviceCodePanel.kt: GitHub/Twitch device-code
