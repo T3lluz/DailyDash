@@ -14,6 +14,7 @@ import androidx.glance.ColorFilter
 import androidx.glance.GlanceModifier
 import androidx.glance.Image
 import androidx.glance.ImageProvider
+import androidx.glance.LocalContext
 import androidx.glance.action.Action
 import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
@@ -166,6 +167,23 @@ object WT {
     val Micro: TextUnit = 8.sp
 }
 
+/**
+ * Widget text follows the system font size up to [MAX_SCALE]. Every layout here is
+ * budgeted in dp for a fixed cell, so past that its bottom sections would be cut off
+ * rather than dropped; 1.3× system text shows at 1.15×. [WidgetFrame] records the scale
+ * as each widget renders (one device, one scale, so a shared value is safe).
+ */
+object WidgetText {
+    const val MAX_SCALE = 1.15f
+
+    @Volatile var systemScale: Float = 1f
+
+    fun size(size: TextUnit): TextUnit {
+        val s = systemScale
+        return if (s <= MAX_SCALE) size else (size.value * MAX_SCALE / s).sp
+    }
+}
+
 fun ts(
     size: TextUnit,
     color: Color = WK.Text,
@@ -173,7 +191,7 @@ fun ts(
     align: TextAlign = TextAlign.Start,
     mono: Boolean = false,
 ) = TextStyle(
-    fontSize = size,
+    fontSize = WidgetText.size(size),
     color = color.cp(),
     fontWeight = weight,
     textAlign = align,
@@ -220,6 +238,7 @@ fun WidgetFrame(
     pad: Dp = FramePad,
     content: @Composable () -> Unit,
 ) {
+    WidgetText.systemScale = LocalContext.current.resources.configuration.fontScale
     var m = GlanceModifier.fillMaxSize().cornerRadius(22.dp).background(WK.Bg.cp())
     if (onClick != null) m = m.clickable(onClick)
     Box(m.padding(pad)) { content() }

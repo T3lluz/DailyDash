@@ -296,8 +296,8 @@ private fun StripLayout(snap: CalSnapshot, env: CalEnv, plan: Plan) {
             }
         } else {
             Column(GlanceModifier.defaultWeight()) {
-                Text("Nothing scheduled", style = ts(WT.Body, WK.Text, FontWeight.Bold), maxLines = 1)
-                if (twoLines) Text(freeDetail(snap, env), style = ts(WT.Tiny, WK.Sub), maxLines = 1)
+                Text(if (env.innerW < 180f) "All clear" else "Nothing scheduled", style = ts(WT.Body, WK.Text, FontWeight.Bold), maxLines = 1)
+                if (twoLines) Text(freeDetail(snap, env, short = env.innerW < 180f), style = ts(WT.Tiny, WK.Sub), maxLines = 1)
             }
         }
         if (plan.addButton) {
@@ -454,13 +454,15 @@ private fun TwoPaneLayout(snap: CalSnapshot, env: CalEnv, plan: Plan, selected: 
                 VGap(6.dp)
                 // With the week below, the hero keeps its own height and the week takes
                 // the rest; without it the hero fills the pane.
-                val heroMod = if (plan.weekLoad) GlanceModifier.fillMaxWidth() else GlanceModifier.fillMaxWidth().defaultWeight()
+                // An empty week isn't worth a chart: the hero (or the free card) fills the pane.
+                val week = plan.weekLoad && CalendarLogic.stripDays(env.today, 7).any { d -> CalendarLogic.eventsOn(snap.events, d).isNotEmpty() }
+                val heroMod = if (week) GlanceModifier.fillMaxWidth() else GlanceModifier.fillMaxWidth().defaultWeight()
                 if (hero != null) {
-                    HeroCard(hero, snap, env, HeroSize.FULL, plan.heroTitleLines, plan.notesLine, leftW, heroMod, fill = !plan.weekLoad)
+                    HeroCard(hero, snap, env, HeroSize.FULL, plan.heroTitleLines, plan.notesLine, leftW, heroMod, fill = !week)
                 } else {
                     FreeCard(snap, env, heroMod)
                 }
-                if (plan.weekLoad) {
+                if (week) {
                     VGap(6.dp)
                     val heroH = if (hero != null) CalendarLogic.heroHeight(HeroSize.FULL, plan.heroTitleLines, plan.notesLine) else 52f
                     val room = env.innerH - CalendarLogic.HEADER_BIG - 8f - CalendarLogic.twoPaneLeftFixed(plan) - heroH
@@ -564,7 +566,7 @@ private fun SelectedDayBar(day: LocalDate, snap: CalSnapshot, env: CalEnv) {
     val stats = CalendarLogic.dayStats(snap.events, day, env.now)
     val detail = listOfNotNull(
         if (stats.count == 1) "1 event" else "${stats.count} events",
-        if (stats.busyMinutes > 0) CalendarLogic.fmtHm(stats.busyMinutes) + " busy" else null,
+        if (stats.busyMinutes > 0) CalendarLogic.fmtHm(stats.busyMinutes) else null,
     ).joinToString(" · ")
     Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Box(GlanceModifier.width(8.dp).height(2.dp).cornerRadius(1.dp).background(WK.Calendar.cp())) {}
@@ -896,17 +898,18 @@ private fun FreeCard(snap: CalSnapshot, env: CalEnv, modifier: GlanceModifier) {
                 colorFilter = ColorFilter.tint(WK.Good.cp()),
             )
             HGap(6.dp)
-            Text("Nothing scheduled", style = ts(WT.Body, WK.Text, FontWeight.Bold), maxLines = 1)
+            Text(if (env.innerW < 150f) "All clear" else "Nothing scheduled", style = ts(WT.Body, WK.Text, FontWeight.Bold), maxLines = 1)
         }
         Text(freeDetail(snap, env), style = ts(WT.Tiny, WK.Sub), maxLines = 2, modifier = GlanceModifier.padding(top = 3.dp))
     }
 }
 
-private fun freeDetail(snap: CalSnapshot, env: CalEnv): String {
+private fun freeDetail(snap: CalSnapshot, env: CalEnv, short: Boolean = false): String {
     val allDay = CalendarLogic.eventsOn(snap.events, env.today).filter { it.allDay }
     return when {
         allDay.isNotEmpty() -> "All day: " + allDay.joinToString(", ") { it.title }
         snap.events.isNotEmpty() -> "No meetings ahead · ${snap.events.size} all-day"
+        short -> "Next 4 weeks free"
         else -> "The next four weeks are clear"
     }
 }

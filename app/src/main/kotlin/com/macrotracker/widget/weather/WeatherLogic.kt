@@ -108,6 +108,9 @@ object WeatherLayouts {
     const val RICH_TILE_DP = 74f
     const val NORMAL_TILE_DP = 60f
 
+    /** The daylight tile's arc, both times and caption fit in less than the rain tile's bars. */
+    const val DAYLIGHT_RICH_DP = 66f
+
     /** A row height that fills [availableDp] with [count] rows, kept between [minDp] and [maxDp]. */
     fun rowHeight(availableDp: Float, count: Int, minDp: Float, maxDp: Float): Float =
         if (count <= 0) minDp else (availableDp / count).coerceIn(minDp, maxDp)
@@ -117,6 +120,8 @@ object WeatherLayouts {
      * beside a useful range bar, and the bar's width (0 = no bar, just low and high).
      */
     fun dayColumns(widthDp: Float): DayColumns {
+        // Under ~140 dp the regular columns (16 + 36 + 18 + 4 + 26 + 28) don't fit: tighter ones.
+        if (widthDp < 140f) return DayColumns(0f, 0f, compact = true)
         val fixed = 16f + DAY_NAME_DP + 18f + 4f + 26f + 28f
         val rain = if (widthDp - fixed >= 120f) DAY_RAIN_DP else 0f
         val bar = widthDp - fixed - rain - 12f
@@ -146,8 +151,11 @@ object WeatherLayouts {
 
 enum class TileMode { MINI, NORMAL, RICH }
 
-/** Widths in dp of a day row's optional columns; 0 leaves the column out. */
-data class DayColumns(val rainDp: Float, val barDp: Float)
+/**
+ * Widths in dp of a day row's optional columns; 0 leaves the column out. [compact] rows
+ * (narrow lists) use tighter padding and columns so the high still fits.
+ */
+data class DayColumns(val rainDp: Float, val barDp: Float, val compact: Boolean = false)
 
 // ─────────────────────────────────────────────────────────────────
 //  FORMATTING

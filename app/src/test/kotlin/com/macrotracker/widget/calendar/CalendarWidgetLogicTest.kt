@@ -136,12 +136,22 @@ class CalendarWidgetLogicTest {
     }
 
     @Test
-    fun selectedDayShowsThatDayOnly() {
+    fun selectedDayLeadsThenTheDaysAfter() {
         val items = L.agenda(all, now, today.plusDays(3), null, showPast = false, locale = en)
         assertEquals(1, items.size)
         assertEquals(listOf(offsite), (items[0] as AgendaItem.AllDay).events)
         val empty = L.agenda(all, now, today.plusDays(10), null, showPast = false, locale = en)
         assertTrue(empty.single() is AgendaItem.Empty)
+        // Tomorrow: its own events without a header, then the offsite under its day's header.
+        val tomorrow = L.agenda(all, now, today.plusDays(1), null, showPast = false, locale = en)
+        assertEquals(dentist, (tomorrow[0] as AgendaItem.Timed).event)
+        val header = tomorrow[1] as AgendaItem.DayHeader
+        assertEquals(today.plusDays(2), header.day)
+        assertEquals(listOf(offsite), (tomorrow[2] as AgendaItem.AllDay).events)
+        // A quiet day says so, and the list carries on after it.
+        val quiet = L.agenda(listOf(offsite), now, today.plusDays(1), null, showPast = false, locale = en)
+        assertTrue(quiet[0] is AgendaItem.Empty)
+        assertTrue(quiet[1] is AgendaItem.DayHeader)
     }
 
     @Test

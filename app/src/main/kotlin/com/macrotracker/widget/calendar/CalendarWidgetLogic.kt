@@ -567,10 +567,12 @@ internal object CalendarLogic {
     // ── Agenda ───────────────────────────────────────────────────────────────────
 
     /**
-     * The agenda rows. With [selected] (a day after today) it is that day alone: all-day
-     * chips, then its events. Otherwise it rolls from today, a header per day, leaving
-     * out [exclude] (the hero, shown above the list). Today's finished events are dimmed
-     * rows with [showPast], else one "3 earlier" line.
+     * The agenda rows. With [selected] (a day after today) it starts with that day (its
+     * all-day chips and events, under the picked-day bar the widget draws, so without a
+     * header of its own), then carries on through the days after it, so a quiet day
+     * doesn't leave the list empty. Otherwise it rolls from today, a header per day,
+     * leaving out [exclude] (the hero, shown above the list). Today's finished events are
+     * dimmed rows with [showPast], else one "3 earlier" line.
      */
     fun agenda(
         events: List<CalEvent>,
@@ -583,14 +585,24 @@ internal object CalendarLogic {
     ): List<AgendaItem> {
         val today = now.toLocalDate()
         if (selected != null) {
+            val out = mutableListOf<AgendaItem>()
             val on = eventsOn(events, selected)
             if (on.isEmpty()) {
-                return listOf(AgendaItem.Empty("Nothing on ${dayLabel(selected, today, locale)}", "Tap + to add an event"))
+                out += AgendaItem.Empty("Nothing on ${dayLabel(selected, today, locale)}", "Tap + to add an event")
+            } else {
+                val allDay = on.filter { it.allDay }
+                if (allDay.isNotEmpty()) out += AgendaItem.AllDay(selected, allDay)
+                on.filter { !it.allDay }.forEach { out += AgendaItem.Timed(it, isPast(it, now), isOngoing(it, now)) }
             }
-            val out = mutableListOf<AgendaItem>()
-            val allDay = on.filter { it.allDay }
-            if (allDay.isNotEmpty()) out += AgendaItem.AllDay(selected, allDay)
-            on.filter { !it.allDay }.forEach { out += AgendaItem.Timed(it, isPast(it, now), isOngoing(it, now)) }
+            // The days after it: only what starts on them (the picked day already shows what runs into them).
+            val after = events.filter { it.start.toLocalDate().isAfter(selected) }
+            for ((day, list) in after.groupBy { it.start.toLocalDate() }.toSortedMap()) {
+                if (out.size >= maxItems) break
+                val sorted = list.sortedWith(dayOrder)
+                out += dayHeader(events, day, today, now, locale)
+                sorted.filter { it.allDay }.takeIf { it.isNotEmpty() }?.let { out += AgendaItem.AllDay(day, it) }
+                sorted.filter { !it.allDay }.forEach { out += AgendaItem.Timed(it, past = false, ongoing = false) }
+            }
             return out.take(maxItems)
         }
 
@@ -613,14 +625,7 @@ internal object CalendarLogic {
             }
             timed.forEach { items += AgendaItem.Timed(it, past = false, ongoing = isOngoing(it, now)) }
             if (items.isEmpty()) continue
-            val stats = dayStats(events, day, now)
-            val detail = listOfNotNull(
-                if (stats.count == 1) "1 event" else "${stats.count} events",
-                if (stats.busyMinutes > 0) fmtHm(stats.busyMinutes) else null,
-            ).joinToString(" · ")
-            val label = dayLabel(day, today, locale)
-            val sub = if (day == today || day == today.plusDays(1)) dateLabel(day, locale) else null
-            out += AgendaItem.DayHeader(day, label, sub, detail, day == today)
+            out += dayHeader(events, day, today, now, locale)
             out += items
         }
         if (out.isEmpty()) {
@@ -633,6 +638,16 @@ internal object CalendarLogic {
             )
         }
         return out.take(maxItems)
+    }
+
+    private fun dayHeader(events: List<CalEvent>, day: LocalDate, today: LocalDate, now: LocalDateTime, locale: Locale): AgendaItem.DayHeader {
+        val stats = dayStats(events, day, now)
+        val detail = listOfNotNull(
+            if (stats.count == 1) "1 event" else "${stats.count} events",
+            if (stats.busyMinutes > 0) fmtHm(stats.busyMinutes) else null,
+        ).joinToString(" · ")
+        val sub = if (day == today || day == today.plusDays(1)) dateLabel(day, locale) else null
+        return AgendaItem.DayHeader(day, dayLabel(day, today, locale), sub, detail, day == today)
     }
 
     // ── Layout ───────────────────────────────────────────────────────────────────

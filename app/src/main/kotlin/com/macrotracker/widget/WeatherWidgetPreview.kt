@@ -55,7 +55,7 @@ object WeatherWidgetPreview {
      * A mild autumn day with a shower mid-afternoon, in the person's own units and clock
      * (read from [real], which carries them even when it has no forecast).
      */
-    private fun sampleData(context: Context, real: WeatherWidgetData): WeatherWidgetData {
+    internal fun sampleData(context: Context, real: WeatherWidgetData): WeatherWidgetData {
         val zone = ZoneId.systemDefault()
         val now = ZonedDateTime.now(zone)
         val start = now.truncatedTo(ChronoUnit.HOURS).plusHours(1)

@@ -416,7 +416,7 @@ private fun NarrowTallLayout(v: WxView, dims: WidgetDims, preview: Boolean) {
         }
         VGap(GAP.dp)
         Box(GlanceModifier.fillMaxWidth().defaultWeight()) {
-            DayList(v, preview, dims.innerWidth, dayRowHeight(v, h - used))
+            DayList(v, preview, dims.innerWidth, dayRowHeight(v, h - used), h - used)
         }
     }
 }
@@ -502,7 +502,7 @@ private fun FullTallLayout(v: WxView, dims: WidgetDims, preview: Boolean) {
             VGap(GAP.dp)
         }
         Box(GlanceModifier.fillMaxWidth().defaultWeight()) {
-            DayList(v, preview, w, dayRowHeight(v, h - used))
+            DayList(v, preview, w, dayRowHeight(v, h - used), h - used)
         }
     }
 }

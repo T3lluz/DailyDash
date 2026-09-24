@@ -95,7 +95,8 @@ class WeatherLogicTest {
         val narrow = WeatherLayouts.dayColumns(196f)
         assertEquals(0f, narrow.rainDp, 0f)
         assertTrue(narrow.barDp >= 30f)
-        assertEquals(DayColumns(0f, 0f), WeatherLayouts.dayColumns(122f))
+        assertEquals(DayColumns(0f, 0f, compact = true), WeatherLayouts.dayColumns(122f))
+        assertEquals(false, WeatherLayouts.dayColumns(150f).compact)
     }
 
     // ── Formatting ─────────────────────────────────────────────────

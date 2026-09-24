@@ -333,7 +333,13 @@ internal fun HourStrip(
 // ─────────────────────────────────────────────────────────────────
 
 /** A tile's outer width (for its pictures) and how much it shows. */
-internal data class TileSpec(val width: Dp, val mode: TileMode) {
+internal data class TileSpec(val width: Dp, val height: Float) {
+    /** How much the tile shows at its height (see [WeatherLayouts.tileMode]). */
+    val mode: TileMode get() = WeatherLayouts.tileMode(height)
+
+    /** [mode] for a tile whose rich form needs only [richDp] (the daylight arc is shorter than the rain bars). */
+    fun modeWithRichAt(richDp: Float): TileMode = if (height >= richDp) TileMode.RICH else mode
+
     /** Room inside the tile's 8 dp side padding. */
     val content: Dp get() = (width - 16.dp).coerceAtLeast(8.dp)
     val valueSize: TextUnit get() = when {
@@ -457,16 +463,17 @@ internal fun RainTile(v: WxView, spec: TileSpec, modifier: GlanceModifier) {
 @Composable
 internal fun DaylightTile(v: WxView, spec: TileSpec, modifier: GlanceModifier) {
     val dl = v.daylight
+    val mode = spec.modeWithRichAt(WeatherLayouts.DAYLIGHT_RICH_DP)
     val label = when {
-        dl == null || spec.mode == TileMode.RICH -> if (spec.narrow) "Sun" else "Daylight"
+        dl == null || mode == TileMode.RICH -> if (spec.narrow) "Sun" else "Daylight"
         dl.up -> "Sunset"
         else -> "Sunrise"
     }
-    WxTile(label, if (dl?.up == true && spec.mode != TileMode.RICH) R.drawable.ic_sunset else R.drawable.ic_sunrise, WK.Weather, modifier) {
+    WxTile(label, if (dl?.up == true && mode != TileMode.RICH) R.drawable.ic_sunset else R.drawable.ic_sunrise, WK.Weather, modifier) {
         if (dl == null) {
             Text("--", style = ts(spec.valueSize, WK.Text, FontWeight.Bold), maxLines = 1)
         } else {
-            when (spec.mode) {
+            when (mode) {
                 TileMode.RICH -> {
                     val context = LocalContext.current
                     val arc = remember(dl.progress, spec.content) { WeatherCharts.sunArc(context, spec.content, 20.dp, dl.progress) }
@@ -506,7 +513,7 @@ internal fun DaylightTile(v: WxView, spec: TileSpec, modifier: GlanceModifier) {
 /** Feels, wind, rain and daylight in one row, each [height] tall. */
 @Composable
 internal fun TileRow4(v: WxView, width: Dp, height: Dp) {
-    val spec = TileSpec((width - 18.dp) / 4, WeatherLayouts.tileMode(height.value))
+    val spec = TileSpec((width - 18.dp) / 4, height.value)
     Row(GlanceModifier.fillMaxWidth().height(height)) {
         FeelsTile(v, spec, GlanceModifier.defaultWeight().fillMaxHeight())
         HGap(6.dp)
@@ -521,7 +528,7 @@ internal fun TileRow4(v: WxView, width: Dp, height: Dp) {
 /** The 5×3's two-by-two: feels like and wind over rain and daylight. */
 @Composable
 internal fun TileGrid(v: WxView, width: Dp, tileHeight: Dp, modifier: GlanceModifier) {
-    val spec = TileSpec((width - 6.dp) / 2, WeatherLayouts.tileMode(tileHeight.value))
+    val spec = TileSpec((width - 6.dp) / 2, tileHeight.value)
     Column(modifier) {
         Row(GlanceModifier.fillMaxWidth().defaultWeight()) {
             FeelsTile(v, spec, GlanceModifier.defaultWeight().fillMaxHeight())
@@ -540,7 +547,7 @@ internal fun TileGrid(v: WxView, width: Dp, tileHeight: Dp, modifier: GlanceModi
 /** Rain and daylight side by side, [height] tall (the 3-column sizes). */
 @Composable
 internal fun TilePair(v: WxView, width: Dp, height: Dp) {
-    val spec = TileSpec((width - 6.dp) / 2, WeatherLayouts.tileMode(height.value))
+    val spec = TileSpec((width - 6.dp) / 2, height.value)
     Row(GlanceModifier.fillMaxWidth().height(height)) {
         RainTile(v, spec, GlanceModifier.defaultWeight().fillMaxHeight())
         HGap(6.dp)
@@ -633,7 +640,7 @@ internal fun TabbedList(v: WxView, tab: String, preview: Boolean, width: Dp, hei
         val listHeight = (height - 24.dp).coerceAtLeast(40.dp)
         Box(GlanceModifier.fillMaxWidth().defaultWeight()) {
             if (days) {
-                DayList(v, preview, width, WeatherLayouts.rowHeight(listHeight.value - 8f, v.d.days.size.coerceAtMost(7), 24f, 30f).dp)
+                DayList(v, preview, width, WeatherLayouts.rowHeight(listHeight.value - 8f, v.d.days.size.coerceAtMost(7), 24f, 30f).dp, listHeight.value)
             } else {
                 HourList(v, preview, width, listHeight)
             }
@@ -717,15 +724,17 @@ private fun ListDayHeader(label: String, first: Boolean) {
 
 /** The days, one row each with rain and the temperature range on the week's track. */
 @Composable
-internal fun DayList(v: WxView, preview: Boolean, width: Dp, rowHeight: Dp) {
+internal fun DayList(v: WxView, preview: Boolean, width: Dp, rowHeight: Dp, heightDp: Float? = null) {
     val days = v.d.days.take(7)
+    // A preview can't scroll: only the rows that fit whole.
+    val fits = heightDp?.let { ((it - 8f) / rowHeight.value).toInt().coerceIn(1, 7) } ?: 7
     val span = WxDays.span(days)
     val cols = WeatherLayouts.dayColumns(width.value)
     Box(GlanceModifier.fillMaxSize().panel(WK.Card, 12.dp)) {
         when {
             days.isEmpty() || span == null -> EmptyNote("The daily forecast arrives with the next refresh")
             preview -> Column(GlanceModifier.fillMaxSize().padding(vertical = 4.dp)) {
-                days.forEach { day -> DayRow(v, day, span, cols, rowHeight) }
+                days.take(fits).forEach { day -> DayRow(v, day, span, cols, rowHeight) }
             }
             else -> LazyColumn(GlanceModifier.fillMaxSize()) {
                 days.forEach { day -> item { DayRow(v, day, span, cols, rowHeight) } }
@@ -737,18 +746,19 @@ internal fun DayList(v: WxView, preview: Boolean, width: Dp, rowHeight: Dp) {
 @Composable
 private fun DayRow(v: WxView, day: WxDay, span: Pair<Double, Double>, cols: DayColumns, rowHeight: Dp) {
     val isToday = day.date == v.today
+    val tight = cols.compact
     Row(
-        GlanceModifier.fillMaxWidth().height(rowHeight).padding(horizontal = 8.dp).clickable(v.openApp),
+        GlanceModifier.fillMaxWidth().height(rowHeight).padding(horizontal = if (tight) 6.dp else 8.dp).clickable(v.openApp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             WxFormat.dayShort(day.date, v.today),
             style = ts(WT.Small, if (isToday) WK.Weather else WK.Text, FontWeight.Bold),
             maxLines = 1,
-            modifier = GlanceModifier.width(WeatherLayouts.DAY_NAME_DP.dp),
+            modifier = GlanceModifier.width(if (tight) 32.dp else WeatherLayouts.DAY_NAME_DP.dp),
         )
-        Image(ImageProvider(skyIcon(day.symbol)), contentDescription = null, modifier = GlanceModifier.size(18.dp))
-        HGap(4.dp)
+        Image(ImageProvider(skyIcon(day.symbol)), contentDescription = null, modifier = GlanceModifier.size(if (tight) 16.dp else 18.dp))
+        HGap(if (tight) 2.dp else 4.dp)
         if (cols.rainDp > 0f) {
             Text(
                 dayRain(day) ?: "",
@@ -761,7 +771,7 @@ private fun DayRow(v: WxView, day: WxDay, span: Pair<Double, Double>, cols: DayC
             v.t(day.minC),
             style = ts(WT.Small, WK.Sub, FontWeight.Medium, TextAlign.End),
             maxLines = 1,
-            modifier = GlanceModifier.width(26.dp),
+            modifier = GlanceModifier.width(if (tight) 24.dp else 26.dp),
         )
         if (cols.barDp > 0f) {
             HGap(6.dp)
@@ -784,7 +794,7 @@ private fun DayRow(v: WxView, day: WxDay, span: Pair<Double, Double>, cols: DayC
             v.t(day.maxC),
             style = ts(WT.Small, WK.Text, FontWeight.Bold, TextAlign.End),
             maxLines = 1,
-            modifier = GlanceModifier.width(28.dp),
+            modifier = GlanceModifier.width(if (tight) 26.dp else 28.dp),
         )
     }
 }
