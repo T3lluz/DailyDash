@@ -99,15 +99,37 @@ com.macrotracker/
                               dashboard's commands on this phone, over the bridge's `/_api/phone/...` with a token
                               from PhoneHubPrefs (the first phone to report pairs; another waits to be accepted).
                               PhoneHub (bound in DailyDashApp) holds a link while the app is in front or
-                              PhoneNotificationListener is bound: `/live?phone=<token>` for command cues, a
-                              PhoneSnapshot report every 30 s in front / 3 min behind and on battery, media or
-                              torch changes. PhoneHubWorker reports every 15 min otherwise. The listener mirrors
-                              notifications (not this app's, summaries, ongoing media/progress or secret ones) and
-                              runs dismiss / reply (the app's own RemoteInput action) / media. Commands: ring
-                              (PhoneRinger, alarm stream at full, restored after), torch, open-url (a notification
-                              when the app is not in front: Android blocks background activity starts), clipboard,
-                              note, volume, refresh. PhoneShareActivity is "Send to desk" in the share sheet.
-                              Location is the weather cache's, never a fresh fix. Settings: Connections → Phone hub
+                              PhoneNotificationListener is bound: `/live?phone=<token>`, whose `phone` events carry
+                              the queued commands inline (`cmds`; run straight from the event, deduped by id against
+                              `/phone/commands`, which still runs on `hello`). A full PhoneSnapshot report every 30 s
+                              in front / 3 min behind and on battery or torch changes; a *light* report (no health,
+                              calendar, food) after commands. Media has its own lane: track, state, queue, volume,
+                              ringer, DND, headphone and ringing changes send a media-only report (`collectMedia`) 180
+                              ms after the player settles, skipped when nothing the dashboard shows changed and the
+                              position did not jump (>1.5 s off its course). Every report carries `sentAt` so the
+                              bridge can move the track position onto its own clock. Album art is keyed on the
+                              picture itself (players often send the title first and the art later), sent once per
+                              `artId`, and re-sent when the bridge answers `needArt`. `caps.cmds` lists the commands
+                              this build runs and `caps.hub` (PhoneSnapshot.HUB_VERSION, now 2) the protocol round: the
+                              dashboard offers only those, so add a command to COMMANDS when you add one to
+                              `execute`. The battery reports watts from BATTERY_PROPERTY_CURRENT_NOW × voltage.
+                              PhoneHubWorker reports every 15 min otherwise.
+                              PhoneSnapshot reads the cheap things every time (device, battery with W/mA/capacity,
+                              network with SSID/signal, storage, RAM, system switches, sound and the output device,
+                              every media session, the next alarm, today's health, the food log from MacroRepository,
+                              events, weather); PhoneExtras keeps the slow ones (week of health, sleep stages, HR by
+                              half hour, workouts, vitals hourly, screen time from UsageStats when Usage access is
+                              granted) and refreshes them behind the report, poking a new one when they land.
+                              The listener mirrors notifications (not this app's, summaries, ongoing media/progress or
+                              secret ones) with their plain action buttons, and runs dismiss / reply (the app's own
+                              RemoteInput action) / action (tap a button) / media (incl. another player by `pkg`,
+                              custom actions, ±15 s) / DND (`requestInterruptionFilter`). Removals flush after 60 ms.
+                              Commands: ring (PhoneRinger, alarm stream at full, restored after), torch, open-url (a
+                              notification when the app is not in front: Android blocks background activity starts),
+                              clipboard, note, volume (media/ring/notif/alarm/call), ringer, dnd, refresh.
+                              PhoneShareActivity is "Send to desk" in the share sheet. Location is the weather cache's,
+                              never a fresh fix. Settings: Connections → Phone hub (notification access, usage access,
+                              what to share incl. the food log)
     update/                ← GitHub Releases in-app updater (see "In-app updates")
     health/                ← HealthConnectRepository (read-only; lazy client; PERMISSIONS companion set);
                               reads: Steps, HeartRate, RestingHeartRate, OxygenSaturation,

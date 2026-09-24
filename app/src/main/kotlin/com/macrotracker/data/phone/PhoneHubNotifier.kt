@@ -135,6 +135,9 @@ object PhoneRinger {
 
     val ringing: Boolean get() = player != null
 
+    /** Told when ringing starts or stops (the hub reports it, so the dashboard's Stop button is right). */
+    @Volatile var onChange: (() -> Unit)? = null
+
     fun start(context: Context, seconds: Int) {
         val ctx = context.applicationContext
         main.post {
@@ -167,6 +170,7 @@ object PhoneRinger {
             )
             PhoneHubNotifier.ringing(ctx)
             main.postDelayed(stopper, seconds.coerceIn(5, 120) * 1000L)
+            onChange?.invoke()
         }
     }
 
@@ -177,6 +181,7 @@ object PhoneRinger {
 
     private fun stopNow(ctx: Context) {
         main.removeCallbacks(stopper)
+        val was = player != null
         player?.runCatching { stop(); release() }
         player = null
         ctx.getSystemService(Vibrator::class.java)?.cancel()
@@ -185,6 +190,7 @@ object PhoneRinger {
         }
         restoreVolume = null
         PhoneHubNotifier.cancelRinging(ctx)
+        if (was) onChange?.invoke()
     }
 }
 

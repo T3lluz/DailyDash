@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.macrotracker.data.phone.PhoneHub
+import com.macrotracker.data.phone.PhoneExtras
 import com.macrotracker.data.phone.PhoneHubConfig
 import com.macrotracker.data.phone.PhoneHubPrefs
 import com.macrotracker.data.phone.PhoneHubStatus
@@ -30,8 +31,16 @@ class PhoneHubViewModel @Inject constructor(
     /** Notification access, read again whenever the screen comes back from Android's settings. */
     val access: StateFlow<Boolean> = _access
 
+    private val _usage = MutableStateFlow(PhoneExtras.usageGranted(context))
+
+    /** Usage access, for screen time on the dashboard. */
+    val usage: StateFlow<Boolean> = _usage
+
     fun recheckAccess() {
         _access.value = PhoneNotificationListener.granted(context)
+        val had = _usage.value
+        _usage.value = PhoneExtras.usageGranted(context)
+        if (_usage.value && !had) reportNow()
     }
 
     fun update(transform: (PhoneHubConfig) -> PhoneHubConfig) {

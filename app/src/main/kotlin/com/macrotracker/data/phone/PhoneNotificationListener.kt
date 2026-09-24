@@ -20,10 +20,13 @@ import dagger.hilt.android.AndroidEntryPoint
 import org.json.JSONObject
 import javax.inject.Inject
 
-/** What is playing on the phone, as the listener last saw it. */
+/** What is playing on the phone, as the listener last saw it, and every other player it could switch to. */
 object PhoneMedia {
     @Volatile
     var controller: MediaController? = null
+
+    @Volatile
+    var sessions: List<MediaController> = emptyList()
 }
 
 /**
@@ -40,6 +43,7 @@ class PhoneNotificationListener : NotificationListenerService() {
     private var sessions: MediaSessionManager? = null
     private val controllerCallback = object : MediaController.Callback() {
         override fun onPlaybackStateChanged(state: PlaybackState?) = hub.poke(PhoneHub.Poke.MEDIA)
+        override fun onQueueChanged(queue: MutableList<android.media.session.MediaSession.QueueItem>?) = hub.poke(PhoneHub.Poke.MEDIA)
         override fun onMetadataChanged(metadata: android.media.MediaMetadata?) = hub.poke(PhoneHub.Poke.MEDIA)
         override fun onSessionDestroyed() = pickController()
     }
@@ -60,6 +64,7 @@ class PhoneNotificationListener : NotificationListenerService() {
         runCatching { sessions?.removeOnActiveSessionsChangedListener(sessionsChanged) }
         PhoneMedia.controller?.unregisterCallback(controllerCallback)
         PhoneMedia.controller = null
+        PhoneMedia.sessions = emptyList()
         hub.listenerDisconnected()
     }
 
@@ -74,6 +79,7 @@ class PhoneNotificationListener : NotificationListenerService() {
     /** The playing session if there is one, else the most recent. */
     private fun pickController() {
         val list = runCatching { sessions?.getActiveSessions(component(this)) }.getOrNull().orEmpty()
+        PhoneMedia.sessions = list
         val next = list.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING } ?: list.firstOrNull()
         val prev = PhoneMedia.controller
         if (prev?.sessionToken != next?.sessionToken) {
@@ -89,6 +95,19 @@ class PhoneNotificationListener : NotificationListenerService() {
     fun dismiss(key: String): Boolean = runCatching { cancelNotification(key) }.isSuccess
 
     fun dismissAll(): Boolean = runCatching { cancelAllNotifications() }.isSuccess
+
+    /** Taps one of the notification's own buttons ("Mark as read", "Archive", …) by its place in [toJson]'s list. */
+    fun action(key: String, index: Int): String? {
+        val sbn = runCatching { activeNotifications }.getOrNull()?.firstOrNull { it.key == key }
+            ?: return "That notification is gone"
+        val a = plainActions(sbn.notification).getOrNull(index) ?: return "That button is gone"
+        return runCatching { a.actionIntent.send(); null }.getOrElse { "The app would not take it: ${it.message}" }
+    }
+
+    /** Do not disturb, through the listener's own right to ask for it. */
+    fun setDnd(on: Boolean) {
+        requestInterruptionFilter(if (on) INTERRUPTION_FILTER_PRIORITY else INTERRUPTION_FILTER_ALL)
+    }
 
     /** Answers through the notification's own reply action, as typing in the shade would. */
     fun reply(key: String, text: String): String? {
@@ -131,6 +150,10 @@ class PhoneNotificationListener : NotificationListenerService() {
 
         internal fun replyAction(n: Notification): Notification.Action? =
             n.actions?.firstOrNull { a -> a.remoteInputs?.any { it.allowFreeFormInput } == true }
+
+        /** The buttons under a notification that need no typing, as the shade shows them. */
+        internal fun plainActions(n: Notification): List<Notification.Action> =
+            n.actions.orEmpty().filter { a -> a.remoteInputs.isNullOrEmpty() && !a.title.isNullOrBlank() }.take(3)
 
         private val skippedCategories = setOf(
             Notification.CATEGORY_TRANSPORT, Notification.CATEGORY_SERVICE,
@@ -186,6 +209,11 @@ class PhoneNotificationListener : NotificationListenerService() {
                 .put("clear", sbn.isClearable)
                 .put("color", if (n.color != 0) "#%06X".format(n.color and 0xFFFFFF) else "")
                 .put("icon", icon ?: "")
+                .put("conv", x.getBoolean(Notification.EXTRA_IS_GROUP_CONVERSATION))
+                .put(
+                    "actions",
+                    org.json.JSONArray().apply { plainActions(n).forEach { put(it.title.toString().take(40)) } },
+                )
         }
 
         /** The last few lines of a messaging-style conversation. */

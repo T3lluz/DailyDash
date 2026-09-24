@@ -54,11 +54,14 @@ data class PhoneHubStatus(
  * the dashboard asks.
  *
  * While the app is in front, or notification access keeps [PhoneNotificationListener]
- * bound, it holds a link to the bridge: `/live` opened as this phone, which says when the
- * dashboard queued a command, and a report every half minute in front (three minutes
- * behind), plus one whenever the battery, the media or the torch changes. Notifications go
- * over as they are posted and removed, a second's worth at a time. With neither, a worker
- * reports and picks up commands every fifteen minutes.
+ * bound, it holds a link to the bridge: `/live` opened as this phone, whose `phone` events
+ * carry the commands the dashboard queued (run straight from the event, no second fetch),
+ * and a report every half minute in front (three minutes behind), plus one whenever the
+ * battery or the torch changes. Media has its own fast lane: a track change, a pause or a
+ * seek goes over as a small media-only report a fifth of a second later, so the dashboard's
+ * progress bar and lyrics stay in step. Notifications go over as they are posted and
+ * removed; a removal alone goes at once, so a dismissal on the phone clears the dashboard
+ * too. With neither, a worker reports and picks up commands every fifteen minutes.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @Singleton
@@ -80,6 +83,10 @@ class PhoneHub @Inject constructor(
     private var listening = false
     private var link: Job? = null
     private val pokes = Channel<Poke>(Channel.CONFLATED)
+    private val mediaPokes = Channel<Unit>(Channel.CONFLATED)
+
+    /** Commands already run, so one that arrives both on the event and from /commands runs once. */
+    private val ran = LinkedHashSet<String>()
 
     private val upserts = LinkedHashMap<String, JSONObject>()
     private val removals = LinkedHashSet<String>()
@@ -96,6 +103,8 @@ class PhoneHub @Inject constructor(
             },
         )
         scope.launch { prefs.config.collect { reconcile(); PhoneHubWorker.schedule(context, it.enabled) } }
+        snapshot.onExtras = { poke(Poke.NOW) }
+        PhoneRinger.onChange = { poke(Poke.MEDIA) }
         watchTorch()
     }
 
@@ -111,7 +120,7 @@ class PhoneHub @Inject constructor(
     }
 
     fun poke(kind: Poke) {
-        pokes.trySend(kind)
+        if (kind == Poke.MEDIA) mediaPokes.trySend(Unit) else pokes.trySend(kind)
     }
 
     /** The link runs while the hub is on and something keeps the process awake to hold it. */
@@ -139,19 +148,36 @@ class PhoneHub @Inject constructor(
                 }
             }
         }
+        // Volume keys, the ringer switch and Do not disturb ride the media lane: it carries sound too.
+        val sound = object : BroadcastReceiver() {
+            override fun onReceive(c: Context, i: Intent) = poke(Poke.MEDIA)
+        }
         withContext(Dispatchers.Main) {
             ContextCompat.registerReceiver(
                 context, battery, IntentFilter(Intent.ACTION_BATTERY_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED,
+            )
+            ContextCompat.registerReceiver(
+                context,
+                sound,
+                IntentFilter().apply {
+                    addAction("android.media.VOLUME_CHANGED_ACTION")
+                    addAction(AudioManager.RINGER_MODE_CHANGED_ACTION)
+                    addAction(android.app.NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED)
+                    addAction(AudioManager.ACTION_HEADSET_PLUG)
+                },
+                ContextCompat.RECEIVER_NOT_EXPORTED,
             )
         }
         try {
             kotlinx.coroutines.coroutineScope {
                 launch { reportLoop() }
+                launch { mediaLoop() }
                 launch { liveLoop() }
             }
         } finally {
             withContext(Dispatchers.Main + kotlinx.coroutines.NonCancellable) {
                 runCatching { context.unregisterReceiver(battery) }
+                runCatching { context.unregisterReceiver(sound) }
             }
         }
     }
@@ -169,6 +195,54 @@ class PhoneHub @Inject constructor(
         }
     }
 
+    /**
+     * Track changes, pauses and seeks, a fifth of a second after the player settles. Some
+     * players announce their state every second or so; a report goes only when something the
+     * dashboard shows changed, or the position jumped away from where it was heading.
+     */
+    private suspend fun mediaLoop() {
+        var lastSig: String? = null
+        var lastPos = 0L
+        var lastAt = 0L
+        var lastPlaying = false
+        var lastSpeed = 1.0
+        for (cue in mediaPokes) {
+            delay(MEDIA_SETTLE_MS)
+            mediaPokes.tryReceive()
+            val config = prefs.config.value
+            if (!config.enabled) continue
+            val body = runCatching { snapshot.collectMedia() }.getOrNull() ?: continue
+            val m = body.optJSONObject("media")
+            val sig = JSONObject(body.toString()).apply {
+                optJSONObject("media")?.apply { remove("pos"); remove("at"); remove("art") }
+            }.toString()
+            val pos = m?.optLong("pos", -1L) ?: -1L
+            val at = m?.optLong("at", 0L) ?: 0L
+            val expected = if (lastPlaying) lastPos + ((at - lastAt) * lastSpeed).toLong() else lastPos
+            val jumped = pos >= 0 && kotlin.math.abs(pos - expected) > POS_JUMP_MS
+            if (sig == lastSig && !jumped) continue
+            val sent = runCatching { sendReport(body) }.isSuccess
+            if (!sent) continue
+            lastSig = sig
+            lastPos = pos
+            lastAt = at
+            lastPlaying = m?.optString("state") == "playing"
+            lastSpeed = m?.optDouble("speed", 1.0) ?: 1.0
+        }
+    }
+
+    /** Posts a report and settles the art handshake: sent once, re-sent when the bridge asks. */
+    private suspend fun sendReport(body: JSONObject) {
+        body.put("sentAt", System.currentTimeMillis())
+        val res = client.report(body)
+        val m = body.optJSONObject("media")
+        if (m != null && m.has("art")) snapshot.artSent(m.optString("artId"))
+        if (res.optBoolean("needArt")) {
+            snapshot.forgetSentArt()
+            poke(Poke.MEDIA)
+        }
+    }
+
     private suspend fun liveLoop() {
         var pause = 2_000L
         while (true) {
@@ -180,7 +254,12 @@ class PhoneHub @Inject constructor(
                     }
                     // `hello` opens every connection: anything queued while the phone was away runs now.
                     val ch = event.optString("ch")
-                    if (ch == "hello" || (ch == "phone" && event.optBoolean("cmd"))) runCommands()
+                    val inline = event.optJSONArray("cmds")
+                    when {
+                        ch == "hello" -> runCommands()
+                        ch == "phone" && event.optBoolean("cmd") && inline != null -> runInline(inline)
+                        ch == "phone" && event.optBoolean("cmd") -> runCommands()
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -199,12 +278,11 @@ class PhoneHub @Inject constructor(
         runCommands()
     }
 
-    suspend fun report() {
+    suspend fun report(light: Boolean = false) {
         val config = prefs.config.value
         if (!config.enabled) return
         try {
-            val body = snapshot.collect(config, torchOn)
-            client.report(body)
+            sendReport(snapshot.collect(config, torchOn, light))
             _status.update { it.copy(lastReportAt = System.currentTimeMillis(), waiting = false, error = null) }
         } catch (e: CancellationException) {
             throw e
@@ -233,14 +311,15 @@ class PhoneHub @Inject constructor(
         scope.launch {
             upserts.remove(key)
             removals.add(key)
-            scheduleFlush()
+            scheduleFlush(soon = true)
         }
     }
 
-    private fun scheduleFlush() {
+    /** Posts wait a moment for their siblings; a removal on its own goes almost at once. */
+    private fun scheduleFlush(soon: Boolean = false) {
         if (flushJob?.isActive == true) return
         flushJob = scope.launch {
-            delay(NOTIF_BATCH_MS)
+            delay(if (soon && upserts.isEmpty()) NOTIF_REMOVE_MS else NOTIF_BATCH_MS)
             val body = JSONObject()
                 .put("upsert", JSONArray(upserts.values.toList()))
                 .put("remove", JSONArray(removals.toList()))
@@ -263,19 +342,33 @@ class PhoneHub @Inject constructor(
 
     private suspend fun runCommands() {
         val cmds = runCatching { client.commands() }.getOrNull() ?: return
+        runInline(cmds)
+    }
+
+    /** Runs commands, acknowledges them together, then reports what they changed. */
+    private suspend fun runInline(cmds: JSONArray) {
         if (cmds.length() == 0) return
         val results = JSONArray()
+        var touched = false
         for (i in 0 until cmds.length()) {
             val c = cmds.optJSONObject(i) ?: continue
+            val id = c.optString("id")
+            if (id.isNotEmpty() && !ran.add(id)) continue
+            while (ran.size > 200) ran.remove(ran.first())
             val kind = c.optString("kind")
             val args = c.optJSONObject("args") ?: JSONObject()
             val problem = runCatching { execute(kind, args) }.getOrElse { it.message ?: "It failed on the phone" }
-            results.put(JSONObject().put("id", c.optString("id")).put("ok", problem == null).put("msg", problem ?: ""))
+            results.put(JSONObject().put("id", id).put("ok", problem == null).put("msg", problem ?: ""))
             _status.update { it.copy(lastCommand = kind) }
             Log.d(TAG, "command $kind: ${problem ?: "done"}")
+            // The dashboard already hid a dismissed notification; if it is still here, send the truth.
+            if (problem != null && kind.startsWith("dismiss")) syncAllNotifications()
+            if (kind !in QUIET) touched = true
         }
+        if (results.length() == 0) return
         runCatching { client.ack(results) }
-        report()
+        // Media commands report through the media lane once the player has moved.
+        if (touched) report(light = true)
     }
 
     /** Runs one command; null when it worked, else why not. */
@@ -294,8 +387,11 @@ class PhoneHub @Inject constructor(
                 null
             }
             "note" -> { PhoneHubNotifier.note(context, args.optString("title"), args.optString("text")); null }
-            "media" -> media(args.optString("action"), args.optLong("pos", -1))
+            "media" -> media(args.optString("action"), args.optLong("pos", -1), args.optString("pkg"), args.optString("id"))
             "volume" -> volume(args.optString("stream"), args.optInt("level", -1))
+            "ringer" -> ringer(args.optString("mode"))
+            "dnd" -> if (listener == null) NO_ACCESS else { listener.setDnd(args.optBoolean("on", true)); null }
+            "action" -> if (listener == null) NO_ACCESS else listener.action(args.optString("key"), args.optInt("index", -1))
             "dismiss" -> if (listener == null) NO_ACCESS else if (listener.dismiss(args.optString("key"))) null else "Could not dismiss it"
             "dismiss-all" -> if (listener == null) NO_ACCESS else if (listener.dismissAll()) null else "Could not dismiss them"
             "reply" -> listener?.reply(args.optString("key"), args.optString("text")) ?: if (listener == null) NO_ACCESS else null
@@ -321,10 +417,16 @@ class PhoneHub @Inject constructor(
         }
     }
 
-    private fun media(action: String, pos: Long): String? {
-        val c = PhoneMedia.controller ?: return if (PhoneNotificationListener.connected) "Nothing is playing" else NO_ACCESS
+    private fun media(action: String, pos: Long, pkg: String, custom: String): String? {
+        // A player other than the current one, picked on the dashboard.
+        val c = (if (pkg.isNotEmpty()) PhoneMedia.sessions.firstOrNull { it.packageName == pkg } else null)
+            ?: PhoneMedia.controller
+            ?: return if (PhoneNotificationListener.connected) "Nothing is playing" else NO_ACCESS
         val t = c.transportControls
         when (action) {
+            "custom" -> if (custom.isNotEmpty()) t.sendCustomAction(custom, null) else return "No action given"
+            "forward" -> t.seekTo((c.playbackState?.position ?: 0L) + 15_000)
+            "rewind" -> t.seekTo(((c.playbackState?.position ?: 0L) - 15_000).coerceAtLeast(0))
             "play" -> t.play()
             "pause" -> t.pause()
             "toggle" -> if (c.playbackState?.state == PlaybackState.STATE_PLAYING) t.pause() else t.play()
@@ -336,11 +438,26 @@ class PhoneHub @Inject constructor(
         return null
     }
 
+    private fun ringer(mode: String): String? {
+        val am = context.getSystemService(AudioManager::class.java) ?: return "No audio service"
+        val m = when (mode) {
+            "normal" -> AudioManager.RINGER_MODE_NORMAL
+            "vibrate" -> AudioManager.RINGER_MODE_VIBRATE
+            "silent" -> AudioManager.RINGER_MODE_SILENT
+            else -> return "Unknown ringer mode"
+        }
+        return runCatching { am.ringerMode = m }.exceptionOrNull()?.let {
+            "Android wants Do not disturb access for that; grant notification access to DailyDash"
+        }
+    }
+
     private fun volume(stream: String, level: Int): String? {
         val am = context.getSystemService(AudioManager::class.java) ?: return "No audio service"
         val s = when (stream) {
             "media" -> AudioManager.STREAM_MUSIC
             "ring" -> AudioManager.STREAM_RING
+            "notif" -> AudioManager.STREAM_NOTIFICATION
+            "call" -> AudioManager.STREAM_VOICE_CALL
             "alarm" -> AudioManager.STREAM_ALARM
             else -> return "Unknown volume"
         }
@@ -387,6 +504,12 @@ class PhoneHub @Inject constructor(
         const val REPORT_FRONT_MS = 30_000L
         const val REPORT_BACK_MS = 180_000L
         const val MIN_GAP_MS = 4_000L
-        const val NOTIF_BATCH_MS = 1_200L
+        const val NOTIF_BATCH_MS = 500L
+        const val NOTIF_REMOVE_MS = 60L
+        const val MEDIA_SETTLE_MS = 180L
+        const val POS_JUMP_MS = 1_500L
+
+        /** Commands that change nothing a report would show. */
+        val QUIET = setOf("media", "open-url", "clipboard", "note", "reply", "refresh")
     }
 }
