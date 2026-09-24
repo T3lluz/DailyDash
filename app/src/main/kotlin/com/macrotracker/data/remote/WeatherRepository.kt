@@ -78,6 +78,8 @@ data class WeatherInfo(
     val feelsLike: Double? = null,      // dew-point-based approximation from Yr.no
     val humidity: Double? = null,       // relative_humidity from Yr.no
     val precipProbability: Int? = null, // next-hour chance of precipitation
+    /** Millimetres expected in the coming hour (the next six when the feed has no hourly step). */
+    val precipitation: Double? = null,
     val windGust: Double? = null,
     val uvIndex: Double? = null,
     val pressure: Double? = null,
@@ -254,6 +256,14 @@ class WeatherRepository @Inject constructor(
                     ?.roundToInt()
             else -> null
         }
+
+        val precipitation = when {
+            data.has("next_1_hours") -> data.getJSONObject("next_1_hours").optJSONObject("details")
+                ?.optDouble("precipitation_amount")
+            data.has("next_6_hours") -> data.getJSONObject("next_6_hours").optJSONObject("details")
+                ?.optDouble("precipitation_amount")
+            else -> null
+        }?.takeIf { !it.isNaN() && it >= 0.0 }
 
         val (description, iconRes) = mapSymbolCode(symbolCode)
 
@@ -517,6 +527,7 @@ class WeatherRepository @Inject constructor(
             feelsLike = feelsLike,
             humidity = humidity,
             precipProbability = precipProbability,
+            precipitation = precipitation,
             windGust = windGust,
             uvIndex = uvIndex,
             pressure = pressure,

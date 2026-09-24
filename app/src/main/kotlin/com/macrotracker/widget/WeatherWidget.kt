@@ -329,8 +329,9 @@ private fun WideLayout(v: WxView, dims: WidgetDims) {
 @Composable
 private fun TallLayout(v: WxView, dims: WidgetDims, preview: Boolean, tab: String) {
     val h = dims.innerHeight.value
-    // Header, now, sky, and a list of at least four rows under its pills.
-    val fixed = 30f + 36f + 14f + 8f
+    // Header, now (the icon beside a hero-size temperature), sky, and a list of at least
+    // four rows under its pills. Measured in the phone's font, so a preview draws whole rows.
+    val fixed = 30f + 44f + 17f + 8f
     val opt = WeatherLayouts.fit(h, fixed + 150f, listOf("rain" to 26f, "wear" to 29f))
     val used = fixed + (if ("rain" in opt) 26f else 0f) + (if ("wear" in opt) 29f else 0f)
     Column(GlanceModifier.fillMaxSize()) {
@@ -362,13 +363,14 @@ private fun TallLayout(v: WxView, dims: WidgetDims, preview: Boolean, tab: Strin
 
 @Composable
 private fun CompactLayout(v: WxView, dims: WidgetDims) {
-    // Header, now, at least a short hour strip, and the rain / daylight pair.
-    val required = 34f + 40f + GAP + 62f + GAP + WeatherLayouts.NORMAL_TILE_DP
+    // Header, now (three lines beside the icon), at least a short hour strip, and the
+    // rain / daylight pair.
+    val required = 34f + 48f + GAP + 62f + GAP + WeatherLayouts.NORMAL_TILE_DP
     val opt = WeatherLayouts.fit(
         dims.innerHeight.value,
         required,
         // The hours' rain line first: without its room the strip squeezes it to nothing.
-        listOf("rain" to 14f, "wear" to 29f, "rich" to WeatherLayouts.RICH_TILE_DP - WeatherLayouts.NORMAL_TILE_DP),
+        listOf("rain" to 16f, "wear" to 29f, "rich" to WeatherLayouts.RICH_TILE_DP - WeatherLayouts.NORMAL_TILE_DP),
     )
     val tileH = if ("rich" in opt) WeatherLayouts.RICH_TILE_DP else WeatherLayouts.NORMAL_TILE_DP
     Column(GlanceModifier.fillMaxSize()) {
@@ -391,7 +393,8 @@ private fun CompactLayout(v: WxView, dims: WidgetDims) {
 @Composable
 private fun NarrowTallLayout(v: WxView, dims: WidgetDims, preview: Boolean) {
     val h = dims.innerHeight.value
-    val stripH = 74f
+    // Time, sky, temperature and the rain line under it.
+    val stripH = 78f
     val fixed = 34f + 40f + GAP + stripH + GAP + WeatherLayouts.NORMAL_TILE_DP + GAP
     // Three day rows at least: the list scrolls to the rest.
     val daysMin = 3 * 22f + 8f

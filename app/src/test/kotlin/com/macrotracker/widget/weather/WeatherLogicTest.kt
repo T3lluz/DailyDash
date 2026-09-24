@@ -127,10 +127,16 @@ class WeatherLogicTest {
     }
 
     @Test
-    fun `hour rain prefers the chance, then the amount`() {
-        assertEquals("40%", WxFormat.hourRain(hour(0, pop = 40, mm = 0.5)))
-        assertEquals("0.5", WxFormat.hourRain(hour(0, mm = 0.5)))
+    fun `rain reads in millimetres, never as a chance`() {
+        assertEquals("0.5 mm", WxFormat.hourRain(hour(0, pop = 40, mm = 0.5)))
+        assertEquals("12 mm", WxFormat.hourRain(hour(0, mm = 12.2)))
+        assertEquals("0.5", WxFormat.hourRain(hour(0, mm = 0.5), narrow = true))
+        assertNull(WxFormat.hourRain(hour(0, pop = 80)))
         assertNull(WxFormat.hourRain(hour(0, pop = 5)))
+        val day = WxDay(LocalDate.of(2026, 9, 24), 8.0, 14.0, "rain", precipMm = 3.24, pop = 70)
+        assertEquals("3.2 mm", WxFormat.dayRain(day))
+        assertNull(WxFormat.dayRain(day.copy(precipMm = 0.2)))
+        assertNull(WxFormat.dayRain(day.copy(precipMm = null)))
     }
 
     // ── Conditions ─────────────────────────────────────────────────
@@ -174,14 +180,14 @@ class WeatherLogicTest {
     }
 
     @Test
-    fun `rain later names its start and chance`() {
+    fun `rain later names its start and amount`() {
         val hours = List(12) { i -> if (i in 3..5) hour(i, symbol = "rain", pop = 70, mm = 1.0) else hour(i, pop = 10) }
         val r = RainOutlook.of(hours)
         assertEquals(RainOutlook.Kind.LATER, r.kind)
         assertEquals("16:00", r.value(zone, true))
         assertEquals("4 PM", r.value(zone, false))
-        assertEquals("70% · 3.0 mm", r.detail(zone, true))
-        assertEquals("Rain from 16:00 · 70%", r.sentence(zone, true))
+        assertEquals("3.0 mm", r.detail(zone, true))
+        assertEquals("Rain from 16:00 · 3.0 mm", r.sentence(zone, true))
         assertEquals("Rain from 4 PM", r.short(zone, false))
         assertEquals(hours[6].epochMillis, r.endEpoch)
     }
@@ -342,7 +348,8 @@ class WeatherLogicTest {
         assertTrue(p.contains("Stockholm"))
         assertTrue(p.contains("57°"))
         assertTrue(p.contains("1 PM"))
-        assertTrue(p.contains("Tomorrow: 46° to 59°, rain, 3.2 mm rain (70%)."))
+        assertTrue(p.contains("Tomorrow: 46° to 59°, rain, 3.2 mm rain."))
+        assertFalse(p.contains("%"))
         assertTrue(p.contains("Sunset 7:02 PM"))
     }
 
@@ -361,10 +368,10 @@ class WeatherLogicTest {
     }
 
     @Test
-    fun narrowRainDetailDropsTheUnit() {
+    fun narrowRainDetailKeepsTheUnit() {
         val hours = (0 until 12).map { i -> if (i in 2..4) hour(i, pop = 60, mm = 0.7) else hour(i) }
         val r = RainOutlook.of(hours)
-        assertEquals("60% · 2.1 mm", r.detail(zone, true))
-        assertEquals("60% · 2.1", r.detail(zone, true, narrow = true))
+        assertEquals("2.1 mm", r.detail(zone, true))
+        assertEquals("2.1 mm", r.detail(zone, true, narrow = true))
     }
 }
