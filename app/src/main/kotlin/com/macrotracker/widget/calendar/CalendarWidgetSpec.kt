@@ -22,6 +22,7 @@ object CalendarWidgetSpec : DashWidgetSpec {
     override val accent = WK.Calendar
     override val receiver = CalendarWidgetReceiver::class.java
     override val previewSize: DpSize = WidgetDims.cells(4, 3)
+    override val showcase = listOf(4 to 1, 2 to 2, 5 to 2, 4 to 3, 4 to 5, 5 to 5)
 
     override fun widget(): GlanceAppWidget = CalendarWidget()
 

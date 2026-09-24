@@ -21,10 +21,11 @@ object GitHubWidgetSpec : DashWidgetSpec {
     override val title = "GitHub"
     override val description =
         "Reviews waiting on you, your inbox, pull requests and issues, over your contribution graph and streak."
-    override val sizeLabel = "2×1 to 5×5"
+    override val sizeLabel = "2×1 – 5×5"
     override val accent = WK.GitHub
     override val receiver = GitHubWidgetReceiver::class.java
     override val previewSize: DpSize = WidgetDims.cells(4, 3)
+    override val showcase = listOf(4 to 1, 2 to 2, 4 to 2, 4 to 3, 5 to 5)
 
     override fun widget(): GlanceAppWidget = GitHubWidget()
 

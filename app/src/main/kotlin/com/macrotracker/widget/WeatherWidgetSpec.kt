@@ -16,6 +16,7 @@ object WeatherWidgetSpec : DashWidgetSpec {
     override val accent = WK.Weather
     override val receiver = WeatherWidgetReceiver::class.java
     override val previewSize: DpSize = WEATHER_WIDGET_PREVIEW_SIZE
+    override val showcase = listOf(4 to 1, 2 to 2, 4 to 2, 3 to 3, 5 to 3, 5 to 5)
 
     override fun widget(): GlanceAppWidget = WeatherWidget()
 

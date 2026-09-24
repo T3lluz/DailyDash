@@ -35,6 +35,12 @@ interface DashWidgetSpec {
     /** The size the Widgets screen and the launcher picker preview it at. */
     val previewSize: DpSize
 
+    /**
+     * Launcher cells (columns to rows) the Widgets screen lets you flip the preview
+     * through, one per distinct layout worth seeing; [previewSize] is one of them.
+     */
+    val showcase: List<Pair<Int, Int>>
+
     fun widget(): GlanceAppWidget
 
     /**

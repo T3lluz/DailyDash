@@ -8,6 +8,7 @@
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/widget_weather_description"
     android:previewImage="@drawable/widget_preview_weather"
+    android:initialLayout="@layout/glance_default_loading_layout"
     android:minWidth="368dp"
     android:minHeight="220dp"
     android:minResizeWidth="110dp"

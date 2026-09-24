@@ -23,6 +23,7 @@ object ServerWidgetSpec : DashWidgetSpec {
     override val accent = WK.Server
     override val receiver = ServerWidgetReceiver::class.java
     override val previewSize: DpSize = WidgetDims.cells(4, 3)
+    override val showcase = listOf(2 to 2, 2 to 4, 5 to 2, 4 to 3, 5 to 5)
 
     override fun widget(): GlanceAppWidget = ServerWidget()
 

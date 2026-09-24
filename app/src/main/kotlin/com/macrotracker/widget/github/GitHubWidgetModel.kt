@@ -660,7 +660,7 @@ object GhLayout {
      *   line when three rows still fit under it);
      * - otherwise wide (≥ 250) → [GhMode.SPLIT]; narrow → [GhMode.STACK] of tiles + graph.
      */
-    fun plan(w: Float, h: Float, hasBrief: Boolean): GhPlan {
+    fun plan(w: Float, h: Float, hasBrief: Boolean, listCount: Int? = null, canFill: Boolean = false): GhPlan {
         if (h < STRIP_MAX_H) {
             val totals = w >= 160f && h >= 60f
             val counters = w >= 320f && h >= 76f
@@ -698,9 +698,18 @@ object GhLayout {
             val aiH = aiLines * AI_LINE + AI_PAD
             val ai = hasBrief && w >= 180f && rowsIn(r2 - aiH - GAP) >= 3
             if (ai) r2 -= aiH + GAP
-            val rows = rowsIn(r2)
+            var rows = rowsIn(r2)
             // What the last list row can't use goes to the graph (4 dp kept as slack).
-            val spare = (r2 - LIST_LABEL - rows * ROW - 4f).coerceAtLeast(0f)
+            var spare = (r2 - LIST_LABEL - rows * ROW - 4f).coerceAtLeast(0f)
+            // Rows the list ([listCount] long) won't fill go to the graph too, unless the next
+            // list can fill them (its label and at least one row).
+            if (listCount != null && listCount in 1 until rows) {
+                val unused = rows - listCount
+                if (!(canFill && unused * ROW >= LIST_LABEL + 4f + ROW)) {
+                    spare += unused * ROW
+                    rows = listCount
+                }
+            }
             val gh = (gh0 + spare).coerceAtMost(cap)
             return GhPlan(
                 mode = GhMode.STACK,

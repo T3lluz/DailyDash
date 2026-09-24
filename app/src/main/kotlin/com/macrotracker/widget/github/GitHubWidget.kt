@@ -160,15 +160,24 @@ private class GhUi(
 private fun Dashboard(d: GitHubWidgetSnapshot, tab: GhTab?, dims: WidgetDims, preview: Boolean) {
     val context = LocalContext.current
     val today = LocalDate.now()
-    val plan = GhLayout.plan(dims.innerWidth.value, dims.innerHeight.value, !d.brief.isNullOrBlank())
+    val now = System.currentTimeMillis()
+    val shownTab = tab ?: GhLayout.defaultTab(d)
+    val listed = GhRows.build(d, shownTab, now)
+    val plan = GhLayout.plan(
+        dims.innerWidth.value,
+        dims.innerHeight.value,
+        !d.brief.isNullOrBlank(),
+        listCount = listed.size,
+        canFill = GhRows.fill(d, shownTab, listed, now) != null,
+    )
     val avatar = remember(d.avatarUrl, d.fetchedAt) { GitHubWidgetStore.avatar(context, d.avatarUrl) }
     val ui = GhUi(
         d = d,
         plan = plan,
-        tab = tab ?: GhLayout.defaultTab(d),
+        tab = shownTab,
         streak = GhContribMath.streak(d.contrib, today),
         today = today,
-        now = System.currentTimeMillis(),
+        now = now,
         preview = preview,
         avatar = avatar,
     )

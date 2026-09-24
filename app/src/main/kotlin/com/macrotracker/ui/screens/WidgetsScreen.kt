@@ -10,6 +10,7 @@ import android.view.MotionEvent
 import android.widget.FrameLayout
 import android.widget.RemoteViews
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -43,6 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -62,6 +64,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.macrotracker.R
 import com.macrotracker.ui.components.MacroCard
+import com.macrotracker.ui.components.SegmentedTab
+import com.macrotracker.ui.components.SegmentedTabs
 import com.macrotracker.ui.components.SkeletonBlock
 import com.macrotracker.ui.components.SubScreenHeader
 import com.macrotracker.ui.theme.AppIcons
@@ -79,6 +83,7 @@ import com.macrotracker.widget.WeatherWidgetSpec
 import com.macrotracker.widget.WidgetRefreshWorker
 import com.macrotracker.widget.WidgetStateProvider
 import com.macrotracker.widget.kit.WidgetAi
+import com.macrotracker.widget.kit.WidgetDims
 import kotlinx.coroutines.delay
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -261,6 +266,7 @@ private fun WidgetCard(
 ) {
     val isAlreadyPlaced = instanceCount > 0
     val accentColor = spec.accent
+    val haptics = rememberHaptics()
 
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
@@ -285,9 +291,11 @@ private fun WidgetCard(
             this.alpha = alpha
         },
     ) {
-        // ── Preview ──────────────────────────────────────────────────────
+        // ── Preview, at the size picked below it ─────────────────────────
+        val defaultCells = spec.showcase.firstOrNull { (c, r) -> WidgetDims.cells(c, r) == spec.previewSize } ?: spec.showcase.first()
+        var cells by remember(spec.key) { mutableStateOf(defaultCells) }
         Box(modifier = Modifier.fillMaxWidth()) {
-            LiveWidgetPreview(spec = spec, modifier = Modifier.fillMaxWidth())
+            LiveWidgetPreview(spec = spec, cells = cells, modifier = Modifier.fillMaxWidth())
 
             // ── "Active" badge overlay when widget is placed ──
             if (isAlreadyPlaced) {
@@ -319,6 +327,19 @@ private fun WidgetCard(
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Every size has its own layout: flip through them without placing the widget.
+        SegmentedTabs(
+            tabs = spec.showcase.map { (c, r) -> SegmentedTab("${c}x$r", "$c×$r", accent = accentColor) },
+            selectedKey = "${cells.first}x${cells.second}",
+            onSelect = { key ->
+                haptics.tick()
+                spec.showcase.firstOrNull { (c, r) -> "${c}x$r" == key }?.let { cells = it }
+            },
+            compact = true,
+        )
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -448,30 +469,39 @@ private fun WidgetCard(
 // ── Live preview ──────────────────────────────────────────────────────────────
 
 /**
- * The real widget, rendered through the same Glance code as the home screen and
- * scaled down to fit the card. Weather falls back to the static preview image (the
- * one older launchers show in their picker) if the render fails; the others keep
- * their skeleton.
+ * The real widget at [cells], rendered through the same Glance code as the home screen
+ * and scaled down to fit the card. Renders are kept per size, so flipping back is
+ * instant, and the last one stays up while the next renders. Weather falls back to the
+ * static preview image (the one older launchers show in their picker) if the render
+ * fails; the others keep their skeleton.
  */
 @Composable
-private fun LiveWidgetPreview(spec: DashWidgetSpec, modifier: Modifier = Modifier) {
+private fun LiveWidgetPreview(spec: DashWidgetSpec, cells: Pair<Int, Int>, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    var views by remember { mutableStateOf<RemoteViews?>(null) }
+    val renders = remember(spec.key) { mutableStateMapOf<Pair<Int, Int>, RemoteViews>() }
+    var shown by remember(spec.key) { mutableStateOf<Pair<Int, Int>?>(null) }
     var failed by remember { mutableStateOf(false) }
-    LaunchedEffect(spec.key) {
-        runCatching { spec.renderPreview(context) }
-            .onSuccess { views = it }
-            .onFailure { failed = true }
+    LaunchedEffect(spec.key, cells) {
+        if (renders[cells] == null) {
+            runCatching { spec.renderPreview(context, WidgetDims.cells(cells.first, cells.second)) }
+                .onSuccess { renders[cells] = it }
+                .onFailure { failed = shown == null }
+        }
+        if (renders[cells] != null) shown = cells
     }
 
-    val widgetWidth = spec.previewSize.width
-    val widgetHeight = spec.previewSize.height
+    val showing = shown
+    val size = WidgetDims.cells((showing ?: cells).first, (showing ?: cells).second)
+    val widgetWidth = size.width
+    val widgetHeight = size.height
     BoxWithConstraints(
-        modifier = modifier.aspectRatio(widgetWidth / widgetHeight),
+        modifier = modifier
+            .animateContentSize(MacroMotion.slideTween())
+            .aspectRatio(widgetWidth / widgetHeight),
         contentAlignment = Alignment.Center,
     ) {
         val fit = maxWidth / widgetWidth
-        val remoteViews = views
+        val remoteViews = showing?.let { renders[it] }
         when {
             remoteViews != null -> AndroidView(
                 factory = { NonInteractiveFrame(it) },

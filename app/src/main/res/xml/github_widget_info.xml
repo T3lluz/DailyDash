@@ -3,6 +3,7 @@
      every size has its own layout (see GitHubWidget). -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/widget_github_description"
+    android:previewImage="@drawable/widget_preview_github"
     android:initialLayout="@layout/glance_default_loading_layout"
     android:minWidth="250dp"
     android:minHeight="180dp"
