@@ -39,6 +39,7 @@ class SetWidgetStateAction : ActionCallback {
         // A tap drawn before this copy was switched to another widget: not for it any more.
         val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(glanceId)
         if (WidgetInstances.specFor(context, appWidgetId).key != spec.key) return
+        WidgetHaptics.tick(context)
         updateAppWidgetState(context, glanceId) { prefs ->
             prefs[stringPreferencesKey(name)] = value
         }
