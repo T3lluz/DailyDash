@@ -6,10 +6,13 @@ import androidx.glance.GlanceId
 import androidx.glance.action.Action
 import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionParametersOf
+import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.state.updateAppWidgetState
+import com.macrotracker.widget.DashWidget
 import com.macrotracker.widget.DashWidgets
+import com.macrotracker.widget.WidgetInstances
 
 /**
  * Per-widget UI state (the selected tab, the server shown, the day picked) for widgets
@@ -33,10 +36,13 @@ class SetWidgetStateAction : ActionCallback {
         val spec = DashWidgets.byKey(parameters[Spec] ?: return) ?: return
         val name = parameters[Name] ?: return
         val value = parameters[Value] ?: return
+        // A tap drawn before this copy was switched to another widget: not for it any more.
+        val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(glanceId)
+        if (WidgetInstances.specFor(context, appWidgetId).key != spec.key) return
         updateAppWidgetState(context, glanceId) { prefs ->
             prefs[stringPreferencesKey(name)] = value
         }
-        spec.widget().update(context, glanceId)
+        DashWidget().update(context, glanceId)
     }
 
     companion object {

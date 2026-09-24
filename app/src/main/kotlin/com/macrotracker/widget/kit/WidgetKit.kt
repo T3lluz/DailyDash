@@ -2,7 +2,10 @@ package com.macrotracker.widget.kit
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Paint
+import android.graphics.Typeface
 import android.net.Uri
+import android.os.Build
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
@@ -123,12 +126,16 @@ fun parseHexColor(hex: String?, fallback: Color = WK.Sub): Color {
 // ─────────────────────────────────────────────────────────────────
 
 /**
- * The widget's real size (from `LocalSize` under `SizeMode.Exact`) as launcher grid cells.
+ * The widget's real size (from `LocalSize` under `SizeMode.Exact`) as a size class of
+ * [cols] × [rows], each class being the room a layout is designed for ([cells]).
  *
- * Thresholds are the smallest size a launcher reports for that many cells, so a 4×2
- * reads as 4×2 on Pixel Launcher and on One UI alike. Layouts switch on [cols] and
- * [rows] and drop whole sections as space shrinks; they never squeeze a section until
- * its text clips.
+ * Launchers disagree about how big a cell is: Pixel Launcher on a 20:9 phone reports a
+ * 2-row widget about 220–245 dp tall, 118–130 dp a row, where [cells] budgets 102. So
+ * the class is read from the size, never from the launcher's cell count: a class starts
+ * a little under its design size (every layout is checked there, see AGENTS.md → App
+ * Widgets) and a 2-row widget on a Pixel stays a 2-row layout with room to spare rather
+ * than getting the 3-row one and clipping. Layouts switch on [cols] and [rows] and drop
+ * whole sections as space shrinks; they never squeeze a section until its text clips.
  */
 data class WidgetDims(val size: DpSize) {
     val width: Dp get() = size.width
@@ -143,8 +150,11 @@ data class WidgetDims(val size: DpSize) {
 
     companion object {
         /** Index = cells. 0 is a sentinel so `indexOfLast` lands on 1 at worst. */
-        private val COL_MIN = floatArrayOf(0f, 40f, 110f, 180f, 250f, 330f, 420f)
-        private val ROW_MIN = floatArrayOf(0f, 40f, 130f, 220f, 320f, 420f, 520f)
+        private val COL_MIN = floatArrayOf(0f, 40f, 110f, 190f, 285f, 336f, 420f)
+        private val ROW_MIN = floatArrayOf(0f, 40f, 150f, 280f, 380f, 480f, 580f)
+
+        /** The smallest size of the [cols] × [rows] class: what its layout must fit. */
+        fun minSize(cols: Int, rows: Int): DpSize = DpSize(COL_MIN[cols].dp, ROW_MIN[rows].dp)
 
         /** A representative size for [cols] × [rows]: what Pixel Launcher reports in portrait. */
         fun cells(cols: Int, rows: Int): DpSize = DpSize(
@@ -172,15 +182,78 @@ object WT {
  * budgeted in dp for a fixed cell, so past that its bottom sections would be cut off
  * rather than dropped; 1.3× system text shows at 1.15×. [WidgetFrame] records the scale
  * as each widget renders (one device, one scale, so a shared value is safe).
+ *
+ * The budgets were measured in Roboto, but a launcher draws widget text in the phone's
+ * own `TextAppearance.DeviceDefault` font: Google Sans on a Pixel, taller and wider at
+ * the same size, so rows measured for Roboto overflow. [fontFit] is how much smaller that
+ * font is drawn to take the room Roboto does (1 where it is Roboto), measured once per
+ * process by [calibrate].
  */
 object WidgetText {
     const val MAX_SCALE = 1.15f
 
+    /** The smallest [fontFit]: a font far off Roboto is not shrunk past legibility. */
+    const val MIN_FIT = 0.86f
+
+    /**
+     * Roboto's line height (font padding included, as a TextView lays it out) and
+     * [SAMPLE]'s width in regular and bold, per px of text size. The widget-shots `font`
+     * test pins them: under `-PwidgetShotsRoboto` the fit comes out 1.
+     */
+    const val ROBOTO_LINE = 1.3271f
+    const val ROBOTO_WIDTH = 29.44f
+    const val ROBOTO_BOLD_WIDTH = 30.09f
+
+    /** A widget line's mix of words, digits and symbols. */
+    const val SAMPLE = "Partly Cloudy 14° · Tomorrow 10:30 AM · Norris 318 pts · 2 reviews"
+
     @Volatile var systemScale: Float = 1f
+    @Volatile var fontFit: Float = 1f
+    @Volatile private var calibrated = false
 
     fun size(size: TextUnit): TextUnit {
         val s = systemScale
-        return if (s <= MAX_SCALE) size else (size.value * MAX_SCALE / s).sp
+        val scaled = if (s <= MAX_SCALE) size.value else size.value * MAX_SCALE / s
+        return (scaled * fontFit).sp
+    }
+
+    /** Measures the phone's widget font against Roboto, once per process. */
+    fun calibrate(context: Context) {
+        if (calibrated) return
+        fontFit = runCatching { fitFor(deviceTypeface(context)) }.getOrDefault(1f)
+        calibrated = true
+    }
+
+    /** The font `TextAppearance.DeviceDefault` resolves to, which Glance styles every Text with. */
+    fun deviceTypeface(context: Context): Typeface {
+        val a = context.obtainStyledAttributes(android.R.style.TextAppearance_DeviceDefault, intArrayOf(android.R.attr.fontFamily))
+        try {
+            // A family name ("google-sans-text") on most phones; a font resource on some overlays.
+            a.getString(0)?.takeIf { !it.startsWith("res/") }?.let { return Typeface.create(it, Typeface.NORMAL) }
+            runCatching { a.getFont(0) }.getOrNull()?.let { return it }
+        } finally {
+            a.recycle()
+        }
+        return Typeface.DEFAULT
+    }
+
+    /** [typeface]'s line height, then [SAMPLE]'s width in regular and in bold, per px of text size. */
+    fun measure(typeface: Typeface): Triple<Float, Float, Float> {
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.typeface = typeface; textSize = 100f }
+        val fm = paint.fontMetrics
+        val regular = paint.measureText(SAMPLE)
+        paint.typeface = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            Typeface.create(typeface, 700, false)
+        } else {
+            Typeface.create(typeface, Typeface.BOLD)
+        }
+        return Triple((fm.bottom - fm.top) / 100f, regular / 100f, paint.measureText(SAMPLE) / 100f)
+    }
+
+    fun fitFor(typeface: Typeface): Float {
+        val (line, width, bold) = measure(typeface)
+        if (line <= 0f || width <= 0f || bold <= 0f) return 1f
+        return minOf(ROBOTO_LINE / line, ROBOTO_WIDTH / width, ROBOTO_BOLD_WIDTH / bold).coerceIn(MIN_FIT, 1f)
     }
 }
 
@@ -238,7 +311,9 @@ fun WidgetFrame(
     pad: Dp = FramePad,
     content: @Composable () -> Unit,
 ) {
-    WidgetText.systemScale = LocalContext.current.resources.configuration.fontScale
+    val context = LocalContext.current
+    WidgetText.systemScale = context.resources.configuration.fontScale
+    WidgetText.calibrate(context)
     var m = GlanceModifier.fillMaxSize().cornerRadius(22.dp).background(WK.Bg.cp())
     if (onClick != null) m = m.clickable(onClick)
     Box(m.padding(pad)) { content() }

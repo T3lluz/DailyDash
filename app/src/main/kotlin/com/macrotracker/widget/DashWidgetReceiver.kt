@@ -11,14 +11,17 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 /**
- * The receiver every DailyDash widget extends. Placing the first copy of any widget
- * starts the shared 15-minute [WidgetRefreshWorker] and fetches straight away; removing
- * the last copy of the last widget stops it.
+ * The receiver every DailyDash widget extends. [spec] is what a copy placed from this
+ * receiver shows until it is switched in its settings; every receiver draws through the
+ * same [DashWidget], which reads what each copy shows by its id ([WidgetInstances]).
+ *
+ * Placing the first copy of any widget starts the shared 15-minute [WidgetRefreshWorker]
+ * and fetches straight away; removing the last copy of the last widget stops it.
  */
 abstract class DashWidgetReceiver : GlanceAppWidgetReceiver() {
     abstract val spec: DashWidgetSpec
 
-    override val glanceAppWidget: GlanceAppWidget by lazy { spec.widget() }
+    override val glanceAppWidget: GlanceAppWidget = DashWidget()
 
     /** Cheap work to do the moment the first copy is placed (read caches, no network). */
     open fun preWarm(context: Context) {}
@@ -28,6 +31,12 @@ abstract class DashWidgetReceiver : GlanceAppWidgetReceiver() {
         WidgetRefreshWorker.enqueuePeriodicRefresh(context)
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch { runCatching { preWarm(context) } }
         WidgetRefreshWorker.enqueueImmediateRefresh(context)
+    }
+
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+        super.onDeleted(context, appWidgetIds)
+        WidgetInstances.forget(context, appWidgetIds)
+        DashWidgets.forgetUnshown(context)
     }
 
     override fun onDisabled(context: Context) {

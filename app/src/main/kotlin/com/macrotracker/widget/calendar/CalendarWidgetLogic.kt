@@ -662,10 +662,12 @@ internal object CalendarLogic {
         val r = rows.coerceIn(1, 5)
         if (r == 1) return Plan(Shape.STRIP, hero = HeroSize.MINI, addButton = c >= 4, refreshButton = false)
         if (c <= 2) {
-            return if (innerH < 250f) {
+            // A Pixel's 2×2 (about 220 dp inside) has room for the agenda under a
+            // one-line hero; only a short one stretches its hero card over the whole face.
+            return if (innerH < 190f) {
                 Plan(Shape.COMPACT, hero = HeroSize.MINI, heroTitleLines = 3, refreshButton = false)
             } else {
-                Plan(Shape.NARROW, hero = HeroSize.FULL, heroTitleLines = 2, showPast = r >= 5, refreshButton = false)
+                Plan(Shape.NARROW, hero = HeroSize.FULL, heroTitleLines = if (innerH < 250f) 1 else 2, showPast = r >= 5, refreshButton = false)
             }
         }
         val strip = if (innerW >= 300f) 14 else 7

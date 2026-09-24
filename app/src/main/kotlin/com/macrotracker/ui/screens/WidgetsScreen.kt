@@ -2,12 +2,8 @@ package com.macrotracker.ui.screens
 
 import com.macrotracker.ui.theme.OnAccent
 import com.macrotracker.ui.theme.contentColorOn
-import android.annotation.SuppressLint
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
-import android.content.Context
-import android.view.MotionEvent
-import android.widget.FrameLayout
 import android.widget.RemoteViews
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -30,7 +26,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -56,9 +51,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -68,6 +63,7 @@ import com.macrotracker.ui.components.SegmentedTab
 import com.macrotracker.ui.components.SegmentedTabs
 import com.macrotracker.ui.components.SkeletonBlock
 import com.macrotracker.ui.components.SubScreenHeader
+import com.macrotracker.ui.components.WidgetRemoteViews
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
@@ -199,6 +195,7 @@ fun WidgetsScreen(
                     WidgetRefreshWorker.enqueueImmediateRefresh(context)
                 },
             )
+            SwapHint()
             specs.forEachIndexed { index, spec ->
                 WidgetCard(
                     spec = spec,
@@ -216,6 +213,29 @@ fun WidgetsScreen(
                 )
             }
         }
+    }
+}
+
+/** Every placed widget can be switched to another one from its own settings. */
+@Composable
+private fun SwapHint() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Surface.copy(alpha = 0.5f))
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(AppIcons.Settings, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
+        Text(
+            text = "Long-press a widget on your home screen and tap its settings to switch what it shows, " +
+                "or pick which list, tab or server it opens on.",
+            fontSize = 12.sp,
+            color = TextSecondary,
+            lineHeight = 17.sp,
+        )
     }
 }
 
@@ -506,16 +526,7 @@ private fun LiveWidgetPreview(spec: DashWidgetSpec, cells: Pair<Int, Int>, modif
         val fit = maxWidth / widgetWidth
         val remoteViews = showing?.let { renders[it] }
         when {
-            remoteViews != null -> AndroidView(
-                factory = { NonInteractiveFrame(it) },
-                update = { frame ->
-                    frame.removeAllViews()
-                    frame.addView(remoteViews.apply(frame.context, frame))
-                },
-                modifier = Modifier
-                    .requiredSize(widgetWidth, widgetHeight)
-                    .graphicsLayer { scaleX = fit; scaleY = fit },
-            )
+            remoteViews != null -> WidgetRemoteViews(remoteViews, DpSize(widgetWidth, widgetHeight), fit)
             failed && spec.key == WeatherWidgetSpec.key -> Image(
                 painter = painterResource(id = R.drawable.widget_preview_weather),
                 contentDescription = "${spec.title} preview",
@@ -532,13 +543,4 @@ private fun LiveWidgetPreview(spec: DashWidgetSpec, cells: Pair<Int, Int>, modif
             )
         }
     }
-}
-
-/** Hosts the preview but swallows its taps, so the widget's buttons don't fire here. */
-@SuppressLint("ViewConstructor")
-private class NonInteractiveFrame(context: Context) : FrameLayout(context) {
-    override fun onInterceptTouchEvent(ev: MotionEvent): Boolean = true
-
-    @SuppressLint("ClickableViewAccessibility")
-    override fun onTouchEvent(event: MotionEvent): Boolean = false
 }

@@ -211,5 +211,7 @@ if (widgetShots) {
         systemProperty("robolectric.pixelCopyRenderMode", "hardware")
         systemProperty("widgetShots.dir", layout.buildDirectory.dir("widget-shots").get().asFile.path)
         providers.gradleProperty("widgetShotsFont").orNull?.let { systemProperty("widgetShots.font", it) }
+        // Renders use the Pixel's Google Sans Flex (fetched once); -PwidgetShotsRoboto keeps Roboto.
+        if (providers.gradleProperty("widgetShotsRoboto").isPresent) systemProperty("widgetShots.roboto", "true")
     }
 }

@@ -34,11 +34,11 @@ import kotlin.math.cos
 object WeatherWidgetPreview {
 
     /** The widget exactly as it would render on the home screen, at [size]. */
-    suspend fun render(context: Context, size: DpSize = WEATHER_WIDGET_PREVIEW_SIZE): RemoteViews {
+    suspend fun render(context: Context, size: DpSize = WEATHER_WIDGET_PREVIEW_SIZE, tab: String? = null): RemoteViews {
         val cached = WeatherWidgetDataProvider.loadData(context)
         val data = if (cached.hasWeatherData && !cached.weatherDisabled) cached else sampleData(context, cached)
         return GlanceRemoteViews()
-            .compose(context, size) { GlanceTheme { WeatherRoot(data, preview = true, tab = WeatherTabs.HOURS) } }
+            .compose(context, size) { GlanceTheme { WeatherRoot(data, preview = true, tab = tab ?: WeatherTabs.HOURS) } }
             .remoteViews
     }
 

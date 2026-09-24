@@ -5,15 +5,11 @@ import android.text.format.DateFormat
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
 import androidx.glance.LocalContext
 import androidx.glance.LocalSize
 import androidx.glance.action.clickable
-import androidx.glance.appwidget.GlanceAppWidget
-import androidx.glance.appwidget.SizeMode
-import androidx.glance.appwidget.provideContent
 import androidx.glance.currentState
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
@@ -26,7 +22,6 @@ import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.width
-import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import com.macrotracker.R
@@ -78,22 +73,18 @@ import java.time.ZoneId
  * Taps: tabs switch this copy's view (kept per widget), the header's refresh re-fetches,
  * anything else opens DailyDash.
  */
-class F1Widget : GlanceAppWidget() {
-    override val sizeMode = SizeMode.Exact
-    override val stateDefinition = PreferencesGlanceStateDefinition
-
-    override suspend fun provideGlance(context: Context, id: GlanceId) {
-        F1WidgetStore.load(context) // warm the memory copy off the composition
+internal object F1Widget {
+    /** A placed copy, inside [com.macrotracker.widget.DashWidget]'s composition. */
+    @Composable
+    fun Content(context: Context) {
+        // Read inside composition: an update to a live session recomposes this scope
+        // (the tab state changed or not), so it always draws the latest snapshot.
+        val tab = currentState(F1WidgetStore.TabKey)
+        val data = rememberWidgetData(F1WidgetSpec.key) { F1WidgetStore.load(context) }
+        val brief = rememberWidgetData(F1WidgetSpec.key) { F1WidgetStore.brief(context) }
         val is24h = DateFormat.is24HourFormat(context)
-        provideContent {
-            // Read inside composition: an update to a live session recomposes this scope
-            // (the tab state changed or not), so it always draws the latest snapshot.
-            val tab = currentState(F1WidgetStore.TabKey)
-            val data = rememberWidgetData(F1WidgetSpec.key) { F1WidgetStore.load(context) }
-            val brief = rememberWidgetData(F1WidgetSpec.key) { F1WidgetStore.brief(context) }
-            GlanceTheme {
-                F1Root(data, brief, tab, is24h, System.currentTimeMillis(), preview = false)
-            }
+        GlanceTheme {
+            F1Root(data, brief, tab, is24h, System.currentTimeMillis(), preview = false)
         }
     }
 }
@@ -502,14 +493,23 @@ private fun HeroCard(v: F1View, width: Dp, big: Boolean, showSub: Boolean, strip
                 }
             }
         } else {
-            Box(GlanceModifier.fillMaxWidth()) {
-                if (race?.outline != null) {
-                    Box(GlanceModifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-                        CircuitBackdrop(race, (width - 20.dp) * 0.6f, (contentH - 2f).dp)
-                    }
+            // Narrow: the circuit sits beside the name and place, never behind the words,
+            // and the countdown gets the card's full width under them.
+            val headH = (12f + (if (big) 27f else 18f) + (if (showSub) 13f else 0f)).dp
+            val sideW = minOf(headH * 1.4f, (width - 20.dp) * 0.34f)
+            Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(GlanceModifier.defaultWeight()) {
+                    RaceCaption(v, long = false)
+                    Text(v.title(), style = ts(if (big) WT.Big else WT.Title, WK.Text, FontWeight.Bold), maxLines = 1)
+                    if (showSub) Text(v.place(withCircuit = false), style = ts(WT.Tiny, WK.Sub), maxLines = 1)
                 }
-                Column(GlanceModifier.fillMaxWidth()) { HeroWords(v, big, showSub, withCircuit = false, short = width < 220.dp) }
+                if (race?.outline != null) {
+                    HGap(6.dp)
+                    CircuitImage(race, sideW, headH, stroke = 1.6f)
+                }
             }
+            VGap(5.dp)
+            CountdownLine(v, short = width < 220.dp)
         }
         if (strip && !v.week?.slots.isNullOrEmpty()) {
             VGap(8.dp)

@@ -11,7 +11,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.glance.ColorFilter
-import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
 import androidx.glance.Image
@@ -20,12 +19,9 @@ import androidx.glance.LocalContext
 import androidx.glance.LocalSize
 import androidx.glance.action.Action
 import androidx.glance.action.clickable
-import androidx.glance.appwidget.GlanceAppWidget
-import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.lazy.items
-import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.currentState
 import androidx.glance.layout.Alignment
@@ -40,7 +36,6 @@ import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
 import androidx.glance.layout.width
-import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
@@ -53,6 +48,7 @@ import com.macrotracker.widget.kit.KitEmptyState
 import com.macrotracker.widget.kit.VGap
 import com.macrotracker.widget.kit.WK
 import com.macrotracker.widget.kit.WT
+import com.macrotracker.widget.kit.WidgetDataBus
 import com.macrotracker.widget.kit.WidgetDims
 import com.macrotracker.widget.kit.WidgetFrame
 import com.macrotracker.widget.kit.cp
@@ -86,24 +82,21 @@ import java.time.LocalDate
  * opens the profile where there is no list). Rows open their PR / issue / notification.
  * Avatar + login open the profile; the frame opens DailyDash; ⟳ refreshes.
  */
-class GitHubWidget : GlanceAppWidget() {
-    override val sizeMode = SizeMode.Exact
-    override val stateDefinition = PreferencesGlanceStateDefinition
+internal object GitHubWidget {
+    const val STATE_TAB = "tab"
+    val TAB_KEY = stringPreferencesKey(STATE_TAB)
 
-    override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val initial = GitHubWidgetStore.load(context)
-        provideContent {
-            // A refresh that lands while this session is alive redraws it with the new data.
-            val live by GitHubWidgetStore.updates.collectAsState()
-            val data = if (live == null) initial else GitHubWidgetStore.load(context)
-            val tab = GhTab.of(currentState(TAB_KEY))
-            GlanceTheme { GitHubRoot(data, tab, preview = false) }
-        }
-    }
-
-    companion object {
-        const val STATE_TAB = "tab"
-        val TAB_KEY = stringPreferencesKey(STATE_TAB)
+    /**
+     * A placed copy, inside [com.macrotracker.widget.DashWidget]'s composition. A refresh
+     * that lands while the session is alive (a save, or a re-render) redraws it.
+     */
+    @Composable
+    fun Content(context: Context) {
+        val live by GitHubWidgetStore.updates.collectAsState()
+        val version by WidgetDataBus.flow(GitHubWidgetSpec.KEY).collectAsState()
+        val data = remember(live, version) { GitHubWidgetStore.load(context) }
+        val tab = GhTab.of(currentState(TAB_KEY))
+        GlanceTheme { GitHubRoot(data, tab, preview = false) }
     }
 }
 
