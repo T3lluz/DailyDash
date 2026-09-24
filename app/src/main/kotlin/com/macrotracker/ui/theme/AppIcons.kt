@@ -219,6 +219,16 @@ object AppIcons {
     val Droplet: ImageVector by lazy { icon("Droplet") { s("M12 22 a7 7 0 0 0 7 -7 c0 -2 -1 -3.9 -3 -5.5 s-3.5 -4 -4 -6.5 c-0.5 2.5 -2 4.9 -4 6.5 C6 11.1 5 13 5 15 a7 7 0 0 0 7 7 z") } }
     /** Lucide `wind` */
     val Wind: ImageVector by lazy { icon("Wind") { s("M12.8 19.6 A2 2 0 1 0 14 16 H2"); s("M17.5 8 a2.5 2.5 0 1 1 2 4 H2"); s("M9.8 4.4 A2 2 0 1 1 11 8 H2") } }
+    /** Lucide `bone` */
+    val Bone: ImageVector by lazy { icon("Bone") { s("M17 10 c0.7 -0.7 1.69 0 2.5 0 a2.5 2.5 0 1 0 0 -5 a0.5 0.5 0 0 1 -0.5 -0.5 a2.5 2.5 0 1 0 -5 0 c0 0.81 0.7 1.8 0 2.5 l-7 7 c-0.7 0.7 -1.69 0 -2.5 0 a2.5 2.5 0 0 0 0 5 c0.28 0 0.5 0.22 0.5 0.5 a2.5 2.5 0 1 0 5 0 c0 -0.81 -0.7 -1.8 0 -2.5 Z") } }
+    /** Lucide `droplets` */
+    val Droplets: ImageVector by lazy { icon("Droplets") { s("M7 16.3 c2.2 0 4 -1.83 4 -4.05 c0 -1.16 -0.57 -2.26 -1.71 -3.19 S7.29 6.75 7 5.3 c-0.29 1.45 -1.14 2.84 -2.29 3.76 S3 11.1 3 12.25 c0 2.22 1.8 4.05 4 4.05 z"); s("M12.56 6.6 A10.97 10.97 0 0 0 14 3.02 c0.5 2.5 2 4.9 4 6.5 s3 3.5 3 5.5 a6.98 6.98 0 0 1 -11.91 4.97") } }
+    /** Lucide `thermometer-sun` */
+    val ThermometerSun: ImageVector by lazy { icon("ThermometerSun") { s("M12 2 v2"); s("M12 8 a4 4 0 0 0 -1.645 7.647"); s("M2 12 h2"); s("M20 14.54 a4 4 0 1 1 -4 0 V4 a2 2 0 0 1 4 0 z"); s("m4.93 4.93 l1.41 1.41"); s("m6.34 17.66 l-1.41 1.41") } }
+    /** Lucide `test-tube-diagonal` */
+    val TestTube: ImageVector by lazy { icon("TestTube") { s("M21 7 L6.82 21.18 a2.83 2.83 0 0 1 -3.99 -0.01 a2.83 2.83 0 0 1 0 -4 L17 3"); s("m16 2 l6 6"); s("M12 16 H4") } }
+    /** Tabler `heart-rate-monitor` */
+    val HeartRateMonitor: ImageVector by lazy { icon("HeartRateMonitor") { s("M3 5 a1 1 0 0 1 1 -1 h16 a1 1 0 0 1 1 1 v10 a1 1 0 0 1 -1 1 h-16 a1 1 0 0 1 -1 -1 l0 -10"); s("M7 20 h10"); s("M9 16 v4"); s("M15 16 v4"); s("M7 10 h2 l2 3 l2 -6 l1 3 h3") } }
 }
 
 private val Ink = SolidColor(Color.Black)

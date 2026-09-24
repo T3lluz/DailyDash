@@ -7,6 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,6 +27,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.macrotracker.ui.theme.Border
@@ -57,6 +59,8 @@ fun SegmentedTabs(
     modifier: Modifier = Modifier,
     /** A slimmer bar for a screen whose content needs the height (the AI tab's chats). */
     compact: Boolean = false,
+    /** Icon over a smaller label, so five or more segments still fit a phone (the F1 hub). */
+    stacked: Boolean = false,
 ) {
     if (tabs.isEmpty()) return
     val selectedIndex = tabs.indexOfFirst { it.key == selectedKey }.coerceAtLeast(0)
@@ -91,30 +95,58 @@ fun SegmentedTabs(
                 )
                 tabs.forEachIndexed { index, tab ->
                     val isSelected = index == selectedIndex
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(11.dp))
-                            .clickable { onSelect(tab.key) }
-                            .padding(vertical = if (compact) 7.dp else 10.dp, horizontal = 8.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        if (tab.icon != null) {
-                            Icon(
-                                imageVector = tab.icon,
-                                contentDescription = null,
-                                tint = if (isSelected) tab.accent else TextSecondary,
-                                modifier = Modifier.size(15.dp),
+                    if (stacked) {
+                        Column(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(11.dp))
+                                .clickable { onSelect(tab.key) }
+                                .padding(vertical = 7.dp, horizontal = 2.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            if (tab.icon != null) {
+                                Icon(
+                                    imageVector = tab.icon,
+                                    contentDescription = null,
+                                    tint = if (isSelected) tab.accent else TextSecondary,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Spacer(modifier = Modifier.height(3.dp))
+                            }
+                            Text(
+                                text = tab.label,
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) TextPrimary else TextSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
                         }
-                        Text(
-                            text = tab.label,
-                            fontSize = 13.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isSelected) TextPrimary else TextSecondary,
-                            maxLines = 1,
-                        )
+                    } else {
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(11.dp))
+                                .clickable { onSelect(tab.key) }
+                                .padding(vertical = if (compact) 7.dp else 10.dp, horizontal = 8.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (tab.icon != null) {
+                                Icon(
+                                    imageVector = tab.icon,
+                                    contentDescription = null,
+                                    tint = if (isSelected) tab.accent else TextSecondary,
+                                    modifier = Modifier.size(15.dp),
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                            }
+                            Text(
+                                text = tab.label,
+                                fontSize = 13.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) TextPrimary else TextSecondary,
+                                maxLines = 1,
+                            )
+                        }
                     }
                 }
             },

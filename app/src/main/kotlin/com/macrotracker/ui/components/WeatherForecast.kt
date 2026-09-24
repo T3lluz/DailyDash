@@ -32,7 +32,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -70,6 +69,7 @@ import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.WeatherUiState
 import java.util.Locale
 import kotlin.math.roundToInt
+import androidx.compose.ui.graphics.graphicsLayer
 
 /*
  * The weather card opened up, built to be read in one screen: what to wear and the
@@ -256,7 +256,7 @@ private fun NowPanel(advice: ClothingAdvice?, weather: WeatherInfo, windUnit: Wi
         SideRow {
             Condition(R.drawable.ic_weather_wind, "Wind", WeatherUnits.formatWind(weather.windSpeed, windUnit), TextPrimary)
             weather.windGust?.let { Condition(R.drawable.ic_weather_wind, "Gusts", WeatherUnits.formatWind(it, windUnit), TextPrimary) }
-            weather.precipProbability?.let { Condition(R.drawable.ic_weather_precip, "Rain", "$it%", WeatherRain) }
+            weather.precipitation?.let { Condition(R.drawable.ic_weather_precip, "Rain", rainAmount(it), WeatherRain) }
             weather.humidity?.let { Condition(R.drawable.ic_humidity, "Humidity", "${it.toInt()}%", WeatherRain) }
             weather.uvIndex?.let { Condition(R.drawable.ic_uv_index, "UV", String.format(Locale.US, "%.0f", it), WeatherSun) }
             weather.sunrise?.let { Condition(R.drawable.ic_sunrise, "Sunrise", it, WeatherSun) }
@@ -317,8 +317,8 @@ private val CurveLabel = 16.dp
 
 /**
  * Forecast steps side by side with one temperature curve drawn through them, so the
- * shape of the day reads at a glance and each number sits on its point. Rain gets a
- * chance and a bar for how much; wind sits underneath. When the steps fit the width
+ * shape of the day reads at a glance and each number sits on its point. Rain gets its
+ * millimetres and a bar for how much; wind sits underneath. When the steps fit the width
  * (a far day's four six-hour steps) they share it instead of scrolling.
  */
 @Composable
@@ -466,15 +466,16 @@ private fun TemperatureCurve(temps: List<Double>, lo: Double, hi: Double, step: 
     }
 }
 
+/** "0 mm" when nothing falls, else the amount to a tenth ("0.4 mm"). */
+private fun rainAmount(mm: Double): String = if (mm < 0.05) "0 mm" else WeatherUnits.formatPrecipMm(mm)
+
 /**
- * Rain for one step: a bar for how much, the amount in millimetres, and the chance of any.
- * A dry step says so with a dash.
+ * Rain for one step: a bar for how much, and the amount in millimetres. A dry step says
+ * so with a dash.
  */
 @Composable
 private fun RainCell(step: HourlyForecast, modifier: Modifier) {
-    val pop = step.precipProbability ?: 0
     val mm = step.precipitation ?: 0.0
-    val wet = pop > 0 || mm >= 0.1
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.width(18.dp).height(10.dp), contentAlignment = Alignment.BottomCenter) {
             if (mm >= 0.1) {
@@ -492,12 +493,6 @@ private fun RainCell(step: HourlyForecast, modifier: Modifier) {
             fontSize = 10.sp,
             fontWeight = if (mm >= 0.1) FontWeight.SemiBold else FontWeight.Normal,
             color = if (mm >= 0.1) WeatherRain else TextTertiary,
-            maxLines = 1,
-        )
-        Text(
-            if (pop > 0) "$pop%" else " ",
-            fontSize = 9.sp,
-            color = if (wet) WeatherRain.copy(alpha = 0.75f) else TextTertiary,
             maxLines = 1,
         )
     }
@@ -539,9 +534,6 @@ private fun DayRow(
                 day.precipitation?.takeIf { it >= 0.1 }?.let {
                     Text(WeatherUnits.formatPrecipMm(it), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = WeatherRain, maxLines = 1)
                 }
-                day.precipProbability?.takeIf { it >= 10 }?.let {
-                    Text("$it%", fontSize = 9.sp, color = WeatherRain.copy(alpha = 0.75f), maxLines = 1)
-                }
             }
             Text(
                 WeatherUnits.formatTempValue(day.minTemp, tempUnit),
@@ -571,7 +563,7 @@ private fun DayRow(
                 AppIcons.ChevronDown,
                 contentDescription = if (open) "Hide ${day.date}'s hours" else "Show ${day.date}'s hours",
                 tint = TextTertiary,
-                modifier = Modifier.size(16.dp).rotate(chevron),
+                modifier = Modifier.size(16.dp).graphicsLayer { rotationZ = chevron },
             )
         }
         AnimatedVisibility(open, enter = MacroMotion.expandEnter, exit = MacroMotion.expandExit) {

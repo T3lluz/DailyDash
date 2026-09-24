@@ -159,6 +159,7 @@ fun HealthScreen(
     val weekInsights by healthViewModel.weekInsights.collectAsState()
     val previousWeekHistory by healthViewModel.previousWeekHistory.collectAsState()
     val vitalsState by healthViewModel.vitalsState.collectAsState()
+    val birthYear by healthViewModel.birthYear.collectAsState()
     val sleepNights by healthViewModel.sleepNights.collectAsState()
     val sleepLoaded by healthViewModel.sleepLoaded.collectAsState()
     val hourlySteps by healthViewModel.hourlySteps.collectAsState()
@@ -427,6 +428,8 @@ fun HealthScreen(
                             onRequestPermission = {
                                 hcPermissionLauncher.launch(healthViewModel.healthConnectPermissions)
                             },
+                            birthYear = birthYear,
+                            onSetBirthYear = healthViewModel::setBirthYear,
                         )
                     }
                     "ACTIVITIES" -> {

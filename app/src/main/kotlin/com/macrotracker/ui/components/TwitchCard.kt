@@ -63,6 +63,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -109,9 +110,9 @@ private val TwHairline = Border
 private val TwLive = Color(0xFFEB0400)
 private val TwSharp = RoundedCornerShape(8.dp)
 
-private enum class TwHubTab(val label: String) {
-    LIVE("Live"),
-    CHANNELS("Channels"),
+private enum class TwHubTab(val label: String, val icon: ImageVector) {
+    LIVE("Live", AppIcons.Radio),
+    CHANNELS("Channels", AppIcons.List),
 }
 
 private fun openUrl(context: Context, url: String) {
@@ -235,6 +236,7 @@ fun TwitchCard(viewModel: TwitchViewModel = hiltViewModel()) {
                 TwitchCollapsedGlance(
                     twitchState = twitchState,
                     streams = successStreams,
+                    watching = trackedChannels,
                     selectedChannelId = selectedChannelId,
                     onChannelSelected = { selectedChannelId = it },
                     onOpenManage = {
@@ -256,61 +258,26 @@ fun TwitchCard(viewModel: TwitchViewModel = hiltViewModel()) {
             WidgetExpandSection(visible = expanded) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Spacer(modifier = Modifier.height(14.dp))
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        TwHubTab.entries.forEach { tab ->
-                            val active = selectedTab == tab
-                            val bg by animateColorAsState(
-                                if (active) TwPurple else TwSurface,
-                                MacroMotion.colorTween(160),
-                                label = "twTabBg",
-                            )
-                            val fg by animateColorAsState(
-                                if (active) Color.White else TextSecondary,
-                                MacroMotion.colorTween(160),
-                                label = "twTabFg",
-                            )
-                            val badge = when (tab) {
-                                TwHubTab.LIVE -> successStreams.size.takeIf { it > 0 }
-                                TwHubTab.CHANNELS -> trackedChannels.size.takeIf { it > 0 }
+                    SegmentedTabs(
+                        tabs = TwHubTab.entries.map { tab ->
+                            val count = when (tab) {
+                                TwHubTab.LIVE -> successStreams.size
+                                TwHubTab.CHANNELS -> trackedChannels.size
                             }
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                                modifier = Modifier
-                                    .clip(TwSharp)
-                                    .background(bg)
-                                    .clickable {
-                                        haptics.tick()
-                                        selectedTabName = tab.name
-                                    }
-                                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                            ) {
-                                if (tab == TwHubTab.LIVE && active) {
-                                    LivePulseDot(color = TwLive, size = LivePulseSpec.SizeTwitch, style = LivePulseStyle.Rings)
-                                }
-                                Text(
-                                    tab.label.uppercase(),
-                                    color = fg,
-                                    fontWeight = FontWeight.Black,
-                                    fontSize = 11.sp,
-                                    letterSpacing = 0.8.sp,
-                                )
-                                if (badge != null) {
-                                    Text(
-                                        "$badge",
-                                        color = if (active) Color.White.copy(alpha = 0.75f) else TextSecondary,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                    )
-                                }
-                            }
-                        }
-                    }
+                            SegmentedTab(
+                                key = tab.name,
+                                label = if (count > 0) "${tab.label} · $count" else tab.label,
+                                icon = tab.icon,
+                                accent = TwPurple,
+                            )
+                        },
+                        selectedKey = selectedTab.name,
+                        onSelect = { key ->
+                            if (key != selectedTabName) haptics.tick()
+                            selectedTabName = key
+                        },
+                        compact = true,
+                    )
 
                     Spacer(modifier = Modifier.height(12.dp))
                     HorizontalDivider(color = TwHairline, thickness = 0.5.dp)
@@ -424,10 +391,56 @@ fun TwitchCard(viewModel: TwitchViewModel = hiltViewModel()) {
 
 }
 
+/**
+ * Nobody is on air: says so, with the faces of the first few channels being watched, so
+ * the card still shows whose streams it is waiting for.
+ */
+@Composable
+private fun OffAirRow(watching: List<TwitchChannel>) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(TwSharp)
+            .background(TwSurface)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(AppIcons.Radio, null, tint = TextSecondary, modifier = Modifier.size(20.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text("Nobody's live right now", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+            Text(
+                "Checking every minute",
+                fontSize = 11.sp,
+                color = TextSecondary,
+                maxLines = 1,
+            )
+        }
+        val faces = watching.filter { it.profileImageUrl.isNotBlank() }.take(4)
+        if (faces.isNotEmpty()) {
+            Row(horizontalArrangement = Arrangement.spacedBy((-8).dp)) {
+                faces.forEach { channel ->
+                    AsyncImage(
+                        model = channel.profileImageUrl,
+                        contentDescription = channel.displayName,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(26.dp)
+                            .clip(CircleShape)
+                            .border(1.5.dp, TwSurface, CircleShape)
+                            .graphicsLayer { alpha = 0.7f },
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun TwitchCollapsedGlance(
     twitchState: TwitchUiState,
     streams: List<TwitchStream>,
+    watching: List<TwitchChannel>,
     selectedChannelId: String?,
     onChannelSelected: (String?) -> Unit,
     onOpenManage: () -> Unit,
@@ -477,34 +490,11 @@ private fun TwitchCollapsedGlance(
             }
         }
         is TwitchUiState.Loading, TwitchUiState.Idle -> {
-            ContentSkeleton(
-                tiles = 3,
-                tileHeight = 130.dp,
-                lines = 0,
-                accent = TwHairline,
-                surface = TwSurface,
-                tileShape = TwSharp,
-            )
+            MediaCarouselSkeleton(color = TwHairline)
         }
         is TwitchUiState.Success -> {
             if (streams.isEmpty()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(TwSharp)
-                        .background(TwSurface)
-                        .padding(horizontal = 14.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Icon(AppIcons.Radio, null, tint = TextSecondary, modifier = Modifier.size(20.dp))
-                    Text(
-                        "Nobody you follow is live right now",
-                        fontSize = 13.sp,
-                        color = TextSecondary,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
+                OffAirRow(watching = watching)
             } else {
                 CompactLiveFeed(
                     streams = streams,

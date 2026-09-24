@@ -119,6 +119,13 @@ class SettingsRepository @Inject constructor(
     private val _activeCaloriesEnabled = MutableStateFlow(healthPrefs.getBoolean("active_calories_enabled", true))
     val activeCaloriesEnabled: StateFlow<Boolean> = _activeCaloriesEnabled
 
+    /**
+     * Year of birth, 0 when not given. Only the Health estimates read it: an age-predicted
+     * maximum heart rate makes an estimated VO₂ max and resting energy far closer.
+     */
+    private val _birthYear = MutableStateFlow(healthPrefs.getInt(KEY_BIRTH_YEAR, 0))
+    val birthYear: StateFlow<Int> = _birthYear
+
     private val _githubToken = MutableStateFlow(prefs.getString(KEY_GITHUB_TOKEN, "") ?: "")
     val githubToken: StateFlow<String> = _githubToken
 
@@ -248,6 +255,13 @@ class SettingsRepository @Inject constructor(
         _masterHealthConnectEnabled.value = enabled
     }
 
+    /** 0 clears it. */
+    fun setBirthYear(year: Int) {
+        val value = year.takeIf { it in 1900..2100 } ?: 0
+        healthPrefs.edit { putInt(KEY_BIRTH_YEAR, value) }
+        _birthYear.value = value
+    }
+
     fun setWeatherEnabled(enabled: Boolean) {
         prefs.edit { putBoolean("weather_enabled", enabled) }
         _weatherEnabled.value = enabled
@@ -342,6 +356,7 @@ class SettingsRepository @Inject constructor(
         const val KEY_TECH_SUPPORT_BRAIN = "tech_support_brain"
         const val KEY_HERMES_LAST_REACHABLE = "hermes_last_reachable"
         const val KEY_HERMES_PERMISSION = "hermes_permission"
+        const val KEY_BIRTH_YEAR = "birth_year"
         const val TECH_SUPPORT_AUTO = "auto"
         const val TECH_SUPPORT_HERMES = "hermes"
         const val TECH_SUPPORT_PHONE = "phone"

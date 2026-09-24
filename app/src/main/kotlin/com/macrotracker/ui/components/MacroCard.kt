@@ -62,10 +62,11 @@ fun MacroCard(
     // so navigating away and back does not re-trigger the entrance fade.
     var hasAnimated by rememberSaveable { mutableStateOf(false) }
 
-    // Only allocate the Animatable when we actually need to animate.
-    // Once hasAnimated=true we skip the graphicsLayer alpha entirely.
+    // Starts fully shown once the card has faded in, so coming back never fades it again.
     val alpha = remember { Animatable(if (hasAnimated) 1f else 0f) }
-    val scrollIdle = !LocalTickersPaused.current
+    // Only the entrance cares whether a list is scrolling. Once it has run, not reading
+    // the local keeps every card from recomposing each time a scroll starts or stops.
+    val scrollIdle = hasAnimated || !LocalTickersPaused.current
 
     LaunchedEffect(Unit) {
         if (!hasAnimated) {
@@ -79,19 +80,13 @@ fun MacroCard(
         }
     }
 
-    // Skip the graphicsLayer overhead once the card is fully visible —
-    // a graphicsLayer with alpha=1 and no other transforms is effectively free
-    // but avoids allocating an extra layer in RenderNode when alpha < 1.
-    val alphaVal = if (hasAnimated) 1f else alpha.value
-
     Card(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp)
-            .then(
-                if (alphaVal < 1f) Modifier.graphicsLayer { this.alpha = alphaVal }
-                else Modifier
-            ),
+            // Read in the draw phase, so the fade redraws the card instead of
+            // recomposing it every frame.
+            .graphicsLayer { this.alpha = if (hasAnimated) 1f else alpha.value },
         shape = MacroCardShape,
         colors = CardDefaults.cardColors(containerColor = Surface),
         border = BorderStroke(1.dp, borderColor),

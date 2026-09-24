@@ -123,13 +123,23 @@ com.macrotracker/
                               metric failed, so the ViewModel can tell "empty" from "broken".
                               Body & Vitals: `readBodyVitals()` reads Weight, BodyFat, Height, Vo2Max,
                               HRV (RMSSD), RestingHR, SpO2, RespiratoryRate, BodyTemperature,
-                              BasalMetabolicRate, BloodPressure (90 days; the rate-like vitals as one
-                              mean per day over 30) and Hydration per day (14), each only when granted,
-                              and reports the rest in `BodyVitals.notShared`. `readSleepNights()` groups
+                              BasalMetabolicRate, BloodPressure, LeanBodyMass, BoneMass, BodyWaterMass,
+                              BloodGlucose (90 days; the rate-like vitals as one mean per day over 30),
+                              Hydration per day (14) and SkinTemperature (only where Health Connect has
+                              `FEATURE_SKIN_TEMPERATURE`; the sheet asks via `requestablePermissions()`),
+                              each only when granted, and reports the rest in `BodyVitals.notShared`.
+                              Heart rate is also read in half hours (`HrBucket`, 30 days) for what an
+                              HR-only watch still tells: resting HR when nothing writes one
+                              (`derivedRestingHr`, `restingHrDerived`), sleeping HR and each day's
+                              range. 90 days of daily peaks and the last 60 days' outdoor runs feed
+                              `estimateVo2Max` when nothing writes VO₂ max; `estimateBmr` fills resting
+                              energy. Those tiles carry an "Est." badge; the birth year
+                              (`SettingsRepository.birthYear`, asked in the card) sharpens both. `readSleepNights()` groups
                               two weeks of sessions by the 18:00 → 18:00 sleep day; `readHourlySteps()`
                               is today in 24 one-hour slices. HealthVitals.kt holds the pure maths
                               (daily means, 30-day baselines, readiness, sleep consistency, BMI / blood
-                              pressure / VO₂ max bands); HealthVitalsTest pins it.
+                              pressure / VO₂ max / glucose bands, the heart-rate derivations and
+                              estimates); HealthVitalsTest pins it.
     f1/                    ← F1Repository via Ktor + OpenF1 API (https://api.openf1.org/v1/);
                               15-min in-memory + SharedPrefs disk cache. F1Circuits: circuit outlines from
                               bacinger/f1-circuits matched by coordinates (nearest within ~25 km), folded into a
@@ -219,7 +229,10 @@ com.macrotracker/
                               only; tap a peek to bring it in). F1CircuitMap.kt: the dashboard's four-pass circuit
                               (kerb, bed, marque line, car) that paints its lap on screen, with a
                               `CircuitMapWeight` per place and `CircuitMotion` STILL / PAINT_ONCE / BACKDROP
-                              (replays, and keeps a dim car lapping). GitHubContributionGraph.kt: the year with
+                              (replays, and keeps a dim car lapping). F1Card.kt: the F1 hub in the app's look
+                              (inset wells, stat tiles and pills like Health; round team-ringed faces; logo tiles
+                              that fall back to `F1Format.teamCode`), its five tabs a `SegmentedTabs(stacked =
+                              true)` (icon over label). GitHubContributionGraph.kt: the year with
                               the snake. ServerCharts.kt / ServerVitals.kt: 270° dials with an average notch,
                               mirrored area charts, the scrubbable history chart, stacked meters, uptime bars,
                               fact chips. DeviceCodePanel.kt: GitHub/Twitch device-code
@@ -314,7 +327,7 @@ The **Health screen** uses the same draggable pattern with a separate key (`heal
 ```
 "DAILY_HEALTH:true,SLEEP:true,ACTIVITIES:true,VITALS:true,BODY_STATS:true,HISTORY:true,SUMMARY:true,ADD_ENTRY:true,WEEK_AT_A_GLANCE:true,RECENT_LOGS:true"
 ```
-A card missing from a saved order (one added in an update) is slotted in after the card that precedes it by default (`parseWidgetConfig`), not appended. `DAILY_HEALTH` is the hero Daily Health card (Apple-style activity rings, readiness from last night's sleep + HRV + resting HR against the person's own 30-day baseline, today's steps hour by hour, and dynamic today metrics). **`SLEEP`** is last night in full (score, bed → wake, stage mix, hypnogram) over a two-week schedule chart; tap or drag a night to read it, with bedtime/wake regularity and sleep debt below. **`VITALS`** (Body & Vitals) is one tile per measure Health Connect has (HRV, resting HR, weight + BMI, body fat, VO₂ max, blood pressure, SpO₂, respiration, temperature, hydration, resting energy); a tile opens its scrubbable trend with the person's usual range. Shared pieces (chips, delta pills that know which way is good, sparklines, stat tiles) live in `health/HealthUiKit.kt`. The tab pulls to refresh (`HealthViewModel.refresh()`), and Trends pages back `HealthViewModel.MAX_WEEKS_BACK` weeks with week-over-week deltas. **`ACTIVITIES`** lists the **last month** of workouts synced through Health Connect (Garmin Connect, Google Fit, Samsung Health, Strava, and others): type, source, duration, distance, pace, heart rate, elevation, and a GPS route map when the session includes one. A featured hero card sits above three compact rows, with **Show N more** revealing the rest in a scroll box. GPS is read up front only for the newest `EAGER_ROUTE_COUNT` sessions; the rest resolve through `HealthViewModel.onActivityExpanded()` when a row is opened (`routeResolved` gates the "Loading map…" placeholder). `WEEK_AT_A_GLANCE` is the Macro Trends widget (7/14/30-day nutrition chart + per-day food logs), moved from the former History tab.
+A card missing from a saved order (one added in an update) is slotted in after the card that precedes it by default (`parseWidgetConfig`), not appended. `DAILY_HEALTH` is the hero Daily Health card (Apple-style activity rings, readiness from last night's sleep + HRV + resting HR against the person's own 30-day baseline, today's steps hour by hour, and dynamic today metrics). **`SLEEP`** is last night in full (score, bed → wake, stage mix, hypnogram) over a two-week schedule chart; tap or drag a night to read it, with bedtime/wake regularity and sleep debt below. **`VITALS`** (Body & Vitals) is one tile per measure Health Connect has (HRV, resting HR, sleeping HR, daily heart rate, weight + BMI, body fat, lean mass, body water, bone mass, VO₂ max, blood pressure, glucose, SpO₂, respiration, body and skin temperature, hydration, resting energy), plus estimates marked "Est." where nothing writes the measure (resting HR, VO₂ max, resting energy); a tile opens its scrubbable trend with the person's usual range. Shared pieces (chips, delta pills that know which way is good, sparklines, stat tiles) live in `health/HealthUiKit.kt`. The tab pulls to refresh (`HealthViewModel.refresh()`), and Trends pages back `HealthViewModel.MAX_WEEKS_BACK` weeks with week-over-week deltas. **`ACTIVITIES`** lists the **last month** of workouts synced through Health Connect (Garmin Connect, Google Fit, Samsung Health, Strava, and others): type, source, duration, distance, pace, heart rate, elevation, and a GPS route map when the session includes one. A featured hero card sits above three compact rows, with **Show N more** revealing the rest in a scroll box. GPS is read up front only for the newest `EAGER_ROUTE_COUNT` sessions; the rest resolve through `HealthViewModel.onActivityExpanded()` when a row is opened (`routeResolved` gates the "Loading map…" placeholder). `WEEK_AT_A_GLANCE` is the Macro Trends widget (7/14/30-day nutrition chart + per-day food logs), moved from the former History tab.
 
 ### App Widgets (Glance)
 Five home-screen widgets: **Weather**, **Calendar**, **F1**, **Server** and **GitHub**, registered in `DashWidgets.all` and the manifest. Every one is resizable and switches layout on `WidgetDims(LocalSize.current).cols/rows`: a smaller size drops whole sections, never squeezes them.
@@ -395,6 +408,8 @@ Briefly tell the user:
 
 ### Compose Strong Skipping
 Strong skipping is the Compose compiler default on Kotlin 2.x, so there is no flag in `app/build.gradle.kts`. Composables with unstable parameters will skip recomposition automatically — avoid fighting this with `@Stable`/`@Immutable` unless you observe real correctness issues.
+
+**Per-frame values stay out of composition.** Anything that changes every frame (a fade, a pulse, a chevron's turn, a press scale) is kept as a `State` and read inside `graphicsLayer { }`, a `Canvas`/`drawBehind` block or a layout lambda, never as a plain value in the composable body: `MacroCard`'s entrance fade, `LivePulseDot`, `TypingDots` and the expand chevrons do this. `MacroCard` also stops reading `LocalTickersPaused` once its entrance has run, so scroll starts and stops don't recompose every card. The draggable Home/Health lists give each card its own `contentType` (its id), so a slot is only reused for the same card.
 
 ## Important Files to Read First
 - `di/AppModule.kt` — understand what is injected and how

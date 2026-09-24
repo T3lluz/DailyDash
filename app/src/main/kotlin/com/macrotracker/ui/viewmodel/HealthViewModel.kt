@@ -154,7 +154,13 @@ class HealthViewModel @Inject constructor(
     private val _macroHistoryLoading = MutableStateFlow(false)
     val macroHistoryLoading: StateFlow<Boolean> = _macroHistoryLoading
 
-    val healthConnectPermissions = HealthConnectRepository.PERMISSIONS
+    /** What the permission sheet asks for (skin temperature only where Health Connect has it). */
+    val healthConnectPermissions: Set<String> by lazy { healthConnectRepository.requestablePermissions() }
+
+    /** Birth year for the VO₂ max and resting-energy estimates; 0 until the person gives one. */
+    val birthYear: StateFlow<Int> = settingsRepository.birthYear
+
+    fun setBirthYear(year: Int) = settingsRepository.setBirthYear(year)
 
     /**
      * Health Connect is refusing reads for permissions it reports as granted —

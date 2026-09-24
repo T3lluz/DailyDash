@@ -5,6 +5,7 @@ import android.widget.Toast
 import androidx.glance.GlanceId
 import androidx.glance.action.ActionParameters
 import androidx.glance.appwidget.action.ActionCallback
+import com.macrotracker.widget.kit.WidgetHaptics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -16,6 +17,7 @@ import kotlinx.coroutines.withContext
 class RefreshWidgetAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         val spec = parameters[SpecKey]?.let(DashWidgets::byKey) ?: WeatherWidgetSpec
+        WidgetHaptics.click(context)
         toast(context, "Updating ${spec.title.lowercase()}…")
         WidgetRefreshWorker.enqueueForcedRefresh(context, spec.key)
     }

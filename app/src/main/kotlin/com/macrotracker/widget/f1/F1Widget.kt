@@ -29,7 +29,6 @@ import com.macrotracker.widget.kit.rememberWidgetData
 import com.macrotracker.widget.kit.AccentRule
 import com.macrotracker.widget.kit.AiBriefLine
 import com.macrotracker.widget.kit.Chip
-import com.macrotracker.widget.kit.ColorBar
 import com.macrotracker.widget.kit.FramePad
 import com.macrotracker.widget.kit.HGap
 import com.macrotracker.widget.kit.IconButton
@@ -175,7 +174,7 @@ private fun StripLayout(v: F1View) {
             Column(horizontalAlignment = Alignment.End) {
                 Text("LEADER", style = ts(WT.Micro, WK.Sub, FontWeight.Bold), maxLines = 1)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    ColorBar(F1C.team(leader.color), 12.dp)
+                    DriverAvatar(leader.code, leader.color, leader.number, F1Pics.STRIP)
                     HGap(4.dp)
                     Text(leader.code, style = ts(WT.Body, WK.Text, FontWeight.Bold), maxLines = 1)
                 }
@@ -269,7 +268,7 @@ private fun SmallLayout(v: F1View) {
     val innerH = v.dims.innerHeight.value
     val race = v.race
     val showTop3 = innerH >= 150f && v.s.drivers.size >= 3
-    val bodyH = innerH - 26f - (if (showTop3) 25f else 0f)
+    val bodyH = innerH - 26f - (if (showTop3) 27f else 0f)
     Column(GlanceModifier.fillMaxSize()) {
         MiniTopBar(v, showSprint = true)
         VGap(2.dp)
@@ -347,7 +346,7 @@ private fun WideShortLayout(v: F1View) {
     val innerW = v.dims.innerWidth
     val innerH = v.dims.innerHeight.value
     val five = v.dims.cols >= 5
-    val heroW = innerW * (if (five) 0.44f else 0.54f)
+    val heroW = innerW * (if (five) 0.4f else 0.54f)
     val race = v.race
     Row(GlanceModifier.fillMaxSize()) {
         Box(GlanceModifier.width(heroW).fillMaxHeight().panel(WK.Card, 14.dp)) {

@@ -242,14 +242,14 @@ object WxFormat {
         h.epochMillis?.let { hour(it, zone, is24h) } ?: h.label
 
     /**
-     * Rain for one hour in a tight column: the chance when the forecast has one ("40%"),
-     * else the amount ("0.4"), else nothing.
+     * Rain for one hour: how much falls ("0.4 mm"; "0.4" in a [narrow] column whose header
+     * carries the unit), or nothing when it stays dry.
      */
-    fun hourRain(h: WxHour): String? = when {
-        (h.pop ?: 0) >= 10 -> "${h.pop}%"
-        h.precipMm >= 0.1 -> mmShort(h.precipMm)
-        else -> null
-    }
+    fun hourRain(h: WxHour, narrow: Boolean = false): String? =
+        if (h.precipMm >= 0.1) (if (narrow) mmShort(h.precipMm) else mm(h.precipMm)) else null
+
+    /** A day's rain for a narrow column: the day's total ("3.2 mm"), or nothing below half a millimetre. */
+    fun dayRain(day: WxDay): String? = day.precipMm?.takeIf { it >= 0.5 }?.let(::mm)
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -335,7 +335,8 @@ object WxConditions {
 
 /**
  * When rain comes in the next [windowHours], by the in-app forecast's rule: an hour is wet
- * at a 40 % chance or 0.3 mm, and dry again under 30 % and 0.1 mm.
+ * at a 40 % chance or 0.3 mm, and dry again under 30 % and 0.1 mm. What it says about the
+ * rain is always the amount in millimetres, never the chance.
  */
 data class RainOutlook(
     val kind: Kind,
@@ -344,8 +345,6 @@ data class RainOutlook(
     /** When it eases; null when it doesn't within the window (or it's dry). */
     val endEpoch: Long?,
     val totalMm: Double,
-    /** Highest chance in the window, 0 when the forecast has none. */
-    val maxPop: Int,
     val windowHours: Int,
     /** "Snow" when the wet hours are snow or sleet, else "Rain". */
     val word: String,
@@ -360,22 +359,18 @@ data class RainOutlook(
     }
 
     /**
-     * The tile's small line: "next 12 h", "until 5 PM", "60% · 1.2 mm". [narrow] tiles
-     * drop the unit: "60% · 1.2".
+     * The tile's small line: "next 12 h", "until 5 PM", "1.2 mm". The amount keeps its unit
+     * even on [narrow] tiles: without a chance beside it, "1.2 mm" is shorter than
+     * "60% · 1.2" was, and a bare "1.2" says nothing.
      */
+    @Suppress("UNUSED_PARAMETER")
     fun detail(zone: ZoneId, is24h: Boolean, narrow: Boolean = false): String = when (kind) {
         Kind.DRY -> "next $windowHours h"
-        Kind.NOW -> endEpoch?.let { "until ${WxFormat.hour(it, zone, is24h)}" } ?: amount(narrow) ?: "all $windowHours h"
-        Kind.LATER -> amount(narrow) ?: endEpoch?.let { "until ${WxFormat.hour(it, zone, is24h)}" } ?: "in the next $windowHours h"
+        Kind.NOW -> endEpoch?.let { "until ${WxFormat.hour(it, zone, is24h)}" } ?: amount() ?: "all $windowHours h"
+        Kind.LATER -> amount() ?: endEpoch?.let { "until ${WxFormat.hour(it, zone, is24h)}" } ?: "in the next $windowHours h"
     }
 
-    private fun amount(narrow: Boolean): String? {
-        val parts = buildList {
-            if (maxPop > 0) add("$maxPop%")
-            if (totalMm >= 0.1) add(if (narrow) WxFormat.mmShort(totalMm) else WxFormat.mm(totalMm))
-        }
-        return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
-    }
+    private fun amount(): String? = if (totalMm >= 0.1) WxFormat.mm(totalMm) else null
 
     /** For tight spots: "Dry next 12 h", "Rain until 5 PM", "Rain from 3 PM". */
     fun short(zone: ZoneId, is24h: Boolean): String = when (kind) {
@@ -384,7 +379,7 @@ data class RainOutlook(
         Kind.LATER -> "$word from " + (startEpoch?.let { WxFormat.hour(it, zone, is24h) } ?: "later")
     }
 
-    /** One line: "Dry for the next 12 h", "Rain now, easing 5 PM", "Rain from 3 PM · 60%". */
+    /** One line: "Dry for the next 12 h", "Rain now, easing 5 PM", "Rain from 3 PM · 2.4 mm". */
     fun sentence(zone: ZoneId, is24h: Boolean): String = when (kind) {
         Kind.DRY -> "Dry for the next $windowHours h"
         Kind.NOW -> endEpoch?.let { "$word now, easing ${WxFormat.hour(it, zone, is24h)}" }
@@ -392,7 +387,7 @@ data class RainOutlook(
         Kind.LATER -> buildString {
             append("$word from ")
             append(startEpoch?.let { WxFormat.hour(it, zone, is24h) } ?: "later")
-            if (maxPop > 0) append(" · $maxPop%") else if (totalMm >= 0.1) append(" · ${WxFormat.mm(totalMm)}")
+            if (totalMm >= 0.1) append(" · ${WxFormat.mm(totalMm)}")
         }
     }
 
@@ -408,7 +403,6 @@ data class RainOutlook(
         fun of(hours: List<WxHour>, windowHours: Int = 12, nowSymbol: String? = null): RainOutlook {
             val window = hours.take(windowHours)
             val total = window.sumOf { it.precipMm }
-            val maxPop = window.maxOfOrNull { it.pop ?: 0 } ?: 0
             val wetNow = nowSymbol?.let(WxConditions::isWetSymbol) == true && window.firstOrNull()?.let(::isDry) != true
             val firstWet = window.indexOfFirst(::isWet)
             val snowy = window.filter(::isWet).let { wet ->
@@ -418,13 +412,13 @@ data class RainOutlook(
             return when {
                 wetNow || firstWet == 0 -> {
                     val end = window.drop(1).firstOrNull(::isDry)?.epochMillis
-                    RainOutlook(Kind.NOW, null, end, total, maxPop, window.size, word)
+                    RainOutlook(Kind.NOW, null, end, total, window.size, word)
                 }
                 firstWet > 0 -> {
                     val end = window.drop(firstWet + 1).firstOrNull(::isDry)?.epochMillis
-                    RainOutlook(Kind.LATER, window[firstWet].epochMillis, end, total, maxPop, window.size, word)
+                    RainOutlook(Kind.LATER, window[firstWet].epochMillis, end, total, window.size, word)
                 }
-                else -> RainOutlook(Kind.DRY, null, null, total, maxPop, window.size, word)
+                else -> RainOutlook(Kind.DRY, null, null, total, window.size, word)
             }
         }
     }
@@ -716,11 +710,11 @@ object WeatherBrief {
         )
         appendLine("Rest of today: high ${t(highC)}, low ${t(lowC)}." + (sunset?.let { " Sunset ${WxFormat.clock(it, is24h)}." } ?: ""))
         if (hours.isNotEmpty()) {
-            appendLine("Coming hours (time, temperature, sky, rain mm, chance):")
+            appendLine("Coming hours (time, temperature, sky, rain mm):")
             hours.take(18).forEach { h ->
                 val at = WxFormat.hourLabel(h, zone, is24h)
                 val sky = WxConditions.baseSymbol(h.symbol)
-                appendLine("$at ${t(h.tempC)} $sky ${WxFormat.mmShort(h.precipMm)}mm" + (h.pop?.let { " $it%" } ?: ""))
+                appendLine("$at ${t(h.tempC)} $sky ${WxFormat.mmShort(h.precipMm)}mm")
             }
         }
         val today = now.toLocalDate()
@@ -728,8 +722,7 @@ object WeatherBrief {
             val name = if (d.date == today.plusDays(1)) "Tomorrow" else d.date.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.US)
             appendLine(
                 "$name: ${t(d.minC)} to ${t(d.maxC)}, ${WxConditions.baseSymbol(d.symbol)}" +
-                    (d.precipMm?.takeIf { it >= 0.1 }?.let { ", ${WxFormat.mm(it)} rain" } ?: "") +
-                    (d.pop?.let { " ($it%)" } ?: "") + ".",
+                    (d.precipMm?.takeIf { it >= 0.1 }?.let { ", ${WxFormat.mm(it)} rain" } ?: "") + ".",
             )
         }
         wearHeadline?.let { appendLine("A local rule already tells them what to wear: \"$it\".") }
@@ -737,7 +730,8 @@ object WeatherBrief {
         append(
             "Write the brief for their weather widget, under 100 characters: how the rest of the day goes " +
                 "(when rain starts or stops, how the temperature moves) and, if it's evening, the start of tomorrow. " +
-                "Use clock times as written above. Don't repeat the current temperature or the clothing rule word for word.",
+                "Use clock times as written above, and give rain in millimetres, never as a chance. " +
+                "Don't repeat the current temperature or the clothing rule word for word.",
         )
     }
 }

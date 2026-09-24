@@ -677,7 +677,8 @@ private fun HourEntry(v: WxView, hours: List<WxHour>, i: Int, wide: Boolean, rai
     val h = hours[i]
     val newDay = i == 0 || (h.date != null && h.date != hours[i - 1].date)
     Column(GlanceModifier.fillMaxWidth().clickable(v.openApp)) {
-        if (newDay) ListDayHeader(WxFormat.dayHeader(h.date, v.today), first = i == 0)
+        // The rain column's unit sits in the first day's header, so each hour can say just "0.4".
+        if (newDay) ListDayHeader(WxFormat.dayHeader(h.date, v.today), first = i == 0, unit = if (rain && i == 0) "mm" else null)
         Row(
             GlanceModifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -705,7 +706,7 @@ private fun HourEntry(v: WxView, hours: List<WxHour>, i: Int, wide: Boolean, rai
                 )
             }
             if (rain) {
-                val r = WxFormat.hourRain(h)
+                val r = WxFormat.hourRain(h, narrow = true)
                 Text(
                     r ?: "–",
                     style = ts(WT.Micro, if (r != null) WK.WeatherRain else WK.Faint, FontWeight.Medium, TextAlign.End),
@@ -718,14 +719,15 @@ private fun HourEntry(v: WxView, hours: List<WxHour>, i: Int, wide: Boolean, rai
 }
 
 @Composable
-private fun ListDayHeader(label: String, first: Boolean) {
+private fun ListDayHeader(label: String, first: Boolean, unit: String? = null) {
     Row(
         GlanceModifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = if (first) 6.dp else 8.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(GlanceModifier.width(8.dp).height(2.dp).cornerRadius(1.dp).background(WK.Weather.cp())) {}
         HGap(5.dp)
-        Text(label, style = ts(WT.Micro, WK.Weather, FontWeight.Bold), maxLines = 1)
+        Text(label, style = ts(WT.Micro, WK.Weather, FontWeight.Bold), maxLines = 1, modifier = GlanceModifier.defaultWeight())
+        if (unit != null) Text(unit, style = ts(WT.Micro, WK.WeatherRain, FontWeight.Bold, TextAlign.End), maxLines = 1)
     }
 }
 
@@ -769,7 +771,7 @@ private fun DayRow(v: WxView, day: WxDay, span: Pair<Double, Double>, cols: DayC
         HGap(if (tight) 2.dp else 4.dp)
         if (cols.rainDp > 0f) {
             Text(
-                dayRain(day) ?: "",
+                WxFormat.dayRain(day) ?: "",
                 style = ts(WT.Micro, WK.WeatherRain, FontWeight.Medium),
                 maxLines = 1,
                 modifier = GlanceModifier.width(cols.rainDp.dp),
@@ -805,13 +807,6 @@ private fun DayRow(v: WxView, day: WxDay, span: Pair<Double, Double>, cols: DayC
             modifier = GlanceModifier.width(if (tight) 26.dp else 28.dp),
         )
     }
-}
-
-/** A day's rain for its narrow column: the chance when known, else a real amount. */
-private fun dayRain(day: WxDay): String? = when {
-    (day.pop ?: 0) >= 20 -> "${day.pop}%"
-    (day.precipMm ?: 0.0) >= 0.5 -> WxFormat.mm(day.precipMm ?: 0.0)
-    else -> null
 }
 
 @Composable

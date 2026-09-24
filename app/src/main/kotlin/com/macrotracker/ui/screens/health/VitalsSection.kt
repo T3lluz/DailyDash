@@ -23,8 +23,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -54,6 +56,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -62,16 +65,23 @@ import com.macrotracker.data.health.BodyVitals
 import com.macrotracker.data.health.VitalBaseline
 import com.macrotracker.data.health.VitalKind
 import com.macrotracker.data.health.VitalSample
+import com.macrotracker.data.health.Vo2Estimate
+import com.macrotracker.data.health.Vo2Method
 import com.macrotracker.data.health.bloodPressureCategory
 import com.macrotracker.data.health.bmiCategory
 import com.macrotracker.data.health.changeOver
 import com.macrotracker.data.health.dailyMeans
+import com.macrotracker.data.health.estimateBmr
+import com.macrotracker.data.health.estimateVo2Max
+import com.macrotracker.data.health.glucoseCategory
+import com.macrotracker.data.health.maxHeartRate
 import com.macrotracker.data.health.percentChange
 import com.macrotracker.data.health.vitalBaseline
 import com.macrotracker.data.health.vo2MaxCategory
 import com.macrotracker.ui.components.CardHeader
 import com.macrotracker.ui.components.ContentSkeleton
 import com.macrotracker.ui.components.MacroCard
+import com.macrotracker.ui.components.MacroTextField
 import com.macrotracker.ui.components.StatusCopy
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Background
@@ -80,11 +90,18 @@ import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.HealthBloodPressure
 import com.macrotracker.ui.theme.HealthBmr
 import com.macrotracker.ui.theme.HealthBodyFat
+import com.macrotracker.ui.theme.HealthBodyWater
+import com.macrotracker.ui.theme.HealthBoneMass
+import com.macrotracker.ui.theme.HealthGlucose
+import com.macrotracker.ui.theme.HealthHeartRate
 import com.macrotracker.ui.theme.HealthHrv
 import com.macrotracker.ui.theme.HealthHydration
+import com.macrotracker.ui.theme.HealthLeanMass
 import com.macrotracker.ui.theme.HealthOxygen
 import com.macrotracker.ui.theme.HealthRespiratory
 import com.macrotracker.ui.theme.HealthRestingHr
+import com.macrotracker.ui.theme.HealthSkinTemp
+import com.macrotracker.ui.theme.HealthSleep
 import com.macrotracker.ui.theme.HealthTemperature
 import com.macrotracker.ui.theme.HealthVo2
 import com.macrotracker.ui.theme.HealthWeight
@@ -96,11 +113,13 @@ import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.theme.TextTertiary
 import com.macrotracker.ui.theme.Warning
+import com.macrotracker.ui.theme.chipFill
 import com.macrotracker.ui.util.HapticHelper
 import com.macrotracker.ui.util.rememberReducedMotion
 import com.macrotracker.ui.viewmodel.VitalsUiState
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
@@ -112,6 +131,11 @@ import kotlin.math.roundToInt
  * Body & Vitals — every body measurement and slow-moving vital Health Connect
  * holds, one tile each with its latest reading and trend. Tap a tile to open
  * its chart under the row; drag across the chart to read any day.
+ *
+ * What nothing writes but the app can work out is filled in and marked as an
+ * estimate: resting, sleeping and daily heart rate from heart-rate readings,
+ * VO₂ max from runs or heart rate, resting energy from the body. [birthYear]
+ * (0 when unknown) sharpens the last two.
  */
 @Composable
 fun VitalsSection(
@@ -119,11 +143,17 @@ fun VitalsSection(
     haptics: HapticHelper,
     onRequestPermission: () -> Unit,
     delayMs: Long = 30L,
+    birthYear: Int = 0,
+    onSetBirthYear: (Int) -> Unit = {},
 ) {
     val zone = remember { ZoneId.systemDefault() }
     val vitals = (state as? VitalsUiState.Success)?.vitals
-    val tiles = remember(vitals) { vitals?.let { buildVitalTiles(it, zone) }.orEmpty() }
+    val knownYear = birthYear.takeIf { it > 0 }
+    val tiles = remember(vitals, knownYear) {
+        vitals?.let { buildVitalTiles(it, zone, knownYear, Instant.now()) }.orEmpty()
+    }
     var open by rememberSaveable { mutableStateOf<String?>(null) }
+    var askBirthYear by rememberSaveable { mutableStateOf(false) }
 
     MacroCard(delayMs = delayMs) {
         CardHeader(
@@ -203,7 +233,22 @@ fun VitalsSection(
                                 exit = MacroMotion.expandExit,
                             ) {
                                 val shown = row.firstOrNull { it.kind == lastShown[0] }
-                                if (shown != null) VitalDetail(tile = shown, zone = zone, haptics = haptics)
+                                if (shown != null) {
+                                    VitalDetail(
+                                        tile = shown,
+                                        zone = zone,
+                                        haptics = haptics,
+                                        birthYear = knownYear,
+                                        onEditBirthYear = if (shown.usesAge) {
+                                            {
+                                                haptics.tick()
+                                                askBirthYear = true
+                                            }
+                                        } else {
+                                            null
+                                        },
+                                    )
+                                }
                             }
                         }
                     }
@@ -211,17 +256,46 @@ fun VitalsSection(
             }
         }
 
+        val askForYear = vitals != null && knownYear == null && tiles.isNotEmpty() && wantsBirthYear(vitals)
+        if (askForYear) {
+            Spacer(modifier = Modifier.height(10.dp))
+            VitalsPromptRow(
+                icon = AppIcons.Gauge,
+                title = "Add your birth year",
+                body = "For VO₂ max and resting-energy estimates from your heart rate and body",
+                action = "Add",
+                onClick = {
+                    haptics.tick()
+                    askBirthYear = true
+                },
+            )
+        }
         val missing = vitals?.notShared.orEmpty()
         if (tiles.isNotEmpty() && missing.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(10.dp))
-            NotSharedRow(
-                kinds = missing,
+            Spacer(modifier = Modifier.height(if (askForYear) 8.dp else 10.dp))
+            VitalsPromptRow(
+                icon = AppIcons.Lock,
+                title = "${missing.size} more not shared",
+                body = missing.sortedBy { it.ordinal }.joinToString(" · ") { it.label },
+                action = "Allow",
                 onClick = {
                     haptics.tick()
                     onRequestPermission()
                 },
             )
         }
+    }
+
+    if (askBirthYear) {
+        BirthYearDialog(
+            current = knownYear,
+            onDismiss = { askBirthYear = false },
+            onSave = {
+                haptics.click()
+                onSetBirthYear(it)
+                askBirthYear = false
+            },
+        )
     }
 }
 
@@ -247,13 +321,28 @@ private data class VitalTile(
     val guides: List<Double> = emptyList(),
     val lastAt: Instant? = null,
     val note: String? = null,
+    /** [ESTIMATE] when the app worked the value out rather than read it. */
+    val badge: String? = null,
+    /** A change against a baseline, where zero and below are readings too. */
+    val signed: Boolean = false,
+    /** The estimate leans on the birth year, so its detail offers to set it. */
+    val usesAge: Boolean = false,
     val format: (Double) -> String,
 )
 
 private fun oneDecimal(v: Double): String = String.format(Locale.getDefault(), "%.1f", v)
 private fun whole(v: Double): String = v.roundToInt().toString()
 
-private fun buildVitalTiles(v: BodyVitals, zone: ZoneId): List<VitalTile> = buildList {
+/** Marks a tile worked out by the app rather than read from Health Connect. */
+private const val ESTIMATE = "Est."
+
+private fun buildVitalTiles(v: BodyVitals, zone: ZoneId, birthYear: Int?, now: Instant): List<VitalTile> = buildList {
+    val today = now.atZone(zone).toLocalDate()
+    val weight = dailyMeans(v.weightKg, zone)
+    val fat = dailyMeans(v.bodyFatPct, zone)
+    val weightNow = weight.lastOrNull()?.value
+    fun shareOfWeight(kg: Double): String? = weightNow?.takeIf { it > 0.0 }?.let { "${whole(kg / it * 100)}% of body weight" }
+
     v.hrvMs.lastOrNull()?.let { last ->
         val base = vitalBaseline(v.hrvMs)
         val pct = base?.let { percentChange(last.value, it.mean) }
@@ -287,20 +376,74 @@ private fun buildVitalTiles(v: BodyVitals, zone: ZoneId): List<VitalTile> = buil
                 color = HealthRestingHr,
                 value = whole(last.value),
                 unit = "bpm",
-                caption = base?.let { "Usual ${whole(it.mean)} bpm" } ?: "Daily average",
+                caption = base?.let { "Usual ${whole(it.mean)} bpm" }
+                    ?: if (v.restingHrDerived) "Lowest half hour" else "Daily average",
+                badge = if (v.restingHrDerived) ESTIMATE else null,
                 change = delta,
                 changeText = delta?.let { "${abs(it).roundToInt()} bpm" },
                 better = Better.LOWER,
                 series = v.restingHr,
                 baseline = base,
                 lastAt = last.time,
-                note = "A few beats above your usual can be the first sign of stress, a hard day or " +
-                    "a cold coming on. Fitter hearts beat slower at rest.",
+                note = buildString {
+                    if (v.restingHrDerived) {
+                        append("Worked out from your heart rate, as nothing writes resting heart rate to ")
+                        append("Health Connect: each day's lowest half-hour average. ")
+                    }
+                    append("A few beats above your usual can be the first sign of stress, a hard day or ")
+                    append("a cold coming on. Fitter hearts beat slower at rest.")
+                },
                 format = { "${whole(it)} bpm" },
             ),
         )
     }
-    val weight = dailyMeans(v.weightKg, zone)
+    v.sleepingHr.lastOrNull()?.let { last ->
+        val base = vitalBaseline(v.sleepingHr, minDays = 3)
+        val delta = base?.let { last.value - it.mean }
+        add(
+            VitalTile(
+                kind = VitalKind.SLEEPING_HR,
+                icon = AppIcons.Moon,
+                color = HealthSleep,
+                value = whole(last.value),
+                unit = "bpm",
+                caption = base?.let { "Usual ${whole(it.mean)} bpm" } ?: "Average asleep",
+                change = delta,
+                changeText = delta?.let { "${abs(it).roundToInt()} bpm" },
+                better = Better.LOWER,
+                series = v.sleepingHr,
+                baseline = base,
+                lastAt = last.time,
+                note = "Your average heart rate through each night's sleep, from the readings inside it. " +
+                    "A late meal, alcohol, a hard evening session or a cold coming on all hold it up; " +
+                    "a well-recovered night sits at or below your usual.",
+                format = { "${whole(it)} bpm" },
+            ),
+        )
+    }
+    v.heartRateDaily.lastOrNull()?.let { last ->
+        val series = v.heartRateDaily.map { VitalSample(it.date.atTime(LocalTime.NOON).atZone(zone).toInstant(), it.avg) }
+        val base = vitalBaseline(series)
+        val delta = base?.let { last.avg - it.mean }
+        add(
+            VitalTile(
+                kind = VitalKind.HEART_RATE,
+                icon = AppIcons.HeartRateMonitor,
+                color = HealthHeartRate,
+                value = whole(last.avg),
+                unit = "bpm avg",
+                caption = "${whole(last.min)}–${whole(last.max)} bpm" + if (last.date == today) " today" else "",
+                change = delta,
+                changeText = delta?.let { "${abs(it).roundToInt()} bpm" },
+                series = series,
+                baseline = base,
+                lastAt = series.last().time,
+                note = "The average of every heart-rate reading each day, with its lowest and highest. " +
+                    "Busy days run higher; a higher average on a quiet day is worth a look.",
+                format = { "${whole(it)} bpm" },
+            ),
+        )
+    }
     weight.lastOrNull()?.let { last ->
         val change = changeOver(weight, 30)
         val bmi = v.bmi
@@ -331,7 +474,6 @@ private fun buildVitalTiles(v: BodyVitals, zone: ZoneId): List<VitalTile> = buil
             ),
         )
     }
-    val fat = dailyMeans(v.bodyFatPct, zone)
     fat.lastOrNull()?.let { last ->
         val change = changeOver(fat, 30)
         add(
@@ -354,27 +496,111 @@ private fun buildVitalTiles(v: BodyVitals, zone: ZoneId): List<VitalTile> = buil
             ),
         )
     }
-    v.vo2Max.lastOrNull()?.let { last ->
+    val lean = dailyMeans(v.leanMassKg, zone)
+    lean.lastOrNull()?.let { last ->
+        val change = changeOver(lean, 30)
+        add(
+            VitalTile(
+                kind = VitalKind.LEAN_MASS,
+                icon = AppIcons.Dumbbell,
+                color = HealthLeanMass,
+                value = oneDecimal(last.value),
+                unit = "kg",
+                caption = shareOfWeight(last.value) ?: "${v.leanMassKg.size} readings",
+                change = change,
+                changeText = change?.let { "${oneDecimal(abs(it))} kg" },
+                better = Better.HIGHER,
+                series = lean,
+                lastAt = v.leanMassKg.last().time,
+                note = "Everything that isn't fat: muscle, bone, organs and water. Change is over the " +
+                    "last 30 days.",
+                format = { "${oneDecimal(it)} kg" },
+            ),
+        )
+    }
+    val water = dailyMeans(v.bodyWaterKg, zone)
+    water.lastOrNull()?.let { last ->
+        val change = changeOver(water, 30)
+        add(
+            VitalTile(
+                kind = VitalKind.BODY_WATER,
+                icon = AppIcons.Droplets,
+                color = HealthBodyWater,
+                value = oneDecimal(last.value),
+                unit = "kg",
+                caption = shareOfWeight(last.value) ?: "${v.bodyWaterKg.size} readings",
+                change = change,
+                changeText = change?.let { "${oneDecimal(abs(it))} kg" },
+                series = water,
+                lastAt = v.bodyWaterKg.last().time,
+                note = "Water in your body as your scale reads it. Most adults sit between 45 and 65% " +
+                    "of body weight, and it moves with what you drank and ate, so read the trend.",
+                format = { "${oneDecimal(it)} kg" },
+            ),
+        )
+    }
+    val bone = dailyMeans(v.boneMassKg, zone)
+    bone.lastOrNull()?.let { last ->
+        add(
+            VitalTile(
+                kind = VitalKind.BONE_MASS,
+                icon = AppIcons.Bone,
+                color = HealthBoneMass,
+                value = oneDecimal(last.value),
+                unit = "kg",
+                caption = shareOfWeight(last.value) ?: "${v.boneMassKg.size} readings",
+                series = bone,
+                lastAt = v.boneMassKg.last().time,
+                note = "A smart scale's estimate from your weight and impedance. Bone barely changes, " +
+                    "so a move of more than a couple of hundred grams is usually the scale.",
+                format = { "${oneDecimal(it)} kg" },
+            ),
+        )
+    }
+    val recordedVo2 = v.vo2Max.lastOrNull()
+    if (recordedVo2 != null) {
         val change = changeOver(v.vo2Max, 90)
         add(
             VitalTile(
                 kind = VitalKind.VO2_MAX,
                 icon = AppIcons.Gauge,
                 color = HealthVo2,
-                value = oneDecimal(last.value),
+                value = oneDecimal(recordedVo2.value),
                 unit = "ml/kg/min",
-                caption = vo2MaxCategory(last.value),
-                captionColor = vo2Color(last.value),
+                caption = vo2MaxCategory(recordedVo2.value),
+                captionColor = vo2Color(recordedVo2.value),
                 change = change,
                 changeText = change?.let { oneDecimal(abs(it)) },
                 better = Better.HIGHER,
                 series = v.vo2Max,
-                lastAt = last.time,
+                lastAt = recordedVo2.time,
                 note = "How much oxygen your body can use at full effort, the best single measure of " +
                     "cardio fitness. Bands are sex-neutral and change is over 90 days.",
                 format = { oneDecimal(it) },
             ),
         )
+    } else {
+        val maxHr = maxHeartRate(v.dailyPeakHr, birthYear, today)
+        estimateVo2Max(v.runs, v.restingHr, maxHr, now)?.let { est ->
+            add(
+                VitalTile(
+                    kind = VitalKind.VO2_MAX,
+                    icon = AppIcons.Gauge,
+                    color = HealthVo2,
+                    value = oneDecimal(est.value),
+                    unit = "ml/kg/min",
+                    caption = vo2MaxCategory(est.value),
+                    captionColor = vo2Color(est.value),
+                    badge = ESTIMATE,
+                    better = Better.HIGHER,
+                    series = est.series,
+                    lastAt = est.series.lastOrNull()?.time,
+                    usesAge = true,
+                    note = vo2EstimateNote(est, fromAge = birthYear != null),
+                    format = { oneDecimal(it) },
+                ),
+            )
+        }
     }
     v.bloodPressure.lastOrNull()?.let { last ->
         val category = bloodPressureCategory(last.systolic, last.diastolic)
@@ -397,6 +623,31 @@ private fun buildVitalTiles(v: BodyVitals, zone: ZoneId): List<VitalTile> = buil
                 lastAt = last.time,
                 note = "Categories follow the American Heart Association. Dashed lines mark 120/80.",
                 format = { whole(it) },
+            ),
+        )
+    }
+    v.glucoseLatest?.let { latest ->
+        val category = glucoseCategory(latest.value)
+        add(
+            VitalTile(
+                kind = VitalKind.GLUCOSE,
+                icon = AppIcons.TestTube,
+                color = HealthGlucose,
+                value = oneDecimal(latest.value),
+                unit = "mmol/L",
+                caption = category,
+                captionColor = when (category) {
+                    "In range" -> Success
+                    "Raised" -> Warning
+                    else -> Error
+                },
+                series = v.glucose,
+                baseline = vitalBaseline(v.glucose, minDays = 3),
+                guides = listOf(3.9, 7.8),
+                lastAt = latest.time,
+                note = "The tile shows your latest reading and the chart each day's average. Dashed " +
+                    "lines mark 3.9 and 7.8 mmol/L, the usual range outside meals.",
+                format = { "${oneDecimal(it)} mmol/L" },
             ),
         )
     }
@@ -465,15 +716,40 @@ private fun buildVitalTiles(v: BodyVitals, zone: ZoneId): List<VitalTile> = buil
             ),
         )
     }
+    v.skinTempDelta.lastOrNull()?.let { last ->
+        add(
+            VitalTile(
+                kind = VitalKind.SKIN_TEMP,
+                icon = AppIcons.ThermometerSun,
+                color = HealthSkinTemp,
+                value = signedOneDecimal(last.value),
+                unit = "°C",
+                caption = when {
+                    last.value >= SKIN_TEMP_NOTABLE -> "Above your baseline"
+                    last.value <= -SKIN_TEMP_NOTABLE -> "Below your baseline"
+                    else -> "Near your baseline"
+                },
+                captionColor = if (abs(last.value) >= SKIN_TEMP_NOTABLE) Warning else null,
+                series = v.skinTempDelta,
+                guides = listOf(0.0),
+                signed = true,
+                lastAt = last.time,
+                note = "How far your skin temperature sat from your watch's own baseline each night. " +
+                    "Half a degree or more above it can come with illness, alcohol, a late workout " +
+                    "or your cycle.",
+                format = { "${signedOneDecimal(it)} °C" },
+            ),
+        )
+    }
     if (v.hydrationByDay.any { it.value > 0.0 }) {
         val logged = v.hydrationByDay.filter { it.value > 0.0 }
-        val today = v.hydrationByDay.lastOrNull()?.value ?: 0.0
+        val todayLitres = v.hydrationByDay.lastOrNull()?.value ?: 0.0
         add(
             VitalTile(
                 kind = VitalKind.HYDRATION,
                 icon = AppIcons.GlassWater,
                 color = HealthHydration,
-                value = oneDecimal(today),
+                value = oneDecimal(todayLitres),
                 unit = "L today",
                 caption = "Avg ${oneDecimal(logged.map { it.value }.average())} L on ${logged.size} days",
                 series = v.hydrationByDay,
@@ -484,20 +760,87 @@ private fun buildVitalTiles(v: BodyVitals, zone: ZoneId): List<VitalTile> = buil
             ),
         )
     }
-    v.bmrKcal?.let { bmr ->
+    val recordedBmr = v.bmrKcal
+    if (recordedBmr != null) {
         add(
             VitalTile(
                 kind = VitalKind.BMR,
                 icon = AppIcons.Flame,
                 color = HealthBmr,
-                value = String.format(Locale.getDefault(), "%,d", bmr.roundToInt()),
+                value = kcal(recordedBmr),
                 unit = "kcal/day",
                 caption = "Burned at rest",
                 format = { whole(it) },
             ),
         )
+    } else {
+        // One estimate per weigh-in, each with the body fat known on that day.
+        val series = weight.mapNotNull { w ->
+            val fatThen = fat.lastOrNull { !it.time.isAfter(w.time) }?.value
+            val day = w.time.atZone(zone).toLocalDate()
+            estimateBmr(w.value, fatThen, v.heightM, birthYear, day)?.let { VitalSample(w.time, it) }
+        }
+        series.lastOrNull()?.let { last ->
+            val fromLean = fat.lastOrNull { !it.time.isAfter(last.time) }?.value?.let { it in 3.0..70.0 } == true
+            add(
+                VitalTile(
+                    kind = VitalKind.BMR,
+                    icon = AppIcons.Flame,
+                    color = HealthBmr,
+                    value = kcal(last.value),
+                    unit = "kcal/day",
+                    caption = "Burned at rest",
+                    badge = ESTIMATE,
+                    series = series,
+                    lastAt = last.time,
+                    usesAge = !fromLean,
+                    note = if (fromLean) {
+                        "Worked out from your lean mass (Katch–McArdle), as nothing writes resting " +
+                            "energy to Health Connect."
+                    } else {
+                        "Worked out from your weight, height and age (Mifflin–St Jeor, halfway between " +
+                            "its male and female forms, as the app doesn't know your sex), as nothing " +
+                            "writes resting energy to Health Connect."
+                    },
+                    format = { "${whole(it)} kcal" },
+                ),
+            )
+        }
     }
 }
+
+private fun kcal(value: Double): String = String.format(Locale.getDefault(), "%,d", value.roundToInt())
+
+/** "+0.3" / "−0.2": a change against a baseline, with its sign always shown. */
+private fun signedOneDecimal(v: Double): String =
+    String.format(Locale.getDefault(), "%+.1f", v).replace('-', '−')
+
+/** A night this far from the skin-temperature baseline is worth a word. */
+private const val SKIN_TEMP_NOTABLE = 0.5
+
+private fun vo2EstimateNote(est: Vo2Estimate, fromAge: Boolean): String {
+    val max = "${whole(est.maxHr)} bpm " + if (fromAge) {
+        "(the higher of your age's predicted maximum and the highest you've reached)"
+    } else {
+        "(the highest you've reached lately; add your birth year to use your age too)"
+    }
+    return when (est.method) {
+        Vo2Method.RUNS ->
+            "Estimated from ${est.runs} run${if (est.runs == 1) "" else "s"} in the last 60 days, as " +
+                "nothing writes VO₂ max to Health Connect: the oxygen each run's pace costs, scaled by " +
+                "how hard your heart worked against a maximum of $max. The middle of your three best " +
+                "runs counts; hills, heat and GPS drift move single runs."
+        Vo2Method.HEART_RATE ->
+            "Estimated from heart rate alone, as nothing writes VO₂ max to Health Connect: 15.3 × " +
+                "your maximum of $max ÷ your resting heart rate this week. A rough guide: outdoor runs " +
+                "with heart rate give a closer one."
+    }
+}
+
+/** Whether a birth year would let the card estimate something it can't without one. */
+private fun wantsBirthYear(v: BodyVitals): Boolean =
+    (v.vo2Max.isEmpty() && v.restingHr.isNotEmpty()) ||
+        (v.bmrKcal == null && v.weightKg.isNotEmpty() && v.heightM != null && v.bodyFatPct.isEmpty())
 
 private fun vo2Color(vo2: Double): Color = when {
     vo2 >= 42 -> Success
@@ -549,7 +892,12 @@ private fun VitalTileView(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
+            tile.badge?.let {
+                Spacer(modifier = Modifier.width(4.dp))
+                EstimateBadge(it, tile.color)
+            }
             tile.lastAt?.let {
+                Spacer(modifier = Modifier.width(4.dp))
                 Text(whenLabel(it, zone), fontSize = 10.sp, color = TextTertiary, maxLines = 1)
             }
         }
@@ -595,6 +943,7 @@ private fun VitalTileView(
                     color = tile.color,
                     modifier = Modifier.fillMaxSize(),
                     strokeWidthDp = 1.6f,
+                    signed = tile.signed,
                 )
             }
         }
@@ -613,8 +962,31 @@ private fun VitalTileView(
 
 private const val SPARK_POINTS = 30
 
+/** A tinted "Est." chip beside a tile's name. */
 @Composable
-private fun NotSharedRow(kinds: Set<VitalKind>, onClick: () -> Unit) {
+private fun EstimateBadge(text: String, color: Color) {
+    Text(
+        text,
+        fontSize = 9.sp,
+        fontWeight = FontWeight.SemiBold,
+        color = color,
+        maxLines = 1,
+        modifier = Modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(color.chipFill())
+            .padding(horizontal = 5.dp, vertical = 1.dp),
+    )
+}
+
+/** One tappable line under the tiles: what's missing, and the one action that adds it. */
+@Composable
+private fun VitalsPromptRow(
+    icon: ImageVector,
+    title: String,
+    body: String,
+    action: String,
+    onClick: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -624,17 +996,12 @@ private fun NotSharedRow(kinds: Set<VitalKind>, onClick: () -> Unit) {
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(AppIcons.Lock, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(15.dp))
+        Icon(icon, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(15.dp))
         Spacer(modifier = Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
+            Text(title, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
             Text(
-                "${kinds.size} more not shared",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = TextPrimary,
-            )
-            Text(
-                kinds.sortedBy { it.ordinal }.joinToString(" · ") { it.label },
+                body,
                 fontSize = 11.sp,
                 color = TextTertiary,
                 maxLines = 2,
@@ -642,15 +1009,60 @@ private fun NotSharedRow(kinds: Set<VitalKind>, onClick: () -> Unit) {
             )
         }
         Spacer(modifier = Modifier.width(8.dp))
-        Text("Allow", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Primary)
+        Text(action, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Primary)
         Icon(AppIcons.ChevronRight, contentDescription = null, tint = Primary, modifier = Modifier.size(14.dp))
     }
+}
+
+/** Birth year, for the age in the VO₂ max and resting-energy estimates. */
+@Composable
+private fun BirthYearDialog(current: Int?, onDismiss: () -> Unit, onSave: (Int) -> Unit) {
+    val thisYear = remember { LocalDate.now().year }
+    var text by rememberSaveable { mutableStateOf(current?.toString().orEmpty()) }
+    val year = text.toIntOrNull()?.takeIf { it in (thisYear - 100)..(thisYear - 10) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Surface,
+        title = { Text("Your birth year", color = TextPrimary) },
+        text = {
+            Column {
+                Text(
+                    "Your age sets the maximum heart rate the VO₂ max estimate works against, and " +
+                        "goes into resting energy. It stays on this phone.",
+                    color = TextSecondary,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+                MacroTextField(
+                    value = text,
+                    onValueChange = { value -> text = value.filter { it.isDigit() }.take(4) },
+                    placeholder = "e.g. ${thisYear - 30}",
+                    keyboardType = KeyboardType.Number,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { year?.let(onSave) }, enabled = year != null) {
+                Text("Save", color = if (year != null) Primary else TextTertiary)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel", color = TextSecondary) }
+        },
+    )
 }
 
 // ── Detail ────────────────────────────────────────────────────────────────
 
 @Composable
-private fun VitalDetail(tile: VitalTile, zone: ZoneId, haptics: HapticHelper) {
+private fun VitalDetail(
+    tile: VitalTile,
+    zone: ZoneId,
+    haptics: HapticHelper,
+    birthYear: Int?,
+    onEditBirthYear: (() -> Unit)?,
+) {
     // -1 = the latest reading, so new data moves the readout along with it.
     var picked by remember(tile.kind) { mutableIntStateOf(-1) }
     val dateFmt = remember { DateTimeFormatter.ofPattern("EEE d MMM") }
@@ -707,6 +1119,29 @@ private fun VitalDetail(tile: VitalTile, zone: ZoneId, haptics: HapticHelper) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(it, fontSize = 11.sp, color = TextTertiary, lineHeight = 15.sp)
         }
+        if (onEditBirthYear != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(onClick = onEditBirthYear)
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    birthYear?.let { "Born $it" } ?: "No birth year set",
+                    fontSize = 11.sp,
+                    color = TextSecondary,
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    if (birthYear != null) "Change" else "Add",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Primary,
+                )
+            }
+        }
     }
 }
 
@@ -718,7 +1153,7 @@ private fun readout(tile: VitalTile, index: Int): String {
 
 @Composable
 private fun VitalSummaryRow(tile: VitalTile) {
-    val values = tile.series.map { it.value }.filter { it > 0.0 }
+    val values = tile.series.map { it.value }.filter { tile.signed || it > 0.0 }
     if (values.isEmpty()) return
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         if (tile.lower.isNotEmpty()) {
@@ -771,9 +1206,10 @@ private fun VitalTrendChart(
     val t0 = series.first().time.epochSecond
     val t1 = series.last().time.epochSecond
     val span = (t1 - t0).coerceAtLeast(1L).toFloat()
+    fun reading(v: Double) = tile.signed || v > 0.0
     val allValues = buildList {
-        series.forEach { if (it.value > 0.0) add(it.value) }
-        tile.lower.forEach { if (it.value > 0.0) add(it.value) }
+        series.forEach { if (reading(it.value)) add(it.value) }
+        tile.lower.forEach { if (reading(it.value)) add(it.value) }
         addAll(tile.guides)
         tile.baseline?.let {
             add(it.mean - it.sd)
@@ -782,7 +1218,13 @@ private fun VitalTrendChart(
     }
     val rawMin = if (tile.bars) 0.0 else allValues.minOrNull() ?: 0.0
     val rawMax = allValues.maxOrNull() ?: 1.0
-    val pad = ((rawMax - rawMin) * 0.12).coerceAtLeast(if (tile.bars) 0.0 else 0.5)
+    val pad = ((rawMax - rawMin) * 0.12).coerceAtLeast(
+        when {
+            tile.bars -> 0.0
+            tile.signed -> 0.1
+            else -> 0.5
+        },
+    )
     val yMin = if (tile.bars) 0.0 else rawMin - pad
     val yMax = rawMax + pad
 
@@ -900,7 +1342,7 @@ private fun VitalTrendChart(
         fun linePath(points: List<VitalSample>): Path = Path().apply {
             var started = false
             points.forEachIndexed { i, p ->
-                if (p.value <= 0.0) return@forEachIndexed
+                if (!reading(p.value)) return@forEachIndexed
                 val x = xOf(i)
                 val y = yOf(p.value)
                 if (!started) {
@@ -937,10 +1379,10 @@ private fun VitalTrendChart(
             )
             if (series.size <= 45) {
                 series.forEachIndexed { i, s ->
-                    if (s.value > 0.0) drawCircle(tile.color, 2.dp.toPx(), Offset(xOf(i), yOf(s.value)))
+                    if (reading(s.value)) drawCircle(tile.color, 2.dp.toPx(), Offset(xOf(i), yOf(s.value)))
                 }
                 tile.lower.forEachIndexed { i, s ->
-                    if (s.value > 0.0) drawCircle(tile.color.copy(alpha = 0.55f), 1.8.dp.toPx(), Offset(xOf(i), yOf(s.value)))
+                    if (reading(s.value)) drawCircle(tile.color.copy(alpha = 0.55f), 1.8.dp.toPx(), Offset(xOf(i), yOf(s.value)))
                 }
             }
         }

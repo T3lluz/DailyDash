@@ -71,10 +71,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -120,13 +120,12 @@ private val YtDark     = Color(0xFF0F0F0F)
 private val YtSurface  = Surface
 private val YtCardBg   = SurfaceChrome
 private val YtHairline = Border
-private val YtSharp    = RoundedCornerShape(6.dp)
 
 private enum class YtLayout { LIST, GRID }
 
-private enum class YtHubTab(val label: String) {
-    FEED("Feed"),
-    CHANNELS("Channels"),
+private enum class YtHubTab(val label: String, val icon: ImageVector) {
+    FEED("Feed", AppIcons.TvPlay),
+    CHANNELS("Channels", AppIcons.List),
 }
 
 /** Walk ContextWrappers — ModalBottomSheet does not expose the Activity as LocalContext. */
@@ -282,58 +281,26 @@ fun YoutubeCard(viewModel: YouTubeViewModel = hiltViewModel()) {
                     Spacer(Modifier.height(14.dp))
 
                     // ── Hub tabs ──────────────────────────────────────────
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        YtHubTab.entries.forEach { tab ->
-                            val active = selectedTab == tab
-                            val bg by animateColorAsState(
-                                if (active) YtRed else YtSurface,
-                                MacroMotion.colorTween(160),
-                                label = "ytTabBg",
-                            )
-                            val fg by animateColorAsState(
-                                if (active) Color.White else TextSecondary,
-                                MacroMotion.colorTween(160),
-                                label = "ytTabFg",
-                            )
-                            val badge = when (tab) {
-                                YtHubTab.FEED -> successVideos.size.takeIf { it > 0 }
-                                YtHubTab.CHANNELS -> trackedChannels.size.takeIf { it > 0 }
+                    SegmentedTabs(
+                        tabs = YtHubTab.entries.map { tab ->
+                            val count = when (tab) {
+                                YtHubTab.FEED -> successVideos.size
+                                YtHubTab.CHANNELS -> trackedChannels.size
                             }
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                                modifier = Modifier
-                                    .clip(YtSharp)
-                                    .background(bg)
-                                    .clickable {
-                                        haptics.tick()
-                                        selectedTabName = tab.name
-                                    }
-                                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                            ) {
-                                Text(
-                                    tab.label.uppercase(),
-                                    color = fg,
-                                    fontWeight = FontWeight.Black,
-                                    fontSize = 11.sp,
-                                    letterSpacing = 0.8.sp,
-                                )
-                                if (badge != null) {
-                                    Text(
-                                        "$badge",
-                                        color = if (active) Color.White.copy(alpha = 0.75f) else TextSecondary,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                    )
-                                }
-                            }
-                        }
-                    }
+                            SegmentedTab(
+                                key = tab.name,
+                                label = if (count > 0) "${tab.label} · $count" else tab.label,
+                                icon = tab.icon,
+                                accent = YtRed,
+                            )
+                        },
+                        selectedKey = selectedTab.name,
+                        onSelect = { key ->
+                            if (key != selectedTabName) haptics.tick()
+                            selectedTabName = key
+                        },
+                        compact = true,
+                    )
 
                     Spacer(Modifier.height(12.dp))
                     HorizontalDivider(color = YtHairline, thickness = 0.5.dp)
@@ -493,13 +460,7 @@ private fun YoutubeCollapsedGlance(
             }
         }
         is YouTubeUiState.Loading, YouTubeUiState.Idle -> {
-            ContentSkeleton(
-                tiles = 3,
-                tileAspect = 16f / 9f,
-                lines = 0,
-                accent = YtHairline,
-                surface = YtCardBg,
-            )
+            MediaCarouselSkeleton(color = YtHairline)
         }
         is YouTubeUiState.Success -> {
             CompactVideoFeed(
@@ -717,32 +678,28 @@ private fun CompactVideoFeed(
                     trackedChannels.find { it.channelId == selectedChannelId }?.title ?: ""
                 }
                 Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(YtRed.copy(alpha = 0.12f))
+                        .border(0.5.dp, YtRed.copy(alpha = 0.3f), RoundedCornerShape(999.dp))
+                        .clickable {
+                            haptics.tick()
+                            onChannelSelected(null)
+                        }
+                        .padding(start = 10.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f, fill = false)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(YtRed.copy(alpha = 0.12f))
-                            .border(0.5.dp, YtRed.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
-                            .padding(horizontal = 8.dp, vertical = 3.dp),
-                    ) {
-                        Text(
-                            channelName,
-                            fontSize = 10.sp,
-                            color = YtRed,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
                     Text(
-                        "Tap avatar to clear",
-                        fontSize = 9.sp,
-                        color = TextTertiary,
+                        "${displayedVideos.size} from $channelName",
+                        fontSize = 11.sp,
+                        color = YtRed,
+                        fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
                     )
+                    Icon(AppIcons.Close, contentDescription = "Show every channel", tint = YtRed, modifier = Modifier.size(12.dp))
                 }
             }
         }
@@ -882,34 +839,53 @@ private fun VideoCarouselItem(video: YoutubeVideo, look: MediaItemLook, avatarUr
         ) {
             Icon(AppIcons.Play, null, tint = Color.White, modifier = Modifier.size(14.dp))
         }
-        Column(
+        // Whose video it is, as on YouTube itself: the channel's picture beside the words.
+        Row(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
                 .followVisible(look)
                 .graphicsLayer { alpha = look.textAlpha() }
                 .padding(horizontal = 10.dp, vertical = 9.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.Bottom,
         ) {
-            Text(
-                video.title,
-                style = androidx.compose.ui.text.TextStyle(
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    lineHeight = 16.sp,
-                    shadow = shadow,
-                ),
-                color = Color.White,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                videoMetaLine(video, includeChannel = true),
-                style = androidx.compose.ui.text.TextStyle(fontSize = 10.sp, shadow = shadow),
-                color = Color.White.copy(alpha = 0.8f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (!avatarUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = avatarUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .padding(bottom = 1.dp)
+                        .size(26.dp)
+                        .clip(CircleShape)
+                        .border(1.dp, Color.White.copy(alpha = 0.35f), CircleShape),
+                )
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Text(
+                    video.title,
+                    style = androidx.compose.ui.text.TextStyle(
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        lineHeight = 16.sp,
+                        shadow = shadow,
+                    ),
+                    color = Color.White,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    videoMetaLine(video, includeChannel = true),
+                    style = androidx.compose.ui.text.TextStyle(fontSize = 10.sp, shadow = shadow),
+                    color = Color.White.copy(alpha = 0.8f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }
@@ -2442,7 +2418,10 @@ private fun SuggestionRow(
         // + / check / remove button
         Box(
             modifier = Modifier
-                .scale(btnScale)
+                .graphicsLayer {
+                    scaleX = btnScale
+                    scaleY = btnScale
+                }
                 .size(36.dp)
                 .clip(CircleShape)
                 .background(btnBg)
@@ -2531,7 +2510,10 @@ private fun ChannelListRow(
         // Animated add/check/remove button
         Box(
             modifier = Modifier
-                .scale(btnScale)
+                .graphicsLayer {
+                    scaleX = btnScale
+                    scaleY = btnScale
+                }
                 .size(36.dp)
                 .clip(CircleShape)
                 .background(buttonBg)

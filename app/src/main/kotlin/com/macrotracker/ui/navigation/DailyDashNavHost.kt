@@ -11,7 +11,6 @@ import androidx.navigation.navArgument
 import com.macrotracker.ui.screens.AIScreen
 import com.macrotracker.ui.screens.CameraScanScreen
 import com.macrotracker.ui.screens.HealthScreen
-import com.macrotracker.ui.screens.HelpScreen
 import com.macrotracker.ui.screens.HomeScreen
 import com.macrotracker.ui.screens.ServerScreen
 import com.macrotracker.ui.screens.SettingsScreen
@@ -37,7 +36,6 @@ private val TabOrder = listOf(
 
 private val SubScreens = setOf(
     SubScreenRoutes.STATS,
-    SubScreenRoutes.HELP,
     SubScreenRoutes.WIDGETS,
     SubScreenRoutes.CAMERA_SCAN,
     SettingsRoutes.CONNECTIONS,
@@ -153,14 +151,9 @@ fun DailyDashNavHost(
                 onNavigateToAi = { navController.navigateToSubScreen(SettingsRoutes.AI) },
                 onNavigateToNutrition = { navController.navigateToSubScreen(SettingsRoutes.NUTRITION) },
                 onNavigateToAbout = { navController.navigateToSubScreen(SettingsRoutes.ABOUT) },
-                onNavigateToHelp = { navController.navigateToSubScreen(SubScreenRoutes.HELP) },
                 onNavigateToStats = { navController.navigateToSubScreen(SubScreenRoutes.STATS) },
                 onNavigateToWidgets = { navController.navigateToSubScreen(SubScreenRoutes.WIDGETS) },
-                onReplayTutorial = {
-                    navController.navigate(OnboardingRoutes.WELCOME) {
-                        popUpTo(Screen.Home.route)
-                    }
-                },
+                onNavigateToServers = { navController.navigateToSubScreen(SettingsRoutes.SERVERS) },
             )
         }
 
@@ -205,15 +198,18 @@ fun DailyDashNavHost(
         }
 
         subScreen(SettingsRoutes.ABOUT) { entry ->
-            AboutSettingsScreen(onNavigateBack = { navController.popSubScreen(entry) })
+            AboutSettingsScreen(
+                onNavigateBack = { navController.popSubScreen(entry) },
+                onReplayIntro = {
+                    navController.navigate(OnboardingRoutes.WELCOME) {
+                        popUpTo(Screen.Home.route)
+                    }
+                },
+            )
         }
 
         subScreen(SubScreenRoutes.STATS) { entry ->
             StatsScreen(onNavigateBack = { navController.popSubScreen(entry) })
-        }
-
-        subScreen(SubScreenRoutes.HELP) { entry ->
-            HelpScreen(onNavigateBack = { navController.popSubScreen(entry) })
         }
 
         subScreen(SubScreenRoutes.WIDGETS) { entry ->

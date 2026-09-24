@@ -65,6 +65,7 @@ import com.macrotracker.ui.theme.AppIcons
 @Composable
 fun AboutSettingsScreen(
     onNavigateBack: () -> Unit,
+    onReplayIntro: () -> Unit = {},
 ) {
     val activity = LocalContext.current as ComponentActivity
     val appUpdateViewModel: AppUpdateViewModel = hiltViewModel(viewModelStoreOwner = activity)
@@ -91,7 +92,7 @@ fun AboutSettingsScreen(
     ) {
         SubScreenHeader(
             title = "About",
-            subtitle = "Version, updates, and release notes",
+            subtitle = "Version, updates, release notes and the intro",
             onNavigateBack = onNavigateBack,
         )
         Spacer(modifier = Modifier.height(12.dp))
@@ -260,6 +261,16 @@ fun AboutSettingsScreen(
                     }
                 }
             }
+        }
+
+        MacroCard(delayMs = 90) {
+            SettingsNavRow(
+                icon = AppIcons.GraduationCap,
+                tint = Primary,
+                title = "Replay the intro",
+                summary = "The welcome, permissions and a quick tour of the tabs",
+                onClick = onReplayIntro,
+            )
         }
     }
 }
