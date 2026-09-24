@@ -213,6 +213,18 @@ class F1WidgetLogicTest {
         assertNull(F1SnapshotCodec.decode("garbage"))
     }
 
+    @Test fun mediaKeysFollowWhatARenderKnows() {
+        assertEquals("d_nor", F1MediaKeys.driver("NOR"))
+        // One team under its old and new names, one key.
+        assertEquals(F1MediaKeys.team("RB F1 Team"), F1MediaKeys.team("Racing Bulls"))
+        assertEquals("t_haas", F1MediaKeys.team("Haas F1 Team"))
+        assertEquals(
+            listOf("https://a/1.webp", "https://b/2.png"),
+            F1MediaKeys.candidates(" https://a/1.webp|https://b/2.png||https://a/1.webp|junk"),
+        )
+        assertEquals(emptyList<String>(), F1MediaKeys.candidates(null))
+    }
+
     @Test fun tightClockAndShortWhen() {
         val t = at("2026-09-26T10:30:00")
         assertEquals("10:30a", F1Format.clockTight(t, utc, is24h = false, locale = java.util.Locale.US))
@@ -225,11 +237,13 @@ class F1WidgetLogicTest {
 
     @Test fun teamListsUseNamesOrCodesThroughout() {
         val teams = F1WidgetSample.snapshot(at("2026-09-25T10:00:00"), utc).teams
-        // "Aston Martin" doesn't fit beside the gap at 5 cells, so the gap goes, not the names.
-        assertEquals(TeamColumns(names = true, gap = false), F1Layouts.teamColumns(teams, 167f))
+        // Beside its logo tile "Aston Martin" doesn't fit a 5-cell column even without the
+        // gap, so every row takes its code (the logo still says whose it is) and keeps the gap.
+        assertEquals(TeamColumns(names = false, gap = true), F1Layouts.teamColumns(teams, 167f))
         assertEquals(TeamColumns(names = true, gap = true), F1Layouts.teamColumns(teams, 260f))
         assertEquals(TeamColumns(names = false, gap = false), F1Layouts.teamColumns(teams, 131f))
-        assertEquals(TeamColumns(names = true, gap = true), F1Layouts.teamColumns(teams.take(3), 167f))
+        // The top three's names fit there, so the gap is what goes.
+        assertEquals(TeamColumns(names = true, gap = false), F1Layouts.teamColumns(teams.take(3), 167f))
     }
 
     @Test fun sampleIsARealWeekend() {

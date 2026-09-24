@@ -520,13 +520,16 @@ object F1Layouts {
     fun teamColumns(teams: List<WTeam>, colDp: Float): TeamColumns {
         val narrow = colDp < 120f
         val gapFits = colDp >= 150f
-        val room = colDp - 8f - (if (narrow) 24f else 30f) - (if (colDp >= 210f) 24f else 0f) - (if (narrow) 30f else 36f)
+        // Position, the logo tile (22 dp) and their gaps lead the row.
+        val lead = if (narrow) 13f + 4f + 22f + 4f else 16f + 5f + 22f + 6f
+        val room = colDp - 8f - lead - (if (colDp >= 210f) 24f else 0f) - (if (narrow) 30f else 36f)
         val perChar = if (narrow) 6f else 6.6f
         val longest = teams.maxOfOrNull { F1Format.teamShort(it.name).length } ?: 0
         return when {
             gapFits && longest * perChar <= room - 34f -> TeamColumns(names = true, gap = true)
             longest * perChar <= room -> TeamColumns(names = true, gap = false)
-            else -> TeamColumns(names = false, gap = gapFits)
+            // A bold "MCL" needs ~27 dp; the gap only joins when the codes keep that.
+            else -> TeamColumns(names = false, gap = gapFits && room - 34f >= 27f)
         }
     }
 
@@ -618,4 +621,23 @@ object F1Ai {
             )
         }
     }
+}
+
+// ─────────────────────────────────────────────────────────────────
+//  HEADSHOTS AND LOGOS
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * How the widget files a driver's headshot and a team's logo: by what a render already
+ * knows (the driver's code, the team's name), so the snapshot carries no image URLs.
+ */
+object F1MediaKeys {
+    fun driver(code: String): String = "d_" + code.lowercase(Locale.US).filter { it.isLetterOrDigit() }
+
+    /** "RB F1 Team" and "Racing Bulls" file under one key, as they are one team. */
+    fun team(name: String): String = "t_" + F1Format.teamShort(name).lowercase(Locale.US).filter { it.isLetterOrDigit() }
+
+    /** The repository's headshot field: candidate URLs joined by '|', best first. */
+    fun candidates(raw: String?): List<String> =
+        raw.orEmpty().split('|').map { it.trim() }.filter { it.startsWith("https://") || it.startsWith("http://") }.distinct()
 }

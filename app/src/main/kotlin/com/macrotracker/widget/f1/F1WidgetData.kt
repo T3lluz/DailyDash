@@ -79,17 +79,19 @@ internal object F1WidgetStore {
 
         val ttl = F1Clock.refreshTtlMs(current?.races.orEmpty(), now, zone)
         val due = force || current == null || now - current.fetchedAt >= ttl
-        val fresh: F1Snapshot? = when {
-            due -> withTimeoutOrNull(FETCH_TIMEOUT_MS) { repo.getOverallF1Data(forceRefresh = force) }
-                ?.getOrNull()
-                ?.let { F1SnapshotMapper.from(it, repo.lastFetchTimeMs.takeIf { t -> t > 0L } ?: now, now) }
+        val source: F1Standings? = when {
+            due -> withTimeoutOrNull(FETCH_TIMEOUT_MS) { repo.getOverallF1Data(forceRefresh = force) }?.getOrNull()
             // The app fetched since we did: take it, no network.
-            repo.lastFetchTimeMs > current.fetchedAt ->
-                repo.getCachedF1Data()?.let { F1SnapshotMapper.from(it, repo.lastFetchTimeMs, now) }
+            repo.lastFetchTimeMs > current.fetchedAt -> repo.getCachedF1Data()
             else -> null
-        }?.takeIf { it.hasContent }
+        }
+        val fetchedAt = if (due) repo.lastFetchTimeMs.takeIf { it > 0L } ?: now else repo.lastFetchTimeMs
+        val fresh: F1Snapshot? = source?.let { F1SnapshotMapper.from(it, fetchedAt, now) }?.takeIf { it.hasContent }
 
         if (fresh != null) save(context, fresh)
+        // Faces and logos for whoever is in the standings now; each is fetched once, and a
+        // new season's assets replace last season's as the URLs move.
+        (source ?: repo.getCachedF1Data())?.let { F1WidgetMedia.sync(context, it) }
         val shown = fresh ?: current ?: return
         if (briefShownSomewhere(context)) {
             WidgetAi.brief(

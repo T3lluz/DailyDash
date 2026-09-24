@@ -88,13 +88,55 @@ internal object F1C {
 
 /** Row heights (dp) the layouts budget with when they choose how many rows fit. */
 internal object F1Rows {
-    const val MINI = 17f
-    const val DRIVER = 23f
-    const val TEAM = 27f
-    const val RESULT = 23f
+    const val MINI = 18f
+    const val DRIVER = 24f
+    const val TEAM = 28f
+    const val RESULT = 24f
     const val CALENDAR = 32f
     const val PODIUM = 58f
     const val LABEL = 17f
+}
+
+/**
+ * Sizes of the faces and logo tiles, which stand where the team-colour bars used to: the
+ * colour is still there, as the disc behind a face or the tile behind a logo.
+ */
+internal object F1Pics {
+    /** A standings or result row. */
+    val ROW = 18.dp
+
+    /** The dense rows and the top-three tiles. */
+    val MINI = 14.dp
+
+    val PODIUM = 26.dp
+    val STRIP = 16.dp
+
+    val TILE_W = 22.dp
+    val TILE_H = 16.dp
+    val MINI_TILE_W = 16.dp
+    val MINI_TILE_H = 13.dp
+}
+
+/** A driver's face on a disc of their team's colour (their number while there's no headshot). */
+@Composable
+internal fun DriverAvatar(code: String, color: String, number: String?, size: Dp) {
+    val context = LocalContext.current
+    Image(
+        provider = ImageProvider(F1WidgetMedia.avatar(context, code, color, number, size)),
+        contentDescription = null,
+        modifier = GlanceModifier.size(size),
+    )
+}
+
+/** A team's logo on a tile of its colour (its code while there's no logo). */
+@Composable
+internal fun TeamTile(name: String, color: String, width: Dp = F1Pics.TILE_W, height: Dp = F1Pics.TILE_H) {
+    val context = LocalContext.current
+    Image(
+        provider = ImageProvider(F1WidgetMedia.logoTile(context, name, color, width, height)),
+        contentDescription = null,
+        modifier = GlanceModifier.size(width, height),
+    )
 }
 
 /** Everything a layout needs to draw one render. */
@@ -543,12 +585,13 @@ internal fun DriverRow(v: F1View, d: WDriver, colW: Dp) {
             modifier = GlanceModifier.width(if (narrow) 13.dp else 16.dp),
         )
         HGap(if (narrow) 4.dp else 5.dp)
-        ColorBar(F1C.team(d.color), 13.dp)
+        // Under 100 dp (a 2-wide widget at its smallest) a face would squeeze the code out.
+        if (colW < 100.dp) ColorBar(F1C.team(d.color), 13.dp) else DriverAvatar(d.code, d.color, d.number, F1Pics.ROW)
         HGap(if (narrow) 4.dp else 6.dp)
         // Surnames need ~80 dp beside the gap and points; below that the code, and below
         // ~150 dp the gap goes so the code keeps its room.
         Text(
-            if (colW >= 190.dp) F1Format.surname(d.name) else d.code,
+            if (colW >= 200.dp) F1Format.surname(d.name) else d.code,
             style = ts(if (narrow) WT.Small else WT.Body, WK.Text, if (leader) FontWeight.Bold else FontWeight.Medium),
             maxLines = 1,
             modifier = GlanceModifier.defaultWeight(),
@@ -578,11 +621,15 @@ internal fun DriverRow(v: F1View, d: WDriver, colW: Dp) {
     }
 }
 
-/** Whether every team's short name fits a [MiniRow] at [colW]. */
+/** Whether every team's short name fits a [MiniRow] at [colW], its gap column included when shown. */
 internal fun miniNamesFit(teams: List<WTeam>, colW: Dp): Boolean {
-    val room = colW.value - 12f - 4f - 3f - 5f - (if (colW >= 104.dp) 28f else 0f) - 30f
+    val room = colW.value - 11f - 4f - F1Pics.MINI_TILE_W.value - 4f - (if (miniShowsGap(colW, F1Pics.MINI_TILE_W)) 28f else 0f) - 26f
     return teams.all { F1Format.teamShort(it.name).length * 6f <= room }
 }
+
+/** The gap column shows when a three-letter code keeps its ~24 dp beside it. */
+internal fun miniShowsGap(colW: Dp, picW: Dp): Boolean =
+    colW.value - 11f - 4f - picW.value - 4f - 28f - 26f >= 24f
 
 /** A constructors row with a thin bar of its points against the leader's. */
 @Composable
@@ -591,7 +638,7 @@ internal fun TeamRow(v: F1View, t: WTeam, colW: Dp, cols: TeamColumns) {
     val leader = t.pos == 1
     val color = F1C.team(t.color)
     val base = if (leader) GlanceModifier.fillMaxWidth().panel(WK.Card, 8.dp) else GlanceModifier.fillMaxWidth()
-    val lead = if (narrow) 13.dp + 4.dp + 3.dp + 4.dp else 16.dp + 5.dp + 3.dp + 6.dp
+    val lead = if (narrow) 13.dp + 4.dp + F1Pics.TILE_W + 4.dp else 16.dp + 5.dp + F1Pics.TILE_W + 6.dp
     val barW = (colW - 8.dp - lead - 4.dp).coerceAtLeast(0.dp)
     val frac = if (v.teamLeaderPts > 0.0) (t.points / v.teamLeaderPts).toFloat() else 0f
     Column(base.padding(horizontal = 4.dp, vertical = 3.dp)) {
@@ -603,7 +650,7 @@ internal fun TeamRow(v: F1View, t: WTeam, colW: Dp, cols: TeamColumns) {
                 modifier = GlanceModifier.width(if (narrow) 13.dp else 16.dp),
             )
             HGap(if (narrow) 4.dp else 5.dp)
-            ColorBar(color, 13.dp)
+            TeamTile(t.name, t.color)
             HGap(if (narrow) 4.dp else 6.dp)
             Text(
                 if (cols.names) F1Format.teamShort(t.name) else F1Format.teamCode(t.name),
@@ -651,21 +698,21 @@ private fun PointsBar(width: Dp, fraction: Float, color: Color) {
     }
 }
 
-/** A dense standings row for the smallest sizes: position, team colour, code, points. */
+/** A dense standings row for the smallest sizes: position, face or logo, code, points. */
 @Composable
-internal fun MiniRow(pos: Int, color: Color, label: String, value: String, gap: String?, colW: Dp) {
+internal fun MiniRow(pos: Int, label: String, value: String, gap: String?, colW: Dp, picW: Dp, pic: @Composable () -> Unit) {
     Row(GlanceModifier.fillMaxWidth().padding(vertical = 1.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(
             "$pos",
             style = ts(WT.Tiny, F1C.medal(pos) ?: WK.Muted, FontWeight.Bold, TextAlign.End, mono = true),
             maxLines = 1,
-            modifier = GlanceModifier.width(12.dp),
+            modifier = GlanceModifier.width(11.dp),
         )
         HGap(4.dp)
-        ColorBar(color, 11.dp)
-        HGap(5.dp)
+        pic()
+        HGap(4.dp)
         Text(label, style = ts(WT.Small, WK.Text, FontWeight.Bold), maxLines = 1, modifier = GlanceModifier.defaultWeight())
-        if (gap != null && colW >= 104.dp) {
+        if (gap != null && miniShowsGap(colW, picW)) {
             Text(
                 gap,
                 style = ts(WT.Micro, WK.Muted, FontWeight.Medium, TextAlign.End, mono = true),
@@ -677,7 +724,7 @@ internal fun MiniRow(pos: Int, color: Color, label: String, value: String, gap: 
             value,
             style = ts(WT.Small, WK.Text, FontWeight.Bold, TextAlign.End, mono = true),
             maxLines = 1,
-            modifier = GlanceModifier.width(30.dp),
+            modifier = GlanceModifier.width(26.dp),
         )
     }
 }
@@ -686,7 +733,9 @@ internal fun MiniRow(pos: Int, color: Color, label: String, value: String, gap: 
 internal fun MiniDrivers(v: F1View, count: Int, colW: Dp) {
     Column(GlanceModifier.fillMaxWidth()) {
         v.s.drivers.take(count.coerceIn(0, 10)).forEach { d ->
-            MiniRow(d.pos, F1C.team(d.color), d.code, F1Format.points(d.points), F1Format.gap(v.leaderPts, d.points), colW)
+            MiniRow(d.pos, d.code, F1Format.points(d.points), F1Format.gap(v.leaderPts, d.points), colW, F1Pics.MINI) {
+                DriverAvatar(d.code, d.color, d.number, F1Pics.MINI)
+            }
         }
     }
 }
@@ -699,12 +748,14 @@ internal fun MiniTeams(v: F1View, count: Int, colW: Dp) {
         shown.forEach { t ->
             MiniRow(
                 t.pos,
-                F1C.team(t.color),
                 if (names) F1Format.teamShort(t.name) else F1Format.teamCode(t.name),
                 F1Format.points(t.points),
                 F1Format.gap(v.teamLeaderPts, t.points),
                 colW,
-            )
+                F1Pics.MINI_TILE_W,
+            ) {
+                TeamTile(t.name, t.color, F1Pics.MINI_TILE_W, F1Pics.MINI_TILE_H)
+            }
         }
     }
 }
@@ -717,10 +768,10 @@ internal fun TopThreeInline(v: F1View) {
             Box(GlanceModifier.defaultWeight().padding(start = if (i == 0) 0.dp else 4.dp)) {
                 Row(
                     GlanceModifier.fillMaxWidth().panel(if (i == 0) WK.Card else WK.CardAlt, 8.dp)
-                        .padding(horizontal = 5.dp, vertical = 3.dp),
+                        .padding(horizontal = 4.dp, vertical = 3.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    ColorBar(F1C.team(d.color), 10.dp)
+                    DriverAvatar(d.code, d.color, d.number, F1Pics.MINI)
                     HGap(4.dp)
                     Text(d.code, style = ts(WT.Tiny, WK.Text, FontWeight.Bold), maxLines = 1, modifier = GlanceModifier.defaultWeight())
                     Text(F1Format.points(d.points), style = ts(WT.Tiny, WK.Sub, FontWeight.Bold, mono = true), maxLines = 1)
@@ -771,7 +822,8 @@ internal fun TeamList(v: F1View, colW: Dp, previewRows: Int) {
 @Composable
 internal fun StandingsColumns(v: F1View, width: Dp, height: Float) {
     val colW = (width - 10.dp) / 2
-    val listH = height - F1Rows.LABEL
+    // The caption, and the 3 dp under it.
+    val listH = height - F1Rows.LABEL - 3f
     Row(GlanceModifier.fillMaxSize()) {
         Column(GlanceModifier.width(colW).fillMaxHeight()) {
             SectionLabel("Drivers", F1C.Red, trailing = "PTS")
@@ -813,28 +865,34 @@ private fun RaceHeader(v: F1View) {
     }
 }
 
+/** The top three side by side; tiles under ~80 dp (a 3-wide widget) take a smaller face. */
 @Composable
-private fun PodiumTiles(results: List<WResult>) {
+private fun PodiumTiles(results: List<WResult>, width: Dp) {
+    val compact = (width - 10.dp) / 3 < 80.dp
     Row(GlanceModifier.fillMaxWidth()) {
         results.take(3).forEachIndexed { i, r ->
             Box(GlanceModifier.defaultWeight().padding(start = if (i == 0) 0.dp else 5.dp)) {
-                PodiumTile(r)
+                PodiumTile(r, compact)
             }
         }
     }
 }
 
 @Composable
-private fun PodiumTile(r: WResult) {
+private fun PodiumTile(r: WResult, compact: Boolean) {
     val medal = F1C.medal(r.pos) ?: WK.Sub
-    Column(GlanceModifier.fillMaxWidth().panel(WK.Card, 10.dp).padding(horizontal = 7.dp, vertical = 5.dp)) {
+    Column(GlanceModifier.fillMaxWidth().panel(WK.Card, 10.dp).padding(horizontal = if (compact) 5.dp else 6.dp, vertical = 5.dp)) {
         Box(GlanceModifier.fillMaxWidth().height(2.dp).cornerRadius(1.dp).background(medal.cp())) {}
-        VGap(3.dp)
+        VGap(4.dp)
         Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("P${r.pos}", style = ts(WT.Micro, medal, FontWeight.Bold), maxLines = 1, modifier = GlanceModifier.defaultWeight())
-            ColorBar(F1C.team(r.color), 10.dp)
+            DriverAvatar(r.code, r.color, null, if (compact) F1Pics.ROW else F1Pics.PODIUM)
+            HGap(if (compact) 4.dp else 5.dp)
+            Column(GlanceModifier.defaultWeight()) {
+                Text("P${r.pos}", style = ts(WT.Micro, medal, FontWeight.Bold), maxLines = 1)
+                Text(r.code, style = ts(if (compact) WT.Small else WT.Body, WK.Text, FontWeight.Bold), maxLines = 1)
+            }
         }
-        Text(r.code, style = ts(WT.Title, WK.Text, FontWeight.Bold), maxLines = 1)
+        VGap(2.dp)
         Text(
             F1Format.resultText(r).first,
             style = ts(WT.Micro, WK.Sub, FontWeight.Medium, mono = true),
@@ -861,10 +919,10 @@ private fun ResultRow(r: WResult, colW: Dp) {
             modifier = GlanceModifier.width(if (narrow) 13.dp else 16.dp),
         )
         HGap(if (narrow) 4.dp else 5.dp)
-        ColorBar(F1C.team(r.color), 13.dp)
+        DriverAvatar(r.code, r.color, null, F1Pics.ROW)
         HGap(if (narrow) 4.dp else 6.dp)
         Text(
-            if (colW >= 175.dp) F1Format.surname(r.name) else r.code,
+            if (colW >= 190.dp) F1Format.surname(r.name) else r.code,
             style = ts(if (narrow) WT.Small else WT.Body, WK.Text, FontWeight.Medium),
             maxLines = 1,
             modifier = GlanceModifier.defaultWeight(),
@@ -919,7 +977,7 @@ internal fun RaceList(v: F1View, width: Dp, height: Float) {
         v.preview -> Column(GlanceModifier.fillMaxSize()) {
             RaceHeader(v)
             if (tiles) {
-                PodiumTiles(results)
+                PodiumTiles(results, width)
                 VGap(4.dp)
             }
             val room = height - F1Rows.LABEL - (if (tiles) F1Rows.PODIUM else 0f)
@@ -929,7 +987,7 @@ internal fun RaceList(v: F1View, width: Dp, height: Float) {
             item { RaceHeader(v) }
             if (tiles) {
                 item {
-                    Column(GlanceModifier.fillMaxWidth().padding(bottom = 4.dp)) { PodiumTiles(results) }
+                    Column(GlanceModifier.fillMaxWidth().padding(bottom = 4.dp)) { PodiumTiles(results, width) }
                 }
             }
             rest.forEach { r ->
