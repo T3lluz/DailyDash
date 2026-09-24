@@ -1,14 +1,19 @@
 package com.macrotracker.ui.components
 
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.carousel.CarouselDefaults
@@ -26,12 +31,14 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.util.rememberHaptics
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -138,6 +145,26 @@ val MediaCarouselShape = RoundedCornerShape(12.dp)
 private val ItemSpacing = 8.dp
 
 /**
+ * How wide the focused item of a [count]-item carousel [width] wide is. Material 3's hero
+ * keylines shrink the neighbours to the smallest peek before the focused item gives up any
+ * room, so it is the width left beside one peek (two items) or two (three or more), not
+ * beside [peekWidth]. Heights are measured on this, so a 16:9 ratio gives a 16:9 item.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+internal fun mediaCarouselFocusedWidth(width: Dp, count: Int, peekWidth: Dp): Dp {
+    val peek = minOf(peekWidth, CarouselDefaults.MinSmallItemSize)
+    return when {
+        count <= 1 -> width
+        count == 2 -> width - peek - ItemSpacing
+        else -> width - (peek + ItemSpacing) * 2
+    }
+}
+
+/** The carousel's height for [count] items: the focused item at [heightRatio], within bounds. */
+internal fun mediaCarouselHeight(width: Dp, count: Int, peekWidth: Dp, heightRatio: Float, maxHeight: Dp): Dp =
+    (mediaCarouselFocusedWidth(width, count, peekWidth) * heightRatio).coerceIn(120.dp, maxHeight)
+
+/**
  * A strip of thumbnails laid out like Coming up: Material 3's centred hero carousel,
  * so the focused item sits in the middle with a peek on each side that has a
  * neighbour, a fling turns exactly one item, and a drag morphs a peek open under the
@@ -165,9 +192,13 @@ fun <T> MediaCarousel(
 ) {
     if (items.isEmpty()) return
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
-        // The focused item is what is left once a peek has taken its share on each side.
-        val focused = maxWidth - (peekWidth + ItemSpacing) * 2
-        val height = (focused * heightRatio).coerceIn(120.dp, maxHeight)
+        // Glides to a new height when the count crosses one, two or three (a stream going
+        // off air), rather than jumping the list under the finger.
+        val height by animateDpAsState(
+            targetValue = mediaCarouselHeight(maxWidth, items.size, peekWidth, heightRatio, maxHeight),
+            animationSpec = MacroMotion.slideTween(),
+            label = "carouselHeight",
+        )
 
         if (items.size == 1) {
             val only = items.first()
@@ -226,6 +257,34 @@ fun <T> MediaCarousel(
                     content(item, look)
                 }
             }
+        }
+    }
+}
+
+/**
+ * The carousel's loading state: a focused tile between two peeks, at the height the loaded
+ * carousel will have, so the card keeps its size when the items land.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MediaCarouselSkeleton(
+    modifier: Modifier = Modifier,
+    heightRatio: Float = 9f / 16f,
+    maxHeight: Dp = 230.dp,
+    shape: Shape = MediaCarouselShape,
+    peekWidth: Dp = CarouselDefaults.MaxSmallItemSize,
+    color: Color = Border,
+) {
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val peek = minOf(peekWidth, CarouselDefaults.MinSmallItemSize)
+        val height = mediaCarouselHeight(maxWidth, 3, peekWidth, heightRatio, maxHeight)
+        Row(
+            modifier = Modifier.fillMaxWidth().height(height),
+            horizontalArrangement = Arrangement.spacedBy(ItemSpacing),
+        ) {
+            Box(Modifier.width(peek).fillMaxHeight().clip(shape).background(color.copy(alpha = 0.16f)))
+            Box(Modifier.weight(1f).fillMaxHeight().clip(shape).background(color.copy(alpha = 0.28f)))
+            Box(Modifier.width(peek).fillMaxHeight().clip(shape).background(color.copy(alpha = 0.16f)))
         }
     }
 }
