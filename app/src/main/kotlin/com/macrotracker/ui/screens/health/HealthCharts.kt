@@ -48,7 +48,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.macrotracker.ui.theme.Surface
-import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.TextPrimary
@@ -80,8 +79,7 @@ fun AnimatedHealthBarChart(
         modifier = modifier
             .fillMaxWidth()
             .height(220.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(Background),
+            .clip(RoundedCornerShape(16.dp)),
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val top = 24.dp.toPx()
@@ -222,7 +220,6 @@ fun AnimatedHealthAreaChart(
             .fillMaxWidth()
             .height(220.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(Background)
             .pointerInput(values) {
                 var last = -1
                 detectDragGestures(
@@ -404,8 +401,7 @@ fun AnimatedMacroBarChart(
         modifier = modifier
             .fillMaxWidth()
             .height(168.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(Background),
+            .clip(RoundedCornerShape(14.dp)),
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             if (avgValue > 0) {
