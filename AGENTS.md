@@ -342,9 +342,9 @@ header (`rippleAnchor(origin)`, the origin handed to the box's content) the mome
 threshold, only while a finger drives it. The ripple is the only sign a page refresh ran: cards don't show a
 spinner for a background reload. Specs in `MacroMotion.LiquidRipple`.
 
-The F1 countdown's digits flip like a split-flap clock (`FlipText`, components/FlipText.kt): each changed
-character folds about its middle, clipped so the flap reads solid with no card behind it. Specs in
-`MacroMotion.CountdownFlip`; the digit style uses tabular figures so nothing shifts.
+The F1 countdown's digits roll over (`RollingText`, components/RollingText.kt): each changed character
+slides up out of its own clipped box as the new one rises in from below, as a countdown ticks on iOS. Specs
+in `MacroMotion.CountdownRoll`; the digit style uses tabular figures so nothing shifts.
 
 ### Home Screen Widgets (draggable)
 Widget order and visibility are persisted as a single colon-and-comma encoded string in SharedPrefs:

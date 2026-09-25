@@ -216,18 +216,24 @@ object MacroMotion {
     }
 
     /**
-     * The F1 countdown's split-flap: the top half of the old number folds down about the
-     * number's middle, then the bottom half of the new one lands. Well inside a second so the
-     * seconds column is settled before the next tick.
+     * The F1 countdown's digits rolling over: the old one slides up and out of its own box
+     * while the new one rises in from below, the way a countdown ticks on iOS. Only digits
+     * that change move, and the roll is done well before the next second.
      */
-    object CountdownFlip {
-        const val DURATION_MS = 560
+    object CountdownRoll {
+        const val DURATION_MS = 420
 
-        /** Camera distance in multiples of the density, so the fold keeps a little depth. */
-        const val CAMERA_DISTANCE = 10f
+        /** Leaves quickly, lands softly. */
+        private val EASING = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 
-        /** Gravity: slow off the top, quick onto the bottom. */
-        val EASING = CubicBezierEasing(0.45f, 0f, 0.35f, 1f)
+        val transform: ContentTransform
+            get() = ContentTransform(
+                targetContentEnter = slideInVertically(tween(DURATION_MS, easing = EASING)) { it } +
+                    fadeIn(tween(DURATION_MS / 2, delayMillis = DURATION_MS / 6)),
+                initialContentExit = slideOutVertically(tween(DURATION_MS, easing = EASING)) { -it } +
+                    fadeOut(tween(DURATION_MS / 2)),
+                sizeTransform = SizeTransform(clip = true),
+            )
     }
 
     /** The navbar's activity tab rising out of the pill and settling back into it: a touch of give, no wobble. */

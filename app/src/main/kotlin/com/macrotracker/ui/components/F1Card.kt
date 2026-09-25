@@ -92,7 +92,7 @@ private val F1MetaTextStyle = TextStyle(
 
 /**
  * The next-race countdown's digits: clean white numbers with tabular figures, so a digit
- * that flips (see [FlipText]) never changes width.
+ * that rolls over (see [RollingText]) never changes width.
  */
 private val F1CountdownDigitsStyle = TextStyle(
     fontSize = 34.sp,
@@ -1190,14 +1190,14 @@ private fun LiveCountdown(
 /** Where a countdown number's middle is, so the dividers line up with the digits, not the captions. */
 private val CountdownDigitsMiddle = HorizontalAlignmentLine(merger = { old, _ -> old })
 
-/** One hero number with its unit in small type underneath; the digits flip as they change. */
+/** One hero number with its unit in small type underneath; the digits roll up as they change. */
 @Composable
 private fun RowScope.CountdownBlock(value: String, label: String) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.alignBy(CountdownDigitsMiddle),
     ) {
-        FlipText(
+        RollingText(
             text = value,
             style = F1CountdownDigitsStyle,
             color = TextPrimary,
@@ -1231,7 +1231,7 @@ private fun RowScope.CountdownDivider() {
 @Composable
 private fun CountdownUnit(value: String, unit: String) {
     Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(1.dp)) {
-        FlipText(text = value, style = F1CountdownInlineStyle, color = TextPrimary)
+        RollingText(text = value, style = F1CountdownInlineStyle, color = TextPrimary)
         Text(unit, color = TextSecondary, fontSize = 10.sp, modifier = Modifier.padding(bottom = 2.dp))
     }
 }
