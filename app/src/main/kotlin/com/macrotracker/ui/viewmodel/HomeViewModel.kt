@@ -22,9 +22,12 @@ import com.macrotracker.data.remote.ClothingAdvisor
 import com.macrotracker.data.remote.LocationProvider
 import com.macrotracker.data.remote.WeatherInfo
 import com.macrotracker.data.remote.WeatherRepository
+import com.macrotracker.ui.screens.health.SleepNightScore
+import com.macrotracker.ui.screens.health.computeSleepNightScore
 import com.macrotracker.widget.WidgetUpdater
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -63,7 +66,15 @@ sealed class WeatherUiState {
 sealed class HomeHealthState {
     data object Loading : HomeHealthState()
     data object Unavailable : HomeHealthState()
-    data class Success(val stats: HealthStats, val isRefreshing: Boolean = false, val lastUpdatedAt: Instant? = null) : HomeHealthState()
+    data class Success(
+        val stats: HealthStats,
+        val isRefreshing: Boolean = false,
+        val lastUpdatedAt: Instant? = null,
+        /** Today's steps per hour from midnight (24 entries), empty when not shared. */
+        val hourlySteps: List<Long> = emptyList(),
+        /** Last night's score from its sleep stages, when there are any. */
+        val sleepScore: SleepNightScore? = null,
+    ) : HomeHealthState()
 }
 
 sealed class CalendarUiState {
@@ -358,13 +369,38 @@ class HomeViewModel @Inject constructor(
         }
 
         try {
-            val stats = healthConnectRepository.readTodayStats()
+            // The day's shape and last night's score ride along with the totals; each read
+            // answers empty on its own failure, so neither can sink the card.
+            val (stats, hourly, sleep) = coroutineScope {
+                val hourly = async {
+                    if (healthConnectRepository.hasPermission(HealthConnectRepository.STEPS_PERMISSION)) {
+                        healthConnectRepository.readHourlySteps()
+                    } else {
+                        emptyList()
+                    }
+                }
+                val sleep = async {
+                    if (healthConnectRepository.hasPermission(HealthConnectRepository.SLEEP_PERMISSION)) {
+                        computeSleepNightScore(healthConnectRepository.readSleepSessions(LocalDate.now()))
+                    } else {
+                        null
+                    }
+                }
+                Triple(healthConnectRepository.readTodayStats(), hourly.await(), sleep.await())
+            }
             if (stats.steps == 0L && current is HomeHealthState.Success && current.stats.steps > 0) {
                 Log.w(TAG, "Health Connect returned 0 steps, keeping previous value to avoid flicker")
                 _healthState.value = current.copy(isRefreshing = false)
             } else {
-                _healthState.value = HomeHealthState.Success(stats, lastUpdatedAt = Instant.now())
+                _healthState.value = HomeHealthState.Success(
+                    stats = stats,
+                    lastUpdatedAt = Instant.now(),
+                    hourlySteps = hourly,
+                    sleepScore = sleep,
+                )
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Failed to read health data for home: ${e.message}", e)
             if (current !is HomeHealthState.Success) {
