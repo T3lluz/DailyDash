@@ -216,6 +216,18 @@ object MacroMotion {
     }
 
     /**
+     * Home's Body Stats chart moving on by itself (steps → heart → Move → sleep) until the
+     * person picks one: slow enough to read each, a plain crossfade between them.
+     */
+    object GlanceCycle {
+        const val INTERVAL_MS = 8_000L
+
+        val transform: ContentTransform
+            get() = fadeIn(tween(320, easing = FastOutSlowInEasing)) togetherWith
+                fadeOut(tween(FADE_OUT_MS, easing = FastOutSlowInEasing))
+    }
+
+    /**
      * The F1 countdown's digits rolling over: the old one slides up and out of its own box
      * while the new one rises in from below, the way a countdown ticks on iOS. Only digits
      * that change move, and the roll is done well before the next second.

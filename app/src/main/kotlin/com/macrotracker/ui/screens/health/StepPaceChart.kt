@@ -127,11 +127,7 @@ fun StepPaceChart(
             drawCircle(tone, 4.dp.toPx(), Offset(nx, y(total)))
         }
     }
-    Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
-        listOf("00", "06", "12", "18").forEach {
-            Text(it, fontSize = 9.sp, color = TextTertiary, modifier = Modifier.weight(1f))
-        }
-    }
+    HourAxis()
 }
 
 /** A read on today's steps in one line, and the number behind it. */
