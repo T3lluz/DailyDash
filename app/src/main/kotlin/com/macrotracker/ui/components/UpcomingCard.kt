@@ -159,7 +159,6 @@ fun UpcomingCard(
     when (val s = state) {
         is UpcomingUiState.Success -> UpcomingContent(
             feed = s.feed,
-            isRefreshing = s.isRefreshing,
             error = s.error,
         )
         is UpcomingUiState.Error -> MacroCard(borderColor = UpcomingAccent.copy(alpha = 0.16f)) {
@@ -185,7 +184,6 @@ fun UpcomingCard(
 @Composable
 private fun UpcomingContent(
     feed: UpcomingFeed,
-    isRefreshing: Boolean,
     error: String?,
 ) {
     val context = LocalContext.current
@@ -250,7 +248,6 @@ private fun UpcomingContent(
         val current = carouselState.currentItem.coerceIn(0, slots.lastIndex)
         UpcomingHeader(
             subtitle = subtitle,
-            isRefreshing = isRefreshing,
             tools = {
                 val todayIndex = todayIndex(slots, today)
                 val onToday = todayIndex >= 0 && current == todayIndex
@@ -322,19 +319,15 @@ private fun UpcomingContent(
 @Composable
 private fun UpcomingHeader(
     subtitle: String,
-    isRefreshing: Boolean = false,
     tools: @Composable () -> Unit,
 ) {
+    // No spinner for a background reload: the page's pull ripple already says it ran.
     CardHeader(
         title = "Coming up",
         icon = AppIcons.TvPlay,
         accent = UpcomingAccent,
         subtitle = subtitle,
     ) {
-        if (isRefreshing) {
-            LoadingSpinner(size = LoadingSpec.SizeInline)
-            Spacer(Modifier.width(4.dp))
-        }
         tools()
     }
 }

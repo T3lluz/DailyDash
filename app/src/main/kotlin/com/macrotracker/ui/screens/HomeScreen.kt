@@ -12,11 +12,8 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -24,14 +21,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -41,8 +36,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.macrotracker.ui.components.WidgetEditor
-import com.macrotracker.ui.components.liquidRipple
-import com.macrotracker.ui.components.rememberRippleOrigin
+import com.macrotracker.ui.components.RipplePullToRefreshBox
 import com.macrotracker.ui.components.rippleAnchor
 import com.macrotracker.ui.components.draggableWidgetItems
 import com.macrotracker.ui.components.encodeWidgetConfig
@@ -58,7 +52,6 @@ import com.macrotracker.ui.util.rememberVisibleHomeWidgetIds
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.macrotracker.ui.theme.Background
-import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.viewmodel.GitHubViewModel
 import com.macrotracker.ui.viewmodel.UpcomingViewModel
@@ -69,7 +62,6 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import com.macrotracker.ui.theme.AppIcons
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onNavigateToHealth: () -> Unit,
@@ -208,37 +200,9 @@ fun HomeScreen(
         }
     }
 
-    // Essentials' pull: a tick every tenth of the way to the threshold, then a click and a
-    // liquid ripple out from the header the moment the pull passes it (before letting go).
-    // Only a finger counts: a refresh started in code also slides the indicator to 1.
-    val pullState = rememberPullToRefreshState()
-    val rippleOrigin = rememberRippleOrigin()
-    var rippleTrigger by remember { mutableIntStateOf(0) }
-    val refreshingNow by rememberUpdatedState(isRefreshing)
-    LaunchedEffect(pullState) {
-        val ticks = MacroMotion.LiquidRipple.PULL_TICKS
-        var lastTick = 0
-        snapshotFlow { pullState.distanceFraction }.collect { fraction ->
-            val tick = (fraction * ticks).toInt()
-            when {
-                fraction == 0f -> lastTick = 0
-                refreshingNow -> lastTick = tick.coerceAtMost(ticks)
-                fraction >= 1f -> if (lastTick < ticks) {
-                    haptics.click()
-                    rippleTrigger++
-                    lastTick = ticks
-                }
-                tick != lastTick -> {
-                    if (tick > lastTick) haptics.tick()
-                    lastTick = tick
-                }
-            }
-        }
-    }
-
-    PullToRefreshBox(
+    RipplePullToRefreshBox(
         isRefreshing = isRefreshing,
-        state = pullState,
+        haptics = haptics,
         onRefresh = {
             val visibleIds = parsedConfigs.filter { it.isVisible }.map { it.id }.toSet()
             viewModel.refreshAll(
@@ -262,9 +226,8 @@ fun HomeScreen(
         },
         modifier = Modifier
             .fillMaxSize()
-            .liquidRipple(trigger = rippleTrigger, origin = rippleOrigin)
             .background(Background),
-    ) {
+    ) { rippleOrigin ->
         val visibleConfigs = remember(parsedConfigs) {
             parsedConfigs.filter { it.isVisible }
         }

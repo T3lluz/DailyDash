@@ -49,8 +49,6 @@ import com.macrotracker.data.health.formatPace
 import com.macrotracker.data.health.pickFeaturedActivity
 import com.macrotracker.ui.components.CardHeader
 import com.macrotracker.ui.components.ContentSkeleton
-import com.macrotracker.ui.components.LoadingSpec
-import com.macrotracker.ui.components.LoadingSpinner
 import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.components.StatusCopy
 import com.macrotracker.ui.components.WidgetScrollBox
@@ -96,11 +94,7 @@ fun ActivitiesSection(
             accent = HealthActivity,
             subtitle = if (activities.isEmpty()) "Workouts from Garmin and Health Connect" else monthSummary(activities),
             modifier = Modifier.padding(bottom = 12.dp),
-        ) {
-            if (state is ActivitiesUiState.Success && state.isRefreshing) {
-                LoadingSpinner(color = Primary, size = LoadingSpec.SizeInline)
-            }
-        }
+        )
 
         when (state) {
             is ActivitiesUiState.Loading -> {

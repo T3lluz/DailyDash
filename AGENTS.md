@@ -334,10 +334,13 @@ and `MacroMotion.Snake`. Both run off a clock read only in the draw phase (a red
 recomposition), take frames only while on screen (`Modifier.trackOnScreen`) and the app is resumed
 (`rememberIsResumed`), and show their finished state when animations are off (`rememberReducedMotion`).
 
-Home's pull to refresh is Essentials' (sameerasw/essentials): a tick every tenth of the pull, then a click and
-`Modifier.liquidRipple` (components/LiquidRipple.kt, its AGSL shader ported as is; Android 13+, off with
-animations off) out from the header (`rippleAnchor`) the moment the pull passes the threshold, only while a
-finger drives it. Specs in `MacroMotion.LiquidRipple`.
+Pull to refresh (Home and Health) is Essentials' (sameerasw/essentials), shared as `RipplePullToRefreshBox`
+(components/PullRippleRefresh.kt): no spinner. The page follows the finger (`PULL_FOLLOW` of the pull) and
+springs back on release; a tick every tenth of the pull, then a click and `Modifier.liquidRipple`
+(components/LiquidRipple.kt, its AGSL shader ported as is; Android 13+, off with animations off) out from the
+header (`rippleAnchor(origin)`, the origin handed to the box's content) the moment the pull passes the
+threshold, only while a finger drives it. The ripple is the only sign a page refresh ran: cards don't show a
+spinner for a background reload. Specs in `MacroMotion.LiquidRipple`.
 
 ### Home Screen Widgets (draggable)
 Widget order and visibility are persisted as a single colon-and-comma encoded string in SharedPrefs:
