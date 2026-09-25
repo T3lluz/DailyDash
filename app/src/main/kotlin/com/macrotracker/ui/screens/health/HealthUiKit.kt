@@ -44,14 +44,13 @@ import androidx.compose.ui.unit.sp
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
-import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.MacroMotion
+import com.macrotracker.ui.theme.SelectedFill
 import com.macrotracker.ui.theme.Success
 import com.macrotracker.ui.theme.Surface
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.theme.TextTertiary
-import com.macrotracker.ui.theme.chipFill
 import com.macrotracker.ui.util.rememberReducedMotion
 import kotlin.math.abs
 
@@ -75,14 +74,18 @@ fun HealthMetric.better(): Better = when (this) {
     -> Better.NEITHER
 }
 
-/** Green when the change went the good way, red when not, grey when it doesn't matter. */
+/**
+ * Green when the change went the good way, grey otherwise. A worse day is not
+ * painted red: the arrow already says which way it went, and a tab full of red
+ * arrows read as alarms.
+ */
 fun deltaColor(change: Double, better: Better, deadZone: Double = 0.5): Color = when {
     better == Better.NEITHER || abs(change) < deadZone -> TextSecondary
     (change > 0) == (better == Better.HIGHER) -> Success
-    else -> Error
+    else -> TextSecondary
 }
 
-/** "↑ 12%" pill. [text] is the magnitude; the arrow comes from [change]'s sign. */
+/** "↑ 12%": an arrow and a number, no pill. [text] is the magnitude; the arrow comes from [change]'s sign. */
 @Composable
 fun DeltaPill(
     text: String,
@@ -92,10 +95,7 @@ fun DeltaPill(
 ) {
     val color = deltaColor(change, better)
     Row(
-        modifier = modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(color.chipFill())
-            .padding(horizontal = 6.dp, vertical = 2.dp),
+        modifier = modifier.padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (abs(change) >= 0.05) {
@@ -215,7 +215,11 @@ fun MiniBars(
     }
 }
 
-/** Filter / metric chip used across Health (Trends metrics, Macro Trends ranges). */
+/**
+ * Filter / metric chip used across Health (Trends metrics, Macro Trends ranges).
+ * Selected is a light neutral fill with white text, as a segmented control; [color]
+ * only tints the selected chip's icon, so a row of chips is not a row of colours.
+ */
 @Composable
 fun HealthChip(
     label: String,
@@ -235,40 +239,39 @@ fun HealthChip(
     Row(
         modifier = modifier
             .clip(shape)
-            .background(Background)
-            .background(color.copy(alpha = 0.18f * fillAlpha))
-            .border(1.dp, if (selected) color.copy(alpha = 0.45f) else Border, shape)
+            .background(SelectedFill.copy(alpha = SelectedFill.alpha * fillAlpha))
+            .border(1.dp, if (selected) Color.Transparent else Border, shape)
             .clickable(onClick = onClick)
             .padding(horizontal = 11.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
-        val tint = if (selected) color else TextSecondary
+        val iconTint = if (selected) color else TextSecondary
         when {
             iconRes != null -> Icon(
                 painter = painterResource(iconRes),
                 contentDescription = null,
-                tint = tint,
+                tint = iconTint,
                 modifier = Modifier.size(14.dp),
             )
             icon != null -> Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = tint,
+                tint = iconTint,
                 modifier = Modifier.size(14.dp),
             )
         }
         Text(
             label,
             fontSize = 12.sp,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            color = tint,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+            color = if (selected) TextPrimary else TextSecondary,
             maxLines = 1,
         )
     }
 }
 
-/** A label-over-value tile on the inset well colour, for summary rows. */
+/** A label-over-value tile on the inset well colour, for summary rows. No outline: the well is enough. */
 @Composable
 fun HealthStatTile(
     label: String,
@@ -281,7 +284,6 @@ fun HealthStatTile(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
             .background(Background)
-            .border(1.dp, Border, RoundedCornerShape(12.dp))
             .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
         Text(label, fontSize = 11.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)

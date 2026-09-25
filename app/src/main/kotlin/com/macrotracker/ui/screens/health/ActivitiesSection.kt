@@ -606,28 +606,12 @@ private fun ActivityLapsRow(activity: HealthActivity) {
     }
 }
 
-internal fun activityAccent(type: Int): Color = when (type) {
-    ExerciseSessionRecord.EXERCISE_TYPE_WALKING -> Primary
-    ExerciseSessionRecord.EXERCISE_TYPE_RUNNING,
-    ExerciseSessionRecord.EXERCISE_TYPE_RUNNING_TREADMILL,
-    -> Color(0xFFFF8A4C)
-    ExerciseSessionRecord.EXERCISE_TYPE_BIKING,
-    ExerciseSessionRecord.EXERCISE_TYPE_BIKING_STATIONARY,
-    -> Color(0xFF2DD4BF)
-    ExerciseSessionRecord.EXERCISE_TYPE_HIKING -> Color(0xFF34D399)
-    ExerciseSessionRecord.EXERCISE_TYPE_SWIMMING_OPEN_WATER,
-    ExerciseSessionRecord.EXERCISE_TYPE_SWIMMING_POOL,
-    -> Color(0xFF38BDF8)
-    ExerciseSessionRecord.EXERCISE_TYPE_STRENGTH_TRAINING,
-    ExerciseSessionRecord.EXERCISE_TYPE_WEIGHTLIFTING,
-    -> Color(0xFFA78BFA)
-    ExerciseSessionRecord.EXERCISE_TYPE_YOGA,
-    ExerciseSessionRecord.EXERCISE_TYPE_PILATES,
-    ExerciseSessionRecord.EXERCISE_TYPE_STRETCHING,
-    -> Color(0xFFC084FC)
-    ExerciseSessionRecord.EXERCISE_TYPE_HIGH_INTENSITY_INTERVAL_TRAINING -> Color(0xFFF43F5E)
-    else -> Primary
-}
+/**
+ * Every workout wears the Activity tone, as Apple Fitness does; its icon tells a run from
+ * a ride. Eight sport colours made the list read like a legend.
+ */
+@Suppress("UNUSED_PARAMETER")
+internal fun activityAccent(type: Int): Color = HealthActivity
 
 internal fun activityIcon(type: Int): ImageVector = when (type) {
     ExerciseSessionRecord.EXERCISE_TYPE_WALKING -> AppIcons.Walk

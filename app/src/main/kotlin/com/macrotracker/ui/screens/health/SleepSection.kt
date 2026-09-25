@@ -279,7 +279,7 @@ private fun SleepScoreBadge(score: Int, label: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(end = 8.dp)) {
             Text("Score", fontSize = 11.sp, color = TextSecondary)
-            Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = HealthSleep)
+            Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
         }
         Box(modifier = Modifier.size(52.dp), contentAlignment = Alignment.Center) {
             Canvas(modifier = Modifier.size(52.dp)) {

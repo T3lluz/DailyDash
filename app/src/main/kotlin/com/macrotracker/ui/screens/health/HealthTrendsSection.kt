@@ -45,6 +45,7 @@ import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.Primary
+import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.HapticHelper
 import com.macrotracker.ui.viewmodel.HealthViewModel
@@ -334,7 +335,7 @@ fun HealthTrendsSection(
                                 formatMetricValue(activeMetric, selectedDayValue),
                                 fontSize = 34.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = color,
+                                color = TextPrimary,
                                 lineHeight = 36.sp,
                             )
                             val unit = formatMetricUnit(activeMetric)
@@ -415,7 +416,6 @@ private fun WeekSummaryTiles(week: List<DailyHealthStats>, metric: HealthMetric)
             label = if (metric.better() == Better.NEITHER) "Highest" else "Best day",
             value = best.date.format(dayFmt),
             sub = withUnit(best.stats.valueOf(metric)),
-            accent = metric.tint(),
             modifier = Modifier.weight(1f),
         )
         if (summable) {

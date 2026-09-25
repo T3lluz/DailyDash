@@ -31,6 +31,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -70,10 +71,7 @@ import com.macrotracker.ui.theme.HealthRestingHr
 import com.macrotracker.ui.theme.HealthSleep
 import com.macrotracker.ui.theme.HealthSteps
 import com.macrotracker.ui.theme.MacroMotion
-import com.macrotracker.ui.theme.ReadinessFair
-import com.macrotracker.ui.theme.ReadinessGood
-import com.macrotracker.ui.theme.ReadinessHigh
-import com.macrotracker.ui.theme.ReadinessLow
+import com.macrotracker.ui.theme.ReadinessTone
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.theme.TextTertiary
@@ -305,25 +303,17 @@ fun DailyHealthSection(
         )
     }
 
+    // What else today has, most telling first. Sleep's own numbers live on the Sleep card
+    // and the slow vitals on Body & Vitals, so they only fill in when there's room.
     val chips = buildList {
         if (hero != HeroKind.RESTING && resting != null) {
-            add(Chip("Resting", "$resting bpm", RestC, R.drawable.ic_heart_pulse))
+            add(Chip("Resting HR", "$resting bpm", RestC, R.drawable.ic_heart_pulse))
         }
         heartRateBpm?.takeIf { it != "–" && it.isNotBlank() }?.let {
-            add(Chip("Heart", "$it bpm", HrC, R.drawable.ic_heart))
+            add(Chip("Heart rate", "$it bpm", HrC, R.drawable.ic_heart))
         }
-        nightScore?.takeIf { it.deepMinutes + it.remMinutes > 0 }?.let { s ->
-            add(
-                Chip(
-                    "Deep+REM",
-                    formatMinutesCompact(s.deepMinutes + s.remMinutes),
-                    SleepC,
-                    R.drawable.ic_bed,
-                ),
-            )
-        }
-        nightScore?.efficiencyPercent?.let {
-            add(Chip("Efficiency", "$it%", SleepC, R.drawable.ic_percent))
+        exerciseMinutesToday?.takeIf { it > 0 }?.let {
+            add(Chip("Exercise", formatMinutesCompact(it), HealthActivity, icon = AppIcons.Run))
         }
         if (activity.distanceKm > 0.05) {
             add(
@@ -337,15 +327,6 @@ fun DailyHealthSection(
         }
         if (activity.floors > 0) {
             add(Chip("Floors", "${activity.floors.roundToInt()}", FloorC, R.drawable.ic_stairs))
-        }
-        spo2Percent?.takeIf { it != "–" && it.isNotBlank() }?.let {
-            add(Chip("SpO₂", "$it%", Spo2C, R.drawable.ic_droplet))
-        }
-        respRate?.takeIf { it != "–" && it.isNotBlank() }?.let {
-            add(Chip("Resp", "$it rpm", RespC, R.drawable.ic_lungs))
-        }
-        weekInsights?.stepStreak?.takeIf { it > 1 }?.let {
-            add(Chip("Streak", "$it days", StepsC, R.drawable.ic_trending_up))
         }
         if (hero != HeroKind.ENERGY && eaten != null) {
             val net = burned?.let { eaten - it }
@@ -366,16 +347,22 @@ fun DailyHealthSection(
         if (totalBurn != null && hero != HeroKind.ENERGY) {
             add(Chip("Total burn", "$totalBurn kcal", MoveC, R.drawable.ic_flame))
         }
-        exerciseMinutesToday?.takeIf { it > 0 }?.let {
-            add(Chip("Exercise", formatMinutesCompact(it), HealthActivity, icon = AppIcons.Run))
-        }
         hrvMs?.takeIf { it > 0 }?.let {
             add(Chip("HRV", "${it.roundToInt()} ms", HealthHrv, icon = AppIcons.HeartPulse))
+        }
+        spo2Percent?.takeIf { it != "–" && it.isNotBlank() }?.let {
+            add(Chip("SpO₂", "$it%", Spo2C, R.drawable.ic_droplet))
+        }
+        respRate?.takeIf { it != "–" && it.isNotBlank() }?.let {
+            add(Chip("Breathing", "$it rpm", RespC, R.drawable.ic_lungs))
         }
         hydrationLitres?.takeIf { it > 0 }?.let {
             add(Chip("Water", String.format(Locale.US, "%.1f L", it), HealthHydration, icon = AppIcons.GlassWater))
         }
-    }
+        weekInsights?.stepStreak?.takeIf { it > 1 }?.let {
+            add(Chip("Step streak", "$it days", StepsC, R.drawable.ic_trending_up))
+        }
+    }.take(MAX_TODAY_CELLS)
 
     MacroCard(delayMs = delayMs) {
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -510,20 +497,7 @@ fun DailyHealthSection(
 
             if (chips.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(14.dp))
-                // Dense 2-column metric grid fills remaining width
-                chips.chunked(2).forEach { row ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        row.forEach { chip ->
-                            MetricCell(chip, Modifier.weight(1f))
-                        }
-                        if (row.size == 1) Spacer(modifier = Modifier.weight(1f))
-                    }
-                }
+                TodayGrid(chips)
             }
         }
     }
@@ -577,7 +551,7 @@ private fun GoalBar(
                     label,
                     fontSize = if (compact) 11.sp else 13.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = color,
+                    color = TextSecondary,
                     maxLines = 1,
                 )
             }
@@ -594,42 +568,71 @@ private fun GoalBar(
     }
 }
 
+/**
+ * Today's other measures as one grouped well, two to a row with hairlines between
+ * rows, the way Apple Health lists a summary: a small icon and grey name, a white number.
+ */
 @Composable
-private fun MetricCell(chip: Chip, modifier: Modifier = Modifier) {
-    Row(
-        modifier = modifier
-            .background(chip.color.copy(alpha = 0.10f), RoundedCornerShape(10.dp))
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+private fun TodayGrid(chips: List<Chip>) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Background),
     ) {
-        when {
-            chip.iconRes != null -> Icon(
-                painter = painterResource(chip.iconRes),
-                contentDescription = null,
-                tint = chip.color,
-                modifier = Modifier.size(16.dp),
-            )
-            chip.icon != null -> Icon(
-                imageVector = chip.icon,
-                contentDescription = null,
-                tint = chip.color,
-                modifier = Modifier.size(16.dp),
-            )
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(chip.label, fontSize = 10.sp, color = TextSecondary, maxLines = 1)
-            Text(
-                chip.value,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+        chips.chunked(2).forEachIndexed { index, row ->
+            if (index > 0) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp)
+                        .height(1.dp)
+                        .background(Border),
+                )
+            }
+            Row(modifier = Modifier.fillMaxWidth()) {
+                row.forEach { chip -> MetricCell(chip, Modifier.weight(1f)) }
+                if (row.size == 1) Spacer(modifier = Modifier.weight(1f))
+            }
         }
     }
 }
+
+@Composable
+private fun MetricCell(chip: Chip, modifier: Modifier = Modifier) {
+    Column(modifier = modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            when {
+                chip.iconRes != null -> Icon(
+                    painter = painterResource(chip.iconRes),
+                    contentDescription = null,
+                    tint = chip.color,
+                    modifier = Modifier.size(12.dp),
+                )
+                chip.icon != null -> Icon(
+                    imageVector = chip.icon,
+                    contentDescription = null,
+                    tint = chip.color,
+                    modifier = Modifier.size(12.dp),
+                )
+            }
+            Spacer(modifier = Modifier.width(5.dp))
+            Text(chip.label, fontSize = 11.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            chip.value,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = TextPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** How many of today's other measures the card lists; the rest have their own cards. */
+private const val MAX_TODAY_CELLS = 6
 
 /** Concentric Steps (outer) → Sleep → Move (inner). */
 @Composable
@@ -691,17 +694,11 @@ private fun signedPct(value: Double): String {
     return "$sign${String.format(Locale.US, "%.0f", value)}%"
 }
 
-fun readinessColor(score: Int): Color = when {
-    score >= 85 -> ReadinessHigh
-    score >= 70 -> ReadinessGood
-    score >= 55 -> ReadinessFair
-    else -> ReadinessLow
-}
 
 /** Readiness score in a ring, with the parts that made it. */
 @Composable
 private fun ReadinessRow(readiness: Readiness) {
-    val color = readinessColor(readiness.score)
+    val color = ReadinessTone
     val reduced = rememberReducedMotion()
     val progress = remember { Animatable(if (reduced) readiness.score / 100f else 0f) }
     LaunchedEffect(readiness.score) {
