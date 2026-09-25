@@ -33,9 +33,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -86,6 +84,8 @@ import com.macrotracker.ui.components.WidgetScrollBox
 import com.macrotracker.ui.components.MacroProgressBar
 import com.macrotracker.ui.components.MacroTextField
 import com.macrotracker.ui.components.PillButton
+import com.macrotracker.ui.components.RipplePullToRefreshBox
+import com.macrotracker.ui.components.rippleAnchor
 import com.macrotracker.ui.components.ScreenHeader
 import com.macrotracker.ui.components.TabContentBottomPadding
 import com.macrotracker.ui.components.StatusCopy
@@ -124,7 +124,7 @@ import kotlin.math.roundToInt
 import com.macrotracker.ui.theme.AppIcons
 
 
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun HealthScreen(
     onNavigateToCameraScan: () -> Unit,
@@ -292,8 +292,9 @@ fun HealthScreen(
     }
 
     CompositionLocalProvider(LocalTickersPaused provides tickersPaused) {
-    PullToRefreshBox(
+    RipplePullToRefreshBox(
         isRefreshing = refreshing,
+        haptics = haptics,
         onRefresh = {
             healthViewModel.refresh()
             dashboardViewModel.loadData(forceRefresh = true)
@@ -301,7 +302,7 @@ fun HealthScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Background),
-    ) {
+    ) { rippleOrigin ->
     LazyColumn(
         state = listState,
         userScrollEnabled = !dragState.isDragActive,
@@ -317,6 +318,7 @@ fun HealthScreen(
             ScreenHeader(
                 title = "Health",
                 subtitle = todayFormatted,
+                modifier = Modifier.rippleAnchor(rippleOrigin),
                 trailing = {
                     IconButton(onClick = { haptics.tick(); isEditMode = !isEditMode }) {
                         Icon(AppIcons.Edit, contentDescription = "Edit Widgets", tint = Primary)

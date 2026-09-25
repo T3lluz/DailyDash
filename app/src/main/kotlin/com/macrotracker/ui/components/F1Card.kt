@@ -21,7 +21,10 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.HorizontalAlignmentLine
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.SpanStyle
@@ -87,16 +90,28 @@ private val F1MetaTextStyle = TextStyle(
     ),
 )
 
-/** Large countdown for the collapsed next-race glance. */
-private val F1CountdownHeroStyle = TextStyle(
-    fontSize = 64.sp,
-    fontWeight = FontWeight.Black,
-    letterSpacing = (-2).sp,
+/**
+ * The next-race countdown's digits: clean white numbers with tabular figures, so a digit
+ * that flips (see [FlipText]) never changes width.
+ */
+private val F1CountdownDigitsStyle = TextStyle(
+    fontSize = 34.sp,
+    fontWeight = FontWeight.SemiBold,
+    letterSpacing = (-0.5).sp,
+    fontFeatureSettings = "tnum",
     platformStyle = PlatformTextStyle(includeFontPadding = false),
     lineHeightStyle = LineHeightStyle(
         alignment = LineHeightStyle.Alignment.Center,
         trim = LineHeightStyle.Trim.Both,
     ),
+)
+
+/** The one-line countdown under the hub's next race. */
+private val F1CountdownInlineStyle = TextStyle(
+    fontSize = 16.sp,
+    fontWeight = FontWeight.SemiBold,
+    fontFeatureSettings = "tnum",
+    platformStyle = PlatformTextStyle(includeFontPadding = false),
 )
 
 private val CollapsedGapColWidth = 36.dp
@@ -1140,78 +1155,95 @@ private fun LiveCountdown(
                 color = TextSecondary,
                 style = F1MetaTextStyle.copy(fontSize = 10.sp),
             )
-            Spacer(Modifier.height(6.dp))
-            Row(
-                verticalAlignment = Alignment.Top,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                CountdownBlock(days.toString(), "DAYS", accentColor)
-                CountdownColon()
-                CountdownBlock(hours.toString().padStart(2, '0'), "HRS", accentColor)
-                CountdownColon()
-                CountdownBlock(mins.toString().padStart(2, '0'), "MIN", accentColor)
-                CountdownColon()
-                CountdownBlock(secs.toString().padStart(2, '0'), "SEC", accentColor)
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                CountdownBlock(days.toString(), "days")
+                CountdownDivider()
+                CountdownBlock(hours.toString().padStart(2, '0'), "hrs")
+                CountdownDivider()
+                CountdownBlock(mins.toString().padStart(2, '0'), "min")
+                CountdownDivider()
+                CountdownBlock(secs.toString().padStart(2, '0'), "sec")
             }
         }
 
         CountdownStyle.Inline -> Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("Starts in", color = TextSecondary, fontSize = 11.sp)
             Spacer(Modifier.weight(1f))
             if (days > 0) {
-                CountdownUnit("$days", "d", accentColor)
+                CountdownUnit("$days", "d")
                 CountdownSep()
             }
-            CountdownUnit(hours.toString().padStart(2, '0'), "h", accentColor)
+            CountdownUnit(hours.toString().padStart(2, '0'), "h")
             CountdownSep()
-            CountdownUnit(mins.toString().padStart(2, '0'), "m", accentColor)
+            CountdownUnit(mins.toString().padStart(2, '0'), "m")
             CountdownSep()
-            CountdownUnit(secs.toString().padStart(2, '0'), "s", accentColor)
+            CountdownUnit(secs.toString().padStart(2, '0'), "s")
         }
     }
 }
 
-/** One hero digit pair with its unit caption underneath. */
+/** Where a countdown number's middle is, so the dividers line up with the digits, not the captions. */
+private val CountdownDigitsMiddle = HorizontalAlignmentLine(merger = { old, _ -> old })
+
+/** One hero number with its unit in small type underneath; the digits flip as they change. */
 @Composable
-private fun CountdownBlock(value: String, label: String, color: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            value,
-            color = color,
-            style = F1CountdownHeroStyle.copy(fontSize = 34.sp, letterSpacing = (-1).sp),
-            maxLines = 1,
-            softWrap = false,
+private fun RowScope.CountdownBlock(value: String, label: String) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.alignBy(CountdownDigitsMiddle),
+    ) {
+        FlipText(
+            text = value,
+            style = F1CountdownDigitsStyle,
+            color = TextPrimary,
+            modifier = Modifier.layout { measurable, constraints ->
+                val placeable = measurable.measure(constraints)
+                layout(
+                    placeable.width,
+                    placeable.height,
+                    mapOf(CountdownDigitsMiddle to placeable.height / 2),
+                ) { placeable.place(0, 0) }
+            },
         )
-        Spacer(Modifier.height(3.dp))
-        Text(label, color = TextSecondary, style = F1MetaTextStyle.copy(fontSize = 9.sp))
+        Spacer(Modifier.height(2.dp))
+        Text(label, color = TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Medium)
     }
 }
 
+/** A thin upright rule between hero numbers, about as tall as the digits. */
 @Composable
-private fun CountdownColon() {
-    Text(
-        ":",
-        color = TextTertiary,
-        style = F1CountdownHeroStyle.copy(fontSize = 28.sp, letterSpacing = 0.sp),
-        modifier = Modifier.padding(top = 2.dp),
+private fun RowScope.CountdownDivider() {
+    val height = with(LocalDensity.current) { (F1CountdownDigitsStyle.fontSize * 0.62f).toDp() }
+    Box(
+        modifier = Modifier
+            .alignBy { it.measuredHeight / 2 }
+            .width(1.dp)
+            .height(height)
+            .background(TextTertiary.copy(alpha = 0.6f), CircleShape),
     )
 }
 
 @Composable
-private fun CountdownUnit(value: String, unit: String, color: Color) {
+private fun CountdownUnit(value: String, unit: String) {
     Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(1.dp)) {
-        Text(value, color = color, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        FlipText(text = value, style = F1CountdownInlineStyle, color = TextPrimary)
         Text(unit, color = TextSecondary, fontSize = 10.sp, modifier = Modifier.padding(bottom = 2.dp))
     }
 }
 
 @Composable
 private fun CountdownSep() {
-    Text("·", color = TextTertiary, fontSize = 13.sp)
+    Box(
+        modifier = Modifier
+            .width(1.dp)
+            .height(11.dp)
+            .background(TextTertiary.copy(alpha = 0.6f), CircleShape),
+    )
 }
 
 // ── Shared circuit stat ───────────────────────────────────────────────────────

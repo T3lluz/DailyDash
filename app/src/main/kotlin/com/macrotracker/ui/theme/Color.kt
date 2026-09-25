@@ -62,48 +62,56 @@ val MapSurface = SurfaceChrome
 val MapWell = Color(0xFF121212)
 
 /**
- * Health metric accents — one palette for rings, chips, stat cards and charts.
+ * Health colours, one per category the way Apple Health does it, not one per measure:
+ * the tab used to carry two dozen accents and every tile shouted in its own. A measure
+ * takes its category's tone for its icon, ring or chart line; numbers stay white and
+ * labels grey.
  *
- * Daily Health and Body Stats used to carry two different sets of hard-coded
- * hex for the same metrics, so the same number changed colour between cards.
+ * Activity (orange) · Heart (coral red, also the Move ring) · Sleep (indigo) ·
+ * Body (violet) · Vitals & breathing (sky) · Nutrition (green).
  */
-val HealthSteps = Color(0xFF4DA3FF)
-val HealthSleep = Color(0xFFBF5AF2)
-val HealthMove = Color(0xFFFF375F)
-val HealthHeartRate = Color(0xFFFF5A52)
-val HealthRestingHr = Color(0xFFFF6961)
-val HealthOxygen = Color(0xFF64D2FF)
-val HealthRespiratory = Color(0xFF70D7FF)
-val HealthFloors = Color(0xFF30D158)
-val HealthDistance = Color(0xFF32ADE6)
-val HealthEnergy = Color(0xFFFFD60A)
-val HealthProtein = Color(0xFF32D74B)
-val HealthActivity = Color(0xFF34D399)
-val HealthHrv = Color(0xFF5AC8FA)
-val HealthWeight = Color(0xFF8E8CFF)
-val HealthBodyFat = Color(0xFFFFB86B)
-val HealthVo2 = Color(0xFF2DD4BF)
-val HealthTemperature = Color(0xFFFF9F68)
-val HealthBloodPressure = Color(0xFFFF6B8B)
-val HealthHydration = Color(0xFF4FC3F7)
-val HealthBmr = HealthEnergy
-val HealthLeanMass = Color(0xFF6EE7B7)
-val HealthBodyWater = Color(0xFF60A5FA)
-val HealthBoneMass = Color(0xFFD6CFC4)
-val HealthGlucose = Color(0xFFF472B6)
-val HealthSkinTemp = Color(0xFFFFB38A)
+val HealthActivityTone = Color(0xFFFF9F45)
+val HealthHeartTone = Color(0xFFFF6369)
+val HealthSleepTone = Color(0xFF7C83F2)
+val HealthBodyTone = Color(0xFFC38AF0)
+val HealthVitalsTone = Color(0xFF5AB4F5)
+val HealthNutritionTone = Color(0xFF5CC98A)
 
-/** Sleep stages — hypnogram, stage strip and legend share these. */
-val SleepStageAwake = Color(0xFFFF8A65)
-val SleepStageRem = Color(0xFF4FC3F7)
-val SleepStageLight = Color(0xFF7E57C2)
-val SleepStageDeep = Color(0xFF5C6BC0)
+// Per-measure names, kept so each call site says what it draws; each is its category's tone.
+val HealthSteps = HealthActivityTone
+val HealthSleep = HealthSleepTone
+val HealthMove = HealthHeartTone
+val HealthHeartRate = HealthHeartTone
+val HealthRestingHr = HealthHeartTone
+val HealthOxygen = HealthVitalsTone
+val HealthRespiratory = HealthVitalsTone
+val HealthFloors = HealthActivityTone
+val HealthDistance = HealthActivityTone
+val HealthEnergy = HealthNutritionTone
+val HealthProtein = HealthNutritionTone
+val HealthActivity = HealthActivityTone
+val HealthHrv = HealthHeartTone
+val HealthWeight = HealthBodyTone
+val HealthBodyFat = HealthBodyTone
+val HealthVo2 = HealthHeartTone
+val HealthTemperature = HealthVitalsTone
+val HealthBloodPressure = HealthHeartTone
+val HealthHydration = HealthNutritionTone
+val HealthBmr = HealthBodyTone
+val HealthLeanMass = HealthBodyTone
+val HealthBodyWater = HealthBodyTone
+val HealthBoneMass = HealthBodyTone
+val HealthGlucose = HealthVitalsTone
+val HealthSkinTemp = HealthVitalsTone
 
-/** Readiness bands, low → high. */
-val ReadinessLow = Error
-val ReadinessFair = Warning
-val ReadinessGood = Color(0xFF64D2FF)
-val ReadinessHigh = Success
+/** Sleep stages: shades of the sleep indigo, deep darkest, with awake the one warm note. */
+val SleepStageAwake = Color(0xFFE8A28C)
+val SleepStageRem = Color(0xFFA9B2FF)
+val SleepStageLight = HealthSleepTone
+val SleepStageDeep = Color(0xFF4E55C4)
+
+/** Readiness is one calm tone; its label ("Low", "Good") carries the verdict. */
+val ReadinessTone = Primary
 
 /** Nutrition accents — calories and protein, wherever either is charted. */
 val NutritionCalories = Color(0xFFFF9F43)

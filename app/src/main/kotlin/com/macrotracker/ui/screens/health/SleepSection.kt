@@ -24,7 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -83,9 +83,15 @@ fun SleepSection(
 ) {
     val zone = remember { ZoneId.systemDefault() }
     val goal = DEFAULT_SLEEP_GOAL_MINUTES
-    // -1 = follow the newest night, so a fresh sync moves the card along with it.
-    var picked by rememberSaveable { mutableIntStateOf(-1) }
-    val selectedIndex = if (picked in nights.indices) picked else nights.lastIndex
+    // A picked night is kept by its date, and only while the night it was picked against is
+    // still the newest: a list index used to survive in saved state and, once a new night
+    // synced and the list shifted, land on an older night than the one on screen.
+    var pickedDay by rememberSaveable { mutableLongStateOf(NO_PICK) }
+    var pickedAgainst by rememberSaveable { mutableLongStateOf(NO_PICK) }
+    val newestDay = nights.lastOrNull()?.date?.toEpochDay() ?: NO_PICK
+    val selectedIndex = nights.indexOfFirst { it.date.toEpochDay() == pickedDay }
+        .takeIf { it >= 0 && pickedAgainst == newestDay }
+        ?: nights.lastIndex
     val night = nights.getOrNull(selectedIndex)
     val consistency = remember(nights) { computeSleepConsistency(nights.map { it.toSpan() }, goal, zone) }
 
@@ -135,7 +141,10 @@ fun SleepSection(
                         goalMinutes = goal,
                         zone = zone,
                         haptics = haptics,
-                        onSelect = { picked = if (it == nights.lastIndex) -1 else it },
+                        onSelect = { i ->
+                            pickedDay = if (i == nights.lastIndex) NO_PICK else nights[i].date.toEpochDay()
+                            pickedAgainst = newestDay
+                        },
                     )
                 }
 
@@ -175,6 +184,8 @@ fun SleepSection(
         }
     }
 }
+
+private const val NO_PICK = Long.MIN_VALUE
 
 private fun nightSubtitle(night: SleepNight): String {
     val today = LocalDate.now()
@@ -268,7 +279,7 @@ private fun SleepScoreBadge(score: Int, label: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(end = 8.dp)) {
             Text("Score", fontSize = 11.sp, color = TextSecondary)
-            Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = HealthSleep)
+            Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
         }
         Box(modifier = Modifier.size(52.dp), contentAlignment = Alignment.Center) {
             Canvas(modifier = Modifier.size(52.dp)) {

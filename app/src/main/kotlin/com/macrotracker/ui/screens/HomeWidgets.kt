@@ -3,7 +3,6 @@ package com.macrotracker.ui.screens
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -28,20 +26,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.macrotracker.ui.components.BodyStats
 import com.macrotracker.ui.components.ButtonVariant
 import com.macrotracker.ui.components.CalendarCard
 import com.macrotracker.ui.components.CardHeader
 import com.macrotracker.ui.components.F1Card
 import com.macrotracker.ui.components.GitHubCard
-import com.macrotracker.ui.components.HealthMetricUiState
-import com.macrotracker.ui.components.LoadingSpec
-import com.macrotracker.ui.components.LoadingSpinner
 import com.macrotracker.ui.components.MacroButton
 import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.components.MacroProgressBar
 import com.macrotracker.ui.components.MacroTextField
-import com.macrotracker.ui.components.MetricInfo
 import com.macrotracker.ui.components.WeatherCard
 import com.macrotracker.ui.components.ServerCard
 import com.macrotracker.ui.components.WidgetConfig
@@ -54,15 +47,13 @@ import com.macrotracker.ui.components.YoutubeCard
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.HealthHeartRate
-import com.macrotracker.ui.theme.HealthMove
-import com.macrotracker.ui.theme.HealthSleep
-import com.macrotracker.ui.theme.HealthSteps
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.Secondary
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.LastUpdatedText
 import com.macrotracker.ui.viewmodel.HomeHealthState
+import com.macrotracker.ui.screens.health.HealthGlanceCard
 import com.macrotracker.ui.viewmodel.HomeViewModel
 import com.macrotracker.ui.theme.AppIcons
 
@@ -172,65 +163,13 @@ private fun HomeBodyStatsWidget(viewModel: HomeViewModel, isVisible: Boolean, on
     val healthState by viewModel.healthState.collectAsState()
     when (val hs = healthState) {
         is HomeHealthState.Success -> {
-            val stats = hs.stats
-            MacroCard {
-                CardHeader(
-                    title = "Body Stats",
-                    icon = AppIcons.HeartPulse,
-                    accent = HealthHeartRate,
-                    subtitle = "via Health Connect",
-                    modifier = Modifier.padding(bottom = 12.dp),
-                ) {
-                    LastUpdatedText(lastUpdatedAt = hs.lastUpdatedAt)
-                    if (hs.isRefreshing) {
-                        Spacer(modifier = Modifier.width(8.dp))
-                        LoadingSpinner(size = LoadingSpec.SizeInline)
-                    }
-                }
-
-                val sleepDisplay = if (stats.sleepMinutes > 0) {
-                    val h = stats.sleepMinutes / 60
-                    val m = stats.sleepMinutes % 60
-                    "${h}h ${m}m"
-                } else "—"
-
-                val homeMetrics = listOf(
-                    Pair(
-                        MetricInfo("Steps", "", AppIcons.Walk, HealthSteps),
-                        HealthMetricUiState(value = "%,d".format(stats.steps), isEnabled = true),
-                    ),
-                    Pair(
-                        MetricInfo("Avg HR", "bpm", AppIcons.HeartPulse, HealthHeartRate),
-                        HealthMetricUiState(
-                            value = if (stats.avgHeartRate > 0) "${stats.avgHeartRate}" else "—",
-                            isEnabled = true,
-                        ),
-                    ),
-                    Pair(
-                        MetricInfo("Sleep", "", AppIcons.Moon, HealthSleep),
-                        HealthMetricUiState(value = sleepDisplay, isEnabled = true),
-                    ),
-                    Pair(
-                        MetricInfo(
-                            if (stats.activeCaloriesBurned > 0) "Active" else "Total Cal",
-                            "kcal",
-                            AppIcons.Flame,
-                            HealthMove,
-                        ),
-                        HealthMetricUiState(
-                            value = when {
-                                stats.activeCaloriesBurned > 0 -> "${stats.activeCaloriesBurned.toInt()}"
-                                stats.totalCaloriesBurned > 0 -> "${stats.totalCaloriesBurned.toInt()}"
-                                else -> "—"
-                            },
-                            isEnabled = true,
-                        ),
-                    ),
-                )
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    BodyStats(metrics = homeMetrics, isCompact = true)
-                }
-            }
+            HealthGlanceCard(
+                stats = hs.stats,
+                hourlySteps = hs.hourlySteps,
+                sleepScore = hs.sleepScore,
+                lastUpdatedAt = hs.lastUpdatedAt,
+                onOpen = onOpenHealth,
+            )
         }
         is HomeHealthState.Loading -> {
             WidgetPlaceholderCard(title = "Body Stats", icon = AppIcons.HeartPulse, accent = HealthHeartRate)

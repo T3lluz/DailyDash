@@ -5,7 +5,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,7 +18,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.annotation.DrawableRes
 import androidx.compose.material3.Icon
@@ -38,7 +36,6 @@ import com.macrotracker.data.health.DailyHealthStats
 import com.macrotracker.ui.components.HealthMetricUiState
 import com.macrotracker.ui.components.calculatePercentageChange
 import com.macrotracker.ui.theme.Background
-import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
@@ -66,10 +63,9 @@ fun HealthStatCard(
     val accent = if (dimmed) color.copy(alpha = 0.45f) else color
     Box(
         modifier = modifier
-            .height(96.dp)
+            .height(92.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(Background)
-            .border(1.dp, Border, RoundedCornerShape(12.dp)),
+            .background(Background),
     ) {
         Column(
             modifier = Modifier
@@ -77,29 +73,22 @@ fun HealthStatCard(
                 .fillMaxSize(),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
+            // Apple Health's tile: a small icon and the name in grey, the number in white.
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(CircleShape)
-                        .background(accent.copy(alpha = 0.18f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        painter = painterResource(iconRes),
-                        contentDescription = metricName,
-                        tint = accent,
-                        modifier = Modifier.size(16.dp),
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
+                Icon(
+                    painter = painterResource(iconRes),
+                    contentDescription = metricName,
+                    tint = accent,
+                    modifier = Modifier.size(14.dp),
+                )
+                Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = metricName,
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Medium,
                     color = TextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

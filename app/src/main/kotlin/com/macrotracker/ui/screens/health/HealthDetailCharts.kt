@@ -982,11 +982,12 @@ fun computeHourlyHeartRateRanges(samples: List<HeartRateRecord.Sample>): List<Ho
 
 @Composable
 fun HeartRateEffortChart(effort: HeartRateEffort) {
+    // One heart tone, stronger with the effort, rather than four unrelated colours.
     val colors = listOf(
-        Color(0xFF90A4AE), // Rest
-        Color(0xFF42A5F5), // Daily
-        Color(0xFFFFA726), // Active
-        Color(0xFFEF5350), // High
+        HealthHeartRate.copy(alpha = 0.22f), // Rest
+        HealthHeartRate.copy(alpha = 0.45f), // Daily
+        HealthHeartRate.copy(alpha = 0.72f), // Active
+        HealthHeartRate, // High
     )
     val labels = listOf("Rest", "Daily", "Active", "High")
     val restCeil = effort.restingAnchorBpm + 10

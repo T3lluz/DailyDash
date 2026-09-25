@@ -101,19 +101,18 @@ import com.macrotracker.ui.theme.HealthOxygen
 import com.macrotracker.ui.theme.HealthRespiratory
 import com.macrotracker.ui.theme.HealthRestingHr
 import com.macrotracker.ui.theme.HealthSkinTemp
-import com.macrotracker.ui.theme.HealthSleep
 import com.macrotracker.ui.theme.HealthTemperature
 import com.macrotracker.ui.theme.HealthVo2
 import com.macrotracker.ui.theme.HealthWeight
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.Primary
-import com.macrotracker.ui.theme.Success
 import com.macrotracker.ui.theme.Surface
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.theme.TextTertiary
 import com.macrotracker.ui.theme.Warning
-import com.macrotracker.ui.theme.chipFill
+import com.macrotracker.ui.theme.BorderStrong
+import com.macrotracker.ui.theme.SelectedFill
 import com.macrotracker.ui.util.HapticHelper
 import com.macrotracker.ui.util.rememberReducedMotion
 import com.macrotracker.ui.viewmodel.VitalsUiState
@@ -404,7 +403,7 @@ private fun buildVitalTiles(v: BodyVitals, zone: ZoneId, birthYear: Int?, now: I
             VitalTile(
                 kind = VitalKind.SLEEPING_HR,
                 icon = AppIcons.Moon,
-                color = HealthSleep,
+                color = HealthRestingHr,
                 value = whole(last.value),
                 unit = "bpm",
                 caption = base?.let { "Usual ${whole(it.mean)} bpm" } ?: "Average asleep",
@@ -613,7 +612,7 @@ private fun buildVitalTiles(v: BodyVitals, zone: ZoneId, birthYear: Int?, now: I
                 unit = "mmHg",
                 caption = category,
                 captionColor = when (category) {
-                    "Normal" -> Success
+                    "Normal" -> null
                     "Elevated" -> Warning
                     else -> Error
                 },
@@ -637,7 +636,7 @@ private fun buildVitalTiles(v: BodyVitals, zone: ZoneId, birthYear: Int?, now: I
                 unit = "mmol/L",
                 caption = category,
                 captionColor = when (category) {
-                    "In range" -> Success
+                    "In range" -> null
                     "Raised" -> Warning
                     else -> Error
                 },
@@ -842,11 +841,8 @@ private fun wantsBirthYear(v: BodyVitals): Boolean =
     (v.vo2Max.isEmpty() && v.restingHr.isNotEmpty()) ||
         (v.bmrKcal == null && v.weightKg.isNotEmpty() && v.heightM != null && v.bodyFatPct.isEmpty())
 
-private fun vo2Color(vo2: Double): Color = when {
-    vo2 >= 42 -> Success
-    vo2 >= 35 -> Warning
-    else -> Error
-}
+/** Fitness bands read as plain words; only a low one is worth a colour. */
+private fun vo2Color(vo2: Double): Color? = if (vo2 < 35) Warning else null
 
 private fun whenLabel(at: Instant, zone: ZoneId): String {
     val day = at.atZone(zone).toLocalDate()
@@ -868,8 +864,9 @@ private fun VitalTileView(
     modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(14.dp)
+    // Closed tiles are plain wells; the open one is outlined in neutral, not its colour.
     val borderColor by animateColorAsState(
-        targetValue = if (open) tile.color.copy(alpha = 0.7f) else Border,
+        targetValue = if (open) BorderStrong else Color.Transparent,
         animationSpec = MacroMotion.colorTween(),
         label = "vitalTileBorder",
     )
@@ -894,7 +891,7 @@ private fun VitalTileView(
             )
             tile.badge?.let {
                 Spacer(modifier = Modifier.width(4.dp))
-                EstimateBadge(it, tile.color)
+                EstimateBadge(it)
             }
             tile.lastAt?.let {
                 Spacer(modifier = Modifier.width(4.dp))
@@ -962,18 +959,18 @@ private fun VitalTileView(
 
 private const val SPARK_POINTS = 30
 
-/** A tinted "Est." chip beside a tile's name. */
+/** A quiet "Est." chip beside a tile's name. */
 @Composable
-private fun EstimateBadge(text: String, color: Color) {
+private fun EstimateBadge(text: String) {
     Text(
         text,
         fontSize = 9.sp,
         fontWeight = FontWeight.SemiBold,
-        color = color,
+        color = TextSecondary,
         maxLines = 1,
         modifier = Modifier
             .clip(RoundedCornerShape(6.dp))
-            .background(color.chipFill())
+            .background(SelectedFill)
             .padding(horizontal = 5.dp, vertical = 1.dp),
     )
 }
@@ -1074,7 +1071,7 @@ private fun VitalDetail(
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(Background)
-            .border(1.dp, tile.color.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
+            .border(1.dp, Border, RoundedCornerShape(14.dp))
             .padding(12.dp),
     ) {
         Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.fillMaxWidth()) {
@@ -1082,7 +1079,7 @@ private fun VitalDetail(
                 readout(tile, index),
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
-                color = tile.color,
+                color = TextPrimary,
                 modifier = Modifier.weight(1f),
             )
             Text(
