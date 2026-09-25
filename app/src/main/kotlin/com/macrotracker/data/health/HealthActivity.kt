@@ -281,8 +281,6 @@ fun activityWindowStart(
     return if (calendarMonthStart.isBefore(rolling)) calendarMonthStart else rolling
 }
 
-/** Outdoor sessions lead the card; otherwise the most recent one does. */
-fun pickFeaturedActivity(activities: List<HealthActivity>): HealthActivity? {
-    if (activities.isEmpty()) return null
-    return activities.firstOrNull { it.isOutdoorType } ?: activities.first()
-}
+/** The newest workout leads the card, as Apple Fitness opens its history on the latest one. */
+fun pickFeaturedActivity(activities: List<HealthActivity>): HealthActivity? =
+    activities.maxByOrNull { it.startTime }

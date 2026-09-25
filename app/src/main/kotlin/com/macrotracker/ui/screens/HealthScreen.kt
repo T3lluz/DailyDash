@@ -64,13 +64,13 @@ import com.macrotracker.ui.screens.health.AnimatedMacroBarChart
 import com.macrotracker.ui.screens.health.DailyHealthSection
 import com.macrotracker.ui.screens.health.HealthMetric
 import com.macrotracker.ui.screens.health.HealthMetricEntry
-import com.macrotracker.ui.screens.health.HealthMetricGrid
 import com.macrotracker.ui.screens.health.HealthChip
 import com.macrotracker.ui.screens.health.HealthStatTile
 import com.macrotracker.ui.screens.health.HealthTrendsSection
 import com.macrotracker.ui.screens.health.HealthHeader
 import com.macrotracker.ui.screens.health.HealthSection
 import com.macrotracker.ui.screens.health.SleepSection
+import com.macrotracker.ui.screens.health.TodaysReadingsSection
 import com.macrotracker.ui.screens.health.VitalsSection
 import com.macrotracker.ui.screens.health.computeSleepNightScore
 import com.macrotracker.data.health.readinessFrom
@@ -89,7 +89,6 @@ import com.macrotracker.ui.components.RipplePullToRefreshBox
 import com.macrotracker.ui.components.rippleAnchor
 import com.macrotracker.ui.components.ScreenHeader
 import com.macrotracker.ui.components.TabContentBottomPadding
-import com.macrotracker.ui.components.StatusCopy
 import com.macrotracker.ui.components.ScreenHeaderSpacer
 import com.macrotracker.ui.components.WidgetEditor
 import com.macrotracker.ui.components.draggableWidgetItems
@@ -431,56 +430,33 @@ fun HealthScreen(
                         )
                     }
                     "BODY_STATS" -> {
-                        // Every enabled metric gets a card. This grid used to be
-                        // suppressed whenever Daily Health was visible, which hid
-                        // steps / distance / floors / active calories entirely on a
-                        // default install.
+                        // Every enabled metric gets a row; one with nothing yet today folds
+                        // into the section's last line instead of disappearing.
                         val metricEntries = remember(
                             heartRateState, restingHeartRateState, oxygenSaturationState,
                             respiratoryRateState, stepsState, distanceState,
                             floorsClimbedState, activeCaloriesState,
                         ) {
                             listOf(
-                                HealthMetricEntry(HealthMetric.HEART_RATE, "Heart Rate", "bpm", heartRateState),
-                                HealthMetricEntry(HealthMetric.RESTING_HEART_RATE, "Resting HR", "bpm", restingHeartRateState),
-                                HealthMetricEntry(HealthMetric.OXYGEN_SATURATION, "SpO₂", "%", oxygenSaturationState),
-                                HealthMetricEntry(HealthMetric.RESPIRATORY_RATE, "Resp. Rate", "rpm", respiratoryRateState),
-                                HealthMetricEntry(HealthMetric.STEPS, "Steps", "", stepsState),
-                                HealthMetricEntry(HealthMetric.DISTANCE, "Distance", "km", distanceState),
-                                HealthMetricEntry(HealthMetric.FLOORS_CLIMBED, "Floors", "", floorsClimbedState),
-                                HealthMetricEntry(HealthMetric.CALORIES, "Active Cals", "kcal", activeCaloriesState),
+                                HealthMetricEntry(HealthMetric.HEART_RATE, heartRateState),
+                                HealthMetricEntry(HealthMetric.RESTING_HEART_RATE, restingHeartRateState),
+                                HealthMetricEntry(HealthMetric.OXYGEN_SATURATION, oxygenSaturationState),
+                                HealthMetricEntry(HealthMetric.RESPIRATORY_RATE, respiratoryRateState),
+                                HealthMetricEntry(HealthMetric.STEPS, stepsState),
+                                HealthMetricEntry(HealthMetric.DISTANCE, distanceState),
+                                HealthMetricEntry(HealthMetric.FLOORS_CLIMBED, floorsClimbedState),
+                                HealthMetricEntry(HealthMetric.CALORIES, activeCaloriesState),
                             )
                         }
-
-                        if (metricEntries.any { it.state.isEnabled }) {
-                            HealthSection(delayMs = 0) {
-                                HealthHeader(
-                                    title = "Today's readings",
-                                    icon = AppIcons.HeartRateMonitor,
-                                    accent = Primary,
-                                    subtitle = "Next to yesterday, with the last seven days",
-                                    modifier = Modifier.padding(bottom = 12.dp),
-                                )
-
-                                HealthMetricGrid(entries = metricEntries, history = lastSevenDays)
-
-                                if (missingPermissions.isNotEmpty()) {
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    StatusCopy(
-                                        title = "Some metrics aren’t shared",
-                                        body = "Health Connect hasn’t granted " +
-                                            missingPermissions.joinToString { it.label } +
-                                            ". Allow them to see real numbers instead of placeholders.",
-                                        actionLabel = "Allow in Health Connect",
-                                        onAction = {
-                                            haptics.tick()
-                                            hcPermissionLauncher.launch(healthViewModel.healthConnectPermissions)
-                                        },
-                                    )
-                                }
-                            }
-
-                        }
+                        TodaysReadingsSection(
+                            entries = metricEntries,
+                            history = lastSevenDays,
+                            notShared = missingPermissions.map { it.label },
+                            onAllow = {
+                                haptics.tick()
+                                hcPermissionLauncher.launch(healthViewModel.healthConnectPermissions)
+                            },
+                        )
                     }
                     "HISTORY" -> {
                         if (healthHistory.isEmpty()) {
