@@ -166,6 +166,7 @@ private fun HomeBodyStatsWidget(viewModel: HomeViewModel, isVisible: Boolean, on
             HealthGlanceCard(
                 stats = hs.stats,
                 hourlySteps = hs.hourlySteps,
+                usualHourlySteps = hs.usualHourlySteps,
                 sleepScore = hs.sleepScore,
                 lastUpdatedAt = hs.lastUpdatedAt,
                 onOpen = onOpenHealth,

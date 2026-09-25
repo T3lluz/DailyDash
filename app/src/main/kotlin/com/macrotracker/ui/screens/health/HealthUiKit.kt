@@ -4,7 +4,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -16,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,7 +40,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.macrotracker.ui.theme.AppIcons
-import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.SelectedFill
@@ -240,7 +237,6 @@ fun HealthChip(
         modifier = modifier
             .clip(shape)
             .background(SelectedFill.copy(alpha = SelectedFill.alpha * fillAlpha))
-            .border(1.dp, if (selected) Color.Transparent else Border, shape)
             .clickable(onClick = onClick)
             .padding(horizontal = 11.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -271,7 +267,10 @@ fun HealthChip(
     }
 }
 
-/** A label-over-value tile on the inset well colour, for summary rows. No outline: the well is enough. */
+/**
+ * A label over a value, nothing around it: a row of these reads as one line of facts, as
+ * Apple Health sets them, where a row of boxes read as a spreadsheet.
+ */
 @Composable
 fun HealthStatTile(
     label: String,
@@ -280,24 +279,19 @@ fun HealthStatTile(
     sub: String? = null,
     accent: Color? = null,
 ) {
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(Background)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-    ) {
-        Text(label, fontSize = 11.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Column(modifier = modifier.padding(vertical = 2.dp)) {
+        Text(label, fontSize = 12.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Spacer(modifier = Modifier.height(2.dp))
         Text(
             value,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.SemiBold,
             color = accent ?: TextPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
         if (sub != null) {
-            Text(sub, fontSize = 10.sp, color = TextTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(sub, fontSize = 11.sp, color = TextTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

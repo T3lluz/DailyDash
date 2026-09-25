@@ -111,6 +111,10 @@ class HealthViewModel @Inject constructor(
     private val _hourlySteps = MutableStateFlow<List<Long>>(emptyList())
     val hourlySteps: StateFlow<List<Long>> = _hourlySteps
 
+    /** A usual day's steps per hour (24 entries), for today's pace; empty until there are enough days. */
+    private val _usualHourlySteps = MutableStateFlow<List<Double>>(emptyList())
+    val usualHourlySteps: StateFlow<List<Double>> = _usualHourlySteps
+
     /** True while a pull-to-refresh the person started is running. */
     private val _refreshing = MutableStateFlow(false)
     val refreshing: StateFlow<Boolean> = _refreshing
@@ -462,6 +466,7 @@ class HealthViewModel @Inject constructor(
                 val hourlyDeferred = async {
                     try {
                         _hourlySteps.value = healthConnectRepository.readHourlySteps()
+                        _usualHourlySteps.value = healthConnectRepository.readUsualHourlySteps()
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {

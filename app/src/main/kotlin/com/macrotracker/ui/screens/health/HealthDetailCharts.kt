@@ -3,7 +3,6 @@ package com.macrotracker.ui.screens.health
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -89,7 +88,7 @@ private fun sleepStageLane(stage: Int): Int? = when (stage) {
     else -> null
 }
 
-private fun sleepStageColor(stage: Int): Color = when (sleepStageLane(stage)) {
+internal fun sleepStageColor(stage: Int): Color = when (sleepStageLane(stage)) {
     0 -> SleepAwake
     1 -> SleepRem
     2 -> SleepLight
@@ -227,8 +226,7 @@ fun HeartRateDetailChart(
                 .fillMaxWidth()
                 .height(200.dp)
                 .clip(RoundedCornerShape(16.dp))
-                .background(Background)
-                .border(1.dp, Border.copy(alpha = 0.55f), RoundedCornerShape(16.dp)),
+                .background(Background),
         ) {
             Canvas(
                 modifier = Modifier
@@ -753,8 +751,7 @@ private fun SleepStagesHypnogram(
                     .weight(1f)
                     .fillMaxHeight()
                     .clip(RoundedCornerShape(18.dp))
-                    .background(Background)
-                    .border(1.dp, Border.copy(alpha = 0.5f), RoundedCornerShape(18.dp)),
+                    .background(Background),
             ) {
                 Canvas(
                     modifier = Modifier

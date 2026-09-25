@@ -59,7 +59,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.macrotracker.ui.components.CardHeader
 import com.macrotracker.ui.screens.health.ActivitiesSection
 import com.macrotracker.ui.screens.health.AnimatedMacroBarChart
 import com.macrotracker.ui.screens.health.DailyHealthSection
@@ -69,16 +68,19 @@ import com.macrotracker.ui.screens.health.HealthMetricGrid
 import com.macrotracker.ui.screens.health.HealthChip
 import com.macrotracker.ui.screens.health.HealthStatTile
 import com.macrotracker.ui.screens.health.HealthTrendsSection
+import com.macrotracker.ui.screens.health.HealthHeader
+import com.macrotracker.ui.screens.health.HealthSection
+import com.macrotracker.ui.screens.health.LiftWhileDragging
 import com.macrotracker.ui.screens.health.SleepSection
 import com.macrotracker.ui.screens.health.VitalsSection
 import com.macrotracker.ui.screens.health.computeSleepNightScore
 import com.macrotracker.data.health.readinessFrom
 import com.macrotracker.data.local.DailySummary
 import com.macrotracker.data.local.MacroLogEntity
+import com.macrotracker.ui.components.ContentSkeleton
 import com.macrotracker.ui.components.HealthConnectCard
 import com.macrotracker.ui.components.LoadingRow
 import com.macrotracker.ui.components.MacroButton
-import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.components.MacroLogItem
 import com.macrotracker.ui.components.WidgetScrollBox
 import com.macrotracker.ui.components.MacroProgressBar
@@ -91,8 +93,6 @@ import com.macrotracker.ui.components.TabContentBottomPadding
 import com.macrotracker.ui.components.StatusCopy
 import com.macrotracker.ui.components.ScreenHeaderSpacer
 import com.macrotracker.ui.components.WidgetEditor
-import com.macrotracker.ui.components.WidgetPlaceholder
-import com.macrotracker.ui.components.WidgetPlaceholderCard
 import com.macrotracker.ui.components.draggableWidgetItems
 import com.macrotracker.ui.components.encodeWidgetConfig
 import com.macrotracker.ui.components.parseWidgetConfig
@@ -102,6 +102,8 @@ import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.NutritionCalories
 import com.macrotracker.ui.theme.HealthHeartRate
+import com.macrotracker.ui.theme.HealthNutritionTone
+import com.macrotracker.ui.theme.HealthSteps
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.Secondary
 import com.macrotracker.ui.theme.Success
@@ -163,6 +165,7 @@ fun HealthScreen(
     val sleepNights by healthViewModel.sleepNights.collectAsState()
     val sleepLoaded by healthViewModel.sleepLoaded.collectAsState()
     val hourlySteps by healthViewModel.hourlySteps.collectAsState()
+    val usualHourlySteps by healthViewModel.usualHourlySteps.collectAsState()
     val refreshing by healthViewModel.refreshing.collectAsState()
 
     var selectedMetric by rememberSaveable { mutableStateOf(HealthMetric.STEPS) }
@@ -185,7 +188,7 @@ fun HealthScreen(
 
     val defaultHealthWidgets = remember {
         listOf(
-            Triple("DAILY_HEALTH", "Daily Health", AppIcons.HeartFilled),
+            Triple("DAILY_HEALTH", "Today", AppIcons.HeartFilled),
             Triple("SLEEP", "Sleep", AppIcons.Moon),
             Triple("ACTIVITIES", "Activities", AppIcons.Activity),
             Triple("VITALS", "Body & Vitals", AppIcons.Scale),
@@ -388,7 +391,8 @@ fun HealthScreen(
                 state = dragState,
                 itemKey = { it.id },
                 haptics = haptics,
-            ) { _, config, _ ->
+            ) { _, config, isDragging ->
+                LiftWhileDragging(isDragging) {
                     when (config.id) {
                     "DAILY_HEALTH" -> {
                         val hcStats = (healthConnectState as? HealthConnectUiState.Success)?.stats
@@ -407,6 +411,7 @@ fun HealthScreen(
                             floorsToday = floorsClimbedState.today?.toDouble(),
                             readiness = readiness,
                             hourlySteps = hourlySteps,
+                            usualHourlySteps = usualHourlySteps,
                             exerciseMinutesToday = exerciseToday,
                             hrvMs = hrvToday,
                             hydrationLitres = waterToday,
@@ -468,8 +473,8 @@ fun HealthScreen(
                         }
 
                         if (metricEntries.any { it.state.isEnabled }) {
-                            MacroCard(delayMs = 0) {
-                                CardHeader(
+                            HealthSection(delayMs = 0) {
+                                HealthHeader(
                                     title = "Body Stats",
                                     icon = AppIcons.HeartPulse,
                                     accent = HealthHeartRate,
@@ -501,11 +506,11 @@ fun HealthScreen(
                             // Reserve the slot instead of collapsing to nothing —
                             // an empty section used to shove the rest of the list
                             // down the instant the week query returned.
-                            WidgetPlaceholderCard(
-                                title = "Weekly Trends",
-                                icon = AppIcons.ChartLine,
-                                lines = 4,
-                            )
+                            HealthSection {
+                                HealthHeader(title = "Weekly Trends", icon = AppIcons.ChartLine, accent = HealthSteps)
+                                Spacer(modifier = Modifier.height(14.dp))
+                                ContentSkeleton(lines = 4, accent = Border)
+                            }
                         } else {
                             HealthTrendsSection(
                                 healthHistory = healthHistory,
@@ -539,20 +544,18 @@ fun HealthScreen(
                     "SUMMARY" -> {
                         val s = summary
                         if (s == null) {
-                            WidgetPlaceholderCard(
-                                title = "Daily Summary",
-                                icon = AppIcons.Rows,
-                                accent = Primary,
-                                minHeight = WidgetPlaceholder.CompactMinHeight,
-                                lines = 2,
-                            )
+                            HealthSection {
+                                HealthHeader(title = "Daily Summary", icon = AppIcons.Rows, accent = HealthNutritionTone)
+                                Spacer(modifier = Modifier.height(14.dp))
+                                ContentSkeleton(lines = 2, accent = Border)
+                            }
                         } else {
                             val hcStats = (healthConnectState as? HealthConnectUiState.Success)?.stats
-                            MacroCard(delayMs = 100) {
-                                CardHeader(
+                            HealthSection(delayMs = 100) {
+                                HealthHeader(
                                     title = "Daily Summary",
                                     icon = AppIcons.Rows,
-                                    accent = Primary,
+                                    accent = HealthNutritionTone,
                                     modifier = Modifier.padding(bottom = 16.dp),
                                 )
                                 val calProgress = if (s.calorieGoal > 0) s.totalCalories.toFloat() / s.calorieGoal else 0f
@@ -636,11 +639,11 @@ fun HealthScreen(
                         }
                     }
                     "ADD_ENTRY" -> {
-                        MacroCard(delayMs = 150) {
-                            CardHeader(
+                        HealthSection(delayMs = 150) {
+                            HealthHeader(
                                 title = "Add Entry",
                                 icon = AppIcons.Add,
-                                accent = Primary,
+                                accent = HealthNutritionTone,
                                 modifier = Modifier.padding(bottom = 16.dp),
                             ) {
                                 PillButton(
@@ -746,10 +749,11 @@ fun HealthScreen(
                         )
                     }
                     "RECENT_LOGS" -> {
-                        MacroCard(delayMs = 250) {
-                            CardHeader(
+                        HealthSection(delayMs = 250) {
+                            HealthHeader(
                                 title = "Recent Logs",
                                 icon = AppIcons.List,
+                                accent = HealthNutritionTone,
                                 modifier = Modifier.padding(bottom = 8.dp),
                             )
 
@@ -775,6 +779,7 @@ fun HealthScreen(
                             }
                         }
                     }
+                }
                 }
             }
         }
@@ -824,11 +829,11 @@ private fun MacroTrendsSection(
     val avgMetric = metricValues.filter { it > 0 }.let { if (it.isEmpty()) 0.0 else it.average() }
 
     Column {
-        MacroCard(delayMs = 70) {
-            CardHeader(
+        HealthSection(delayMs = 70) {
+            HealthHeader(
                 title = "Macro Trends",
                 icon = AppIcons.ChartBar,
-                accent = barColor,
+                accent = HealthNutritionTone,
                 modifier = Modifier.padding(bottom = 10.dp),
             )
 
@@ -909,9 +914,10 @@ private fun MacroTrendsSection(
             }
         }
 
-        MacroCard(delayMs = 100) {
+        // The picked day's food reads as the second half of the same section, not a card of its own.
+        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 22.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 10.dp)) {
-                Icon(AppIcons.CalendarDays, contentDescription = null, tint = Primary, modifier = Modifier.size(18.dp))
+                Icon(AppIcons.CalendarDays, contentDescription = null, tint = HealthNutritionTone, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 val displayDate = try {
                     LocalDate.parse(selectedDate).format(DateTimeFormatter.ofPattern("EEEE, MMM d"))

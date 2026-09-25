@@ -160,6 +160,9 @@ class HealthConnectRepository @Inject constructor(
         /** Nights the Sleep card charts. */
         const val SLEEP_NIGHTS = 14
 
+        /** Days before today that make up "a usual day" for the step pace. */
+        const val USUAL_PACE_DAYS = 14
+
         /** Days of rate-like vitals (HRV, resting HR, SpO₂…) Body & Vitals charts. */
         private const val VITALS_RATE_DAYS = 30L
 
@@ -1552,6 +1555,38 @@ class HealthConnectRepository @Inject constructor(
             hours.toList()
         } catch (e: Exception) {
             Log.w(TAG, "Failed to read hourly steps: ${e.message}")
+            noteReadFailure(e)
+            emptyList()
+        }
+    }
+
+    /**
+     * A usual day's steps per hour over the [days] full days before today, in one
+     * hourly aggregate ([usualHourlyProfile]). Empty when fewer than three of them moved.
+     */
+    suspend fun readUsualHourlySteps(days: Int = USUAL_PACE_DAYS): List<Double> = withContext(Dispatchers.IO) {
+        val hc = client ?: return@withContext emptyList()
+        if (!hasPermission(STEPS_PERMISSION)) return@withContext emptyList()
+        val zone = ZoneId.systemDefault()
+        val today = LocalDate.now(zone)
+        val start = today.minusDays(days.toLong()).atStartOfDay(zone).toInstant()
+        val end = today.atStartOfDay(zone).toInstant()
+        try {
+            val byDay = HashMap<LocalDate, LongArray>()
+            hc.aggregateGroupByDuration(
+                AggregateGroupByDurationRequest(
+                    metrics = setOf(StepsRecord.COUNT_TOTAL),
+                    timeRangeFilter = TimeRangeFilter.between(start, end),
+                    timeRangeSlicer = Duration.ofHours(1),
+                ),
+            ).forEach { bucket ->
+                val local = bucket.startTime.atZone(zone)
+                val hours = byDay.getOrPut(local.toLocalDate()) { LongArray(24) }
+                hours[local.hour] += bucket.result[StepsRecord.COUNT_TOTAL] ?: 0L
+            }
+            usualHourlyProfile(byDay.values.map { it.toList() })
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to read usual hourly steps: ${e.message}")
             noteReadFailure(e)
             emptyList()
         }
