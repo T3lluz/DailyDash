@@ -215,6 +215,21 @@ object MacroMotion {
         fun <T> settleSpring() = spring<T>(dampingRatio = 0.78f, stiffness = 420f)
     }
 
+    /**
+     * The F1 countdown's split-flap: the top half of the old number folds down about the
+     * number's middle, then the bottom half of the new one lands. Well inside a second so the
+     * seconds column is settled before the next tick.
+     */
+    object CountdownFlip {
+        const val DURATION_MS = 560
+
+        /** Camera distance in multiples of the density, so the fold keeps a little depth. */
+        const val CAMERA_DISTANCE = 10f
+
+        /** Gravity: slow off the top, quick onto the bottom. */
+        val EASING = CubicBezierEasing(0.45f, 0f, 0.35f, 1f)
+    }
+
     /** The navbar's activity tab rising out of the pill and settling back into it: a touch of give, no wobble. */
     fun <T> navTabSpring() = spring<T>(dampingRatio = 0.82f, stiffness = 420f)
 
