@@ -5,11 +5,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,8 +16,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,7 +27,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -48,12 +43,9 @@ import androidx.compose.ui.unit.sp
 import com.macrotracker.data.health.computeSleepConsistency
 import com.macrotracker.data.health.formatEveningOffset
 import com.macrotracker.data.health.minutesFromEvening
-import com.macrotracker.ui.components.CardHeader
 import com.macrotracker.ui.components.ContentSkeleton
-import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.components.StatusCopy
 import com.macrotracker.ui.theme.AppIcons
-import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.HealthSleep
 import com.macrotracker.ui.theme.MacroMotion
@@ -95,8 +87,8 @@ fun SleepSection(
     val night = nights.getOrNull(selectedIndex)
     val consistency = remember(nights) { computeSleepConsistency(nights.map { it.toSpan() }, goal, zone) }
 
-    MacroCard(delayMs = delayMs) {
-        CardHeader(
+    HealthSection(delayMs = delayMs) {
+        HealthHeader(
             title = "Sleep",
             icon = AppIcons.Moon,
             accent = HealthSleep,
@@ -202,40 +194,45 @@ private fun NightDetail(night: SleepNight, zone: ZoneId, haptics: HapticHelper) 
     val timeFmt = remember { DateTimeFormatter.ofPattern("HH:mm") }
     val score = night.score
     Column(modifier = Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text("Asleep", fontSize = 12.sp, color = TextSecondary)
-                Text(
-                    formatMinutesCompact(night.asleepMinutes),
-                    fontSize = 34.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
-                    lineHeight = 36.sp,
-                )
-            }
-            if (score != null) {
-                SleepScoreBadge(score.score, score.label)
-            }
-        }
-        Spacer(modifier = Modifier.height(6.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(AppIcons.Moon, contentDescription = null, tint = HealthSleep, modifier = Modifier.size(13.dp))
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(night.bedtime.atZone(zone).format(timeFmt), fontSize = 13.sp, color = TextPrimary)
-            Text("  →  ", fontSize = 13.sp, color = TextTertiary)
-            Icon(AppIcons.Sunrise, contentDescription = null, tint = HealthSleep, modifier = Modifier.size(13.dp))
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(night.wake.atZone(zone).format(timeFmt), fontSize = 13.sp, color = TextPrimary)
-            if (night.sessions.size > 1) {
-                Text(
-                    "  ·  ${night.sessions.size} sessions",
-                    fontSize = 12.sp,
-                    color = TextSecondary,
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            SleepClockDial(night = night, zone = zone, modifier = Modifier.size(156.dp))
+            Spacer(modifier = Modifier.width(22.dp))
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (score != null) {
+                    Column {
+                        Text("Sleep score", fontSize = 12.sp, color = TextSecondary)
+                        Row {
+                            Text(
+                                "${score.score}",
+                                fontSize = 28.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary,
+                                modifier = Modifier.alignByBaseline(),
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                score.label,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = HealthSleep,
+                                modifier = Modifier.alignByBaseline(),
+                            )
+                        }
+                    }
+                }
+                ClockTime("Bedtime", night.bedtime.atZone(zone).format(timeFmt))
+                ClockTime(
+                    "Woke",
+                    night.wake.atZone(zone).format(timeFmt),
+                    note = night.sessions.size.takeIf { it > 1 }?.let { "$it sessions" },
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(18.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             HealthStatTile(
                 label = "In bed",
@@ -256,7 +253,7 @@ private fun NightDetail(night: SleepNight, zone: ZoneId, haptics: HapticHelper) 
         }
 
         if (score != null && night.hasStages) {
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             SleepStageMix(
                 deepMinutes = score.deepMinutes,
                 lightMinutes = score.lightMinutes,
@@ -269,42 +266,22 @@ private fun NightDetail(night: SleepNight, zone: ZoneId, haptics: HapticHelper) 
     }
 }
 
-/** Score in a small ring, coloured by Garmin's bands. */
 @Composable
-private fun SleepScoreBadge(score: Int, label: String) {
-    val progress = remember { androidx.compose.animation.core.Animatable(0f) }
-    LaunchedEffect(score) {
-        progress.animateTo(score / 100f, MacroMotion.chartRevealTween(700))
-    }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(end = 8.dp)) {
-            Text("Score", fontSize = 11.sp, color = TextSecondary)
-            Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-        }
-        Box(modifier = Modifier.size(52.dp), contentAlignment = Alignment.Center) {
-            Canvas(modifier = Modifier.size(52.dp)) {
-                val stroke = 5.dp.toPx()
-                val inset = stroke / 2f
-                drawArc(
-                    color = HealthSleep.copy(alpha = 0.18f),
-                    startAngle = -90f,
-                    sweepAngle = 360f,
-                    useCenter = false,
-                    topLeft = Offset(inset, inset),
-                    size = Size(size.width - stroke, size.height - stroke),
-                    style = Stroke(stroke),
-                )
-                drawArc(
-                    color = HealthSleep,
-                    startAngle = -90f,
-                    sweepAngle = 360f * progress.value,
-                    useCenter = false,
-                    topLeft = Offset(inset, inset),
-                    size = Size(size.width - stroke, size.height - stroke),
-                    style = Stroke(stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round),
-                )
+private fun ClockTime(label: String, time: String, note: String? = null) {
+    Column {
+        Text(label, fontSize = 12.sp, color = TextSecondary)
+        Row {
+            Text(
+                time,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimary,
+                modifier = Modifier.alignByBaseline(),
+            )
+            if (note != null) {
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(note, fontSize = 11.sp, color = TextTertiary, modifier = Modifier.alignByBaseline())
             }
-            Text("$score", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
         }
     }
 }
@@ -349,8 +326,6 @@ private fun SleepScheduleChart(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(170.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(Background)
                 .pointerInput(count) {
                     fun indexAt(x: Float): Int {
                         val left = 38.dp.toPx()

@@ -47,9 +47,7 @@ import com.macrotracker.data.health.formatActivityWhen
 import com.macrotracker.data.health.formatElevation
 import com.macrotracker.data.health.formatPace
 import com.macrotracker.data.health.pickFeaturedActivity
-import com.macrotracker.ui.components.CardHeader
 import com.macrotracker.ui.components.ContentSkeleton
-import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.components.StatusCopy
 import com.macrotracker.ui.components.WidgetScrollBox
 import com.macrotracker.ui.theme.Background
@@ -58,7 +56,6 @@ import com.macrotracker.ui.theme.HealthActivity
 import com.macrotracker.ui.theme.HealthHeartRate
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.MapSurface
-import com.macrotracker.ui.theme.MapWell
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
@@ -86,9 +83,9 @@ fun ActivitiesSection(
     onRetry: () -> Unit = onRequestPermission,
     delayMs: Long = 40L,
 ) {
-    MacroCard(delayMs = delayMs) {
+    HealthSection(delayMs = delayMs) {
         val activities = (state as? ActivitiesUiState.Success)?.activities.orEmpty()
-        CardHeader(
+        HealthHeader(
             title = "Activities",
             icon = AppIcons.Activity,
             accent = HealthActivity,
@@ -273,6 +270,7 @@ private fun ActivitiesList(
 
     val rows: @Composable () -> Unit = {
         visible.forEach { activity ->
+            Hairline()
             CompactActivityRow(
                 activity = activity,
                 expanded = expandedId == activity.id,
@@ -313,10 +311,8 @@ private fun ShowMoreRow(expanded: Boolean, hiddenCount: Int, onClick: () -> Unit
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(Background)
-            .border(1.dp, Border, RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 9.dp),
+            .padding(vertical = 10.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -342,14 +338,7 @@ private fun FeaturedActivityCard(
     haptics: HapticHelper,
 ) {
     val accent = activityAccent(activity.exerciseType)
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(Background)
-            .border(1.dp, Border, RoundedCornerShape(14.dp))
-            .padding(12.dp),
-    ) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         ActivityHeader(activity = activity, accent = accent)
         Spacer(modifier = Modifier.height(10.dp))
         ActivityStatsGrid(activity)
@@ -374,11 +363,8 @@ private fun CompactActivityRow(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(Background)
             .clickable(onClick = onToggle)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(vertical = 12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             ActivityTypeBadge(activity.exerciseType, accent)
@@ -450,7 +436,7 @@ private fun ActivityHeader(activity: HealthActivity, accent: Color) {
                 color = TextSecondary,
             )
         }
-        SourceChip(activity.sourceLabel, accent)
+        SourceChip(activity.sourceLabel)
     }
 }
 
@@ -473,16 +459,12 @@ private fun ActivityTypeBadge(type: Int, accent: Color) {
 }
 
 @Composable
-private fun SourceChip(label: String, accent: Color) {
+private fun SourceChip(label: String) {
     Text(
         label,
         fontSize = 11.sp,
         fontWeight = FontWeight.SemiBold,
-        color = accent,
-        modifier = Modifier
-            .clip(CircleShape)
-            .background(accent.copy(alpha = 0.14f))
-            .padding(horizontal = 10.dp, vertical = 4.dp),
+        color = TextSecondary,
     )
 }
 
@@ -516,12 +498,10 @@ private fun ActivityStatsGrid(activity: HealthActivity) {
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(MapWell)
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                    .padding(vertical = 4.dp),
             ) {
-                Text(label, fontSize = 10.sp, color = TextSecondary)
-                Text(value, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary, maxLines = 1)
+                Text(label, fontSize = 11.sp, color = TextSecondary)
+                Text(value, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1)
             }
         }
     }
@@ -548,9 +528,7 @@ private fun ActivityHrSparkline(samples: List<ActivityHrPoint>, accent: Color) {
         androidx.compose.foundation.Canvas(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(44.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(MapWell),
+                .height(44.dp),
         ) {
             if (samples.size < 2) return@Canvas
             val minB = samples.minOf { it.bpm }.toFloat()
@@ -589,9 +567,7 @@ private fun ActivityLapsRow(activity: HealthActivity) {
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MapWell)
-                    .padding(6.dp),
+                    .padding(vertical = 4.dp),
             ) {
                 Text("L${lap.index}", fontSize = 10.sp, color = TextSecondary)
                 Text(

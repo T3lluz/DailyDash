@@ -4,28 +4,22 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.annotation.DrawableRes
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -35,7 +29,6 @@ import androidx.compose.ui.unit.sp
 import com.macrotracker.data.health.DailyHealthStats
 import com.macrotracker.ui.components.HealthMetricUiState
 import com.macrotracker.ui.components.calculatePercentageChange
-import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
@@ -61,17 +54,12 @@ fun HealthStatCard(
 ) {
     val valueColor = if (dimmed) TextSecondary else TextPrimary
     val accent = if (dimmed) color.copy(alpha = 0.45f) else color
-    Box(
-        modifier = modifier
-            .height(92.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(Background),
-    ) {
+    Box(modifier = modifier) {
         Column(
             modifier = Modifier
-                .padding(12.dp)
-                .fillMaxSize(),
-            verticalArrangement = Arrangement.SpaceBetween,
+                .fillMaxWidth()
+                .padding(top = 14.dp, bottom = 14.dp, end = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             // Apple Health's tile: a small icon and the name in grey, the number in white.
             Row(
@@ -108,7 +96,7 @@ fun HealthStatCard(
                     ) { animatedValue ->
                         Text(
                             text = animatedValue,
-                            fontSize = 20.sp,
+                            fontSize = 22.sp,
                             fontWeight = FontWeight.Bold,
                             color = valueColor,
                             maxLines = 1,
@@ -183,7 +171,6 @@ data class HealthMetricEntry(
  * so — the old grid silently dropped both cases, which read as "the app only
  * shows heart rate".
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun HealthMetricGrid(
     entries: List<HealthMetricEntry>,
@@ -193,37 +180,40 @@ fun HealthMetricGrid(
 ) {
     val visible = entries.filter { it.state.isEnabled }
     if (visible.isEmpty()) return
-    FlowRow(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        maxItemsInEachRow = 2,
-    ) {
-        visible.forEach { entry ->
-            val state = entry.state
-            val value = state.value.orEmpty().ifBlank { "—" }
-            HealthStatCard(
-                modifier = Modifier.weight(1f),
-                metricName = entry.label,
-                value = if (entry.unit.isBlank()) value else "$value ${entry.unit}",
-                percentageChange = if (state.hasValue) {
-                    calculatePercentageChange(state.today, state.yesterday)
-                } else {
-                    null
-                },
-                iconRes = entry.metric.iconRes(),
-                color = entry.metric.tint(),
-                note = when {
-                    state.permissionMissing -> "Not shared"
-                    state.isEmpty -> "No data today"
-                    else -> null
-                },
-                dimmed = !state.hasValue,
-                better = entry.metric.better(),
-                trend = history.takeLast(7).map { it.stats.valueOf(entry.metric) },
-            )
+    // Two to a row with hairlines between the rows, like Apple Health's summary list.
+    Column(modifier = modifier.fillMaxWidth()) {
+        visible.chunked(2).forEach { row ->
+            Hairline()
+            Row(modifier = Modifier.fillMaxWidth()) {
+                row.forEach { entry -> MetricCell(entry, history, Modifier.weight(1f)) }
+                if (row.size == 1) Spacer(modifier = Modifier.weight(1f))
+            }
         }
-        // Keeps the last row aligned to the same column widths.
-        if (visible.size % 2 == 1) Spacer(modifier = Modifier.weight(1f))
     }
+}
+
+@Composable
+private fun MetricCell(entry: HealthMetricEntry, history: List<DailyHealthStats>, modifier: Modifier) {
+    val state = entry.state
+    val value = state.value.orEmpty().ifBlank { "—" }
+    HealthStatCard(
+        modifier = modifier,
+        metricName = entry.label,
+        value = if (entry.unit.isBlank()) value else "$value ${entry.unit}",
+        percentageChange = if (state.hasValue) {
+            calculatePercentageChange(state.today, state.yesterday)
+        } else {
+            null
+        },
+        iconRes = entry.metric.iconRes(),
+        color = entry.metric.tint(),
+        note = when {
+            state.permissionMissing -> "Not shared"
+            state.isEmpty -> "No data today"
+            else -> null
+        },
+        dimmed = !state.hasValue,
+        better = entry.metric.better(),
+        trend = history.takeLast(7).map { it.stats.valueOf(entry.metric) },
+    )
 }

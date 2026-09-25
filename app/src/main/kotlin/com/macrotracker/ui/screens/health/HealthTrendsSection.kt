@@ -39,8 +39,6 @@ import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import com.macrotracker.data.health.DailyHealthStats
 import com.macrotracker.data.health.percentChange
-import com.macrotracker.ui.components.CardHeader
-import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.MacroMotion
@@ -145,9 +143,9 @@ fun HealthTrendsSection(
         null
     }
 
-    MacroCard(delayMs = 75) {
+    HealthSection(delayMs = 75) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            CardHeader(
+            HealthHeader(
                 title = weekLabel,
                 icon = AppIcons.ChartLine,
                 accent = color,

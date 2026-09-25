@@ -5,7 +5,6 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -78,13 +77,10 @@ import com.macrotracker.data.health.maxHeartRate
 import com.macrotracker.data.health.percentChange
 import com.macrotracker.data.health.vitalBaseline
 import com.macrotracker.data.health.vo2MaxCategory
-import com.macrotracker.ui.components.CardHeader
 import com.macrotracker.ui.components.ContentSkeleton
-import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.components.MacroTextField
 import com.macrotracker.ui.components.StatusCopy
 import com.macrotracker.ui.theme.AppIcons
-import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.HealthBloodPressure
@@ -111,7 +107,6 @@ import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.theme.TextTertiary
 import com.macrotracker.ui.theme.Warning
-import com.macrotracker.ui.theme.BorderStrong
 import com.macrotracker.ui.theme.SelectedFill
 import com.macrotracker.ui.util.HapticHelper
 import com.macrotracker.ui.util.rememberReducedMotion
@@ -154,8 +149,8 @@ fun VitalsSection(
     var open by rememberSaveable { mutableStateOf<String?>(null) }
     var askBirthYear by rememberSaveable { mutableStateOf(false) }
 
-    MacroCard(delayMs = delayMs) {
-        CardHeader(
+    HealthSection(delayMs = delayMs) {
+        HealthHeader(
             title = "Body & Vitals",
             icon = AppIcons.Scale,
             accent = HealthWeight,
@@ -189,14 +184,15 @@ fun VitalsSection(
             )
             else -> {
                 val rows = tiles.chunked(2)
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column {
                     rows.forEach { row ->
                         key(row.first().kind) {
+                            Hairline()
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(IntrinsicSize.Min),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp),
                             ) {
                                 row.forEach { tile ->
                                     val expandable = tile.series.size >= 2
@@ -863,20 +859,17 @@ private fun VitalTileView(
     onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(14.dp)
-    // Closed tiles are plain wells; the open one is outlined in neutral, not its colour.
-    val borderColor by animateColorAsState(
-        targetValue = if (open) BorderStrong else Color.Transparent,
+    // No box: the open tile is the one whose name takes its colour.
+    val nameColor by animateColorAsState(
+        targetValue = if (open) tile.color else TextSecondary,
         animationSpec = MacroMotion.colorTween(),
-        label = "vitalTileBorder",
+        label = "vitalTileName",
     )
     Column(
         modifier = modifier
-            .clip(shape)
-            .background(Background)
-            .border(1.dp, borderColor, shape)
+            .clip(RoundedCornerShape(10.dp))
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(12.dp),
+            .padding(vertical = 14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(tile.icon, contentDescription = null, tint = tile.color, modifier = Modifier.size(14.dp))
@@ -884,7 +877,8 @@ private fun VitalTileView(
             Text(
                 tile.kind.label,
                 fontSize = 12.sp,
-                color = TextSecondary,
+                fontWeight = if (open) FontWeight.SemiBold else FontWeight.Normal,
+                color = nameColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
@@ -988,9 +982,8 @@ private fun VitalsPromptRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(Background)
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(15.dp))
@@ -1069,10 +1062,7 @@ private fun VitalDetail(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(Background)
-            .border(1.dp, Border, RoundedCornerShape(14.dp))
-            .padding(12.dp),
+            .padding(top = 4.dp, bottom = 16.dp),
     ) {
         Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.fillMaxWidth()) {
             Text(
