@@ -74,6 +74,8 @@ sealed class HomeHealthState {
         val hourlySteps: List<Long> = emptyList(),
         /** Last night's score from its sleep stages, when there are any. */
         val sleepScore: SleepNightScore? = null,
+        /** A usual day's steps per hour, for today's pace; empty until two weeks have some. */
+        val usualHourlySteps: List<Double> = emptyList(),
     ) : HomeHealthState()
 }
 
@@ -371,7 +373,8 @@ class HomeViewModel @Inject constructor(
         try {
             // The day's shape and last night's score ride along with the totals; each read
             // answers empty on its own failure, so neither can sink the card.
-            val (stats, hourly, sleep) = coroutineScope {
+            val (reads, usualSteps) = coroutineScope {
+                val usual = async { healthConnectRepository.readUsualHourlySteps() }
                 val hourly = async {
                     if (healthConnectRepository.hasPermission(HealthConnectRepository.STEPS_PERMISSION)) {
                         healthConnectRepository.readHourlySteps()
@@ -386,8 +389,9 @@ class HomeViewModel @Inject constructor(
                         null
                     }
                 }
-                Triple(healthConnectRepository.readTodayStats(), hourly.await(), sleep.await())
+                Triple(healthConnectRepository.readTodayStats(), hourly.await(), sleep.await()) to usual.await()
             }
+            val (stats, hourly, sleep) = reads
             if (stats.steps == 0L && current is HomeHealthState.Success && current.stats.steps > 0) {
                 Log.w(TAG, "Health Connect returned 0 steps, keeping previous value to avoid flicker")
                 _healthState.value = current.copy(isRefreshing = false)
@@ -397,6 +401,7 @@ class HomeViewModel @Inject constructor(
                     lastUpdatedAt = Instant.now(),
                     hourlySteps = hourly,
                     sleepScore = sleep,
+                    usualHourlySteps = usualSteps,
                 )
             }
         } catch (e: CancellationException) {
