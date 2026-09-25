@@ -39,8 +39,8 @@ import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import com.macrotracker.data.health.DailyHealthStats
 import com.macrotracker.data.health.percentChange
-import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
+import com.macrotracker.ui.theme.SelectedFill
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.TextPrimary
@@ -145,11 +145,12 @@ fun HealthTrendsSection(
 
     HealthSection(delayMs = 75) {
         Column(modifier = Modifier.fillMaxWidth()) {
+            // Always "Trends", whichever week or measure is showing; the week goes underneath.
             HealthHeader(
-                title = weekLabel,
+                title = "Trends",
                 icon = AppIcons.ChartLine,
-                accent = color,
-                subtitle = rangeLabel,
+                accent = Primary,
+                subtitle = listOfNotNull(weekLabel, rangeLabel).joinToString(" · "),
             ) {
                 IconButton(
                     onClick = {
@@ -185,7 +186,7 @@ fun HealthTrendsSection(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
-                        .background(Background)
+                        .background(SelectedFill)
                         .clickable {
                             onWeekStartDaySelected(
                                 if (weekStartDay == DayOfWeek.MONDAY) DayOfWeek.SUNDAY else DayOfWeek.MONDAY,

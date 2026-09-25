@@ -28,10 +28,10 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.macrotracker.ui.theme.AppIcons
-import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.HealthSleep
 import com.macrotracker.ui.theme.MacroMotion
+import com.macrotracker.ui.theme.Surface
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.theme.TextTertiary
@@ -152,10 +152,10 @@ private fun DrawScope.drawFace(inner: Float, measurer: TextMeasurer) {
 private fun DrawScope.drawHandle(painter: VectorPainter, angle: Float, radius: Float, stroke: Float) {
     val at = pointAt(center, radius, angle)
     val r = stroke * 0.62f
-    drawCircle(Background, radius = r + 1.5.dp.toPx(), center = at)
+    drawCircle(Surface, radius = r + 1.5.dp.toPx(), center = at)
     drawCircle(HealthSleep, radius = r, center = at)
     val glyph = r * 1.15f
     translate(at.x - glyph / 2f, at.y - glyph / 2f) {
-        with(painter) { draw(Size(glyph, glyph), colorFilter = ColorFilter.tint(Background)) }
+        with(painter) { draw(Size(glyph, glyph), colorFilter = ColorFilter.tint(Surface)) }
     }
 }

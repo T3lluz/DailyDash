@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
+import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.macrotracker.data.calendar.CalendarEvent
@@ -13,6 +14,8 @@ import com.macrotracker.data.calendar.CalendarRepository
 import com.macrotracker.data.f1.F1Repository
 import com.macrotracker.data.health.HealthConnectRepository
 import com.macrotracker.data.health.HealthStats
+import com.macrotracker.data.health.HrPoint
+import com.macrotracker.data.health.heartRateCurve
 import com.macrotracker.data.local.DailySummary
 import com.macrotracker.data.local.MacroLogEntity
 import com.macrotracker.data.local.MacroRepository
@@ -42,6 +45,7 @@ import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import javax.inject.Inject
@@ -63,6 +67,13 @@ sealed class WeatherUiState {
     data class Error(val message: String) : WeatherUiState()
 }
 
+/** The Home card's slower reads, gathered beside the day's totals. */
+private data class HomeHealthExtras(
+    val usualSteps: List<Double>,
+    val heartRate: List<HrPoint>,
+    val moveKcal: List<Double>,
+)
+
 sealed class HomeHealthState {
     data object Loading : HomeHealthState()
     data object Unavailable : HomeHealthState()
@@ -76,6 +87,12 @@ sealed class HomeHealthState {
         val sleepScore: SleepNightScore? = null,
         /** A usual day's steps per hour, for today's pace; empty until two weeks have some. */
         val usualHourlySteps: List<Double> = emptyList(),
+        /** Today's heart rate in quarter hours, for the card's heart chart. */
+        val heartRate: List<HrPoint> = emptyList(),
+        /** Active calories per hour of today, for the Move chart. */
+        val hourlyMoveKcal: List<Double> = emptyList(),
+        /** Last night's sessions with their stages, for the sleep chart. */
+        val sleepSessions: List<SleepSessionRecord> = emptyList(),
     ) : HomeHealthState()
 }
 
@@ -373,8 +390,19 @@ class HomeViewModel @Inject constructor(
         try {
             // The day's shape and last night's score ride along with the totals; each read
             // answers empty on its own failure, so neither can sink the card.
-            val (reads, usualSteps) = coroutineScope {
+            val (reads, extras) = coroutineScope {
                 val usual = async { healthConnectRepository.readUsualHourlySteps() }
+                val heart = async {
+                    if (healthConnectRepository.hasPermission(HealthConnectRepository.HEART_RATE_PERMISSION)) {
+                        heartRateCurve(
+                            healthConnectRepository.readHeartRateIntraday(LocalDate.now()).map { it.time to it.beatsPerMinute },
+                            ZoneId.systemDefault(),
+                        )
+                    } else {
+                        emptyList()
+                    }
+                }
+                val move = async { healthConnectRepository.readHourlyActiveCalories() }
                 val hourly = async {
                     if (healthConnectRepository.hasPermission(HealthConnectRepository.STEPS_PERMISSION)) {
                         healthConnectRepository.readHourlySteps()
@@ -384,14 +412,15 @@ class HomeViewModel @Inject constructor(
                 }
                 val sleep = async {
                     if (healthConnectRepository.hasPermission(HealthConnectRepository.SLEEP_PERMISSION)) {
-                        computeSleepNightScore(healthConnectRepository.readSleepSessions(LocalDate.now()))
+                        healthConnectRepository.readSleepSessions(LocalDate.now())
                     } else {
-                        null
+                        emptyList()
                     }
                 }
-                Triple(healthConnectRepository.readTodayStats(), hourly.await(), sleep.await()) to usual.await()
+                Triple(healthConnectRepository.readTodayStats(), hourly.await(), sleep.await()) to
+                    HomeHealthExtras(usual.await(), heart.await(), move.await())
             }
-            val (stats, hourly, sleep) = reads
+            val (stats, hourly, sessions) = reads
             if (stats.steps == 0L && current is HomeHealthState.Success && current.stats.steps > 0) {
                 Log.w(TAG, "Health Connect returned 0 steps, keeping previous value to avoid flicker")
                 _healthState.value = current.copy(isRefreshing = false)
@@ -400,8 +429,11 @@ class HomeViewModel @Inject constructor(
                     stats = stats,
                     lastUpdatedAt = Instant.now(),
                     hourlySteps = hourly,
-                    sleepScore = sleep,
-                    usualHourlySteps = usualSteps,
+                    sleepScore = computeSleepNightScore(sessions),
+                    usualHourlySteps = extras.usualSteps,
+                    heartRate = extras.heartRate,
+                    hourlyMoveKcal = extras.moveKcal,
+                    sleepSessions = sessions,
                 )
             }
         } catch (e: CancellationException) {

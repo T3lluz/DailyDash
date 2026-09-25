@@ -49,7 +49,6 @@ import androidx.compose.ui.unit.sp
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import com.macrotracker.R
-import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.Surface
@@ -225,8 +224,7 @@ fun HeartRateDetailChart(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(200.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(Background),
+                .clip(RoundedCornerShape(16.dp)),
         ) {
             Canvas(
                 modifier = Modifier
@@ -750,8 +748,7 @@ private fun SleepStagesHypnogram(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .clip(RoundedCornerShape(18.dp))
-                    .background(Background),
+                    .clip(RoundedCornerShape(18.dp)),
             ) {
                 Canvas(
                     modifier = Modifier

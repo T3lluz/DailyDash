@@ -70,7 +70,6 @@ import com.macrotracker.ui.screens.health.HealthStatTile
 import com.macrotracker.ui.screens.health.HealthTrendsSection
 import com.macrotracker.ui.screens.health.HealthHeader
 import com.macrotracker.ui.screens.health.HealthSection
-import com.macrotracker.ui.screens.health.LiftWhileDragging
 import com.macrotracker.ui.screens.health.SleepSection
 import com.macrotracker.ui.screens.health.VitalsSection
 import com.macrotracker.ui.screens.health.computeSleepNightScore
@@ -101,9 +100,7 @@ import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.NutritionCalories
-import com.macrotracker.ui.theme.HealthHeartRate
 import com.macrotracker.ui.theme.HealthNutritionTone
-import com.macrotracker.ui.theme.HealthSteps
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.Secondary
 import com.macrotracker.ui.theme.Success
@@ -114,10 +111,8 @@ import com.macrotracker.ui.util.LocalTickersPaused
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.DashboardViewModel
 import com.macrotracker.ui.viewmodel.HealthConnectUiState
-import com.macrotracker.ui.viewmodel.ActivitiesUiState
 import com.macrotracker.ui.viewmodel.HealthViewModel
 import com.macrotracker.ui.viewmodel.VitalsUiState
-import java.time.ZoneId
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle as JavaTextStyle
@@ -158,7 +153,6 @@ fun HealthScreen(
     val weekStartDay by healthViewModel.weekStartDay.collectAsState()
     val weeksBack by healthViewModel.weeksBack.collectAsState()
     val macroInsights by healthViewModel.macroInsights.collectAsState()
-    val weekInsights by healthViewModel.weekInsights.collectAsState()
     val previousWeekHistory by healthViewModel.previousWeekHistory.collectAsState()
     val vitalsState by healthViewModel.vitalsState.collectAsState()
     val birthYear by healthViewModel.birthYear.collectAsState()
@@ -188,16 +182,18 @@ fun HealthScreen(
 
     val defaultHealthWidgets = remember {
         listOf(
+            // Today and its numbers, then the night, workouts and the body over time,
+            // then food: each name says what the section holds.
             Triple("DAILY_HEALTH", "Today", AppIcons.HeartFilled),
+            Triple("BODY_STATS", "Today's readings", AppIcons.HeartRateMonitor),
             Triple("SLEEP", "Sleep", AppIcons.Moon),
             Triple("ACTIVITIES", "Activities", AppIcons.Activity),
             Triple("VITALS", "Body & Vitals", AppIcons.Scale),
-            Triple("BODY_STATS", "Body Stats", AppIcons.HeartPulse),
-            Triple("HISTORY", "Weekly Trends", AppIcons.ChartLine),
-            Triple("SUMMARY", "Daily Summary", AppIcons.Rows),
-            Triple("ADD_ENTRY", "Add Entry", AppIcons.Add),
-            Triple("WEEK_AT_A_GLANCE", "Macro Trends", AppIcons.ChartBar),
-            Triple("RECENT_LOGS", "Recent Logs", AppIcons.List),
+            Triple("HISTORY", "Trends", AppIcons.ChartLine),
+            Triple("SUMMARY", "Food today", AppIcons.Rows),
+            Triple("ADD_ENTRY", "Log food", AppIcons.Add),
+            Triple("WEEK_AT_A_GLANCE", "Food trends", AppIcons.ChartBar),
+            Triple("RECENT_LOGS", "Food log", AppIcons.List),
         )
     }
     val parsedConfigs = remember(healthWidgetOrder) {
@@ -267,9 +263,8 @@ fun HealthScreen(
     )
     val tickersPaused by remember { derivedStateOf { listState.isScrollInProgress } }
 
-    // Readiness and the Daily Health extras come from what the Sleep and Body &
-    // Vitals reads already returned, so nothing here costs another Health
-    // Connect round trip.
+    // Readiness comes from what the Sleep and Body & Vitals reads already
+    // returned, so it costs no other Health Connect round trip.
     val vitals = (vitalsState as? VitalsUiState.Success)?.vitals
     val today = LocalDate.now()
     val todaySessionScore = remember(todaySleepSessions) { computeSleepNightScore(todaySleepSessions)?.score }
@@ -277,15 +272,7 @@ fun HealthScreen(
     val readiness = remember(vitals, lastNightScore) {
         vitals?.let { readinessFrom(it, lastNightScore) }
     }
-    val zone = remember { ZoneId.systemDefault() }
-    val hrvToday = vitals?.hrvMs?.lastOrNull()
-        ?.takeIf { it.time.atZone(zone).toLocalDate() == today }?.value
-    val waterToday = vitals?.hydrationByDay?.lastOrNull()
-        ?.takeIf { it.time.atZone(zone).toLocalDate() == today }?.value
-    val exerciseToday = (activitiesState as? ActivitiesUiState.Success)?.activities
-        ?.filter { it.startTime.atZone(zone).toLocalDate() == today }
-        ?.sumOf { it.duration.toMinutes() }
-    // Rolling seven days for the Body Stats sparklines, whatever week Trends shows.
+    // Rolling seven days for the Today's readings sparklines, whatever week Trends shows.
     val lastSevenDays = remember(healthHistory, previousWeekHistory, weeksBack) {
         if (weeksBack != 0) {
             emptyList()
@@ -391,20 +378,16 @@ fun HealthScreen(
                 state = dragState,
                 itemKey = { it.id },
                 haptics = haptics,
-            ) { _, config, isDragging ->
-                LiftWhileDragging(isDragging) {
+            ) { _, config, _ ->
                     when (config.id) {
                     "DAILY_HEALTH" -> {
                         val hcStats = (healthConnectState as? HealthConnectUiState.Success)?.stats
                         DailyHealthSection(
                             stats = hcStats,
-                            weekInsights = weekInsights,
                             summary = summary,
                             detailedSleep = todaySleepSessions,
                             heartRateBpm = heartRateState.value.takeIf { heartRateState.isEnabled },
                             restingHrBpm = restingHeartRateState.value.takeIf { restingHeartRateState.isEnabled },
-                            spo2Percent = oxygenSaturationState.value.takeIf { oxygenSaturationState.isEnabled },
-                            respRate = respiratoryRateState.value.takeIf { respiratoryRateState.isEnabled },
                             stepsToday = stepsState.today?.toLong(),
                             activeCaloriesToday = activeCaloriesState.today?.toDouble(),
                             distanceToday = distanceState.today?.toDouble(),
@@ -412,9 +395,6 @@ fun HealthScreen(
                             readiness = readiness,
                             hourlySteps = hourlySteps,
                             usualHourlySteps = usualHourlySteps,
-                            exerciseMinutesToday = exerciseToday,
-                            hrvMs = hrvToday,
-                            hydrationLitres = waterToday,
                             loading = healthConnectState is HealthConnectUiState.Loading,
                         )
                     }
@@ -475,9 +455,10 @@ fun HealthScreen(
                         if (metricEntries.any { it.state.isEnabled }) {
                             HealthSection(delayMs = 0) {
                                 HealthHeader(
-                                    title = "Body Stats",
-                                    icon = AppIcons.HeartPulse,
-                                    accent = HealthHeartRate,
+                                    title = "Today's readings",
+                                    icon = AppIcons.HeartRateMonitor,
+                                    accent = Primary,
+                                    subtitle = "Next to yesterday, with the last seven days",
                                     modifier = Modifier.padding(bottom = 12.dp),
                                 )
 
@@ -507,7 +488,7 @@ fun HealthScreen(
                             // an empty section used to shove the rest of the list
                             // down the instant the week query returned.
                             HealthSection {
-                                HealthHeader(title = "Weekly Trends", icon = AppIcons.ChartLine, accent = HealthSteps)
+                                HealthHeader(title = "Trends", icon = AppIcons.ChartLine, accent = Primary)
                                 Spacer(modifier = Modifier.height(14.dp))
                                 ContentSkeleton(lines = 4, accent = Border)
                             }
@@ -545,7 +526,7 @@ fun HealthScreen(
                         val s = summary
                         if (s == null) {
                             HealthSection {
-                                HealthHeader(title = "Daily Summary", icon = AppIcons.Rows, accent = HealthNutritionTone)
+                                HealthHeader(title = "Food today", icon = AppIcons.Rows, accent = HealthNutritionTone)
                                 Spacer(modifier = Modifier.height(14.dp))
                                 ContentSkeleton(lines = 2, accent = Border)
                             }
@@ -553,7 +534,7 @@ fun HealthScreen(
                             val hcStats = (healthConnectState as? HealthConnectUiState.Success)?.stats
                             HealthSection(delayMs = 100) {
                                 HealthHeader(
-                                    title = "Daily Summary",
+                                    title = "Food today",
                                     icon = AppIcons.Rows,
                                     accent = HealthNutritionTone,
                                     modifier = Modifier.padding(bottom = 16.dp),
@@ -641,7 +622,7 @@ fun HealthScreen(
                     "ADD_ENTRY" -> {
                         HealthSection(delayMs = 150) {
                             HealthHeader(
-                                title = "Add Entry",
+                                title = "Log food",
                                 icon = AppIcons.Add,
                                 accent = HealthNutritionTone,
                                 modifier = Modifier.padding(bottom = 16.dp),
@@ -751,7 +732,7 @@ fun HealthScreen(
                     "RECENT_LOGS" -> {
                         HealthSection(delayMs = 250) {
                             HealthHeader(
-                                title = "Recent Logs",
+                                title = "Food log",
                                 icon = AppIcons.List,
                                 accent = HealthNutritionTone,
                                 modifier = Modifier.padding(bottom = 8.dp),
@@ -779,7 +760,6 @@ fun HealthScreen(
                             }
                         }
                     }
-                }
                 }
             }
         }
@@ -831,7 +811,7 @@ private fun MacroTrendsSection(
     Column {
         HealthSection(delayMs = 70) {
             HealthHeader(
-                title = "Macro Trends",
+                title = "Food trends",
                 icon = AppIcons.ChartBar,
                 accent = HealthNutritionTone,
                 modifier = Modifier.padding(bottom = 10.dp),

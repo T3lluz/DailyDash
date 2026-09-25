@@ -1560,6 +1560,34 @@ class HealthConnectRepository @Inject constructor(
         }
     }
 
+    /** Active calories in each hour of today (24 entries, zero where nothing was burned). */
+    suspend fun readHourlyActiveCalories(): List<Double> = withContext(Dispatchers.IO) {
+        val hc = client ?: return@withContext emptyList()
+        if (!hasPermission(ACTIVE_CALORIES_PERMISSION)) return@withContext emptyList()
+        val zone = ZoneId.systemDefault()
+        val start = LocalDate.now(zone).atStartOfDay(zone).toInstant()
+        val end = Instant.now()
+        if (!start.isBefore(end)) return@withContext emptyList()
+        try {
+            val hours = DoubleArray(24)
+            hc.aggregateGroupByDuration(
+                AggregateGroupByDurationRequest(
+                    metrics = setOf(ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL),
+                    timeRangeFilter = TimeRangeFilter.between(start, end),
+                    timeRangeSlicer = Duration.ofHours(1),
+                ),
+            ).forEach { bucket ->
+                val hour = bucket.startTime.atZone(zone).hour
+                hours[hour] += bucket.result[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.inKilocalories ?: 0.0
+            }
+            hours.toList()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to read hourly active calories: ${e.message}")
+            noteReadFailure(e)
+            emptyList()
+        }
+    }
+
     /**
      * A usual day's steps per hour over the [days] full days before today, in one
      * hourly aggregate ([usualHourlyProfile]). Empty when fewer than three of them moved.
