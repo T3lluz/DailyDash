@@ -14,7 +14,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -22,6 +24,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.macrotracker.ui.theme.HeaderColor
+import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.rememberHaptics
@@ -68,7 +71,10 @@ fun ScreenHeader(
 
 @Composable
 fun ScreenHeaderSpacer() {
-    Spacer(modifier = Modifier.height(48.dp))
+    // Room for the island: one line fits in the usual 48dp; a second line (Hermes at work)
+    // pushes the title down on the island's own spring, and lets it back up after.
+    val island by animateDpAsState(LocalIslandClearance.current, MacroMotion.navTabSpring(), label = "header_island")
+    Spacer(modifier = Modifier.height(maxOf(48.dp, island)))
 }
 
 /**
