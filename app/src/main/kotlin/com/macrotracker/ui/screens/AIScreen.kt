@@ -1,5 +1,6 @@
 package com.macrotracker.ui.screens
 
+import com.macrotracker.ui.screens.ai.UsagePane
 import com.macrotracker.ui.theme.BorderStrong
 import com.macrotracker.ui.theme.SurfaceElevated
 import android.Manifest
@@ -139,6 +140,7 @@ private val ClankerIdentity = BotIdentity(
 fun AIScreen(
     onNavigateToCameraScan: () -> Unit,
     onNavigateToAiSettings: () -> Unit,
+    onOpenConsole: () -> Unit = {},
     initialTab: String? = null,
     serverHandoffId: String? = null,
     viewModel: AiViewModel = hiltViewModel(),
@@ -194,6 +196,8 @@ fun AIScreen(
                     AppIcons.Terminal,
                     ServerBrand,
                 ),
+                // What the agents spent and what runs when: the web's bar-chart panel.
+                SegmentedTab(USAGE_TAB, "Usage", AppIcons.ChartColumn, UsageAccent),
             ),
             selectedKey = selectedTab,
             onSelect = {
@@ -205,7 +209,12 @@ fun AIScreen(
         )
 
         Box(modifier = Modifier.weight(1f)) {
-            if (selectedTab == ChatBot.SYSOP.id && usesHermes) {
+            if (selectedTab == USAGE_TAB) {
+                UsagePane(onOpenConsole = onOpenConsole, onOpenChat = {
+                    selectedTab = ChatBot.SYSOP.id
+                    if (!usesHermes) hermesViewModel.setUsesHermes(true)
+                })
+            } else if (selectedTab == ChatBot.SYSOP.id && usesHermes) {
                 HermesChatPane(
                     viewModel = hermesViewModel,
                     onUsePhoneAi = { hermesViewModel.setUsesHermes(false) },
@@ -229,6 +238,9 @@ fun AIScreen(
         }
     }
 }
+
+private const val USAGE_TAB = "usage"
+private val UsageAccent = androidx.compose.ui.graphics.Color(0xFF3987E5)
 
 @Composable
 private fun MacrosChatPane(
