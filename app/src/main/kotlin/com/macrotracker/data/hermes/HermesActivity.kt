@@ -1,10 +1,10 @@
 package com.macrotracker.data.hermes
 
-/** What Hermes is busy with, in the words the navbar tab and the notifications show. */
+/** What Hermes is busy with, in the words the island and the notifications show. */
 enum class HermesActivityKind { SENDING, THINKING, TOOL, WRITING, WORKING }
 
 /**
- * One reading of a turn in progress. [text] fits the navbar tab ("Running commands");
+ * One reading of a turn in progress. [text] fits the island ("Running commands");
  * [short] fits Android 16's status-bar chip, which has room for about one word.
  */
 data class HermesActivityLabel(val kind: HermesActivityKind, val text: String, val short: String) {

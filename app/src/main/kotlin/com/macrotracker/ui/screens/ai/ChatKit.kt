@@ -55,7 +55,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.macrotracker.ui.components.LocalNavTabRise
 import com.macrotracker.ui.components.MarkdownText
 import com.macrotracker.ui.components.TypingDots
 import com.macrotracker.ui.components.dottedGlass
@@ -203,7 +202,7 @@ internal fun composerBottomGap(): Dp {
     val density = LocalDensity.current
     val ime = with(density) { WindowInsets.ime.getBottom(density).toDp() }
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val clearNav = navBottom + PillNavClearance + LocalNavTabRise.current
+    val clearNav = navBottom + PillNavClearance
     return (clearNav - ime).coerceAtLeast(10.dp)
 }
 

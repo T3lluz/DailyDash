@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.transformLatest
 import javax.inject.Inject
 
 /**
- * What the navbar's tab says about Hermes: the turn in progress with what it is doing,
+ * What the island says about Hermes: the turn in progress with what it is doing,
  * or how the last one ended. "Done" shows for a few seconds; "Needs you" stays until the
  * chat is opened, because Hermes is waiting on it.
  */

@@ -40,7 +40,7 @@ data class HermesFinishedTurn(
 )
 
 /**
- * Hermes' turns, for everything outside the chat: the navbar's tab, the ongoing
+ * Hermes' turns, for everything outside the chat: the island, the ongoing
  * notification and the one that says Hermes is done.
  *
  * The chat pane reports each turn it follows. When it stops following one that is still
@@ -64,7 +64,7 @@ class HermesActivityTracker @Inject constructor(
     private val _viewing = MutableStateFlow<String?>(null)
     val viewing: StateFlow<String?> = _viewing
 
-    /** A chat something outside the pane (the navbar tab, a notification) asked to open. */
+    /** A chat something outside the pane (the island, a notification) asked to open. */
     private val _openRequest = MutableStateFlow<String?>(null)
     val openRequest: StateFlow<String?> = _openRequest
 

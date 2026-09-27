@@ -20,7 +20,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -49,11 +48,6 @@ fun PillNavigationBar(
     /** Shows a small update bubble on the Settings tab when an update is available. */
     showSettingsUpdateBadge: Boolean = false,
     hazeState: HazeState? = null,
-    /** What the tab above the pill shows; null lets it sink back in. */
-    activity: NavActivity? = null,
-    /** 0 = tab hidden, 1 = fully risen. Animated by the caller so content above the bar can lift in step. */
-    activityProgress: Float = 0f,
-    onActivityClick: (NavActivity) -> Unit = {},
 ) {
     val haptics = rememberHaptics()
     val selectedIndex = items.indexOfFirst { it.route == currentRoute }.coerceAtLeast(0)
@@ -66,64 +60,22 @@ fun PillNavigationBar(
         label = "nav_slide",
     )
 
-    // The tab keeps showing its last words while it sinks back into the pill.
-    val lastActivity = remember { arrayOfNulls<NavActivity>(1) }
-    if (activity != null) lastActivity[0] = activity
-    val shownActivity = activity ?: lastActivity[0]
-    val progress = activityProgress.coerceIn(0f, 1f)
-    var tabWidthPx by remember { mutableFloatStateOf(0f) }
-    val barShape = remember(progress, tabWidthPx) {
-        NavWithTabShape(
-            pillHeight = NavPillHeight,
-            tabStart = NavTabStart,
-            tabWidthPx = tabWidthPx,
-            rise = NavTabRise * progress,
-        )
-    }
-
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 28.dp, end = 28.dp, bottom = 8.dp)
-            .height(NavPillHeight + NavTabRise),
+            .height(NavPillHeight),
     ) {
-        // One surface for the pill and its tab. The strip above a lowered tab is empty
-        // and has no pointer input, so touches there reach the screen underneath.
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .onSizeChanged { containerSize = it }
                 // The web's edge: a 2dp ring and the soft chrome shadow, cast by the
-                // pill-and-tab outline, never under the glass.
-                .chromeEdge(barShape)
-                .clip(barShape)
-                .dottedGlass(hazeState = hazeState, shape = barShape),
+                // pill's outline, never under the glass.
+                .chromeEdge(NavPillShape)
+                .clip(NavPillShape)
+                .dottedGlass(hazeState = hazeState, shape = NavPillShape),
         )
-
-        if (shownActivity != null && progress > 0.01f) {
-            val risePx = with(density) { NavTabRise.toPx() }
-            NavActivityTabContent(
-                activity = shownActivity,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .offset(x = NavTabStart)
-                    .height(NavTabRise)
-                    .onSizeChanged { tabWidthPx = it.width.toFloat() }
-                    .graphicsLayer {
-                        alpha = progress
-                        translationY = (1f - progress) * risePx
-                    }
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        role = Role.Button,
-                        onClickLabel = "Open the chat",
-                    ) {
-                        haptics.tick()
-                        onActivityClick(shownActivity)
-                    },
-            )
-        }
 
         Box(
             modifier = Modifier
