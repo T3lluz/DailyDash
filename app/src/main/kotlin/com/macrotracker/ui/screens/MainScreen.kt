@@ -1,10 +1,5 @@
 package com.macrotracker.ui.screens
 
-import com.macrotracker.ui.navigation.navigateToSubScreen
-import com.macrotracker.ui.navigation.SubScreenRoutes
-import androidx.compose.ui.platform.LocalUriHandler
-import com.macrotracker.ui.viewmodel.IslandViewModel
-import com.macrotracker.ui.components.TopIsland
 import android.app.Activity
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.PredictiveBackHandler
@@ -18,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -28,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -36,32 +33,38 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.macrotracker.BuildConfig
 import com.macrotracker.data.remote.AiProvider
+import com.macrotracker.data.server.ServerIntentRequest
+import com.macrotracker.data.update.AppUpdateNotifier
 import com.macrotracker.data.update.AppUpdateUiState
 import com.macrotracker.data.update.UpdateInstallActivity
-import com.macrotracker.ui.components.AppUpdateSheet
-import com.macrotracker.data.update.AppUpdateNotifier
 import com.macrotracker.data.update.updateAvailable
+import com.macrotracker.ui.components.AppUpdateSheet
+import com.macrotracker.ui.components.LocalIslandClearance
 import com.macrotracker.ui.components.NavActivity
 import com.macrotracker.ui.components.PillNavigationBar
+import com.macrotracker.ui.components.TopIsland
 import com.macrotracker.ui.components.WhatsNewDialog
-import com.macrotracker.ui.theme.MacroMotion
-import com.macrotracker.ui.viewmodel.HermesActivityViewModel
+import com.macrotracker.ui.components.islandClearance
 import com.macrotracker.ui.navigation.DailyDashNavHost
 import com.macrotracker.ui.navigation.OnboardingRoutes
 import com.macrotracker.ui.navigation.Screen
 import com.macrotracker.ui.navigation.SettingsRoutes
+import com.macrotracker.ui.navigation.SubScreenRoutes
+import com.macrotracker.ui.navigation.navigateToSubScreen
 import com.macrotracker.ui.navigation.navigateToTab
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import com.macrotracker.ui.screens.onboarding.SplashOverlay
+import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.viewmodel.AppUpdateViewModel
+import com.macrotracker.ui.viewmodel.HermesActivityViewModel
+import com.macrotracker.ui.viewmodel.IslandViewModel
 import com.macrotracker.ui.viewmodel.OnboardingViewModel
-import com.macrotracker.ui.viewmodel.SettingsViewModel
 import com.macrotracker.ui.viewmodel.ServerViewModel
-import com.macrotracker.data.server.ServerIntentRequest
+import com.macrotracker.ui.viewmodel.SettingsViewModel
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlin.coroutines.cancellation.CancellationException
 
 @Composable
@@ -331,25 +334,28 @@ private fun MainScreenScaffold(
     // Overlay the frosted pill on top of content so scrolling content
     // can blur through the bar (hazeSource + hazeEffect).
     Box(modifier = Modifier.fillMaxSize()) {
-        DailyDashNavHost(
-            navController = navController,
-            modifier = navHostModifier
-                .fillMaxSize()
-                .hazeSource(state = hazeState),
-            startDestination = startDestination,
-            onOnboardingComplete = onOnboardingComplete,
-            aiAvailable = hasAiApiKey,
-        )
         // The web's island, hanging from the status bar over the tab screens.
         val islandVm: IslandViewModel = hiltViewModel()
         val islandItems by islandVm.items.collectAsState()
         val uriHandler = LocalUriHandler.current
+        val islandVisible = currentRoute == Screen.Home.route || currentRoute == Screen.Health.route ||
+            currentRoute == Screen.Settings.route
+        CompositionLocalProvider(LocalIslandClearance provides islandClearance(islandItems, activity, islandVisible)) {
+            DailyDashNavHost(
+                navController = navController,
+                modifier = navHostModifier
+                    .fillMaxSize()
+                    .hazeSource(state = hazeState),
+                startDestination = startDestination,
+                onOnboardingComplete = onOnboardingComplete,
+                aiAvailable = hasAiApiKey,
+            )
+        }
         TopIsland(
             items = islandItems,
             hermes = activity,
             onHermes = onActivityClick,
-            visible = currentRoute == Screen.Home.route || currentRoute == Screen.Health.route ||
-                currentRoute == Screen.Settings.route,
+            visible = islandVisible,
             hazeState = hazeState,
             onItem = { item ->
                 val link = item.join ?: item.href

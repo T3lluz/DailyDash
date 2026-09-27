@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
@@ -28,7 +29,6 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.createBitmap
-import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.GlassDot
 import com.macrotracker.ui.theme.GlassTint
 import dev.chrisbanes.haze.HazeState
@@ -88,8 +88,16 @@ object DottedFrostSpec {
         Triple(1.dp, 5.dp, Color(0x38000000)),
     )
 
-    /** The 2px ring round the pill and the top bar (`0 0 0 2px var(--line)`). */
-    val RingWidth: Dp = 2.dp
+    /**
+     * The rim: how far in from the outline the glass is shaded darker, how soft its
+     * inner side is, and how much darker. It is the glass a shade down, not a line.
+     */
+    val RimWidth: Dp = 2.5.dp
+    val RimSoftness: Dp = 2.dp
+    val RimShade = Color(0x6B000000)
+
+    /** A light hairline on the very edge, so the rim still reads over the dark app. */
+    val RimHairline = Color(0x1FFFFFFF)
 }
 
 // ── Tiling dot masks ─────────────────────────────────────────────────────────
@@ -216,19 +224,28 @@ fun Modifier.dottedGlass(
 }
 
 /**
- * The web chrome's edge: a [DottedFrostSpec.RingWidth] ring just outside the shape and the
- * soft two-layer lift under it (`--chrome-shadow`), both cast by the shape's own outline
- * with its inside cut away. A shadow under translucent glass would show through it (the
- * web's island had exactly that seam), so none is drawn there.
- *
- * Put it before `clip(shape)` in the chain, so the shadow is not clipped with the glass.
+ * The navbar's and the island's surface in one go: the web's soft two-layer lift outside
+ * the shape, the dotted glass inside it, and [glassRim] round its edge. Everything that
+ * sizes or clips the chrome's content (`animateContentSize`, scrolling) goes after it, or
+ * it cuts the shadow off at the bounds.
  */
-fun Modifier.chromeEdge(shape: Shape, ring: Color = Border, shadow: Boolean = true): Modifier = drawWithCache {
-    val path = Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache)) }
-    val native = path.asAndroidPath()
+@Composable
+fun Modifier.chromeGlass(hazeState: HazeState?, shape: Shape): Modifier = this
+    .chromeShadow(shape)
+    .clip(shape)
+    .dottedGlass(hazeState = hazeState, shape = shape)
+    .glassRim(shape)
+
+/**
+ * The web's `--chrome-shadow` under a surface, cast by the shape's outline with its inside
+ * cut away. A shadow under translucent glass would show through it (the web's island had
+ * exactly that seam), so none is drawn there. Goes before `clip(shape)` in the chain.
+ */
+fun Modifier.chromeShadow(shape: Shape): Modifier = drawWithCache {
+    val native = Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache)) }.asAndroidPath()
     // BlurMaskFilter wants a radius; the CSS blur is twice the Gaussian's sigma, and
     // Android turns a radius into sigma as r * 0.57735 + 0.5.
-    val shadows = if (shadow && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+    val shadows = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
         DottedFrostSpec.ChromeShadow.map { (dy, blur, color) ->
             val sigma = blur.toPx() / 2f
             dy.toPx() to android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
@@ -239,12 +256,8 @@ fun Modifier.chromeEdge(shape: Shape, ring: Color = Border, shadow: Boolean = tr
     } else {
         emptyList()
     }
-    val ringPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-        style = android.graphics.Paint.Style.STROKE
-        strokeWidth = DottedFrostSpec.RingWidth.toPx() * 2f       // half of it is inside, and cut away
-        color = ring.toArgb()
-    }
     onDrawBehind {
+        if (shadows.isEmpty()) return@onDrawBehind
         drawIntoCanvas { c ->
             val nc = c.nativeCanvas
             nc.save()
@@ -255,7 +268,42 @@ fun Modifier.chromeEdge(shape: Shape, ring: Color = Border, shadow: Boolean = tr
                 nc.drawPath(native, paint)
                 nc.restore()
             }
-            nc.drawPath(native, ringPaint)
+            nc.restore()
+        }
+    }
+}
+
+/**
+ * The chrome's edge on the phone. The web rings its chrome in a solid 2px line, which over
+ * anything light reads as a hard grey outline round the glass. Here the edge is the glass
+ * itself a shade darker, fading inward over a couple of dp, so over a white page it is
+ * frosted and dark and over the dark app a faint light hairline still draws the shape.
+ *
+ * Draws over the glass and under the content: put it after [dottedGlass].
+ */
+fun Modifier.glassRim(shape: Shape): Modifier = drawWithCache {
+    val native = Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache)) }.asAndroidPath()
+    // Stroked on the outline, so half of each stroke falls outside and is clipped away.
+    val shade = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        style = android.graphics.Paint.Style.STROKE
+        strokeWidth = DottedFrostSpec.RimWidth.toPx() * 2f
+        color = DottedFrostSpec.RimShade.toArgb()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            maskFilter = BlurMaskFilter(DottedFrostSpec.RimSoftness.toPx(), BlurMaskFilter.Blur.NORMAL)
+        }
+    }
+    val hairline = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        style = android.graphics.Paint.Style.STROKE
+        strokeWidth = 2f
+        color = DottedFrostSpec.RimHairline.toArgb()
+    }
+    onDrawBehind {
+        drawIntoCanvas { c ->
+            val nc = c.nativeCanvas
+            nc.save()
+            nc.clipPath(native)
+            nc.drawPath(native, shade)
+            nc.drawPath(native, hairline)
             nc.restore()
         }
     }
