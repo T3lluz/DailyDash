@@ -1,5 +1,8 @@
 package com.macrotracker.ui.screens
 
+import androidx.compose.ui.platform.LocalUriHandler
+import com.macrotracker.ui.viewmodel.IslandViewModel
+import com.macrotracker.ui.components.TopIsland
 import android.app.Activity
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.PredictiveBackHandler
@@ -335,6 +338,32 @@ private fun MainScreenScaffold(
                 aiAvailable = hasAiApiKey,
             )
         }
+        // The web's island, hanging from the status bar over the tab screens.
+        val islandVm: IslandViewModel = hiltViewModel()
+        val islandItems by islandVm.items.collectAsState()
+        val uriHandler = LocalUriHandler.current
+        TopIsland(
+            items = islandItems,
+            visible = currentRoute == Screen.Home.route || currentRoute == Screen.Health.route ||
+                currentRoute == Screen.Settings.route,
+            hazeState = hazeState,
+            onItem = { item ->
+                val link = item.join ?: item.href
+                when {
+                    item.kind == "need" && item.thread != null -> {
+                        islandVm.openThread(item.thread)
+                        navController.navigateToTab(Screen.AI.route)
+                    }
+                    link != null -> runCatching { uriHandler.openUri(link) }
+                    item.isBrief -> {
+                        islandVm.briefSeen()
+                        navController.navigateToTab(Screen.Home.route)
+                    }
+                    else -> navController.navigateToTab(Screen.Home.route)
+                }
+            },
+            modifier = Modifier.align(Alignment.TopCenter),
+        )
         MainBottomBar(
             navController = navController,
             items = items,
