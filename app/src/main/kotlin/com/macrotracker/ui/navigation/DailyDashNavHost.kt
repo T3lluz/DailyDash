@@ -1,5 +1,6 @@
 package com.macrotracker.ui.navigation
 
+import com.macrotracker.ui.screens.ConsoleScreen
 import androidx.compose.animation.EnterTransition
 import androidx.compose.foundation.background
 import androidx.compose.runtime.Composable
@@ -123,6 +124,7 @@ fun DailyDashNavHost(
             HomeScreen(
                 onNavigateToHealth = { navController.navigateToTab(Screen.Health.route) },
                 onNavigateToServers = { navController.navigateToSubScreen(SettingsRoutes.SERVER_DASHBOARD) },
+                onOpenHermes = { navController.navigateToTab(Screen.AI.route) },
             )
         }
 
@@ -140,6 +142,7 @@ fun DailyDashNavHost(
             AIScreen(
                 onNavigateToCameraScan = { navController.navigateToSubScreen(SubScreenRoutes.CAMERA_SCAN) },
                 onNavigateToAiSettings = { navController.navigateToSubScreen(SettingsRoutes.AI) },
+                onOpenConsole = { navController.navigateToSubScreen(SubScreenRoutes.CONSOLE) },
                 initialTab = entry.arguments?.getString(Screen.AI.ARG_TAB),
                 serverHandoffId = entry.arguments?.getString(Screen.AI.ARG_SEED),
             )
@@ -180,6 +183,7 @@ fun DailyDashNavHost(
                 onNavigateToSettings = {
                     navController.navigate(SettingsRoutes.SERVERS) { launchSingleTop = true }
                 },
+                onOpenConsole = { navController.navigateToSubScreen(SubScreenRoutes.CONSOLE) },
                 // The AI tab is a tab: switch to it rather than stacking it on this screen.
                 onAskAi = if (aiAvailable) {
                     { seedId -> navController.navigateToTab(Screen.AI.withSeed(seedId), restoreState = false) }
@@ -206,6 +210,10 @@ fun DailyDashNavHost(
                     }
                 },
             )
+        }
+
+        subScreen(SubScreenRoutes.CONSOLE) { entry ->
+            ConsoleScreen(onNavigateBack = { navController.popSubScreen(entry) })
         }
 
         subScreen(SubScreenRoutes.STATS) { entry ->

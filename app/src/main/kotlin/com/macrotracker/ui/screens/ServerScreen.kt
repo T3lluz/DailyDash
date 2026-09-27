@@ -111,6 +111,8 @@ fun ServerScreen(
     onNavigateToSettings: () -> Unit,
     /** Null hides every "ask the AI" affordance (no provider configured). */
     onAskAi: ((String) -> Unit)? = null,
+    /** The dashboard server's shell (ConsoleScreen). */
+    onOpenConsole: (() -> Unit)? = null,
     initialServerId: String? = null,
     viewModel: ServerViewModel = hiltViewModel(),
 ) {
@@ -149,6 +151,11 @@ fun ServerScreen(
             onNavigateBack = onNavigateBack,
             modifier = Modifier.padding(horizontal = 16.dp),
             trailing = {
+                onOpenConsole?.let { open ->
+                    IconButton(onClick = { haptics.tick(); open() }, modifier = Modifier.size(40.dp)) {
+                        Icon(AppIcons.SquareTerminal, contentDescription = "Console", tint = TextSecondary, modifier = Modifier.size(21.dp))
+                    }
+                }
                 if (profiles.isNotEmpty()) {
                     IconButton(
                         onClick = {

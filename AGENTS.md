@@ -41,7 +41,8 @@ com.macrotracker/
                               `health_connect_settings`; per-metric health toggles + master toggle
                               + `weatherEnabled`/`calendarEnabled` all as `StateFlow`)
     remote/                ← Gemini/OpenAI/OpenRouter/Claude via OkHttp (`AiApiClient`; NutritionAiRepository),
-                              WeatherRepository (met.no forecast) + ClothingAdvice, LocationProvider
+                              WeatherRepository (met.no forecast, and MET warnings from MetAlerts as the
+                              dashboard shows them, `fetchWarnings`, 15 min) + ClothingAdvice, LocationProvider
     chat/                  ← AI tab chat: ChatRepository, AiChatClient, BotPrompts, ServerAiHandoff
                               (server dashboard → AI tab context hand-off, keyed by seed id)
     hermes/                ← HermesClient: Tech support through Hermes on the dashboard server, via the
@@ -78,7 +79,9 @@ com.macrotracker/
                               stats, ps by RSS, `ss -tln`, running units, journal errors) and the news script
                               (15 min: updates). Scripts are POSIX sh with no variables, every command guarded.
                               DashboardSettingsSync: the web's settings blob (`/_api/sync`, last write wins)
-                              shares the new-chat Hermes mode (`ai.perm`), `units` and `wind` with the phone.
+                              shares the new-chat Hermes mode (`ai.perm`), `units` and `wind` with the phone,
+                              and hands down the web's calendar switches (`cals`, `calMine`) read-only as
+                              `SettingsRepository.dashboardCalendars`.
                               DashboardLink: `_stats.json`, `_history.json` and the tiles in `index.html` from
                               the dashboard server; it belongs to the SSH profile whose `hostname` matches
                               `host.sys.host` (`DashboardLink.belongsTo`).
@@ -183,10 +186,25 @@ com.macrotracker/
                               OAuth (Custom Tabs → github.com/login/device, scopes `repo read:user`);
                               leftover PAT / BuildConfig.GITHUB_TOKEN is an optional fallback
     upcoming/              ← UpcomingRepository: the Coming up timeline, read from the t3lluz dashboard's
-                              `_stats.json` (`rows.upcoming`: Sonarr, Radarr, Stremio, F1 sessions) plus
-                              `_f1.json` circuits. Server URL is `SettingsRepository.dashboardServerUrl`
-                              (Settings → Connections); tailnet-only, so the last good copy is kept on disk.
+                              `_stats.json` (`rows.upcoming`: Sonarr, Radarr, Stremio, F1 sessions and your
+                              Google Calendar events, `svc` gcal) plus `_f1.json` circuits. A gcal row carries
+                              a `CalendarEntry` (calendar, end, all-day, description, `join` call link, kind)
+                              and draws as `CalendarPoster`, the web's `gcalChip`; `DashboardCalendars.shows`
+                              is the web's calendar switch rule (DashboardCalendarsTest). Server URL is
+                              `SettingsRepository.dashboardServerUrl` (Settings → Connections); tailnet-only,
+                              so the last good copy is kept on disk.
                               UpcomingTimeline.kt holds the strip's rules (rest card, default focus, jumps)
+    dashboard/             ← DashboardRepository + DashboardModels: the dashboard server's extras. The island
+                              (`/_api/island`, island.py: today.js's rules, led by "needs you" in Hermes' chats),
+                              the mail (`_today.json`, actions through `/_api/mail/act`), what the agents spent
+                              (`/_api/usage`, usage.py) and the schedule (`/_api/schedule`: scheduled asks, staff
+                              rounds, the briefing, host timers). Each answer's last good copy is kept in
+                              `filesDir/dashboard_cache`. Parsers are pure (DashboardModelsTest).
+    brief/                 ← BriefRepository + DailyBrief: the dashboard's morning briefing (`/_api/brief`,
+                              re-run with `POST /_api/brief/run`), written at 06:45 by Hermes' first staff
+                              member on duty. `BRIEFING` on Home (BriefCard, BriefViewModel) reloads on the live
+                              feed's `ch: brief`; its chat button opens the writer's thread in the AI tab.
+                              Last good copy on disk (prefs `brief_cache`). DailyBriefTest pins the parse
     calendar/              ← CalendarRepository (READ_CALENDAR permission). All-day instances are stored
                               at UTC midnight — always convert with `calendarLocalDateTime(millis, allDay, zone)`
                               so they land on the right day
@@ -208,6 +226,14 @@ com.macrotracker/
                              `FollowChatOnKeyboard` pins the list with plain scrolls, never an animation per
                              frame. Tech support is Hermes when `HermesViewModel.usesHermes`: an
                              explicit `techSupportBrain` choice, or in `auto` whenever Hermes answers, else Sysop)
+                             + ai/UsagePane.kt: the AI tab's third segment, the web's usage panel (limits as
+                             T3 Code's buckets, periods, a 30-day chart stacked by model in fixed categorical
+                             slots, token mix, models/agents/chats, the schedule with a scheduled-ask sheet).
+                             Hermes' rail groups "Needs you" first, dots a chat that moved since this phone
+                             opened it (`HermesUiState.seen`), and shows each chat's tokens and context fill;
+                             the header has a context ring (`HermesThreadSummary.contextFraction`)
+                             + ConsoleScreen.kt: the dashboard's console page (site/console.html, xterm) in a
+                             WebView, the same shells as the web's console (Servers header, Usage)
                              + server/ (the server screen's cards: hero, history, services wall as tiles,
                              activity, compute, memory, network, storage, sensors, processes, containers,
                              system). Sections reorder and toggle like Home (pencil in the header;
@@ -260,12 +286,19 @@ com.macrotracker/
                               mirrored area charts, the scrubbable history chart, stacked meters, uptime bars,
                               fact chips. DeviceCodePanel.kt: GitHub/Twitch device-code
                               sign-in (copyable code + equal-width Open / Cancel). DottedFrost.kt holds the
-                              Cinema-Info glass chrome — use `Modifier.dottedGlass(hazeState, shape)`
-                              on any frosted surface above a `hazeSource` (nav pill, AI composer).
-                              It stacks two masked haze passes: heavy blur everywhere *except* the
-                              dot cores, then a light blur *only* at the cores. `Modifier.dottedFrost()`
-                              is just the painted-dot fallback for surfaces with nothing to blur
-                              (and for API < 31) — don't reach for it as the effect itself.
+                              web dashboard's dotted frost (navbar.css) — use `Modifier.dottedGlass(hazeState, shape)`
+                              on any frosted surface above a `hazeSource` (nav pill, island, AI composer), and
+                              `Modifier.chromeEdge(shape)` before its `clip` for the web's 2dp ring and two-layer
+                              chrome shadow, cast by the outline with the inside cut away (a shadow under the
+                              translucent glass shows through it). Two masked haze passes as the web's two layers:
+                              the glass (tint 66%, clear inside `GlassCoreR`, solid from `GlassEdgeR`) and the dots
+                              (blurred twice a cell wide, dimmed a fifth, a faint wash, solid out to `DotFillR`,
+                              past the glass edge). `Modifier.dottedFrost()` is just the painted-dot fallback for
+                              surfaces with nothing to blur (and for API < 31) — don't reach for it as the effect.
+                              TopIsland.kt: the web's island, drawn by MainScreen under the status bar on Home,
+                              Health and Settings (IslandViewModel; tap opens the chat, the event, the call, or Home).
+                              MailCard.kt: Home's `MAIL` (MailViewModel: optimistic actions laid over the server's
+                              copy until it agrees, undo for archive, "Ask Hermes" starts a chat on the server).
     theme/                 ← Color, Theme, Animation (MacroMotion object — single source for all specs),
                               AppIcons.kt — the app's only icon set (generated Lucide/Tabler ImageVectors).
                               The Material icons dependency is gone: never import
@@ -350,7 +383,7 @@ in `MacroMotion.CountdownRoll`; the digit style uses tabular figures so nothing 
 ### Home Screen Widgets (draggable)
 Widget order and visibility are persisted as a single colon-and-comma encoded string in SharedPrefs:
 ```
-"WEATHER:true,CALENDAR:true,UPCOMING:true,BODY_STATS:true,PROGRESS:true,QUICK_ADD:true,F1:true,GITHUB:true,YOUTUBE:true,TWITCH:true"
+"WEATHER:true,CALENDAR:true,BRIEFING:true,MAIL:true,UPCOMING:true,BODY_STATS:true,PROGRESS:true,QUICK_ADD:true,F1:true,GITHUB:true,YOUTUBE:true,TWITCH:true"
 ```
 `DraggableWidgetColumn` + `WidgetEditor` read/write this via `SettingsRepository`. **`GITHUB`** is the home GitHub hub (`GitHubCard`): account-wide issues, PRs, activity, and repos for the connected GitHub user (not a single project). Connect with Device Code OAuth on the Account tab (`repo` + `read:user`).
 
