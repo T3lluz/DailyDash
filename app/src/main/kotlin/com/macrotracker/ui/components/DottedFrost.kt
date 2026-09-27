@@ -32,9 +32,10 @@ import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.GlassDot
 import com.macrotracker.ui.theme.GlassTint
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.materials.CupertinoMaterials
+import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 
@@ -68,34 +69,18 @@ object DottedFrostSpec {
     /** `--dot-edge` — where the dot has faded out completely. */
     val Edge: Dp = (2.25f * WEB_TO_DP).dp
 
-    /** `.nav-glass` backdrop-filter blur. */
-    val GlassBlur: Dp = 22.dp
+    /** `.header-glass` backdrop-filter blur. */
+    val GlassBlur: Dp = 28.dp
+
+    /** `.header-frost-dots` backdrop-filter blur — the sharp pinprick. */
+    val DotBlur: Dp = 6.dp
 
     /**
-     * What a dot shows: the page behind it averaged over a wide patch (the web's
-     * `--frost-dot-blur`, 16px, twice a cell), so across a dot it barely changes and
-     * each dot is one colour that slides rather than jumps as the page scrolls.
+     * Tighter grid for painted-dot texture inside small chrome (expand bars),
+     * where the full-size pattern would dominate the strip.
      */
-    val DotBlur: Dp = (16f * WEB_TO_DP).dp
-
-    /**
-     * The web's glass and dot rings as radii, scaled like the grid: the glass is clear
-     * inside [GlassCoreR] and solid from [GlassEdgeR]; the dot layer is solid out to
-     * [DotFillR], past where the glass is solid, so no pixel is left to the raw page.
-     */
-    val GlassCoreR: Dp = (1.7f * WEB_TO_DP).dp
-    val GlassEdgeR: Dp = (2.5f * WEB_TO_DP).dp
-    val DotFillR: Dp = (2.9f * WEB_TO_DP).dp
-    val DotSoft: Dp = (0.6f * WEB_TO_DP).dp
-
-    /** `--nav-tint`: the page's background at 66% between the dots. */
-    const val TintAlpha = 0.66f
-
-    /** `brightness(.8)` on the dots, so white faces stay solid over them. */
-    val DotDim = Color.Black.copy(alpha = 0.2f)
-
-    /** `--frost-dot-wash`: keeps the grid visible over plain dark page. */
-    val DotWash = Color.White.copy(alpha = 0.047f)
+    val CompactCell: Dp = (Cell.value * 0.62f).dp
+    val CompactCore: Dp = (Core.value * 0.62f).dp
 
     /** The web's `--chrome-shadow`, two layers: (offset y, blur, colour). */
     val ChromeShadow = listOf(
@@ -105,13 +90,6 @@ object DottedFrostSpec {
 
     /** The 2px ring round the pill and the top bar (`0 0 0 2px var(--line)`). */
     val RingWidth: Dp = 2.dp
-
-    /**
-     * Tighter grid for painted-dot texture inside small chrome (expand bars),
-     * where the full-size pattern would dominate the strip.
-     */
-    val CompactCell: Dp = (Cell.value * 0.62f).dp
-    val CompactCore: Dp = (Core.value * 0.62f).dp
 }
 
 // ── Tiling dot masks ─────────────────────────────────────────────────────────
@@ -176,19 +154,6 @@ private fun dotMaskBrush(
     return ShaderBrush(shader)
 }
 
-/** A cell with a ring from [inner] to [outer] (radii, not diameters). */
-private fun ringMaskBrush(density: Density, cell: Dp, inner: Dp, outer: Dp, invert: Boolean): Brush {
-    val cellPx = with(density) { cell.toPx() }.roundToInt().coerceAtLeast(2)
-    val bitmap = dotMaskBitmap(cellPx, with(density) { inner.toPx() }, with(density) { outer.toPx() }, invert)
-    return ShaderBrush(BitmapShader(bitmap, android.graphics.Shader.TileMode.REPEAT, android.graphics.Shader.TileMode.REPEAT))
-}
-
-@Composable
-private fun rememberRingMask(cell: Dp, inner: Dp, outer: Dp, invert: Boolean): Brush {
-    val density = LocalDensity.current
-    return remember(density.density, cell, inner, outer, invert) { ringMaskBrush(density, cell, inner, outer, invert) }
-}
-
 @Composable
 private fun rememberDotMask(cell: Dp, core: Dp, edge: Dp, invert: Boolean): Brush {
     val density = LocalDensity.current
@@ -200,21 +165,13 @@ private fun rememberDotMask(cell: Dp, core: Dp, edge: Dp, invert: Boolean): Brus
 // ── The real thing: masked double-blur ───────────────────────────────────────
 
 /**
- * The web dashboard's dotted frost (navbar.css, the top bar and the pill navbar): the
- * page seen through a grid of round holes, blurred wide inside each dot, with the tinted
- * glass filling between them.
+ * Frosted glass perforated by a dot grid — the Cinema-Info chrome.
  *
- * Two haze passes over the same source, as the web's two layers:
- *  - **glass** (`.nav-glass`): the page blurred and tinted at 66%, clear inside
- *    [DottedFrostSpec.GlassCoreR] and solid from [DottedFrostSpec.GlassEdgeR];
- *  - **dots** (`.nav-frost-dots`): the page blurred twice a cell wide, dimmed a fifth and
- *    lifted by a faint wash, solid out to [DottedFrostSpec.DotFillR], past the glass edge,
- *    so every pixel is covered by one or the other.
- *
- * Apply to a surface that sits above a `hazeSource`, after `clip(shape)`, and give it
- * [chromeEdge] for the web's ring and shadow. When [hazeState] is null (or the device
- * cannot blur) it degrades to the tinted fill and painted dots.
+ * Apply to a surface that sits above a `hazeSource`, after `clip(shape)`.
+ * When [hazeState] is null (or the device can't blur) it degrades to the tinted
+ * fill + painted dots, which is the same fallback the web build uses.
  */
+@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun Modifier.dottedGlass(
     hazeState: HazeState?,
@@ -235,36 +192,25 @@ fun Modifier.dottedGlass(
             .dottedFrost(color = dotColor, cell = cell, core = core)
     }
 
-    val glassMask = rememberRingMask(cell, DottedFrostSpec.GlassCoreR, DottedFrostSpec.GlassEdgeR, invert = true)
-    val dotMask = rememberRingMask(
-        cell, DottedFrostSpec.DotFillR, DottedFrostSpec.DotFillR + DottedFrostSpec.DotSoft, invert = false,
-    )
-    val glassStyle = remember(tint, glassBlur) {
-        HazeStyle(
-            backgroundColor = tint,
-            tints = listOf(HazeTint(tint.copy(alpha = DottedFrostSpec.TintAlpha))),
-            blurRadius = glassBlur,
-            noiseFactor = 0f,
-        )
-    }
-    val dotStyle = remember(tint, dotBlur) {
-        HazeStyle(
-            backgroundColor = tint,
-            tints = listOf(HazeTint(DottedFrostSpec.DotDim), HazeTint(DottedFrostSpec.DotWash)),
-            blurRadius = dotBlur,
-            noiseFactor = 0f,
-        )
-    }
+    val glassMask = rememberDotMask(cell, core, edge, invert = true)
+    val dotMask = rememberDotMask(cell, core, edge, invert = false)
+    val glassStyle = CupertinoMaterials.ultraThin(containerColor = tint)
 
     return this
-        // `.nav-glass`: between the dots.
+        // `.header-glass` — the pane itself.
         .hazeEffect(state = hazeState, style = glassStyle) {
+            blurRadius = glassBlur
             mask = glassMask
+            // Dots are the texture; grain would compete with them.
+            noiseFactor = 0f
             fallbackTint = HazeTint(tint.copy(alpha = 0.92f))
         }
-        // `.nav-frost-dots`: the dots themselves.
-        .hazeEffect(state = hazeState, style = dotStyle) {
+        // `.header-frost-dots` — sharp windows onto the backdrop.
+        .hazeEffect(state = hazeState, style = glassStyle) {
+            blurRadius = dotBlur
             mask = dotMask
+            noiseFactor = 0f
+            tints = listOf(HazeTint(dotColor))
             fallbackTint = HazeTint(dotColor)
         }
 }
