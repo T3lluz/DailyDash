@@ -7,6 +7,7 @@ import com.macrotracker.data.remote.AnthropicModels
 import com.macrotracker.data.remote.OpenRouterModels
 import com.macrotracker.data.remote.TempUnit
 import com.macrotracker.data.remote.WindUnit
+import com.macrotracker.data.upcoming.DashboardCalendars
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -93,6 +94,10 @@ class SettingsRepository @Inject constructor(
     /** What Hermes may do in a new thread started from the phone (a bridge permission id). */
     private val _hermesPermission = MutableStateFlow(prefs.getString(KEY_HERMES_PERMISSION, "ask") ?: "ask")
     val hermesPermission: StateFlow<String> = _hermesPermission
+
+    /** The web dashboard's calendar switches, as it last synced them; they decide which of your events Coming up shows. */
+    private val _dashboardCalendars = MutableStateFlow(readDashboardCalendars())
+    val dashboardCalendars: StateFlow<DashboardCalendars> = _dashboardCalendars
 
     private val _heartRateEnabled = MutableStateFlow(healthPrefs.getBoolean("heart_rate_enabled", true))
     val heartRateEnabled: StateFlow<Boolean> = _heartRateEnabled
@@ -299,6 +304,24 @@ class SettingsRepository @Inject constructor(
         _hermesPermission.value = id
     }
 
+    fun setDashboardCalendars(value: DashboardCalendars) {
+        if (_dashboardCalendars.value == value) return
+        val shown = org.json.JSONObject().apply { value.shown.forEach { (id, on) -> put(id, on) } }
+        prefs.edit {
+            putBoolean(KEY_DASHBOARD_CAL_MINE, value.mine)
+            putString(KEY_DASHBOARD_CALS, shown.toString())
+        }
+        _dashboardCalendars.value = value
+    }
+
+    private fun readDashboardCalendars(): DashboardCalendars {
+        val shown = runCatching {
+            val o = org.json.JSONObject(prefs.getString(KEY_DASHBOARD_CALS, null) ?: "{}")
+            o.keys().asSequence().associateWith { o.optBoolean(it, true) }
+        }.getOrDefault(emptyMap())
+        return DashboardCalendars(mine = prefs.getBoolean(KEY_DASHBOARD_CAL_MINE, true), shown = shown)
+    }
+
     fun setCalendarEnabled(enabled: Boolean) {
         prefs.edit { putBoolean("calendar_enabled", enabled) }
         _calendarEnabled.value = enabled
@@ -356,6 +379,8 @@ class SettingsRepository @Inject constructor(
         const val KEY_TECH_SUPPORT_BRAIN = "tech_support_brain"
         const val KEY_HERMES_LAST_REACHABLE = "hermes_last_reachable"
         const val KEY_HERMES_PERMISSION = "hermes_permission"
+        const val KEY_DASHBOARD_CALS = "dashboard_cals"
+        const val KEY_DASHBOARD_CAL_MINE = "dashboard_cal_mine"
         const val KEY_BIRTH_YEAR = "birth_year"
         const val TECH_SUPPORT_AUTO = "auto"
         const val TECH_SUPPORT_HERMES = "hermes"
@@ -363,7 +388,7 @@ class SettingsRepository @Inject constructor(
 
         const val DEFAULT_DASHBOARD_SERVER_URL = "https://t3lluz.com"
 
-        const val DEFAULT_HOME_WIDGET_ORDER = "WEATHER:true,CALENDAR:true,UPCOMING:true,BODY_STATS:true,PROGRESS:true,QUICK_ADD:true,F1:true,GITHUB:true,SERVERS:true,YOUTUBE:true,TWITCH:true"
+        const val DEFAULT_HOME_WIDGET_ORDER = "WEATHER:true,CALENDAR:true,BRIEFING:true,MAIL:true,UPCOMING:true,BODY_STATS:true,PROGRESS:true,QUICK_ADD:true,F1:true,GITHUB:true,SERVERS:true,YOUTUBE:true,TWITCH:true"
 
         /**
          * Existing installs get the Servers card appended, and Coming up placed right

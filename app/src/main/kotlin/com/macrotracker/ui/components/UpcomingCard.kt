@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -40,6 +41,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -51,6 +53,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
@@ -70,6 +73,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.decode.SvgDecoder
 import coil.request.ImageRequest
+import com.macrotracker.data.upcoming.CalendarEntry
+import com.macrotracker.data.upcoming.DashboardCalendars
 import com.macrotracker.data.upcoming.UpcomingEvent
 import com.macrotracker.data.upcoming.UpcomingFeed
 import com.macrotracker.data.upcoming.TimelineSlot
@@ -101,15 +106,16 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZonedDateTime
+import java.time.temporal.ChronoUnit
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /*
  * Coming up — the t3lluz dashboard's timeline, on the phone.
  *
- * Every episode, film and race session the server knows about sits on one
- * horizontal strip in time order. It is Material 3's centred hero carousel:
- * the focused card fills the middle and its neighbours peek in either side,
+ * Every episode, film, race session and event on your own calendars the server
+ * knows about sits on one horizontal strip in time order. It is Material 3's
+ * centred hero carousel: the focused card fills the middle and its neighbours peek in either side,
  * a fling turns exactly one card (singleAdvanceFlingBehavior — Pixel's rule,
  * which is what the web timeline copies), and a drag morphs the incoming card
  * open while the finger is still down. The carousel masks each item rather than
@@ -118,6 +124,11 @@ import java.util.Locale
  *
  * An empty today still gets a card — "Nothing new today" and whatever lands
  * next — so the strip has somewhere to open on.
+ *
+ * Your own events have no artwork, so their card carries the event instead, as the
+ * web's calendar tiles do: the calendar's colour as a glow, a faint mark for its kind,
+ * the calendar's name and a tag, the description, and chips for the place and a call.
+ * Which calendars show follows the web's switches (Settings → Calendars there).
  */
 
 private val UpcomingAccent = Primary
@@ -132,12 +143,22 @@ private val SERVICE_BRAND = mapOf(
     "radarr" to Color(0xFFFFC230),
     "f1" to F1MarqueRed,
     "stremio" to Color(0xFF7B5CFF),
+    "gcal" to Color(0xFF4285F4),
+)
+
+private val CALENDAR_KIND_ICON = mapOf(
+    "work" to AppIcons.Briefcase,
+    "school" to AppIcons.GraduationCap,
+    "holiday" to AppIcons.TreePalm,
+    "birthday" to AppIcons.Cake,
 )
 
 private val ScrimDark = Color(0xFF121212)
 private val SubText = Color(0xFFC9C9C9)
 private val DetailText = Color(0xFFD4D4D4)
 private val TimeText = Color(0xFFD1D1D1)
+private val CalendarNameText = Color(0xFFCFCFCF)
+private val DescText = Color(0xFFBDBDBD)
 
 @Composable
 fun UpcomingCard(
@@ -145,6 +166,7 @@ fun UpcomingCard(
     isVisible: Boolean = true,
 ) {
     val state by viewModel.state.collectAsState()
+    val calendars by viewModel.calendars.collectAsState()
 
     LaunchedEffect(isVisible) {
         if (!isVisible) return@LaunchedEffect
@@ -159,6 +181,7 @@ fun UpcomingCard(
     when (val s = state) {
         is UpcomingUiState.Success -> UpcomingContent(
             feed = s.feed,
+            calendars = calendars,
             error = s.error,
         )
         is UpcomingUiState.Error -> MacroCard(borderColor = UpcomingAccent.copy(alpha = 0.16f)) {
@@ -184,6 +207,7 @@ fun UpcomingCard(
 @Composable
 private fun UpcomingContent(
     feed: UpcomingFeed,
+    calendars: DashboardCalendars,
     error: String?,
 ) {
     val context = LocalContext.current
@@ -192,7 +216,8 @@ private fun UpcomingContent(
     val clock = remember(context) {
         DateTimeFormatter.ofPattern(if (DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm a", Locale.getDefault())
     }
-    val slots = remember(feed.events, today) { buildSlots(feed.events, today, zone) }
+    val events = remember(feed.events, calendars) { feed.events.filter(calendars::shows) }
+    val slots = remember(events, today) { buildSlots(events, today, zone) }
 
     MacroCard(borderColor = UpcomingAccent.copy(alpha = 0.16f)) {
         if (slots.isEmpty()) {
@@ -201,7 +226,7 @@ private fun UpcomingContent(
             return@MacroCard
         }
 
-        val entries = feed.events.size
+        val entries = events.size
         val span = rangeLabel(slots.first().day, slots.last().day)
         val subtitle = "$entries ${if (entries == 1) "entry" else "entries"} · $span"
 
@@ -282,6 +307,14 @@ private fun UpcomingContent(
             // roughly what is left once the two peeks have taken their share.
             val focusedWidth = maxWidth - (CarouselDefaults.MaxSmallItemSize + ItemSpacing) * 2
             val posterHeight = (focusedWidth * 0.64f).coerceIn(140.dp, 240.dp)
+            // Your events show as much description as the card has room for,
+            // as the web's tiles do by their own size.
+            val descLines = when {
+                posterHeight >= 200.dp -> 4
+                posterHeight >= 170.dp -> 3
+                posterHeight >= 150.dp -> 2
+                else -> 1
+            }
 
             HorizontalCenteredHeroCarousel(
                 state = carouselState,
@@ -298,6 +331,16 @@ private fun UpcomingContent(
                     today = today,
                     zone = zone,
                     clock = clock,
+                    descLines = descLines,
+                    onJoin = { url ->
+                        // A chip on a peek brings the card in first, like any tap on it.
+                        if (index != carouselState.currentItem) {
+                            travelTo(index)
+                        } else {
+                            haptics.click()
+                            runCatching { uriHandler.openUri(url) }
+                        }
+                    },
                     onClick = {
                         if (index != carouselState.currentItem) {
                             travelTo(index)
@@ -405,6 +448,8 @@ private fun CarouselItemScope.TimelineItem(
     today: LocalDate,
     zone: ZoneId,
     clock: DateTimeFormatter,
+    descLines: Int,
+    onJoin: (String) -> Unit,
     onClick: () -> Unit,
 ) {
     val info = carouselItemDrawInfo
@@ -452,7 +497,21 @@ private fun CarouselItemScope.TimelineItem(
                 },
         ) {
             when (slot) {
-                is TimelineSlot.Event -> EventPoster(slot.event, past = slot.day < today, info = info)
+                is TimelineSlot.Event -> {
+                    val cal = slot.event.calendar
+                    if (cal != null) {
+                        CalendarPoster(
+                            event = slot.event,
+                            cal = cal,
+                            past = slot.day < today,
+                            descLines = descLines,
+                            info = info,
+                            onJoin = onJoin,
+                        )
+                    } else {
+                        EventPoster(slot.event, past = slot.day < today, info = info)
+                    }
+                }
                 is TimelineSlot.Rest -> RestPoster(slot.hint, info = info)
             }
         }
@@ -478,6 +537,10 @@ private fun WhenStrip(
     val short = if (rel == "Today") "TODAY" else slot.day.format(SHORT_DAY).uppercase()
     val full = (rel ?: slot.day.format(FULL_DAY)).uppercase()
     val time = if (slot is TimelineSlot.Event) ZonedDateTime.ofInstant(slot.at, zone).format(clock) else null
+    // Your events carry an end: a peek keeps the start, the open card says until when.
+    val cal = (slot as? TimelineSlot.Event)?.event?.calendar
+    val shortTime = if (cal?.allDay == true) "all day" else time
+    val fullTime = if (slot is TimelineSlot.Event && cal != null) calendarWhen(slot.event, cal, zone, clock) else time
     val caption = TextStyle(
         fontSize = 10.sp,
         fontWeight = FontWeight.SemiBold,
@@ -495,8 +558,8 @@ private fun WhenStrip(
                 .padding(horizontal = 2.dp),
         ) {
             Text(short, style = caption, color = labelColor, maxLines = 1, overflow = TextOverflow.Clip, softWrap = false)
-            if (time != null) {
-                Text(time, style = caption, color = TimeText, maxLines = 1, overflow = TextOverflow.Clip, softWrap = false)
+            if (shortTime != null) {
+                Text(shortTime, style = caption, color = TimeText, maxLines = 1, overflow = TextOverflow.Clip, softWrap = false)
             }
         }
         Row(
@@ -517,9 +580,9 @@ private fun WhenStrip(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false),
             )
-            if (time != null) {
+            if (fullTime != null) {
                 Spacer(Modifier.width(8.dp))
-                Text(time, style = caption.copy(fontSize = 11.sp), color = TimeText, maxLines = 1)
+                Text(fullTime, style = caption.copy(fontSize = 11.sp), color = TimeText, maxLines = 1)
             }
         }
     }
@@ -705,6 +768,235 @@ private fun EventWords(event: UpcomingEvent, modifier: Modifier) {
     }
 }
 
+/**
+ * One of your own events: no artwork, so the card carries the event, as the web's
+ * calendar tiles do (`gcalChip`). The calendar's colour glows from the top corner over
+ * a flat tint of it, a big faint mark says what kind of event it is, and the Google
+ * Calendar mark, the calendar's name and a tag sit on top. The description, the title
+ * and chips for the place and a call sit at the foot. A peek is the glow and the mark.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CalendarPoster(
+    event: UpcomingEvent,
+    cal: CalendarEntry,
+    past: Boolean,
+    descLines: Int,
+    info: CarouselItemDrawInfo,
+    onJoin: (String) -> Unit,
+) {
+    val context = LocalContext.current
+    val brand = remember(event.brand) { parseHex(event.brand) ?: SERVICE_BRAND.getValue("gcal") }
+    val tone = if (past) 0.6f else 1f
+    val kindIcon = CALENDAR_KIND_ICON[cal.kind]
+    val place = remember(event.note) { cal.place(event.note) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .drawBehind {
+                val r = info.maskRect.intersect(Rect(Offset.Zero, size))
+                drawRect(brand.copy(alpha = 0.09f * tone).compositeOver(Surface))
+                drawRect(
+                    Brush.verticalGradient(
+                        listOf(Color.Transparent, Surface),
+                        startY = 0f,
+                        endY = size.height,
+                    ),
+                )
+                if (r.width > 0f) {
+                    drawRect(
+                        Brush.radialGradient(
+                            0f to brand.copy(alpha = 0.30f * tone),
+                            0.64f to Color.Transparent,
+                            center = Offset(r.right, r.top),
+                            radius = maxOf(r.width * 1.1f, r.height * 0.9f),
+                        ),
+                        topLeft = r.topLeft,
+                        size = r.size,
+                    )
+                }
+            },
+    ) {
+        kindIcon?.let {
+            Icon(
+                it,
+                contentDescription = null,
+                tint = brand,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .offset(x = 10.dp, y = 12.dp)
+                    .size(96.dp)
+                    .graphicsLayer { alpha = 0.09f * info.openness() },
+            )
+        }
+
+        CalendarTop(
+            event = event,
+            cal = cal,
+            brand = brand,
+            kindIcon = kindIcon,
+            info = info,
+            iconRequest = event.serviceIconUrl?.let { icon ->
+                remember(icon) { ImageRequest.Builder(context).data(icon).decoderFactory(SvgDecoder.Factory()).build() }
+            },
+        )
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .followMask(info)
+                .graphicsLayer { alpha = textAlpha(info.openness()) }
+                .padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            if (cal.description.isNotBlank()) {
+                Text(
+                    cal.description,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    color = DescText,
+                    maxLines = descLines,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Text(
+                event.title,
+                style = TextStyle(fontSize = 17.sp, fontWeight = FontWeight.Bold, lineHeight = 21.sp),
+                color = TextPrimary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (place.isNotBlank() || cal.hasCall) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (place.isNotBlank()) {
+                        CalendarChip(icon = AppIcons.MapPin, text = place, brand = brand, modifier = Modifier.weight(1f, fill = false))
+                    }
+                    if (cal.hasCall) {
+                        CalendarChip(
+                            icon = AppIcons.Video,
+                            text = if (cal.joinUrl != null) "Join call" else "call",
+                            brand = brand,
+                            onClick = cal.joinUrl?.let { url -> { onJoin(url) } },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** The Google Calendar mark (on every card, peeks too), then the calendar's name and a tag. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CalendarTop(
+    event: UpcomingEvent,
+    cal: CalendarEntry,
+    brand: Color,
+    kindIcon: androidx.compose.ui.graphics.vector.ImageVector?,
+    info: CarouselItemDrawInfo,
+    iconRequest: ImageRequest?,
+) {
+    val iconInsetPx = with(LocalDensity.current) { 8.dp.toPx() }
+    Box(modifier = Modifier.fillMaxWidth()) {
+        iconRequest?.let {
+            AsyncImage(
+                model = it,
+                contentDescription = "Google Calendar",
+                modifier = Modifier
+                    .padding(top = 8.dp)
+                    .size(20.dp)
+                    .followMask(info, inset = iconInsetPx)
+                    .graphicsLayer {
+                        val s = (16f + 4f * info.openness()) / 20f
+                        scaleX = s
+                        scaleY = s
+                        transformOrigin = TransformOrigin(0f, 0f)
+                    },
+            )
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .followMask(info)
+                .graphicsLayer { alpha = textAlpha(info.openness()) }
+                .padding(start = 34.dp, end = 8.dp, top = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                cal.calendarName,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = CalendarNameText,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            event.tag?.let { tag ->
+                Spacer(Modifier.width(6.dp))
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(brand.copy(alpha = 0.45f).compositeOver(Color.Black.copy(alpha = 0.53f)))
+                        .padding(horizontal = 7.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    kindIcon?.let {
+                        Icon(it, contentDescription = null, tint = Color.White, modifier = Modifier.size(11.dp))
+                        Spacer(Modifier.width(4.dp))
+                    }
+                    Text(tag, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White, letterSpacing = 0.3.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CalendarChip(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    text: String,
+    brand: Color,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(if (onClick != null) brand.copy(alpha = 0.28f) else Color.Black.copy(alpha = 0.3f))
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(start = 6.dp, end = 8.dp, top = 3.dp, bottom = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, contentDescription = null, tint = lerp(brand, Color.White, 0.4f), modifier = Modifier.size(11.dp))
+        Spacer(Modifier.width(4.dp))
+        Text(
+            text,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color(0xFFD8D8D8),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** "all day", "3 days", or the start and end: `16:00–18:00`. */
+private fun calendarWhen(event: UpcomingEvent, cal: CalendarEntry, zone: ZoneId, clock: DateTimeFormatter): String {
+    val start = ZonedDateTime.ofInstant(event.at, zone)
+    val end = cal.end?.let { ZonedDateTime.ofInstant(it, zone) }
+    if (cal.allDay) {
+        val days = end?.let { ChronoUnit.DAYS.between(start.toLocalDate(), it.toLocalDate()) } ?: 1L
+        return if (days > 1) "$days days" else "all day"
+    }
+    if (end == null || !end.isAfter(start)) return start.format(clock)
+    val endText = if (end.toLocalDate() == start.toLocalDate()) end.format(clock) else "${end.format(END_DAY)} ${end.format(clock)}"
+    return "${start.format(clock)}–$endText"
+}
+
+private val END_DAY = DateTimeFormatter.ofPattern("EEE", Locale.ENGLISH)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun RestPoster(hint: String, info: CarouselItemDrawInfo) {
@@ -775,7 +1067,16 @@ private fun slotDescription(slot: TimelineSlot, today: LocalDate, zone: ZoneId, 
     val day = relativeDay(slot.day, today) ?: slot.day.format(FULL_DAY)
     return when (slot) {
         is TimelineSlot.Rest -> "Nothing new today. ${slot.hint}"
-        is TimelineSlot.Event -> listOf(
+        is TimelineSlot.Event -> slot.event.calendar?.let { cal ->
+            listOf(
+                slot.event.title,
+                cal.calendarName,
+                "$day ${calendarWhen(slot.event, cal, zone, clock)}",
+                cal.place(slot.event.note),
+                if (cal.hasCall) "video call" else "",
+                cal.description,
+            ).filter { it.isNotBlank() }.joinToString(", ")
+        } ?: listOf(
             slot.event.title,
             slot.event.code,
             slot.event.detail,
