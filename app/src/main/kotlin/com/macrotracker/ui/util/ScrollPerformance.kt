@@ -16,7 +16,7 @@ val LocalTickersPaused = staticCompositionLocalOf { false }
 
 private val HOME_WIDGET_ITEM_KEYS = setOf(
     "F1", "GITHUB", "SERVERS", "UPCOMING", "YOUTUBE", "TWITCH", "WEATHER", "CALENDAR", "BODY_STATS", "PROGRESS",
-    "QUICK_ADD",
+    "QUICK_ADD", "BRIEFING", "MAIL",
 )
 
 /** Tab slide duration in [MacroMotion] — used to defer work until navigation finishes. */

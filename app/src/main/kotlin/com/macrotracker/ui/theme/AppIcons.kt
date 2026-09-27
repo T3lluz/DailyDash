@@ -227,6 +227,36 @@ object AppIcons {
     val ThermometerSun: ImageVector by lazy { icon("ThermometerSun") { s("M12 2 v2"); s("M12 8 a4 4 0 0 0 -1.645 7.647"); s("M2 12 h2"); s("M20 14.54 a4 4 0 1 1 -4 0 V4 a2 2 0 0 1 4 0 z"); s("m4.93 4.93 l1.41 1.41"); s("m6.34 17.66 l-1.41 1.41") } }
     /** Lucide `test-tube-diagonal` */
     val TestTube: ImageVector by lazy { icon("TestTube") { s("M21 7 L6.82 21.18 a2.83 2.83 0 0 1 -3.99 -0.01 a2.83 2.83 0 0 1 0 -4 L17 3"); s("m16 2 l6 6"); s("M12 16 H4") } }
+    /** Lucide `briefcase` */
+    val Briefcase: ImageVector by lazy { icon("Briefcase") { s("M16 20 V4 a2 2 0 0 0 -2 -2 h-4 a2 2 0 0 0 -2 2 v16"); s("M4 6 h16 a2 2 0 0 1 2 2 v10 a2 2 0 0 1 -2 2 h-16 a2 2 0 0 1 -2 -2 v-10 a2 2 0 0 1 2 -2 z") } }
+    /** Lucide `tree-palm` */
+    val TreePalm: ImageVector by lazy { icon("TreePalm") { s("M13 8 c0 -2.76 -2.46 -5 -5.5 -5 S2 5.24 2 8 h2 l1 -1 l1 1 h4"); s("M13 7.14 A5.82 5.82 0 0 1 16.5 6 c3.04 0 5.5 2.24 5.5 5 h-3 l-1 -1 l-1 1 h-3"); s("M5.89 9.71 c-2.15 2.15 -2.3 5.47 -0.35 7.43 l4.24 -4.25 l0.7 -0.7 l0.71 -0.71 l2.12 -2.12 c-1.95 -1.96 -5.27 -1.8 -7.42 0.35"); s("M11 15.5 c0.5 2.5 -0.17 4.5 -1 6.5 h4 c2 -5.5 -0.5 -12 -1 -14") } }
+    /** Lucide `cake` */
+    val Cake: ImageVector by lazy { icon("Cake") { s("M20 21 v-8 a2 2 0 0 0 -2 -2 H6 a2 2 0 0 0 -2 2 v8"); s("M4 16 s0.5 -1 2 -1 s2.5 2 4 2 s2.5 -2 4 -2 s2.5 2 4 2 s2 -1 2 -1"); s("M2 21 h20"); s("M7 8 v3"); s("M12 8 v3"); s("M17 8 v3"); s("M7 4 h0.01"); s("M12 4 h0.01"); s("M17 4 h0.01") } }
+    /** Lucide `mail` */
+    val Mail: ImageVector by lazy { icon("Mail") { s("m22 7 -8.991 5.727 a2 2 0 0 1 -2.009 0 L2 7"); s("M4 4 h16 a2 2 0 0 1 2 2 v12 a2 2 0 0 1 -2 2 h-16 a2 2 0 0 1 -2 -2 v-12 a2 2 0 0 1 2 -2 z") } }
+    /** Lucide `mail-open` */
+    val MailOpen: ImageVector by lazy { icon("MailOpen") { s("M21.2 8.4 c0.5 0.38 0.8 0.97 0.8 1.6 v10 a2 2 0 0 1 -2 2 H4 a2 2 0 0 1 -2 -2 V10 a2 2 0 0 1 0.8 -1.6 l8 -6 a2 2 0 0 1 2.4 0 l8 6 Z"); s("m22 10 -8.97 5.7 a1.94 1.94 0 0 1 -2.06 0 L2 10") } }
+    /** Lucide `archive` */
+    val Archive: ImageVector by lazy { icon("Archive") { s("M3 3 h18 a1 1 0 0 1 1 1 v3 a1 1 0 0 1 -1 1 h-18 a1 1 0 0 1 -1 -1 v-3 a1 1 0 0 1 1 -1 z"); s("M4 8 v11 a2 2 0 0 0 2 2 h12 a2 2 0 0 0 2 -2 V8"); s("M10 12 h4") } }
+    /** Lucide `cloud-rain` */
+    val CloudRain: ImageVector by lazy { icon("CloudRain") { s("M4 14.899 A7 7 0 1 1 15.71 8 h1.79 a4.5 4.5 0 0 1 2.5 8.242"); s("M16 14 v6"); s("M8 14 v6"); s("M12 16 v6") } }
+    /** Lucide `siren` */
+    val Siren: ImageVector by lazy { icon("Siren") { s("M7 18 v-6 a5 5 0 1 1 10 0 v6"); s("M5 21 a1 1 0 0 0 1 1 h12 a1 1 0 0 0 1 -1 v-1 a2 2 0 0 0 -2 -2 H7 a2 2 0 0 0 -2 2 z"); s("M21 12 h1"); s("M18.5 4.5 L18 5"); s("M2 12 h1"); s("M12 2 v1"); s("m4.929 4.929 0.707 0.707"); s("M12 12 v6") } }
+    /** Lucide `inbox` */
+    val Inbox: ImageVector by lazy { icon("Inbox") { s("M22 12 L16 12 L14 15 L10 15 L8 12 L2 12"); s("M5.45 5.11 L2 12 v6 a2 2 0 0 0 2 2 h16 a2 2 0 0 0 2 -2 v-6 l-3.45 -6.89 A2 2 0 0 0 16.76 4 H7.24 a2 2 0 0 0 -1.79 1.11 z") } }
+    /** Lucide `square-terminal` */
+    val SquareTerminal: ImageVector by lazy { icon("SquareTerminal") { s("m7 11 2 -2 -2 -2"); s("M11 13 h4"); s("M5 3 h14 a2 2 0 0 1 2 2 v14 a2 2 0 0 1 -2 2 h-14 a2 2 0 0 1 -2 -2 v-14 a2 2 0 0 1 2 -2 z") } }
+    /** Lucide `chart-column` */
+    val ChartColumn: ImageVector by lazy { icon("ChartColumn") { s("M3 3 v16 a2 2 0 0 0 2 2 h16"); s("M18 17 V9"); s("M13 17 V5"); s("M8 17 v-3") } }
+    /** Lucide `coins` */
+    val Coins: ImageVector by lazy { icon("Coins") { s("M13.744 17.736 a6 6 0 1 1 -7.48 -7.48"); s("M15 6 h1 v4"); s("m6.134 14.768 0.866 -0.5 2 3.464"); s("M10 8 a6 6 0 1 0 12 0 a6 6 0 1 0 -12 0") } }
+    /** Lucide `repeat` */
+    val Repeat: ImageVector by lazy { icon("Repeat") { s("m17 2 4 4 -4 4"); s("M3 11 v-1 a4 4 0 0 1 4 -4 h14"); s("m7 22 -4 -4 4 -4"); s("M21 13 v1 a4 4 0 0 1 -4 4 H3") } }
+    /** Lucide `calendar-plus` */
+    val CalendarPlus: ImageVector by lazy { icon("CalendarPlus") { s("M16 18 h6"); s("M16 2 v3"); s("M19 15 v6"); s("M21 11.5 V5 a2 2 0 0 0 -2 -2 H5 a2 2 0 0 0 -2 2 v14 a2 2 0 0 0 2 2 h8.3"); s("M3 9 h18"); s("M8 2 v3") } }
+    /** Lucide `pause` */
+    val Pause: ImageVector by lazy { icon("Pause") { s("M15 3 h3 a1 1 0 0 1 1 1 v16 a1 1 0 0 1 -1 1 h-3 a1 1 0 0 1 -1 -1 v-16 a1 1 0 0 1 1 -1 z"); s("M6 3 h3 a1 1 0 0 1 1 1 v16 a1 1 0 0 1 -1 1 h-3 a1 1 0 0 1 -1 -1 v-16 a1 1 0 0 1 1 -1 z") } }
     /** Tabler `heart-rate-monitor` */
     val HeartRateMonitor: ImageVector by lazy { icon("HeartRateMonitor") { s("M3 5 a1 1 0 0 1 1 -1 h16 a1 1 0 0 1 1 1 v10 a1 1 0 0 1 -1 1 h-16 a1 1 0 0 1 -1 -1 l0 -10"); s("M7 20 h10"); s("M9 16 v4"); s("M15 16 v4"); s("M7 10 h2 l2 3 l2 -6 l1 3 h3") } }
 }

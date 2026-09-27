@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.macrotracker.ui.components.BriefCard
 import com.macrotracker.ui.components.ButtonVariant
 import com.macrotracker.ui.components.CalendarCard
 import com.macrotracker.ui.components.CardHeader
@@ -33,6 +34,7 @@ import com.macrotracker.ui.components.F1Card
 import com.macrotracker.ui.components.GitHubCard
 import com.macrotracker.ui.components.MacroButton
 import com.macrotracker.ui.components.MacroCard
+import com.macrotracker.ui.components.MailCard
 import com.macrotracker.ui.components.MacroProgressBar
 import com.macrotracker.ui.components.MacroTextField
 import com.macrotracker.ui.components.WeatherCard
@@ -64,6 +66,7 @@ fun HomeWidgetItem(
     viewModel: HomeViewModel,
     onNavigateToHealth: () -> Unit,
     onNavigateToServers: () -> Unit,
+    onOpenHermes: () -> Unit,
     onRequestLocationPermission: () -> Unit,
     onRequestCalendarPermission: () -> Unit,
     hasLocationPermission: () -> Boolean,
@@ -78,6 +81,8 @@ fun HomeWidgetItem(
         "F1" -> HomeF1Widget(viewModel, isVisible = isVisible)
         "GITHUB" -> GitHubCard(isVisible = isVisible)
         "UPCOMING" -> UpcomingCard(isVisible = isVisible)
+        "BRIEFING" -> BriefCard(isVisible = isVisible, onOpenChat = onOpenHermes)
+        "MAIL" -> MailCard(isVisible = isVisible, onOpenHermes = onOpenHermes)
         "SERVERS" -> ServerCard(isVisible = isVisible, onOpenServers = onNavigateToServers)
         "YOUTUBE" -> YoutubeCard()
         "TWITCH" -> TwitchCard()

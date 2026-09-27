@@ -24,6 +24,7 @@ import com.macrotracker.data.remote.ClothingAdvice
 import com.macrotracker.data.remote.ClothingAdvisor
 import com.macrotracker.data.remote.LocationProvider
 import com.macrotracker.data.remote.WeatherInfo
+import com.macrotracker.data.remote.WeatherWarning
 import com.macrotracker.data.remote.WeatherRepository
 import com.macrotracker.ui.screens.health.SleepNightScore
 import com.macrotracker.ui.screens.health.computeSleepNightScore
@@ -60,6 +61,8 @@ sealed class WeatherUiState {
         /** True when the location was obtained with coarse (approximate) permission only. */
         val isPrecise: Boolean = true,
         val lastUpdatedAt: Instant? = null,
+        /** MET warnings in force here, worst first. */
+        val warnings: List<WeatherWarning> = emptyList(),
     ) : WeatherUiState()
     data object PermissionRequired : WeatherUiState()
     /** User granted only approximate (coarse) location — weather works but precision is limited. */
@@ -536,6 +539,7 @@ class HomeViewModel @Inject constructor(
             val locationName = locationProvider.getLocationName(location.latitude, location.longitude)
             // Always hit the network path after clearCache on force; clothing is recomputed every fetch.
             val weather = weatherRepository.fetchWeather(location.latitude, location.longitude, locationName)
+            val warnings = weatherRepository.fetchWarnings(location.latitude, location.longitude, force = forceRefresh)
             val clothingAdvice = ClothingAdvisor.advise(weather)
             val fetchedAt = weatherRepository.lastFetchTimeMs
                 .takeIf { it > 0L }
@@ -547,6 +551,7 @@ class HomeViewModel @Inject constructor(
                 clothingAdvice = clothingAdvice,
                 isPrecise = hasPreciseLocation,
                 lastUpdatedAt = fetchedAt,
+                warnings = warnings,
             )
 
             cacheWeatherForWidget(weather, location.latitude, location.longitude)

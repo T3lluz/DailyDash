@@ -130,7 +130,19 @@ data class HermesThreadSummary(
     val model: String = "",
     /** The turn running in it right now, as far as the list shows one; null when idle. */
     val live: HermesLive? = null,
+    /** Questions and approvals since your last message: what the island calls "needs you". */
+    val waiting: Int = 0,
+    /** What its answers used, in tokens and in API dollars (the bridge meters every model call). */
+    val tokens: Long = 0,
+    val cost: Double = 0.0,
+    /** About how much of the context window the chat fills, of [window]; 0 when not known. */
+    val context: Int = 0,
+    val window: Int = 0,
+    /** The scheduled ask that runs in this chat, if one does. */
+    val scheduled: String? = null,
 ) {
+    val contextFraction: Float? get() = if (window > 0 && context > 0) (context.toFloat() / window).coerceIn(0f, 1f) else null
+
     /** A standing Hermes profile (an "employee") rather than a conversation. */
     val isStaff: Boolean get() = kind == "employee"
 

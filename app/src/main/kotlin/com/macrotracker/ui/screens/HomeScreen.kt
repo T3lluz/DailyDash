@@ -57,6 +57,8 @@ import com.macrotracker.ui.viewmodel.GitHubViewModel
 import com.macrotracker.ui.viewmodel.UpcomingViewModel
 import com.macrotracker.ui.viewmodel.HomeViewModel
 import com.macrotracker.ui.viewmodel.TwitchViewModel
+import com.macrotracker.ui.viewmodel.BriefViewModel
+import com.macrotracker.ui.viewmodel.MailViewModel
 import com.macrotracker.ui.viewmodel.YouTubeViewModel
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -66,11 +68,14 @@ import com.macrotracker.ui.theme.AppIcons
 fun HomeScreen(
     onNavigateToHealth: () -> Unit,
     onNavigateToServers: () -> Unit = {},
+    onOpenHermes: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel(),
     youtubeViewModel: YouTubeViewModel = hiltViewModel(),
     twitchViewModel: TwitchViewModel = hiltViewModel(),
     githubViewModel: GitHubViewModel = hiltViewModel(),
     upcomingViewModel: UpcomingViewModel = hiltViewModel(),
+    briefViewModel: BriefViewModel = hiltViewModel(),
+    mailViewModel: MailViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
     val isRefreshing by viewModel.isRefreshing.collectAsState()
@@ -92,6 +97,8 @@ fun HomeScreen(
             Triple("TWITCH", "Twitch live", AppIcons.Video),
             Triple("WEATHER", "Weather", AppIcons.Cloud),
             Triple("CALENDAR", "Calendar", AppIcons.CalendarDays),
+            Triple("BRIEFING", "Briefing", AppIcons.Sparkles),
+            Triple("MAIL", "Mail", AppIcons.Mail),
             Triple("UPCOMING", "Coming up", AppIcons.TvPlay),
             Triple("BODY_STATS", "Body Stats", AppIcons.HeartPulse),
             Triple("PROGRESS", "Today's progress", AppIcons.ChartPie),
@@ -223,6 +230,12 @@ fun HomeScreen(
             if ("UPCOMING" in visibleIds) {
                 upcomingViewModel.load(forceRefresh = true)
             }
+            if ("BRIEFING" in visibleIds) {
+                briefViewModel.load()
+            }
+            if ("MAIL" in visibleIds) {
+                mailViewModel.load()
+            }
         },
         modifier = Modifier
             .fillMaxSize()
@@ -337,6 +350,7 @@ fun HomeScreen(
                         viewModel = viewModel,
                         onNavigateToHealth = onNavigateToHealth,
                         onNavigateToServers = onNavigateToServers,
+                        onOpenHermes = onOpenHermes,
                         onRequestLocationPermission = onRequestLocationPermission,
                         onRequestCalendarPermission = onRequestCalendarPermission,
                         hasLocationPermission = hasLocationPermissionFn,
