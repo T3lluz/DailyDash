@@ -1,6 +1,5 @@
 package com.macrotracker.ui.screens
 
-import com.macrotracker.ui.screens.ai.UsagePane
 import com.macrotracker.ui.theme.BorderStrong
 import com.macrotracker.ui.theme.SurfaceElevated
 import android.Manifest
@@ -141,6 +140,7 @@ fun AIScreen(
     onNavigateToCameraScan: () -> Unit,
     onNavigateToAiSettings: () -> Unit,
     onOpenConsole: () -> Unit = {},
+    onOpenUsage: () -> Unit = {},
     initialTab: String? = null,
     serverHandoffId: String? = null,
     viewModel: AiViewModel = hiltViewModel(),
@@ -186,7 +186,12 @@ fun AIScreen(
             .background(Background),
     ) {
         // One slim row instead of a page title: the chats need the height more than the
-        // tab needs its name, which the nav pill already shows.
+        // tab needs its name, which the nav pill already shows. Usage and the console sit
+        // at its end, a tap away from either chat.
+        Row(
+            modifier = Modifier.padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
         SegmentedTabs(
             tabs = listOf(
                 SegmentedTab(ChatBot.MACROS.id, "Macros", AppIcons.Restaurant, Primary),
@@ -196,8 +201,6 @@ fun AIScreen(
                     AppIcons.Terminal,
                     ServerBrand,
                 ),
-                // What the agents spent and what runs when: the web's bar-chart panel.
-                SegmentedTab(USAGE_TAB, "Usage", AppIcons.ChartColumn, UsageAccent),
             ),
             selectedKey = selectedTab,
             onSelect = {
@@ -205,18 +208,22 @@ fun AIScreen(
                 selectedTab = it
             },
             compact = true,
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 2.dp),
+            modifier = Modifier.weight(1f),
         )
+            Spacer(Modifier.width(4.dp))
+            IconButton(onClick = { haptics.tick(); onOpenUsage() }, modifier = Modifier.size(40.dp)) {
+                Icon(AppIcons.ChartColumn, contentDescription = "Usage", tint = UsageAccent, modifier = Modifier.size(20.dp))
+            }
+            IconButton(onClick = { haptics.tick(); onOpenConsole() }, modifier = Modifier.size(40.dp)) {
+                Icon(AppIcons.SquareTerminal, contentDescription = "Console", tint = TextSecondary, modifier = Modifier.size(20.dp))
+            }
+        }
 
         Box(modifier = Modifier.weight(1f)) {
-            if (selectedTab == USAGE_TAB) {
-                UsagePane(onOpenConsole = onOpenConsole, onOpenChat = {
-                    selectedTab = ChatBot.SYSOP.id
-                    if (!usesHermes) hermesViewModel.setUsesHermes(true)
-                })
-            } else if (selectedTab == ChatBot.SYSOP.id && usesHermes) {
+            if (selectedTab == ChatBot.SYSOP.id && usesHermes) {
                 HermesChatPane(
                     viewModel = hermesViewModel,
+                    onOpenUsage = onOpenUsage,
                     onUsePhoneAi = { hermesViewModel.setUsesHermes(false) },
                 )
             } else if (selectedTab == ChatBot.SYSOP.id) {
@@ -239,7 +246,6 @@ fun AIScreen(
     }
 }
 
-private const val USAGE_TAB = "usage"
 private val UsageAccent = androidx.compose.ui.graphics.Color(0xFF3987E5)
 
 @Composable

@@ -174,8 +174,10 @@ class F1WidgetLogicTest {
     }
 
     @Test fun aiFingerprintIsCoarse() {
-        val now = System.currentTimeMillis()
-        val s = F1WidgetSample.snapshot(now)
+        // A fixed midweek moment: the sample weekend moves on after Sunday's race, so "now"
+        // made this fail every Sunday evening.
+        val now = java.time.LocalDate.of(2026, 9, 23).atTime(12, 0).toInstant(java.time.ZoneOffset.UTC).toEpochMilli()
+        val s = F1WidgetSample.snapshot(now, utc)
         val a = F1Ai.fingerprint(s, now, utc)
         assertEquals(a, F1Ai.fingerprint(s.copy(fetchedAt = now + hour), now + hour, utc))
         val moved = s.copy(drivers = s.drivers.mapIndexed { i, d -> if (i == 0) d.copy(points = d.points + 25) else d })

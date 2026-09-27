@@ -91,6 +91,7 @@ import com.macrotracker.ui.theme.TextTertiary
 fun ServersSettingsScreen(
     onNavigateBack: () -> Unit,
     onOpenDashboard: () -> Unit,
+    onOpenConsole: () -> Unit = {},
     viewModel: ServerViewModel = hiltViewModel(),
 ) {
     val profiles by viewModel.profiles.collectAsState()
@@ -145,6 +146,20 @@ fun ServersSettingsScreen(
         // ── Server list ──────────────────────────────────────────────────
         MacroCard(delayMs = 40) {
             CardHeader(title = "Your servers", icon = AppIcons.Server, accent = Primary) {
+                // A shell on the dashboard server, the same as the web's console.
+                Text(
+                    "Console",
+                    color = Primary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable {
+                            haptics.click()
+                            onOpenConsole()
+                        }
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                )
                 if (profiles.isNotEmpty()) {
                     Text(
                         "Open dashboard",

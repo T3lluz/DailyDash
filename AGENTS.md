@@ -64,7 +64,7 @@ com.macrotracker/
                               while the app is in the background. HermesActivityTest pins the labels.
                               HermesLiveFeed (bound in DailyDashApp) holds the one `/_api/live` connection
                               while the app is in front. Every turn on every thread rides it (`ch: ai`), so a
-                              turn started on the web shows in the navbar tab, the ongoing notification and
+                              turn started on the web shows in the island, the ongoing notification and
                               the open chat; the feed reports it as follower FEED, which never overrides PANE
                               or SERVICE, and hands its turns to the service (`handOffFeed`) when the app
                               goes to the background. Duty and staff threads are skipped, as the web skips
@@ -226,14 +226,21 @@ com.macrotracker/
                              `FollowChatOnKeyboard` pins the list with plain scrolls, never an animation per
                              frame. Tech support is Hermes when `HermesViewModel.usesHermes`: an
                              explicit `techSupportBrain` choice, or in `auto` whenever Hermes answers, else Sysop)
-                             + ai/UsagePane.kt: the AI tab's third segment, the web's usage panel (limits as
-                             T3 Code's buckets, periods, a 30-day chart stacked by model in fixed categorical
-                             slots, token mix, models/agents/chats, the schedule with a scheduled-ask sheet).
+                             + ai/UsagePane.kt in UsageScreen (the chart button beside the AI tab's chats, the
+                             `usage` sub-screen): the web's usage panel. Claude's windows say whether they are
+                             measured or estimated (usage.py calibrates from past readings), Cursor's month by
+                             model, what the work was worth, a 30-day chart of worth by model in fixed
+                             categorical slots, token mix, models/agents/chats, the schedule with a scheduled-ask
+                             sheet. `ComposerUsageRing` is the ring beside send in Hermes' composer, as Claude's
+                             app shows it: the session's use, and on tap the windows, Cursor when the chat runs
+                             on it, and the chat's context.
                              Hermes' rail groups "Needs you" first, dots a chat that moved since this phone
                              opened it (`HermesUiState.seen`), and shows each chat's tokens and context fill;
                              the header has a context ring (`HermesThreadSummary.contextFraction`)
                              + ConsoleScreen.kt: the dashboard's console page (site/console.html, xterm) in a
-                             WebView, the same shells as the web's console (Servers header, Usage)
+                             WebView, the same shells as the web's console. Reached from the AI tab's row, Home's
+                             Servers card, the Servers screen and settings, Usage, and the launcher shortcuts
+                             (res/xml/shortcuts.xml: Console, Usage, Hermes; MainActivity `EXTRA_OPEN`)
                              + server/ (the server screen's cards: hero, history, services wall as tiles,
                              activity, compute, memory, network, storage, sensors, processes, containers,
                              system). Sections reorder and toggle like Home (pencil in the header;
@@ -254,10 +261,10 @@ com.macrotracker/
                              SubScreenRoutes (const routes) + DailyDashNavHost.kt + NavigationActions.kt
                              (`navigateToTab`, `popSubScreen`, `subScreen` destination builder)
     components/            ← shared Composables (MacroCard, PillNavigationBar, DraggableWidgetColumn,
-                              WidgetEditor, WidgetExpandBar, PillButton, …). PillNavigationBar grows a
-                              tab from its top-left edge while Hermes works (NavActivityTab.kt:
-                              `NavWithTabShape` is pill + tab as one outline, so the glass has no seam;
-                              `LocalNavTabRise` lifts the chat composers with it). WorkingScanner.kt is
+                              WidgetEditor, WidgetExpandBar, PillButton, …). What Hermes is doing
+                              (HermesActivityViewModel's `navActivity`) leads the island, as on the web;
+                              the navbar is a plain pill. NavActivityTab.kt holds `NavActivity` and
+                              `NavActivityTabContent`, the island's leading item. WorkingScanner.kt is
                               opencode's Knight Rider scanner (KnightRiderTest pins it to opencode's
                               frames). ScreenHeader.kt: tab
                               `ScreenHeader`, pushed-screen `SubScreenHeader`, `TabContentBottomPadding`,
@@ -286,15 +293,15 @@ com.macrotracker/
                               mirrored area charts, the scrubbable history chart, stacked meters, uptime bars,
                               fact chips. DeviceCodePanel.kt: GitHub/Twitch device-code
                               sign-in (copyable code + equal-width Open / Cancel). DottedFrost.kt holds the
-                              web dashboard's dotted frost (navbar.css) — use `Modifier.dottedGlass(hazeState, shape)`
-                              on any frosted surface above a `hazeSource` (nav pill, island, AI composer), and
-                              `Modifier.chromeEdge(shape)` before its `clip` for the web's 2dp ring and two-layer
-                              chrome shadow, cast by the outline with the inside cut away (a shadow under the
-                              translucent glass shows through it). Two masked haze passes as the web's two layers:
-                              the glass (tint 66%, clear inside `GlassCoreR`, solid from `GlassEdgeR`) and the dots
-                              (blurred twice a cell wide, dimmed a fifth, a faint wash, solid out to `DotFillR`,
-                              past the glass edge). `Modifier.dottedFrost()` is just the painted-dot fallback for
-                              surfaces with nothing to blur (and for API < 31) — don't reach for it as the effect.
+                              Cinema-Info glass chrome — use `Modifier.dottedGlass(hazeState, shape)` on any
+                              frosted surface above a `hazeSource` (nav pill, island, AI composer). It stacks two
+                              masked haze passes: heavy blur everywhere *except* the dot cores, then a light blur
+                              *only* at the cores (the phone keeps these small sharp windows; the web's wider dot
+                              recipe made the dots too big here). `Modifier.chromeEdge(shape)`, before the `clip`,
+                              adds the web's 2dp ring and two-layer chrome shadow, cast by the outline with the
+                              inside cut away (a shadow under translucent glass shows through it).
+                              `Modifier.dottedFrost()` is just the painted-dot fallback for surfaces with nothing
+                              to blur (and for API < 31) — don't reach for it as the effect itself.
                               TopIsland.kt: the web's island, drawn by MainScreen under the status bar on Home,
                               Health and Settings (IslandViewModel; tap opens the chat, the event, the call, or Home).
                               MailCard.kt: Home's `MAIL` (MailViewModel: optimistic actions laid over the server's

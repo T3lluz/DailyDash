@@ -179,7 +179,7 @@ class HermesViewModel @Inject constructor(
     private var wantThink = false
     private var wantFast = false
 
-    /** A chat the navbar tab or a notification asked for; the AI tab switches to Tech support and opens it. */
+    /** A chat the island or a notification asked for; the AI tab switches to Tech support and opens it. */
     val openRequest: StateFlow<String?> = activity.openRequest
 
     /** Every turn running anywhere, with what it is doing, for the rail's rows. */
@@ -814,7 +814,7 @@ class HermesViewModel @Inject constructor(
         sendQueued(threadId)
     }
 
-    /** What the navbar tab and the ongoing notification show while this chat's turn runs. */
+    /** What the island and the ongoing notification show while this chat's turn runs. */
     private fun report() {
         val s = _state.value
         val id = s.threadId ?: return

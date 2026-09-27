@@ -33,5 +33,12 @@
     <string name="hermes_reply">Reply</string>
     <string name="hermes_reply_hint">Message Hermes</string>
     <string name="hermes_open">Open</string>
+    <!-- Launcher shortcuts (res/xml/shortcuts.xml) -->
+    <string name="shortcut_console">Console</string>
+    <string name="shortcut_console_long">Console on the server</string>
+    <string name="shortcut_usage">Usage</string>
+    <string name="shortcut_usage_long">Usage and limits</string>
+    <string name="shortcut_hermes">Hermes</string>
+    <string name="shortcut_hermes_long">Ask Hermes</string>
 </resources>
 

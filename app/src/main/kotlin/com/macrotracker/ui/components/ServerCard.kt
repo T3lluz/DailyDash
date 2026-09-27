@@ -68,6 +68,8 @@ private const val HOME_DASHBOARD_REFRESH_MS = 60_000L
 fun ServerCard(
     isVisible: Boolean,
     onOpenServers: () -> Unit,
+    /** The dashboard server's shell; null hides the button. */
+    onOpenConsole: (() -> Unit)? = null,
     viewModel: ServerViewModel = hiltViewModel(),
 ) {
     val profiles by viewModel.profiles.collectAsState()
@@ -126,6 +128,7 @@ fun ServerCard(
                     onOpenServers()
                 },
         ) {
+            onOpenConsole?.let { HubHeaderAction(AppIcons.SquareTerminal, "Console", it) }
             if (criticalCount > 0) {
                 ServerTag("$criticalCount CRITICAL", ServerCritical)
             } else {

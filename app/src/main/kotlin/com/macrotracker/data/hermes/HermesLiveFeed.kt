@@ -28,7 +28,7 @@ import javax.inject.Singleton
  * The bridge puts everything on that one stream: every Hermes turn's events on every
  * thread (`ai`), list and title changes, settings saves (`sync`) and the collector files
  * (`stats`, `f1`, `history`, `github`). The web page redraws off the same stream, so a
- * turn started at the desk shows here as it runs: in the navbar's tab, the ongoing
+ * turn started at the desk shows here as it runs: in the island, the ongoing
  * notification and, when that chat is open, the transcript. When it ends the phone says so
  * the same way it does for a turn it started itself.
  *

@@ -1,6 +1,7 @@
 package com.macrotracker.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -67,8 +68,8 @@ import dev.chrisbanes.haze.HazeState
  * briefing, mail from a person; then rain within three hours and today's race. Nothing
  * takes turns. The line scrolls sideways when it holds more than fits.
  *
- * What Hermes is doing while he works is the navbar's tab, as before, so the island
- * does not say it twice.
+ * While Hermes works, the island leads with what he is doing (the tracker's turn, then
+ * Done or Needs you), as the web's island does; the navbar stays still.
  */
 
 private val IslandShape = RoundedCornerShape(20.dp)
@@ -78,6 +79,9 @@ private val IslandHeight = 40.dp
 fun TopIsland(
     items: List<IslandItem>,
     visible: Boolean,
+    /** What Hermes is doing (the tracker's turn, or how the last one ended); it leads the line. */
+    hermes: NavActivity? = null,
+    onHermes: (NavActivity) -> Unit = {},
     hazeState: HazeState?,
     onItem: (IslandItem) -> Unit,
     modifier: Modifier = Modifier,
@@ -89,8 +93,10 @@ fun TopIsland(
             .padding(top = 6.dp),
         contentAlignment = Alignment.TopCenter,
     ) {
+        // A question the tracker already shows is not said twice.
+        val shown = if (hermes?.tone == NavActivityTone.NEEDS_YOU) items.filterNot { it.kind == "need" && it.thread == hermes.key } else items
         AnimatedVisibility(
-            visible = visible && items.isNotEmpty(),
+            visible = visible && (shown.isNotEmpty() || hermes != null),
             enter = fadeIn(MacroMotion.fadeTween()) + scaleIn(initialScale = 0.9f),
             exit = fadeOut(MacroMotion.fadeTween(150)) + scaleOut(targetScale = 0.9f),
         ) {
@@ -100,6 +106,8 @@ fun TopIsland(
                     modifier = Modifier
                         .widthIn(max = maxWidth - 32.dp)
                         .height(IslandHeight)
+                        // The island grows and shrinks with what it holds, as the web's tab does.
+                        .animateContentSize(MacroMotion.navTabSpring())
                         .chromeEdge(IslandShape)
                         .clip(IslandShape)
                         .dottedGlass(hazeState = hazeState, shape = IslandShape)
@@ -107,14 +115,22 @@ fun TopIsland(
                         .padding(horizontal = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    items.forEachIndexed { i, item ->
-                        if (i > 0) {
+                    hermes?.let { h ->
+                        NavActivityTabContent(
+                            activity = h,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(16.dp))
+                                .clickable { haptics.tick(); onHermes(h) },
+                        )
+                    }
+                    shown.forEachIndexed { i, item ->
+                        if (i > 0 || hermes != null) {
                             Box(Modifier.padding(horizontal = 2.dp).width(1.dp).height(18.dp).background(Color.White.copy(alpha = 0.09f)))
                         }
                         IslandEntry(
                             item = item,
                             // The first item gets its detail; the rest keep to their title.
-                            detailed = i == 0,
+                            detailed = i == 0 && hermes == null,
                             onClick = { haptics.tick(); onItem(item) },
                         )
                     }

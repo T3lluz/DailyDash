@@ -88,6 +88,27 @@ class DashboardModelsTest {
         assertEquals(29, u.hermesTurns7d)
     }
 
+    @Test fun `limits say whether they are measured or estimated, and Cursor has its month`() {
+        val u = parseUsage(JSONObject("""
+            {"limits": [{"id": "claude", "plan": "Claude Pro", "windows": [
+               {"id": "five_hour", "label": "Session", "mins": 300, "used": 8.4, "estimated": true, "idle": false,
+                "resetsAt": "2026-09-28T03:00:00+00:00", "spent": 3.13, "limit": 38.2, "src": "estimate", "status": ""},
+               {"id": "seven_day", "label": "Weekly", "mins": 10080, "used": 90.2, "estimated": false,
+                "resetsAt": "2026-09-30T18:00:00+00:00", "at": "2026-09-27T18:37:59+00:00", "spent": 391.2, "limit": 433.6,
+                "src": "Hermes", "status": "allowed_warning"}]}],
+             "cursor": {"plan": "Pro+", "month": "September", "t3Turns": 97, "hermesCalls": 14, "tokens": 1894709,
+                        "models": [{"label": "Grok 4.6", "turns": 53}], "dashboard": "https://cursor.com/dashboard?tab=usage"}}
+        """.trimIndent()))
+        assertEquals("Claude Pro", u.claudePlan)
+        assertTrue(u.limits[0].estimated)
+        assertEquals(38.2, u.limits[0].limit!!, 0.0)
+        assertFalse(u.limits[1].estimated)
+        assertEquals("allowed_warning", u.limits[1].status)
+        val cu = u.cursor!!
+        assertEquals(111, cu.turns)
+        assertEquals("Grok 4.6" to 53, cu.models.single())
+    }
+
     @Test fun `tokens and dollars read the way the dashboard writes them`() {
         assertEquals("1.7B", formatTokens(1_716_391_552))
         assertEquals("840M", formatTokens(840_000_000))

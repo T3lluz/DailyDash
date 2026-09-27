@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher shortcut icon: a Lucide mark on the app's dark disc. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp" android:height="48dp" android:viewportWidth="48" android:viewportHeight="48">
+    <path android:fillColor="#FF1F1F1F" android:pathData="M24,0 a24,24 0 1,1 0,48 a24,24 0 1,1 0,-48 z"/>
+    <path android:fillColor="#00000000" android:strokeColor="#FFF2B43C" android:strokeWidth="1.6" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M24,13 l1.9,6.1 6.1,1.9 -6.1,1.9 -1.9,6.1 -1.9,-6.1 -6.1,-1.9 6.1,-1.9 z M31,28 l0.8,2.2 2.2,0.8 -2.2,0.8 -0.8,2.2 -0.8,-2.2 -2.2,-0.8 2.2,-0.8 z"/>
+</vector>
