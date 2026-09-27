@@ -152,10 +152,6 @@ internal fun HermesHeader(
     onClear: () -> Unit,
     onDelete: () -> Unit,
     onUsePhoneAi: (() -> Unit)?,
-    /** How full the open chat's context is, 0–1, when the bridge has measured it. */
-    contextFraction: Float? = null,
-    /** What the open chat has used, in tokens. */
-    tokens: Long = 0,
 ) {
     val haptics = rememberHaptics()
     var menuOpen by remember { mutableStateOf(false) }
@@ -198,17 +194,7 @@ internal fun HermesHeader(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ChatStatusDot(active = working, accent = ServerBrand)
                 Spacer(Modifier.width(6.dp))
-                Text(status, color = TextTertiary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false))
-                // T3 Code's context meter, and what the chat has used so far.
-                if (contextFraction != null) {
-                    Spacer(Modifier.width(8.dp))
-                    ContextRing(contextFraction, size = 13.dp)
-                }
-                if (tokens > 0) {
-                    Spacer(Modifier.width(8.dp))
-                    Text(com.macrotracker.data.dashboard.formatTokens(tokens) + " tok", color = TextTertiary, fontSize = 12.sp, maxLines = 1)
-                }
+                Text(status, color = TextTertiary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         IconButton(onClick = { haptics.tick(); onNewChat() }) {
@@ -558,6 +544,8 @@ internal fun HermesComposer(
     onPickModel: () -> Unit,
     onPickDepth: () -> Unit,
     hazeState: HazeState?,
+    /** The usage ring, beside send (ComposerUsageRing). */
+    usage: (@Composable () -> Unit)? = null,
 ) {
     val bottomPad = composerBottomGap()
     val hasContent = value.isNotBlank() || attachments.isNotEmpty()
@@ -667,6 +655,10 @@ internal fun HermesComposer(
                 }
             }
             Spacer(Modifier.width(6.dp))
+            usage?.let {
+                it()
+                Spacer(Modifier.width(4.dp))
+            }
             Box(
                 modifier = Modifier
                     .size(38.dp)

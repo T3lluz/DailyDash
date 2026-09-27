@@ -141,7 +141,17 @@ fun HermesChatPane(
     viewModel: HermesViewModel,
     onUsePhoneAi: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    onOpenUsage: () -> Unit = {},
+    usageViewModel: com.macrotracker.ui.viewmodel.UsageViewModel = androidx.hilt.navigation.compose.hiltViewModel(),
 ) {
+    val usageState by usageViewModel.state.collectAsState()
+    LaunchedEffect(usageViewModel) {
+        usageViewModel.load()
+        while (true) {
+            kotlinx.coroutines.delay(3 * 60_000L)
+            usageViewModel.load()
+        }
+    }
     val state by viewModel.state.collectAsState()
     val turns by viewModel.turns.collectAsState()
     val haptics = rememberHaptics()
@@ -291,8 +301,6 @@ fun HermesChatPane(
                     onClear = { state.threadId?.let { id -> confirmClear = current ?: placeholderThread(id, state.threadTitle) } },
                     onDelete = { state.threadId?.let { id -> confirmDelete = current ?: placeholderThread(id, state.threadTitle) } },
                     onUsePhoneAi = onUsePhoneAi,
-                    contextFraction = current?.contextFraction,
-                    tokens = current?.tokens ?: 0,
                 )
                 // The chat on screen is read as it moves, so it never gets its own dot.
                 LaunchedEffect(state.threadId, current?.updatedMs) { viewModel.markSeen(state.threadId) }
@@ -451,6 +459,14 @@ fun HermesChatPane(
                     onPickModel = { sheet = HermesSheet.MODEL },
                     onPickDepth = { sheet = HermesSheet.DEPTH },
                     hazeState = chatHaze,
+                    usage = {
+                        ComposerUsageRing(
+                            usage = usageState.usage,
+                            onCursor = (state.currentModel?.id ?: current?.model.orEmpty()).startsWith("cursor"),
+                            chat = current,
+                            onOpenUsage = onOpenUsage,
+                        )
+                    },
                 )
             }
         }
