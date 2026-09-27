@@ -1,5 +1,6 @@
 package com.macrotracker.ui.navigation
 
+import com.macrotracker.ui.screens.UsageScreen
 import com.macrotracker.ui.screens.ConsoleScreen
 import androidx.compose.animation.EnterTransition
 import androidx.compose.foundation.background
@@ -125,6 +126,7 @@ fun DailyDashNavHost(
                 onNavigateToHealth = { navController.navigateToTab(Screen.Health.route) },
                 onNavigateToServers = { navController.navigateToSubScreen(SettingsRoutes.SERVER_DASHBOARD) },
                 onOpenHermes = { navController.navigateToTab(Screen.AI.route) },
+                onOpenConsole = { navController.navigateToSubScreen(SubScreenRoutes.CONSOLE) },
             )
         }
 
@@ -143,6 +145,7 @@ fun DailyDashNavHost(
                 onNavigateToCameraScan = { navController.navigateToSubScreen(SubScreenRoutes.CAMERA_SCAN) },
                 onNavigateToAiSettings = { navController.navigateToSubScreen(SettingsRoutes.AI) },
                 onOpenConsole = { navController.navigateToSubScreen(SubScreenRoutes.CONSOLE) },
+                onOpenUsage = { navController.navigateToSubScreen(SubScreenRoutes.USAGE) },
                 initialTab = entry.arguments?.getString(Screen.AI.ARG_TAB),
                 serverHandoffId = entry.arguments?.getString(Screen.AI.ARG_SEED),
             )
@@ -174,6 +177,7 @@ fun DailyDashNavHost(
                 onOpenDashboard = {
                     navController.navigate(SettingsRoutes.SERVER_DASHBOARD) { launchSingleTop = true }
                 },
+                onOpenConsole = { navController.navigateToSubScreen(SubScreenRoutes.CONSOLE) },
             )
         }
 
@@ -209,6 +213,14 @@ fun DailyDashNavHost(
                         popUpTo(Screen.Home.route)
                     }
                 },
+            )
+        }
+
+        subScreen(SubScreenRoutes.USAGE) { entry ->
+            UsageScreen(
+                onNavigateBack = { navController.popSubScreen(entry) },
+                onOpenConsole = { navController.navigateToSubScreen(SubScreenRoutes.CONSOLE) },
+                onOpenChat = { navController.navigateToTab(Screen.AI.route) },
             )
         }
 

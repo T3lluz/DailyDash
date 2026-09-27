@@ -221,7 +221,29 @@ data class LimitWindow(
     val readAt: Instant?,
     val source: String,
     val resetSince: Boolean,
+    /** Worked out from what Claude has cost since the window opened, not measured. */
+    val estimated: Boolean = false,
+    /** The five-hour session has not started: it starts with the next message. */
+    val idle: Boolean = false,
+    /** What Claude cost in this window so far, and about what a whole window is worth. */
+    val spent: Double = 0.0,
+    val limit: Double? = null,
+    /** `rejected` once the window is used up. */
+    val status: String = "",
 )
+
+/** Cursor this month on this machine: its plan and turns by model (usage.py `cursor_usage`). */
+data class CursorUsage(
+    val plan: String,
+    val month: String,
+    val t3Turns: Int,
+    val hermesCalls: Int,
+    val tokens: Long,
+    val models: List<Pair<String, Int>>,
+    val dashboard: String,
+) {
+    val turns: Int get() = t3Turns + hermesCalls
+}
 
 data class UsageChat(
     val id: String,
@@ -251,6 +273,8 @@ data class UsageSnapshot(
     val insights: List<String>,
     val chats: List<UsageChat>,
     val hermesTurns7d: Int,
+    val claudePlan: String = "",
+    val cursor: CursorUsage? = null,
 ) {
     fun period(key: String): UsageTotals = periods[key] ?: UsageTotals()
 }
@@ -288,6 +312,11 @@ internal fun parseUsage(o: JSONObject): UsageSnapshot {
                 readAt = w.nonBlank("at")?.let(::instantOrNull),
                 source = w.optString("src"),
                 resetSince = w.optBoolean("reset"),
+                estimated = w.optBoolean("estimated"),
+                idle = w.optBoolean("idle"),
+                spent = w.optDouble("spent", 0.0).takeIf { !it.isNaN() } ?: 0.0,
+                limit = if (w.has("limit") && !w.isNull("limit")) w.optDouble("limit") else null,
+                status = w.optString("status"),
             )
         }
     }
@@ -304,6 +333,15 @@ internal fun parseUsage(o: JSONObject): UsageSnapshot {
         cacheRate = o.optDouble("cacheRate", 0.0), saved = o.optDouble("saved", 0.0),
         insights = o.optJSONArray("insights").strings(), chats = chats,
         hermesTurns7d = o.optJSONObject("hermes")?.optInt("turns7d") ?: 0,
+        claudePlan = o.optJSONArray("limits").objects().firstOrNull()?.optString("plan").orEmpty(),
+        cursor = o.optJSONObject("cursor")?.let { cu ->
+            CursorUsage(
+                plan = cu.optString("plan"), month = cu.optString("month"),
+                t3Turns = cu.optInt("t3Turns"), hermesCalls = cu.optInt("hermesCalls"), tokens = cu.optLong("tokens"),
+                models = cu.optJSONArray("models").objects().map { it.optString("label") to it.optInt("turns") },
+                dashboard = cu.optString("dashboard").ifBlank { "https://cursor.com/dashboard" },
+            )
+        },
     )
 }
 

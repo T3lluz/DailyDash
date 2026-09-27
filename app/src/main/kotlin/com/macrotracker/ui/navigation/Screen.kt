@@ -48,4 +48,7 @@ object SubScreenRoutes {
 
     /** A shell on the dashboard server (ConsoleScreen). */
     const val CONSOLE = "console"
+
+    /** What the agents spent and what runs when (UsageScreen). */
+    const val USAGE = "usage"
 }

@@ -130,7 +130,6 @@ private enum class UsageTab(val label: String) { OVERVIEW("Overview"), MODELS("M
 @Composable
 fun UsagePane(
     onOpenChat: () -> Unit,
-    onOpenConsole: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: UsageViewModel = hiltViewModel(),
 ) {
@@ -165,9 +164,6 @@ fun UsagePane(
                         val badge = if (t == UsageTab.SCHEDULE) state.schedule?.jobs?.size?.takeIf { it > 0 } else null
                         Chip(t.label + (badge?.let { " $it" } ?: ""), t == tab) { haptics.tick(); tab = t }
                     }
-                }
-                IconButton(onClick = { haptics.tick(); onOpenConsole() }, modifier = Modifier.size(36.dp)) {
-                    Icon(AppIcons.SquareTerminal, "Console on the server", tint = TextSecondary, modifier = Modifier.size(18.dp))
                 }
                 IconButton(onClick = { haptics.tick(); viewModel.load(fresh = true) }, modifier = Modifier.size(36.dp)) {
                     Icon(AppIcons.Refresh, "Read again", tint = if (state.loading) Primary else TextSecondary, modifier = Modifier.size(18.dp))
@@ -414,81 +410,153 @@ private fun UsageRow(color: Color, title: String, sub: String, share: Float, val
     }
 }
 
-/** T3 Code's bucket: how much of the window is gone, how much is left, when it comes back. */
+/** What is left of the plans: Claude's windows, then Cursor's month. */
 @Composable
 private fun LimitsCard(u: UsageSnapshot) {
-    val five = u.period("5h")
-    Section("Limits", AppIcons.Clock, "Claude · your plan's windows") {
+    Section("Limits", AppIcons.Clock, "what is left of your plans") {
+        ProviderHead("Claude", u.claudePlan)
         if (u.limits.isEmpty()) {
-            Text("No limit readings yet. They come from T3 Code's checks and from Hermes' own Claude runs.", fontSize = 13.sp, color = TextSecondary)
+            Text("No reading yet.", fontSize = 13.sp, color = TextSecondary)
         }
         u.limits.forEachIndexed { i, w ->
             if (i > 0) Spacer(Modifier.height(12.dp))
-            Meter(w)
+            LimitMeter(w)
         }
-        if (five.tokens > 0) {
+        Text(
+            "Measured when Hermes or T3 Code runs Claude; in between, estimated from what Claude has cost here " +
+                "against the last readings. Use on claude.ai or other devices counts too, and is not in the estimate.",
+            fontSize = 11.5.sp, color = TextTertiary, lineHeight = 16.sp, modifier = Modifier.padding(top = 12.dp),
+        )
+        u.cursor?.let { cu ->
             Spacer(Modifier.height(12.dp))
             Hairline()
-            Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Last 5 hours on the server", fontSize = 12.sp, color = TextTertiary, modifier = Modifier.weight(1f))
-                Text(formatTokens(five.tokens), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-                Spacer(Modifier.width(8.dp))
-                Text(formatUsd(five.cost), fontSize = 12.sp, color = TextTertiary)
-            }
+            Spacer(Modifier.height(12.dp))
+            CursorBlock(cu, compact = false)
         }
     }
 }
 
 @Composable
-private fun Meter(w: LimitWindow) {
-    val known = w.usedPercent != null && !w.resetSince
-    val used = (w.usedPercent ?: 0.0).coerceIn(0.0, 100.0)
-    val tone = when { !known -> TextTertiary; used >= 100 -> Error; used >= 80 -> Warning; else -> Primary }
-    val left = when { known -> "${(100 - used).toInt()}% left"; w.resetSince -> "new window"; else -> "not known" }
-    Column(Modifier.semantics { contentDescription = "${w.label}: $left" }) {
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(w.label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-            w.minutes?.let { Text(if (it >= 1440) "  7 days" else "  ${it / 60} h", fontSize = 12.sp, color = TextTertiary) }
-            Spacer(Modifier.weight(1f))
-            Text(left, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = if (known && used >= 80) tone else if (known) TextPrimary else TextTertiary)
-        }
-        Box(Modifier.padding(vertical = 7.dp).fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)).background(Color.White.copy(alpha = 0.07f))) {
-            if (known) Box(Modifier.fillMaxWidth((used / 100).toFloat().coerceAtLeast(0.01f)).height(8.dp).clip(RoundedCornerShape(4.dp)).background(tone))
-        }
-        Row {
-            val reset = w.resetsAt?.takeIf { it.isAfter(Instant.now()) }
+internal fun ProviderHead(name: String, plan: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
+        Text(name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+        if (plan.isNotBlank()) {
+            Spacer(Modifier.width(8.dp))
             Text(
-                reset?.let { "resets in ${untilText(it.toEpochMilli())}" } ?: if (w.resetSince) "reset since the last reading" else "",
-                fontSize = 11.5.sp, color = TextTertiary,
+                plan, fontSize = 11.5.sp, color = TextSecondary,
+                modifier = Modifier.border(1.dp, Border, RoundedCornerShape(50)).padding(horizontal = 8.dp, vertical = 1.dp),
             )
-            Spacer(Modifier.weight(1f))
-            Text(listOfNotNull(w.source.ifBlank { null }, w.readAt?.let { usageAgo(it.toEpochMilli()) }).joinToString(" "), fontSize = 11.5.sp, color = TextTertiary)
         }
     }
 }
 
+/** One Claude window, said plainly: how much is used, when it comes back, measured or estimated. */
+@Composable
+internal fun LimitMeter(w: LimitWindow, compact: Boolean = false) {
+    val known = w.usedPercent != null
+    val used = (w.usedPercent ?: 0.0).coerceIn(0.0, 100.0)
+    val tone = when { !known -> TextTertiary; used >= 100 -> Error; used >= 80 -> Warning; else -> Primary }
+    val head = when {
+        w.idle -> "not started"
+        known -> "${if (w.estimated) "~" else ""}${Math.round(used)}% used"
+        else -> "not known yet"
+    }
+    val reset = w.resetsAt?.takeIf { it.isAfter(Instant.now()) }
+    val whenText = when {
+        w.idle -> "starts with your next message"
+        reset != null -> "resets ${whenText(reset.toEpochMilli())} · in ${untilText(reset.toEpochMilli())}"
+        else -> ""
+    }
+    val how = when {
+        w.idle -> ""
+        w.status == "rejected" -> "limit reached"
+        !w.estimated && w.readAt != null -> "measured ${usageAgo(w.readAt.toEpochMilli())}" +
+            (if (w.source.isNotBlank() && w.source != "estimate") " by ${w.source}" else "") + ", plus use since"
+        w.estimated && w.limit != null -> "estimate · ${formatUsd(w.spent)} of about ${formatUsd(w.limit)} this ${if (w.id == "five_hour") "session" else "week"}"
+        else -> "no reading yet"
+    }
+    Column(Modifier.semantics { contentDescription = "${w.label}: $head" }) {
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(w.label, fontSize = if (compact) 13.sp else 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+            w.minutes?.let { Text(if (it >= 1440) "  7 days" else "  ${it / 60} h", fontSize = 12.sp, color = TextTertiary) }
+            Spacer(Modifier.weight(1f))
+            Text(head, fontSize = if (compact) 13.sp else 14.sp, fontWeight = FontWeight.SemiBold,
+                color = if (known && used >= 80) tone else if (known) TextPrimary else TextTertiary)
+        }
+        Box(
+            Modifier.padding(vertical = if (compact) 5.dp else 7.dp).fillMaxWidth().height(if (compact) 6.dp else 8.dp)
+                .clip(RoundedCornerShape(4.dp)).background(Color.White.copy(alpha = 0.07f)),
+        ) {
+            if (known && used > 0) {
+                Box(Modifier.fillMaxWidth((used / 100).toFloat().coerceAtLeast(0.015f)).height(if (compact) 6.dp else 8.dp)
+                    .clip(RoundedCornerShape(4.dp)).background(tone))
+            }
+        }
+        if (whenText.isNotBlank()) Text(whenText, fontSize = 11.5.sp, color = TextTertiary)
+        if (how.isNotBlank()) Text(how, fontSize = 11.5.sp, color = TextTertiary)
+    }
+}
+
+/** Cursor's side: the plan and this month's turns by model; its dashboard has what is left. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun CursorBlock(cu: com.macrotracker.data.dashboard.CursorUsage, compact: Boolean) {
+    val uri = androidx.compose.ui.platform.LocalUriHandler.current
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ProviderHead("Cursor", cu.plan)
+            Spacer(Modifier.weight(1f))
+            Text("${cu.turns} turn${if (cu.turns == 1) "" else "s"}${if (compact) "" else " in ${cu.month}"}",
+                fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, modifier = Modifier.padding(bottom = 8.dp))
+        }
+        Text(
+            listOfNotNull(cu.t3Turns.takeIf { it > 0 }?.let { "T3 Code $it" }, cu.hermesCalls.takeIf { it > 0 }?.let { "Hermes $it" },
+                cu.tokens.takeIf { it > 0 }?.let { "${formatTokens(it)} tokens through Hermes" }).joinToString(" · "),
+            fontSize = 11.5.sp, color = TextTertiary,
+        )
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(top = 6.dp)) {
+            cu.models.take(if (compact) 3 else 5).forEach { (label, n) ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(9.dp).clip(RoundedCornerShape(3.dp)).background(slotColor(label)))
+                    Spacer(Modifier.width(5.dp))
+                    Text("$label $n", fontSize = 11.5.sp, color = TextSecondary)
+                }
+            }
+        }
+        Text(
+            if (compact) "Cursor's dashboard ↗" else "What's left of the plan is on Cursor's dashboard ↗",
+            fontSize = 12.sp, color = Primary,
+            modifier = Modifier.padding(top = 8.dp).clip(RoundedCornerShape(6.dp)).clickable { runCatching { uri.openUri(cu.dashboard) } },
+        )
+    }
+}
+
+/** Today, the week, the month, in what the work was worth at API prices. */
 @Composable
 private fun Pods(u: UsageSnapshot) {
     val w = u.period("7d")
     val pw = u.period("prev7d")
-    val change = if (pw.tokens > 0) (w.tokens - pw.tokens).toDouble() / pw.tokens else null
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Pod("Today", u.period("today"), null, Modifier.weight(1f))
-        Pod("7 days", w, change?.takeIf { kotlin.math.abs(it) >= 0.05 }, Modifier.weight(1f))
-        Pod("30 days", u.period("30d"), null, Modifier.weight(1f))
+    val change = if (pw.cost > 0) (w.cost - pw.cost) / pw.cost else null
+    Section("What it was worth", AppIcons.Coins, "at API prices") {
+        Row {
+            Pod("Today", u.period("today"), null, Modifier.weight(1f))
+            Box(Modifier.width(1.dp).height(52.dp).background(Border))
+            Pod("7 days", w, change?.takeIf { kotlin.math.abs(it) >= 0.05 }, Modifier.weight(1f).padding(start = 12.dp))
+            Box(Modifier.width(1.dp).height(52.dp).background(Border))
+            Pod("30 days", u.period("30d"), null, Modifier.weight(1f).padding(start = 12.dp))
+        }
     }
 }
 
 @Composable
 private fun Pod(label: String, t: UsageTotals, change: Double?, modifier: Modifier) {
-    Column(
-        modifier.clip(RoundedCornerShape(14.dp)).background(Surface).border(1.dp, Border, RoundedCornerShape(14.dp)).padding(12.dp),
-    ) {
+    Column(modifier) {
         Text(label.uppercase(), fontSize = 10.sp, letterSpacing = 0.7.sp, fontWeight = FontWeight.SemiBold, color = TextTertiary)
-        Text(formatTokens(t.tokens), fontSize = 21.sp, fontWeight = FontWeight.Bold, color = TextPrimary, letterSpacing = (-0.3).sp)
+        Text(formatUsd(t.cost), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary, letterSpacing = (-0.3).sp, maxLines = 1)
         Text(
-            formatUsd(t.cost) + (change?.let { " · ${if (it > 0) "▲" else "▼"}${kotlin.math.abs(Math.round(it * 100))}%" } ?: ""),
-            fontSize = 11.5.sp, color = TextTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            "${formatTokens(t.tokens)} tokens" + (change?.let { " · ${if (it > 0) "▲" else "▼"}${kotlin.math.abs(Math.round(it * 100))}%" } ?: ""),
+            fontSize = 11.sp, color = TextTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -503,9 +571,10 @@ private fun DaysChart(u: UsageSnapshot) {
     val ordered = remember(u.models) {
         u.models.filter { usageSlot(it.label) >= 0 }.sortedBy { usageSlot(it.label) }
     }
-    val max = (days.maxOfOrNull { it.tokens } ?: 1L).coerceAtLeast(1L)
+    // Worth, not tokens: a token read from cache costs a tenth of a fresh one and would drown the rest.
+    val max = (days.maxOfOrNull { it.cost } ?: 0.0).coerceAtLeast(0.01)
     var picked by remember(days) { mutableIntStateOf(days.lastIndex) }
-    Section("30 days", AppIcons.ChartColumn, "tokens a day, by model") {
+    Section("30 days", AppIcons.ChartColumn, "a day's work at API prices") {
         val day = days.getOrNull(picked)
         day?.let { d ->
             Row(verticalAlignment = Alignment.Bottom) {
@@ -514,7 +583,7 @@ private fun DaysChart(u: UsageSnapshot) {
                     fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary,
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("${formatTokens(d.tokens)} · ${formatUsd(d.cost)} · ${d.calls} calls", fontSize = 12.sp, color = TextTertiary)
+                Text("${formatUsd(d.cost)} · ${formatTokens(d.tokens)} tokens · ${d.calls} calls", fontSize = 12.sp, color = TextTertiary)
             }
             Spacer(Modifier.height(8.dp))
         }
@@ -534,11 +603,12 @@ private fun DaysChart(u: UsageSnapshot) {
                 val x = i * (bw + gap)
                 var y = size.height
                 val dim = if (i == picked) 1f else 0.55f
-                val parts = ordered.map { it.label to (d.byModel[it.id] ?: 0L) } +
-                    ("Other" to d.byModel.filterKeys { id -> ordered.none { it.id == id } }.values.sum())
+                val share = { tok: Long -> if (d.tokens > 0) tok.toDouble() / d.tokens * d.cost else 0.0 }
+                val parts = ordered.map { it.label to share(d.byModel[it.id] ?: 0L) } +
+                    ("Other" to share(d.byModel.filterKeys { id -> ordered.none { it.id == id } }.values.sum()))
                 parts.forEach { (label, v) ->
-                    if (v <= 0) return@forEach
-                    val h = (v.toFloat() / max * (size.height - 4.dp.toPx())).coerceAtLeast(1.5f)
+                    if (v <= 0.0) return@forEach
+                    val h = (v / max * (size.height - 4.dp.toPx())).toFloat().coerceAtLeast(1.5f)
                     y -= h
                     drawRoundRect(
                         color = (if (label == "Other") OtherColor else slotColor(label)).copy(alpha = dim),
@@ -550,7 +620,7 @@ private fun DaysChart(u: UsageSnapshot) {
         Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
             Text(LocalDate.parse(days.first().date).format(DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)), fontSize = 11.sp, color = TextTertiary)
             Spacer(Modifier.weight(1f))
-            Text("peak ${formatTokens(max)}", fontSize = 11.sp, color = TextTertiary)
+            Text("busiest ${formatUsd(max)}", fontSize = 11.sp, color = TextTertiary)
             Spacer(Modifier.weight(1f))
             Text("today", fontSize = 11.sp, color = TextTertiary)
         }
@@ -775,4 +845,98 @@ internal fun HermesModelName(id: String): String? {
     if (bare == "auto") return "Cursor Auto"
     val words = bare.split('-', '_').takeWhile { it !in setOf("xhigh", "high", "low", "medium", "fast", "free", "thinking") }
     return words.joinToString(" ") { w -> w.replaceFirstChar { it.uppercase() } }.replace(Regex("(\\d) (\\d)"), "$1.$2").ifBlank { bare }
+}
+
+/**
+ * The usage ring in Hermes' composer, the way Claude's own app shows it: a ring that fills
+ * with how much of the Claude session is gone, and a tap for the rest in a small panel:
+ * the session and the week, Cursor's month when this chat runs on Cursor, and how full
+ * this chat's own context is.
+ */
+@Composable
+internal fun ComposerUsageRing(
+    usage: UsageSnapshot?,
+    onCursor: Boolean,
+    chat: com.macrotracker.data.hermes.HermesThreadSummary?,
+    onOpenUsage: () -> Unit,
+) {
+    val session = usage?.limits?.firstOrNull { it.id == "five_hour" } ?: return
+    val used = ((session.usedPercent ?: 0.0) / 100).toFloat().coerceIn(0f, 1f)
+    val tone = when { used >= 1f -> Error; used >= 0.8f -> Warning; else -> Primary }
+    var open by remember { mutableStateOf(false) }
+    val haptics = rememberHaptics()
+    Box {
+        Box(
+            Modifier
+                .size(34.dp)
+                .clip(CircleShape)
+                .clickable { haptics.tick(); open = true }
+                .semantics {
+                    contentDescription = if (session.idle) "Claude session not started" else "Claude session ${Math.round(used * 100)}% used"
+                }
+                .drawBehind {
+                    val w = 2.5.dp.toPx()
+                    val d = 18.dp.toPx()
+                    val tl = Offset((size.width - d) / 2 + w / 2, (size.height - d) / 2 + w / 2)
+                    val sz = Size(d - w, d - w)
+                    drawArc(Color.White.copy(alpha = 0.14f), 0f, 360f, false, topLeft = tl, size = sz, style = Stroke(w))
+                    if (used > 0f) drawArc(tone, -90f, 360f * used, false, topLeft = tl, size = sz, style = Stroke(w, cap = StrokeCap.Round))
+                },
+        )
+        if (open) {
+            androidx.compose.ui.window.Popup(
+                alignment = Alignment.BottomEnd,
+                offset = androidx.compose.ui.unit.IntOffset(0, -120),
+                onDismissRequest = { open = false },
+                properties = androidx.compose.ui.window.PopupProperties(focusable = true),
+            ) {
+                Column(
+                    Modifier
+                        .width(300.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color(0xFF181818))
+                        .border(1.dp, Border, RoundedCornerShape(16.dp))
+                        .padding(14.dp),
+                ) {
+                    ProviderHead("Claude", usage.claudePlan)
+                    usage.limits.forEachIndexed { i, w ->
+                        if (i > 0) Spacer(Modifier.height(10.dp))
+                        LimitMeter(w, compact = true)
+                    }
+                    if (onCursor) usage.cursor?.let {
+                        Spacer(Modifier.height(12.dp)); Hairline(); Spacer(Modifier.height(10.dp))
+                        CursorBlock(it, compact = true)
+                    }
+                    chat?.let { c ->
+                        Spacer(Modifier.height(12.dp)); Hairline(); Spacer(Modifier.height(10.dp))
+                        val f = c.contextFraction
+                        Row(verticalAlignment = Alignment.Bottom) {
+                            Text("This chat", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                            Spacer(Modifier.weight(1f))
+                            Text(f?.let { "${(it * 100).toInt()}% of context" } ?: "no reading yet", fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                        }
+                        if (f != null) {
+                            val ct = when { f >= 0.85f -> Error; f >= 0.6f -> Warning; else -> Primary }
+                            Box(Modifier.padding(vertical = 5.dp).fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp))
+                                .background(Color.White.copy(alpha = 0.07f))) {
+                                Box(Modifier.fillMaxWidth(f.coerceAtLeast(0.015f)).height(6.dp).clip(RoundedCornerShape(3.dp)).background(ct))
+                            }
+                            Text("about ${formatTokens(c.context.toLong())} of ${formatTokens(c.window.toLong())} · Hermes compresses it when it fills",
+                                fontSize = 11.5.sp, color = TextTertiary)
+                        }
+                        if (c.tokens > 0) {
+                            Text("${formatTokens(c.tokens)} tokens used" + (if (c.cost > 0) " · ${formatUsd(c.cost)} at API prices" else ""),
+                                fontSize = 11.5.sp, color = TextTertiary)
+                        }
+                    }
+                    Text(
+                        "All usage", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Primary,
+                        modifier = Modifier.padding(top = 12.dp).clip(RoundedCornerShape(6.dp))
+                            .clickable { open = false; onOpenUsage() }.padding(vertical = 2.dp),
+                    )
+                }
+            }
+        }
+    }
 }
