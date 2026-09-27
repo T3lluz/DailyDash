@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long-press DailyDash's icon: straight to the console, usage, or Hermes. MainActivity reads
+     the `open` extra (EXTRA_OPEN) and MainScreen goes there once onboarding is done. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="console"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_console"
+        android:shortcutShortLabel="@string/shortcut_console"
+        android:shortcutLongLabel="@string/shortcut_console_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.macrotracker"
+            android:targetClass="com.macrotracker.MainActivity">
+            <extra android:name="open" android:value="console" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="usage"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_usage"
+        android:shortcutShortLabel="@string/shortcut_usage"
+        android:shortcutLongLabel="@string/shortcut_usage_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.macrotracker"
+            android:targetClass="com.macrotracker.MainActivity">
+            <extra android:name="open" android:value="usage" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="hermes"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_hermes"
+        android:shortcutShortLabel="@string/shortcut_hermes"
+        android:shortcutLongLabel="@string/shortcut_hermes_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.macrotracker"
+            android:targetClass="com.macrotracker.MainActivity">
+            <extra android:name="open" android:value="hermes" />
+        </intent>
+    </shortcut>
+</shortcuts>

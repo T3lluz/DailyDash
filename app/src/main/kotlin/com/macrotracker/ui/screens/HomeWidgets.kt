@@ -67,6 +67,7 @@ fun HomeWidgetItem(
     onNavigateToHealth: () -> Unit,
     onNavigateToServers: () -> Unit,
     onOpenHermes: () -> Unit,
+    onOpenConsole: () -> Unit,
     onRequestLocationPermission: () -> Unit,
     onRequestCalendarPermission: () -> Unit,
     hasLocationPermission: () -> Boolean,
@@ -83,7 +84,7 @@ fun HomeWidgetItem(
         "UPCOMING" -> UpcomingCard(isVisible = isVisible)
         "BRIEFING" -> BriefCard(isVisible = isVisible, onOpenChat = onOpenHermes)
         "MAIL" -> MailCard(isVisible = isVisible, onOpenHermes = onOpenHermes)
-        "SERVERS" -> ServerCard(isVisible = isVisible, onOpenServers = onNavigateToServers)
+        "SERVERS" -> ServerCard(isVisible = isVisible, onOpenServers = onNavigateToServers, onOpenConsole = onOpenConsole)
         "YOUTUBE" -> YoutubeCard()
         "TWITCH" -> TwitchCard()
         "WEATHER" -> HomeWeatherWidget(

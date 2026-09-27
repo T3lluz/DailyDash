@@ -29,6 +29,10 @@ class MainActivity : ComponentActivity() {
     private val _hermesRequest = MutableStateFlow<String?>(null)
     private val hermesRequest: StateFlow<String?> = _hermesRequest
 
+    /** A launcher shortcut: `console`, `usage` or `hermes` (res/xml/shortcuts.xml). */
+    private val _openRequest = MutableStateFlow<String?>(null)
+    private val openRequest: StateFlow<String?> = _openRequest
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // Switch away from the splash theme before Compose draws its first frame
         setTheme(R.style.Theme_DailyDash)
@@ -36,6 +40,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         handleServerIntent(intent)
         handleHermesIntent(intent)
+        handleOpenIntent(intent)
         setContent {
             DailyDashTheme {
                 MainScreen(
@@ -43,6 +48,8 @@ class MainActivity : ComponentActivity() {
                     onServerRequestHandled = { _serverRequest.value = null },
                     hermesRequest = hermesRequest,
                     onHermesRequestHandled = { _hermesRequest.value = null },
+                    openRequest = openRequest,
+                    onOpenRequestHandled = { _openRequest.value = null },
                 )
             }
         }
@@ -53,6 +60,17 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         handleServerIntent(intent)
         handleHermesIntent(intent)
+        handleOpenIntent(intent)
+    }
+
+    private fun handleOpenIntent(intent: Intent?) {
+        val where = intent?.getStringExtra(EXTRA_OPEN)?.takeIf { it.isNotBlank() } ?: return
+        _openRequest.value = where
+        intent.removeExtra(EXTRA_OPEN)
+    }
+
+    companion object {
+        const val EXTRA_OPEN = "open"
     }
 
     private fun handleHermesIntent(intent: Intent?) {
