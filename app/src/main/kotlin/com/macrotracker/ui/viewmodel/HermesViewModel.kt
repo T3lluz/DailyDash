@@ -78,7 +78,15 @@ data class HermesUiState(
     val queued: String? = null,
     /** Hermes is being pointed at another model. */
     val switchingModel: Boolean = false,
+    /** When this phone last looked at each chat, so one that moved since gets a dot. */
+    val seen: Map<String, Long> = emptyMap(),
 ) {
+    /** A chat that moved since this phone last opened it; one never opened here is not news. */
+    fun isUnread(t: HermesThreadSummary): Boolean {
+        val at = seen[t.id] ?: return false
+        return t.id != threadId && t.updatedMs > at + 1500
+    }
+
     val busy: Boolean get() = live != null
     val currentModel: HermesModelOption? get() = HermesCatalog.current(status)
     val mode: HermesMode get() = HermesCatalog.modeFor(status, modeId)
@@ -104,8 +112,27 @@ class HermesViewModel @Inject constructor(
     @param:ApplicationContext private val context: Context,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(HermesUiState(modeId = settings.hermesPermission.value))
+    private val seenPrefs = context.getSharedPreferences("hermes_seen", Context.MODE_PRIVATE)
+    private val _state = MutableStateFlow(
+        HermesUiState(
+            modeId = settings.hermesPermission.value,
+            seen = seenPrefs.all.mapNotNull { (k, v) -> (v as? Long)?.let { k to it } }.toMap(),
+        ),
+    )
     val state: StateFlow<HermesUiState> = _state
+
+    /** The chat on screen is read as it happens (as the web marks it). */
+    fun markSeen(id: String?) {
+        if (id.isNullOrBlank()) return
+        val t = _state.value.threads.firstOrNull { it.id == id }
+        val at = maxOf(System.currentTimeMillis(), t?.updatedMs ?: 0L)
+        _state.update { it.copy(seen = it.seen + (id to at)) }
+        seenPrefs.edit().putLong(id, at).apply()
+        if (seenPrefs.all.size > 250) {
+            val old = seenPrefs.all.entries.sortedBy { (it.value as? Long) ?: 0L }.take(50)
+            seenPrefs.edit().apply { old.forEach { remove(it.key) } }.apply()
+        }
+    }
 
     /**
      * Whether Tech support is Hermes right now. An explicit choice sticks; otherwise it is
@@ -345,6 +372,7 @@ class HermesViewModel @Inject constructor(
 
     fun openThread(id: String, chosen: Boolean = true) {
         if (chosen) threadChosen = true
+        markSeen(id)
         if (_state.value.threadId == id && _state.value.items.isNotEmpty()) return
         releaseLive()
         streamJob?.cancel()
