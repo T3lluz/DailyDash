@@ -258,6 +258,7 @@ fun HermesChatPane(
                     onTogglePin = { viewModel.setPinned(it.id, !it.pinned) },
                     onClear = { confirmClear = it },
                     onDelete = { confirmDelete = it },
+                    isUnread = state::isUnread,
                 )
             }
         },
@@ -273,7 +274,7 @@ fun HermesChatPane(
                     title = state.threadTitle,
                     status = headerStatus(state),
                     working = state.busy,
-                    railAttention = state.threads.any { it.id != state.threadId && (it.busy || it.pending > 0) } ||
+                    railAttention = state.threads.any { it.id != state.threadId && (it.busy || it.pending > 0 || state.isUnread(it)) } ||
                         turns.keys.any { it != state.threadId },
                     pinned = current?.pinned == true,
                     hasThread = state.threadId != null,
@@ -290,7 +291,11 @@ fun HermesChatPane(
                     onClear = { state.threadId?.let { id -> confirmClear = current ?: placeholderThread(id, state.threadTitle) } },
                     onDelete = { state.threadId?.let { id -> confirmDelete = current ?: placeholderThread(id, state.threadTitle) } },
                     onUsePhoneAi = onUsePhoneAi,
+                    contextFraction = current?.contextFraction,
+                    tokens = current?.tokens ?: 0,
                 )
+                // The chat on screen is read as it moves, so it never gets its own dot.
+                LaunchedEffect(state.threadId, current?.updatedMs) { viewModel.markSeen(state.threadId) }
 
                 when {
                     state.reach == HermesReach.DOWN -> HermesUnreachable(

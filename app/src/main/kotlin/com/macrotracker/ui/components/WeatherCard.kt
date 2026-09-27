@@ -2,6 +2,7 @@ package com.macrotracker.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,10 +26,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import java.time.ZoneId
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -37,8 +40,11 @@ import androidx.compose.ui.unit.sp
 import com.macrotracker.R
 import com.macrotracker.data.remote.TempUnit
 import com.macrotracker.data.remote.WeatherUnits
+import com.macrotracker.data.remote.WeatherWarning
 import com.macrotracker.data.remote.WindUnit
 import com.macrotracker.ui.theme.Border
+import com.macrotracker.ui.theme.Error
+import com.macrotracker.ui.theme.Warning
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.Surface
@@ -272,6 +278,11 @@ fun WeatherCard(
                                 }
                             }
 
+                            if (successState.warnings.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                WeatherWarnings(successState.warnings)
+                            }
+
                             Spacer(modifier = Modifier.height(12.dp))
 
                             // Current weather — compact: temp + wind only (no rain/humidity %)
@@ -385,6 +396,79 @@ fun WeatherCard(
         }
     }
 }
+
+/**
+ * MET warnings in force here, worst first, as the dashboard shows them above its
+ * weather: "Yellow warning · Strong wind gusts", then where and when. A tap opens the
+ * warning on Yr.
+ */
+@Composable
+private fun WeatherWarnings(warnings: List<WeatherWarning>) {
+    val uriHandler = LocalUriHandler.current
+    val haptics = rememberHaptics()
+    val zone = remember { ZoneId.systemDefault() }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        warnings.forEach { w ->
+            val tone = when (w.color) {
+                "red" -> Error
+                "orange" -> WarningOrange
+                else -> Warning
+            }
+            Row(
+                verticalAlignment = Alignment.Top,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(tone.copy(alpha = 0.14f))
+                    .border(1.dp, tone.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
+                    .clickable { haptics.click(); runCatching { uriHandler.openUri(w.url) } }
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+            ) {
+                Icon(AppIcons.Warning, contentDescription = null, tint = tone, modifier = Modifier.padding(top = 1.dp).size(16.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "${w.color.replaceFirstChar { it.uppercase() }.ifBlank { "Weather" }} warning · ${w.title}",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    val window = warningWindow(w, zone)
+                    val where = listOf(w.area, window).filter { it.isNotBlank() }.joinToString(" · ")
+                    if (where.isNotBlank()) {
+                        Text(where, fontSize = 12.sp, color = TextSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** "today 14:00–20:00", "Mon 06:00–Tue 06:00", or "until Mon 18:00". */
+private fun warningWindow(w: WeatherWarning, zone: ZoneId): String {
+    val today = java.time.LocalDate.now(zone)
+    fun day(t: java.time.ZonedDateTime): String = when (t.toLocalDate()) {
+        today -> "today"
+        today.plusDays(1) -> "tomorrow"
+        else -> t.format(WARN_DAY)
+    }
+    val from = w.from?.atZone(zone)
+    val to = w.to?.atZone(zone)
+    return when {
+        from != null && to != null && from.toLocalDate() == to.toLocalDate() ->
+            "${day(from)} ${from.format(WARN_TIME)}–${to.format(WARN_TIME)}"
+        from != null && to != null && from.isAfter(java.time.ZonedDateTime.now(zone)) ->
+            "${day(from)} ${from.format(WARN_TIME)}–${day(to)} ${to.format(WARN_TIME)}"
+        to != null -> "until ${day(to)} ${to.format(WARN_TIME)}"
+        else -> ""
+    }
+}
+
+private val WARN_DAY = java.time.format.DateTimeFormatter.ofPattern("EEE", java.util.Locale.ENGLISH)
+private val WARN_TIME = java.time.format.DateTimeFormatter.ofPattern("HH:mm", java.util.Locale.ENGLISH)
+private val WarningOrange = Color(0xFFF08C3A)
 
 @Composable
 private fun WeatherMetricChip(

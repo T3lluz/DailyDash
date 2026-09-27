@@ -90,6 +90,23 @@ data class WeatherInfo(
     val sunset: String? = null,
 )
 
+/**
+ * A MET Norway warning in force for this spot (MetAlerts), the same ones the t3lluz
+ * dashboard shows above its weather.
+ */
+data class WeatherWarning(
+    /** The event in words, e.g. "Strong wind gusts". */
+    val title: String,
+    /** `yellow`, `orange` or `red`. */
+    val color: String,
+    val area: String,
+    val description: String,
+    val advice: String,
+    val from: Instant?,
+    val to: Instant?,
+    val url: String,
+)
+
 private enum class DayPeriod(val label: String, val shortLabel: String, val hourStart: Int) {
     MORNING("Morning", "AM", 6),
     AFTERNOON("Afternoon", "PM", 12),
@@ -107,6 +124,9 @@ class WeatherRepository @Inject constructor(
             "https://api.met.no/weatherapi/locationforecast/2.0/complete"
         private const val USER_AGENT = "DailyDash/1.0 (Android; daily-dash-app)"
         private const val CACHE_TTL_MS = 8 * 60 * 1000L // 8 minutes — keeps What to Wear current
+        private const val ALERTS_URL = "https://api.met.no/weatherapi/metalerts/2.0/current.json"
+        private const val WARNINGS_TTL_MS = 15 * 60 * 1000L
+        private val WARNING_RANK = mapOf("red" to 3, "orange" to 2, "yellow" to 1)
 
         fun mapSymbolCode(code: String): Pair<String, Int> {
             // Yr.no symbol codes: https://api.met.no/weatherapi/weathericon/2.0/documentation
@@ -181,6 +201,57 @@ class WeatherRepository @Inject constructor(
         cachedLon = roundedLon
         cacheTimestamp = now
         result
+    }
+
+    private var cachedWarnings: List<WeatherWarning> = emptyList()
+    private var warningsKey: String = ""
+    private var warningsAt: Long = 0L
+
+    /**
+     * Warnings in force here, from MET's MetAlerts, as the dashboard reads them. Kept a
+     * quarter of an hour, like the server's copy; a failure is "none", never an error,
+     * so a warnings outage cannot take the forecast with it.
+     */
+    suspend fun fetchWarnings(lat: Double, lon: Double, force: Boolean = false): List<WeatherWarning> = withContext(Dispatchers.IO) {
+        val key = String.format(Locale.US, "%.2f,%.2f", lat, lon)
+        val now = System.currentTimeMillis()
+        if (!force && key == warningsKey && now - warningsAt < WARNINGS_TTL_MS) return@withContext cachedWarnings
+        val url = String.format(Locale.US, "$ALERTS_URL?lat=%.4f&lon=%.4f&lang=en", lat, lon)
+        val request = Request.Builder().url(url).header("User-Agent", USER_AGENT).get().build()
+        val warnings = runCatching {
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) throw Exception("MetAlerts answered ${response.code}")
+                parseWarnings(response.body?.string().orEmpty())
+            }
+        }.getOrElse {
+            Log.w(TAG, "MetAlerts unavailable: ${it.message}")
+            return@withContext cachedWarnings.takeIf { key == warningsKey }.orEmpty()
+        }
+        cachedWarnings = warnings
+        warningsKey = key
+        warningsAt = now
+        warnings
+    }
+
+    private fun parseWarnings(json: String): List<WeatherWarning> {
+        val features = JSONObject(json).optJSONArray("features") ?: return emptyList()
+        return (0 until features.length()).mapNotNull { i ->
+            val f = features.optJSONObject(i) ?: return@mapNotNull null
+            val p = f.optJSONObject("properties") ?: return@mapNotNull null
+            val interval = f.optJSONObject("when")?.optJSONArray("interval")
+            fun at(j: Int) = interval?.optString(j)?.takeIf { it.isNotBlank() }?.let { runCatching { Instant.parse(it) }.getOrNull() }
+            val level = p.optString("awareness_level").split(';')
+            WeatherWarning(
+                title = p.optString("eventAwarenessName").ifBlank { p.optString("event") }.ifBlank { "Weather warning" },
+                color = level.getOrNull(1)?.trim().orEmpty(),
+                area = p.optString("area"),
+                description = p.optString("description"),
+                advice = p.optString("instruction"),
+                from = at(0),
+                to = at(1),
+                url = p.optString("web").ifBlank { "https://www.yr.no/" },
+            )
+        }.sortedByDescending { WARNING_RANK[it.color] ?: 0 }
     }
 
     /** Epoch-ms of the last successful network weather fetch (0 if never / cleared). */

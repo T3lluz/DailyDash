@@ -6,6 +6,7 @@ import com.macrotracker.data.hermes.HermesLiveFeed
 import com.macrotracker.data.local.SettingsRepository
 import com.macrotracker.data.remote.TempUnit
 import com.macrotracker.data.remote.WindUnit
+import com.macrotracker.data.upcoming.DashboardCalendars
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -25,7 +26,8 @@ import javax.inject.Singleton
  * The few settings the phone and the web dashboard both have, kept the same through the
  * dashboard's own settings blob (`/_api/sync`, the one every browser tab shares):
  * the mode a new Hermes chat starts in (`ai.perm`), the temperature unit (`units`) and the
- * wind unit (`wind`).
+ * wind unit (`wind`). The calendar switches (`cals`, `calMine`) only come this way: the
+ * phone has no screen for them, so it follows the web's and never writes them.
  *
  * The web's protocol is last write wins on the whole blob, so the phone reads it, changes
  * only its own fields and writes it back stamped now. It pulls when the live feed connects
@@ -69,6 +71,13 @@ class DashboardSettingsSync @Inject constructor(
         remote.perm?.let { if (it != settings.hermesPermission.value) settings.setHermesPermission(it) }
         remote.temp?.let { if (it != settings.tempUnit.value) settings.setTempUnit(it) }
         remote.wind?.let { if (it != settings.windUnit.value) settings.setWindUnit(it) }
+        settings.setDashboardCalendars(readCalendars(data))
+    }
+
+    private fun readCalendars(data: JSONObject): DashboardCalendars {
+        val cals = data.optJSONObject("cals")
+        val shown = cals?.keys()?.asSequence()?.associateWith { cals.optBoolean(it, true) }.orEmpty()
+        return DashboardCalendars(mine = data.optBoolean("calMine", true), shown = shown)
     }
 
     private suspend fun push(local: Shared) {

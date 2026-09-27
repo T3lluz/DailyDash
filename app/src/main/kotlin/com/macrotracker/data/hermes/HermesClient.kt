@@ -151,6 +151,46 @@ class HermesClient @Inject constructor(
      */
     suspend fun syncRead(): JSONObject = withContext(Dispatchers.IO) { JSONObject(get("/sync")) }
 
+    /** The morning briefing the dashboard shows in its Today panel. */
+    suspend fun brief(): JSONObject = withContext(Dispatchers.IO) { JSONObject(get("/brief")) }
+
+    /**
+     * Asks for the briefing to be written again. The bridge answers at once, `writing`, or
+     * with an `error` when no one is free to write it; `ch: brief` on the live feed says
+     * when it is done.
+     */
+    suspend fun briefRun(): JSONObject = withContext(Dispatchers.IO) { JSONObject(send("POST", "/brief/run", null)) }
+
+    /** What the agents on the server spent: tokens, value, models, limits (usage.py). */
+    suspend fun usage(fresh: Boolean = false): JSONObject = withContext(Dispatchers.IO) {
+        JSONObject(get(if (fresh) "/usage?fresh=1" else "/usage"))
+    }
+
+    /** What runs by itself: scheduled asks, staff rounds, the briefing, the host's timers. */
+    suspend fun schedule(): JSONObject = withContext(Dispatchers.IO) { JSONObject(get("/schedule")) }
+
+    /** Creates or updates a scheduled ask; the bridge answers with the saved job. */
+    suspend fun scheduleSave(job: JSONObject): JSONObject = withContext(Dispatchers.IO) {
+        JSONObject(send("POST", "/schedule", job))
+    }
+
+    suspend fun scheduleDelete(id: String): Unit = withContext(Dispatchers.IO) {
+        send("DELETE", "/schedule/${enc(id)}", null)
+    }
+
+    /** Runs a scheduled ask now. Throws with the bridge's reason when it cannot start. */
+    suspend fun scheduleRun(id: String): Unit = withContext(Dispatchers.IO) {
+        send("POST", "/schedule/${enc(id)}/run", JSONObject())
+    }
+
+    /** The island's items as the web would show them (island.py), without what Hermes is doing. */
+    suspend fun island(): JSONObject = withContext(Dispatchers.IO) { JSONObject(get("/island")) }
+
+    /** Acts on mail through the dashboard: read, unread, archive, unarchive, star, unstar. */
+    suspend fun mailAct(ids: List<String>, action: String): Unit = withContext(Dispatchers.IO) {
+        send("POST", "/mail/act", JSONObject().put("ids", JSONArray(ids)).put("action", action))
+    }
+
     /** Saves the whole blob back. A 409 means someone saved later; read theirs instead. */
     suspend fun syncWrite(at: Long, data: JSONObject): Unit = withContext(Dispatchers.IO) {
         send("PUT", "/sync", JSONObject().put("at", at).put("data", data))
@@ -411,6 +451,12 @@ class HermesClient @Inject constructor(
             pending = o.optInt("pending"),
             model = o.optString("model"),
             live = o.optJSONObject("live")?.let(::parseLive),
+            waiting = o.optInt("waiting", o.optInt("pending")),
+            tokens = o.optLong("tok"),
+            cost = o.optDouble("cost", 0.0).takeIf { !it.isNaN() } ?: 0.0,
+            context = o.optInt("ctx"),
+            window = o.optInt("win"),
+            scheduled = o.optJSONObject("sched")?.optString("title")?.takeIf { it.isNotBlank() },
         )
 
         /** The list's short copy of a running turn: when it started, the tail of its words, its tools. */

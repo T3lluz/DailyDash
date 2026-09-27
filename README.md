@@ -36,9 +36,14 @@
 | :---: | --- | --- | --- |
 | <img src="docs/integrations/nutrition.svg" width="20" alt="" /> | **Nutrition** | Calories and protein against goals, Quick Add, 7/14/30-day trends | — (AI for meal text and label photos) |
 | <img src="docs/integrations/health-connect.svg" width="20" alt="" /> | **Health** | Activity rings, today vs. yesterday, sleep, a month of workouts with GPS routes | [Health Connect](https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata) |
-| <img src="docs/integrations/weather.svg" width="20" alt="" /> | **Weather** | Now, hourly curve, daily ranges, UV, wind, sunrise/sunset, what to wear | Location |
+| <img src="docs/integrations/weather.svg" width="20" alt="" /> | **Weather** | Now, hourly curve, daily ranges, UV, wind, sunrise/sunset, what to wear, MET warnings | Location |
 | <img src="docs/integrations/calendar.svg" width="20" alt="" /> | **Calendar** | Day strip and agenda up to 31 days ahead | Calendar access |
-| <img src="docs/integrations/calendar.svg" width="20" alt="" /> | **Coming up** | Episodes, films and F1 sessions on one swipeable timeline | Dashboard server <sup>†</sup> |
+| <img src="docs/integrations/calendar.svg" width="20" alt="" /> | **Coming up** | Episodes, films, F1 sessions and your Google Calendar events (place, description, join the call) on one swipeable timeline | Dashboard server <sup>†</sup> |
+| <img src="docs/integrations/hermes.png" width="20" alt="" /> | **Mail** | The dashboard's Mail: Needs you, Bills, Deliveries, Starred, The rest; read, archive (undo), star, or ask Hermes to draft a reply | Dashboard server <sup>†</sup> |
+| <img src="docs/integrations/hermes.png" width="20" alt="" /> | **Island** | The web's island under the status bar: what waits on you in Hermes, warnings, what's on now or next, F1, mail, rain | Dashboard server <sup>†</sup> |
+| <img src="docs/integrations/ai.svg" width="20" alt="" /> | **Usage** | Tokens and API value by day, model, agent and project; Claude's session and weekly windows; each Hermes chat's context; scheduled asks | Dashboard server <sup>†</sup> |
+| <img src="docs/integrations/servers.svg" width="20" alt="" /> | **Console** | A shell on the dashboard server, the same shells as the web's console, with an Esc/Tab/Ctrl/arrow bar | Dashboard server <sup>†</sup> |
+| <img src="docs/integrations/hermes.png" width="20" alt="" /> | **Briefing** | The morning briefing Hermes' staff write at 06:45; ask a follow-up or have it written again | Dashboard server <sup>†</sup> |
 | <img src="docs/integrations/f1.svg" width="20" alt="" /> | **Formula 1** | Countdown over an animated circuit map, driver and constructor standings, results, schedule | — |
 | <img src="docs/integrations/github.svg" width="20" alt="" /> | **GitHub** | Issues, PRs, activity and repos across your account; contribution year with the snake | Connect GitHub |
 | <img src="docs/integrations/youtube.svg" width="20" alt="" /> | **YouTube** | Newest videos from followed channels in a carousel | — (Connect Google imports subscriptions) |

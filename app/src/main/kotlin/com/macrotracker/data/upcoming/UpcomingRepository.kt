@@ -59,6 +59,7 @@ class UpcomingRepository @Inject constructor(
             "radarr" to "icons/radarr.svg",
             "stremio" to "icons/stremio.svg",
             "f1" to "icons/f1-mark.svg",
+            "gcal" to "icons/google-calendar.svg",
         )
 
         private val F1_FLAG = mapOf(
@@ -199,10 +200,23 @@ class UpcomingRepository @Inject constructor(
                 note = m.optNonBlank("note") ?: race?.optNonBlank("circuit"),
                 flag = race?.optNonBlank("country")?.let { F1_FLAG[it.trim()] },
                 trackPath = race?.optNonBlank("d"),
+                calendar = if (svc == "gcal") calendarEntry(m) else null,
             )
         }.sortedBy { it.at }
         return UpcomingFeed(events = events, fetchedAtMs = fetchedAtMs, stremioError = stremioError)
     }
+
+    private fun calendarEntry(m: JSONObject) = CalendarEntry(
+        calendarId = m.optString("cal"),
+        calendarName = m.optNonBlank("calName") ?: "Calendar",
+        end = m.optNonBlank("end")?.let { runCatching { Instant.parse(it) }.getOrNull() },
+        allDay = m.optBoolean("allDay"),
+        description = m.optString("desc").trim(),
+        joinUrl = m.optNonBlank("join"),
+        hasCall = m.optBoolean("meet"),
+        kind = m.optString("kind"),
+        onByDefault = m.optBoolean("calOn", true),
+    )
 
     /** Same rule as the dashboard's `appURL`: each app lives on its own subdomain. */
     private fun appUrl(base: String, host: String, svc: String, path: String?): String? {

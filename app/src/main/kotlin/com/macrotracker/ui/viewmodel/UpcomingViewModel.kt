@@ -3,6 +3,7 @@ package com.macrotracker.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.macrotracker.data.local.SettingsRepository
+import com.macrotracker.data.upcoming.DashboardCalendars
 import com.macrotracker.data.upcoming.UpcomingFeed
 import com.macrotracker.data.hermes.HermesLiveFeed
 import com.macrotracker.data.upcoming.UpcomingRepository
@@ -45,6 +46,9 @@ class UpcomingViewModel @Inject constructor(
         repository.getCached()?.let { UpcomingUiState.Success(it) } ?: UpcomingUiState.Idle,
     )
     val state: StateFlow<UpcomingUiState> = _state
+
+    /** The web's calendar switches: which of your own events the strip shows. */
+    val calendars: StateFlow<DashboardCalendars> = settings.dashboardCalendars
 
     private var loadJob: Job? = null
 

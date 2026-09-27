@@ -93,15 +93,11 @@ fun PillNavigationBar(
             modifier = Modifier
                 .fillMaxSize()
                 .onSizeChanged { containerSize = it }
-                .shadow(
-                    elevation = 12.dp,
-                    shape = barShape,
-                    ambientColor = Color.Black.copy(alpha = 0.28f),
-                    spotColor = Color.Black.copy(alpha = 0.32f),
-                )
+                // The web's edge: a 2dp ring and the soft chrome shadow, cast by the
+                // pill-and-tab outline, never under the glass.
+                .chromeEdge(barShape)
                 .clip(barShape)
-                .dottedGlass(hazeState = hazeState, shape = barShape)
-                .border(BorderStroke(0.5.dp, GlassHairline), barShape),
+                .dottedGlass(hazeState = hazeState, shape = barShape),
         )
 
         if (shownActivity != null && progress > 0.01f) {

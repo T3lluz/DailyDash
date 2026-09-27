@@ -4,8 +4,9 @@ import java.time.Instant
 
 /**
  * One entry on the t3lluz *Coming up* timeline: an episode (Sonarr, Stremio), a
- * film (Radarr) or an F1 session. Mirrors `rows.upcoming` in the dashboard's
- * `_stats.json`, with relative artwork paths already resolved against the server.
+ * film (Radarr), an F1 session or one of your own events from Google Calendar.
+ * Mirrors `rows.upcoming` in the dashboard's `_stats.json`, with relative artwork
+ * paths already resolved against the server.
  */
 data class UpcomingEvent(
     /** Stable across refreshes, so the focused card survives a reload. */
@@ -30,8 +31,11 @@ data class UpcomingEvent(
     val flag: String?,
     /** F1 circuit outline as SVG path data in a 0–100 box, from `_f1.json`. */
     val trackPath: String?,
+    /** Set on your own events (`svc` gcal) only. */
+    val calendar: CalendarEntry? = null,
 ) {
     val isF1: Boolean get() = service == "f1"
+    val isCalendar: Boolean get() = calendar != null
 
     /** `S03E01` / `Movie` / the session name, split from the episode title. */
     val code: String
@@ -56,6 +60,47 @@ data class UpcomingEvent(
 
     private companion object {
         val EPISODE_CODE = Regex("""^(S\d{1,2}E\d{1,2}|Movie)(?:\s*[·•]\s*(.*))?$""", RegexOption.IGNORE_CASE)
+    }
+}
+
+/**
+ * What a Google Calendar entry carries that an episode does not. The web draws the
+ * same fields on its calendar tiles (`gcalChip` in calendar.js): which calendar, a
+ * tag for its kind, the description, and chips for the time, the place and a call.
+ */
+data class CalendarEntry(
+    val calendarId: String,
+    /** `Personal` for the primary calendar, else the calendar's own name. */
+    val calendarName: String,
+    val end: Instant?,
+    val allDay: Boolean,
+    val description: String,
+    /** The video call to join, when the event has one. */
+    val joinUrl: String?,
+    val hasCall: Boolean,
+    /** `work`, `school`, `holiday`, `birthday`, or blank. */
+    val kind: String,
+    /** The collector's default for this calendar; the web's switches override it. */
+    val onByDefault: Boolean,
+) {
+    /** The first two parts of the address, as the web shortens it: "Halseveien 5, Mandal". */
+    fun place(note: String?): String =
+        note.orEmpty().split(',').take(2).joinToString(",").trim()
+}
+
+/**
+ * The dashboard's calendar switches (Settings → Calendars on the web), read from its
+ * synced settings. [shown] maps a calendar id to on or off; a calendar it does not
+ * name follows the collector's default. [mine] off keeps every one of your own
+ * events out of Coming up, as the web's "Today only" does.
+ */
+data class DashboardCalendars(
+    val mine: Boolean = true,
+    val shown: Map<String, Boolean> = emptyMap(),
+) {
+    fun shows(event: UpcomingEvent): Boolean {
+        val cal = event.calendar ?: return true
+        return mine && (shown[cal.calendarId] ?: cal.onByDefault)
     }
 }
 

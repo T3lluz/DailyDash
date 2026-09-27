@@ -152,6 +152,10 @@ internal fun HermesHeader(
     onClear: () -> Unit,
     onDelete: () -> Unit,
     onUsePhoneAi: (() -> Unit)?,
+    /** How full the open chat's context is, 0–1, when the bridge has measured it. */
+    contextFraction: Float? = null,
+    /** What the open chat has used, in tokens. */
+    tokens: Long = 0,
 ) {
     val haptics = rememberHaptics()
     var menuOpen by remember { mutableStateOf(false) }
@@ -194,7 +198,17 @@ internal fun HermesHeader(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ChatStatusDot(active = working, accent = ServerBrand)
                 Spacer(Modifier.width(6.dp))
-                Text(status, color = TextTertiary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(status, color = TextTertiary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false))
+                // T3 Code's context meter, and what the chat has used so far.
+                if (contextFraction != null) {
+                    Spacer(Modifier.width(8.dp))
+                    ContextRing(contextFraction, size = 13.dp)
+                }
+                if (tokens > 0) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(com.macrotracker.data.dashboard.formatTokens(tokens) + " tok", color = TextTertiary, fontSize = 12.sp, maxLines = 1)
+                }
             }
         }
         IconButton(onClick = { haptics.tick(); onNewChat() }) {
@@ -253,15 +267,19 @@ internal fun HermesThreadRail(
     onTogglePin: (HermesThreadSummary) -> Unit,
     onClear: (HermesThreadSummary) -> Unit,
     onDelete: (HermesThreadSummary) -> Unit,
+    /** A chat that moved since this phone last opened it. */
+    isUnread: (HermesThreadSummary) -> Boolean = { false },
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     val shown = remember(threads, query) {
         val q = query.trim().lowercase()
         threads.filter { q.isEmpty() || q in it.title.lowercase() || q in it.preview.lowercase() }
     }
+    // As the web's rail: what waits on you first, then staff, pinned and the rest.
+    val needs = shown.filter { it.waiting > 0 && !it.isStaff }
     val staff = shown.filter { it.isStaff }
-    val pinned = shown.filter { it.pinned && !it.isStaff }
-    val rest = shown.filter { !it.pinned && !it.isStaff }.sortedByDescending { it.updatedMs }
+    val pinned = shown.filter { it.pinned && !it.isStaff && it.waiting == 0 }
+    val rest = shown.filter { !it.pinned && !it.isStaff && it.waiting == 0 }.sortedByDescending { it.updatedMs }
 
     Column(
         modifier = Modifier
@@ -321,6 +339,7 @@ internal fun HermesThreadRail(
                         thread = t,
                         turn = turns[t.id],
                         selected = t.id == selectedId,
+                        unread = isUnread(t),
                         onOpen = { onOpen(t.id) },
                         onRename = { onRename(t) },
                         onTogglePin = { onTogglePin(t) },
@@ -329,6 +348,7 @@ internal fun HermesThreadRail(
                     )
                 }
             }
+            section("Needs you", needs)
             section("Staff", staff)
             section("Pinned", pinned)
             section(if (staff.isEmpty() && pinned.isEmpty()) "Chats" else "Recent", rest)
@@ -364,6 +384,7 @@ private fun ThreadRow(
     thread: HermesThreadSummary,
     turn: HermesTurnActivity?,
     selected: Boolean,
+    unread: Boolean,
     onOpen: () -> Unit,
     onRename: () -> Unit,
     onTogglePin: () -> Unit,
@@ -393,6 +414,7 @@ private fun ThreadRow(
                 when {
                     busy -> LivePulseDot(color = ServerBrand, size = 12.dp)
                     thread.pending > 0 -> Box(Modifier.size(8.dp).clip(CircleShape).background(ServerWarn))
+                    unread -> Box(Modifier.size(8.dp).clip(CircleShape).background(com.macrotracker.ui.theme.Primary))
                     thread.isStaff -> Box(Modifier.size(8.dp).clip(CircleShape).background(ServerGood))
                     else -> Box(Modifier.size(6.dp).clip(CircleShape).background(Border))
                 }
@@ -404,7 +426,7 @@ private fun ThreadRow(
                         thread.title,
                         color = TextPrimary, // selection shows in the weight and the row fill
                         fontSize = 14.sp,
-                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                        fontWeight = if (selected || unread) FontWeight.SemiBold else FontWeight.Medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
@@ -434,7 +456,22 @@ private fun ThreadRow(
                     )
                 }
             }
-            Text(ago(thread.updatedMs), color = TextTertiary, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 4.dp))
+            Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(horizontal = 4.dp)) {
+                Text(ago(thread.updatedMs), color = TextTertiary, fontSize = 11.sp)
+                // What the chat has used and how full it is, as the web's rail tags say.
+                val meta = listOfNotNull(
+                    thread.tokens.takeIf { it > 0 }?.let { com.macrotracker.data.dashboard.formatTokens(it) },
+                    thread.contextFraction?.let { "${(it * 100).toInt()}%" },
+                ).joinToString(" · ")
+                if (meta.isNotEmpty()) {
+                    val hot = (thread.contextFraction ?: 0f) >= 0.85f
+                    val warm = (thread.contextFraction ?: 0f) >= 0.6f
+                    Text(meta, color = if (hot) com.macrotracker.ui.theme.Error else if (warm) ServerWarn else TextTertiary, fontSize = 10.sp)
+                }
+                if (thread.scheduled != null) {
+                    Icon(AppIcons.Repeat, "Runs on a schedule", tint = com.macrotracker.ui.theme.Primary, modifier = Modifier.size(11.dp))
+                }
+            }
             Box {
                 IconButton(onClick = { haptics.tick(); menuOpen = true }, modifier = Modifier.size(32.dp)) {
                     Icon(AppIcons.ChevronDown, contentDescription = "Chat options", tint = TextTertiary, modifier = Modifier.size(16.dp))
