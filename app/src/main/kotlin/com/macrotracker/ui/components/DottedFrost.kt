@@ -237,6 +237,30 @@ fun Modifier.chromeGlass(hazeState: HazeState?, shape: Shape): Modifier = this
     .glassRim(shape)
 
 /**
+ * Plain frosted glass: the backdrop blurred smooth, with no dot grid, laid over an opaque
+ * [base]. The base is what keeps it clean over other glass: whatever sits between it and
+ * the page (the navbar's dotted glass under its tab bubble) is covered, so only the page,
+ * blurred and washed with [tint], shows through. Goes after `clip(shape)`.
+ */
+fun Modifier.frostedGlass(
+    hazeState: HazeState?,
+    base: Color,
+    tint: Color,
+    blur: Dp = DottedFrostSpec.GlassBlur,
+): Modifier {
+    val under = this.background(base)
+    if (hazeState == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+        return under.background(tint)
+    }
+    return under.hazeEffect(state = hazeState) {
+        blurRadius = blur
+        noiseFactor = 0f
+        tints = listOf(HazeTint(tint))
+        fallbackTint = HazeTint(tint)
+    }
+}
+
+/**
  * The web's `--chrome-shadow` under a surface, cast by the shape's outline with its inside
  * cut away. A shadow under translucent glass would show through it (the web's island had
  * exactly that seam), so none is drawn there. Goes before `clip(shape)` in the chain.

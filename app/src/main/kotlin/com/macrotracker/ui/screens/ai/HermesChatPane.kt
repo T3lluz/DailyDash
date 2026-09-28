@@ -11,12 +11,10 @@ import com.macrotracker.ui.components.WorkingScanner
 import com.macrotracker.ui.util.rememberIsResumed
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import com.macrotracker.data.hermes.HermesCatalog
@@ -32,9 +30,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -43,7 +41,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -127,7 +124,7 @@ private val Mono = FontFamily.Monospace
 
 /**
  * Tech support through Hermes, the agent that lives on the server, in the shape of the
- * t3lluz dashboard's panel: the threads in a drawer on the left, the conversation, and a
+ * t3lluz dashboard's panel: the threads in a sheet, the conversation, and a
  * tall composer with what Hermes may do, which model it thinks with and how hard.
  *
  * The threads are the server's, so a conversation started on the dashboard is here too,
@@ -158,7 +155,10 @@ fun HermesChatPane(
     val listState = rememberLazyListState()
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
-    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    // The chats open in a sheet over the pane. It is a window of its own, so it never
+    // hangs beside the pane where a tab switch's slide could bring it into view.
+    var railOpen by remember { mutableStateOf(false) }
+    val railState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     var draft by rememberSaveable { mutableStateOf("") }
     var forceFollow by remember { mutableStateOf(true) }
@@ -180,7 +180,7 @@ fun HermesChatPane(
     FollowChatOnKeyboard(listState) { forceFollow || nearBottom }
 
     // The bridge's change feed, while the pane is on screen: a chat started on the desk
-    // shows up in the drawer as it happens.
+    // shows up in the chat list as it happens.
     DisposableEffect(viewModel) {
         viewModel.startLive()
         onDispose { viewModel.stopLive() }
@@ -210,7 +210,7 @@ fun HermesChatPane(
     }
 
     fun closeRail() {
-        scope.launch { drawerState.close() }
+        scope.launch { railState.hide() }.invokeOnCompletion { if (!railState.isVisible) railOpen = false }
     }
 
     fun send(text: String) {
@@ -232,47 +232,7 @@ fun HermesChatPane(
     val chatHaze = rememberHazeState()
     val modifiers = remember(state.status) { HermesCatalog.modifiers(state.status) }
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        // Only the rail's own swipe closes it; opening is the button, so the tab switcher
-        // and the chat's own horizontal scrolls keep their gestures.
-        gesturesEnabled = drawerState.isOpen,
-        scrimColor = Color.Black.copy(alpha = 0.45f),
-        modifier = modifier,
-        drawerContent = {
-            ModalDrawerSheet(
-                drawerContainerColor = Surface,
-                drawerShape = RoundedCornerShape(topEnd = 22.dp, bottomEnd = 22.dp),
-                modifier = Modifier.widthIn(max = 320.dp),
-                // The pane sits under the AI tab's header, not at the top of the screen.
-                windowInsets = WindowInsets(0, 0, 0, 0),
-            ) {
-                HermesThreadRail(
-                    threads = state.threads,
-                    turns = turns,
-                    selectedId = state.threadId,
-                    status = state.status,
-                    onOpen = { id ->
-                        haptics.tick()
-                        forceFollow = true
-                        viewModel.openThread(id)
-                        closeRail()
-                    },
-                    onNewChat = {
-                        haptics.tick()
-                        forceFollow = true
-                        viewModel.newThread()
-                        closeRail()
-                    },
-                    onRename = { renaming = it },
-                    onTogglePin = { viewModel.setPinned(it.id, !it.pinned) },
-                    onClear = { confirmClear = it },
-                    onDelete = { confirmDelete = it },
-                    isUnread = state::isUnread,
-                )
-            }
-        },
-    ) {
+    Box(modifier = modifier) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -290,7 +250,7 @@ fun HermesChatPane(
                     hasThread = state.threadId != null,
                     onOpenRail = {
                         viewModel.refreshThreads()
-                        scope.launch { drawerState.open() }
+                        railOpen = true
                     },
                     onNewChat = {
                         forceFollow = true
@@ -467,6 +427,41 @@ fun HermesChatPane(
                             onOpenUsage = onOpenUsage,
                         )
                     },
+                )
+            }
+        }
+    }
+
+    if (railOpen) {
+        ModalBottomSheet(
+            onDismissRequest = { railOpen = false },
+            sheetState = railState,
+            containerColor = Surface,
+        ) {
+            // Tall enough for a real list, and a fixed height so searching doesn't make it jump.
+            Box(Modifier.fillMaxWidth().fillMaxHeight(0.86f)) {
+                HermesThreadRail(
+                    threads = state.threads,
+                    turns = turns,
+                    selectedId = state.threadId,
+                    status = state.status,
+                    onOpen = { id ->
+                        haptics.tick()
+                        forceFollow = true
+                        viewModel.openThread(id)
+                        closeRail()
+                    },
+                    onNewChat = {
+                        haptics.tick()
+                        forceFollow = true
+                        viewModel.newThread()
+                        closeRail()
+                    },
+                    onRename = { renaming = it },
+                    onTogglePin = { viewModel.setPinned(it.id, !it.pinned) },
+                    onClear = { confirmClear = it },
+                    onDelete = { confirmDelete = it },
+                    isUnread = state::isUnread,
                 )
             }
         }
