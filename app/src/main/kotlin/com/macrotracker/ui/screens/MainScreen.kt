@@ -342,6 +342,7 @@ private fun MainScreenScaffold(
         // The web's island, hanging from the status bar over the tab screens.
         val islandVm: IslandViewModel = hiltViewModel()
         val islandItems by islandVm.items.collectAsState()
+        val islandShortTitles by islandVm.shortTitles.collectAsState()
         val uriHandler = LocalUriHandler.current
         val islandVisible = currentRoute == Screen.Home.route || currentRoute == Screen.Health.route ||
             currentRoute == Screen.Settings.route
@@ -358,6 +359,7 @@ private fun MainScreenScaffold(
         }
         TopIsland(
             items = islandItems,
+            shortTitles = islandShortTitles,
             hermes = activity,
             onHermes = onActivityClick,
             visible = islandVisible,

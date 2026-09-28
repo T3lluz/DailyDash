@@ -64,11 +64,20 @@ class ChromeShotsTest {
         item("mail", "accent", "mail", "Sara wrote"),
         item("rain", "info", "cloud-rain", "Rain from 19:00"),
     )
+    private val crowded = listOf(
+        item("need", "needs", "circle-help", "Frank asks", "Keep Knaben?", "Answer"),
+        item("wx", "warn", "siren", "Yellow wind warning", "Vestland"),
+        item("cal", "soon", "calendar-clock", "Quarterly planning review", "14:30", "in 25 min", color = "#7986cb"),
+        item("brief", "accent", "sparkles", "Morning briefing"),
+        item("mail", "", "mail", "3 mails need you", "Sara, Tom"),
+        item("rain", "info", "cloud-rain", "Rain likely from 19:00"),
+    )
     private val working = NavActivity("t1", NavActivityTone.WORKING, "Running commands", System.currentTimeMillis() - 83_000)
 
     @Test fun light() = shot("chrome_light", light = true, items = items, hermes = working)
     @Test fun dark() = shot("chrome_dark", light = false, items = items, hermes = working)
     @Test fun itemsOnly() = shot("chrome_items", light = true, items = items.take(1), hermes = null)
+    @Test fun crowdedLine() = shot("chrome_crowded", light = true, items = crowded, hermes = working)
     @Test fun hermesOnly() = shot("chrome_hermes", light = false, items = emptyList(), hermes = working)
 
     private fun shot(name: String, light: Boolean, items: List<IslandItem>, hermes: NavActivity?) {

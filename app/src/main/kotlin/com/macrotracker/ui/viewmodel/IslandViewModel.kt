@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.macrotracker.data.dashboard.DashboardRepository
 import com.macrotracker.data.dashboard.IslandItem
+import com.macrotracker.data.dashboard.IslandShortener
 import com.macrotracker.data.hermes.HermesActivityTracker
 import com.macrotracker.data.hermes.HermesLiveFeed
 import com.macrotracker.data.local.SettingsRepository
@@ -42,6 +43,7 @@ class IslandViewModel @Inject constructor(
     private val settings: SettingsRepository,
     private val liveFeed: HermesLiveFeed,
     private val tracker: HermesActivityTracker,
+    private val shortener: IslandShortener,
     @ApplicationContext context: Context,
 ) : ViewModel() {
 
@@ -49,7 +51,12 @@ class IslandViewModel @Inject constructor(
     private val _items = MutableStateFlow(filtered(repository.cachedIsland()?.items.orEmpty()))
     val items: StateFlow<List<IslandItem>> = _items
 
+    /** Short titles by full title, for when the line has to fold its items to fit. */
+    private val _shortTitles = MutableStateFlow(shortener.cached())
+    val shortTitles: StateFlow<Map<String, String>> = _shortTitles
+
     private var job: Job? = null
+    private var shortJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -60,6 +67,7 @@ class IslandViewModel @Inject constructor(
                 .collect { load() }
         }
         viewModelScope.launch { liveFeed.connected.filter { it }.collect { load() } }
+        viewModelScope.launch { _items.collect { shorten(it) } }
         viewModelScope.launch {
             while (true) {
                 if (ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) load()
@@ -80,6 +88,13 @@ class IslandViewModel @Inject constructor(
                 // Off the tailnet: the island keeps what it last knew until it is out of date.
                 _items.value = _items.value.filterNot { it.kind == "cal" && it.tone == "live" }
             }
+        }
+    }
+
+    private fun shorten(items: List<IslandItem>) {
+        if (items.isEmpty() || shortJob?.isActive == true) return
+        shortJob = viewModelScope.launch {
+            shortener.shorten(items)?.let { _shortTitles.value = it }
         }
     }
 
