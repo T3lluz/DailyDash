@@ -3,7 +3,9 @@ package com.macrotracker.ui.screens
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.Uri
+import android.view.View
 import android.view.ViewGroup
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -21,9 +23,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -61,10 +64,12 @@ fun ConsoleScreen(
     val base by viewModel.dashboardUrl.collectAsState()
     val haptics = rememberHaptics()
     var web by remember { mutableStateOf<WebView?>(null) }
+    // Reconnect after the page's renderer died builds a fresh WebView.
+    var generation by remember { mutableIntStateOf(0) }
+    var rendererGone by remember { mutableStateOf(false) }
     val host = remember(base) { Uri.parse(base).host.orEmpty() }
 
     BackHandler { onNavigateBack() }
-    DisposableEffect(Unit) { onDispose { web?.destroy() } }
 
     Column(
         Modifier
@@ -79,39 +84,69 @@ fun ConsoleScreen(
             onNavigateBack = onNavigateBack,
             modifier = Modifier.padding(horizontal = 16.dp),
             trailing = {
-                IconButton(onClick = { haptics.tick(); web?.reload() }, modifier = Modifier.size(40.dp)) {
+                IconButton(
+                    onClick = {
+                        haptics.tick()
+                        val view = web
+                        if (view != null && !rendererGone) {
+                            view.reload()
+                        } else {
+                            rendererGone = false
+                            generation++
+                        }
+                    },
+                    modifier = Modifier.size(40.dp),
+                ) {
                     Icon(AppIcons.Refresh, "Reconnect", tint = TextSecondary, modifier = Modifier.size(20.dp))
                 }
             },
         )
         if (base.isBlank()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                 Text("The console runs on your dashboard server.", color = TextSecondary, fontSize = 14.sp)
             }
-            return@Column
-        }
-        AndroidView(
-            modifier = Modifier.fillMaxWidth().weight(1f),
-            factory = { ctx ->
-                WebView(ctx).apply {
-                    layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                    setBackgroundColor(ConsoleBackground.toArgb())
-                    settings.javaScriptEnabled = true
-                    settings.domStorageEnabled = true
-                    settings.mediaPlaybackRequiresUserGesture = true
-                    webViewClient = object : WebViewClient() {
-                        // The console stays in the app; a link printed in the shell opens outside.
-                        override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                            val url = request.url
-                            if (url.host == host && url.path?.startsWith("/console") == true) return false
-                            runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, url)) }
-                            return true
+        } else if (rendererGone) {
+            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                Text("The console stopped. Reconnect to open it again.", color = TextSecondary, fontSize = 14.sp)
+            }
+        } else {
+            key(generation) {
+                AndroidView(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    factory = { ctx ->
+                        WebView(ctx).apply {
+                            layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                            setBackgroundColor(ConsoleBackground.toArgb())
+                            settings.javaScriptEnabled = true
+                            settings.domStorageEnabled = true
+                            settings.mediaPlaybackRequiresUserGesture = true
+                            webViewClient = object : WebViewClient() {
+                                // The console stays in the app; a link printed in the shell opens outside.
+                                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                                    val url = request.url
+                                    if (url.host == host && url.path?.startsWith("/console") == true) return false
+                                    runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, url)) }
+                                    return true
+                                }
+
+                                // A WebView renderer that dies takes the app with it unless it is let go here.
+                                override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+                                    view.visibility = View.GONE
+                                    rendererGone = true
+                                    return true
+                                }
+                            }
+                            loadUrl("${base.trimEnd('/')}/console.html")
+                            web = this
                         }
-                    }
-                    loadUrl("${base.trimEnd('/')}/console.html")
-                    web = this
-                }
-            },
-        )
+                    },
+                    // Destroyed once it is off the screen, never while it is still attached and drawing.
+                    onRelease = { view ->
+                        if (web === view) web = null
+                        view.destroy()
+                    },
+                )
+            }
+        }
     }
 }

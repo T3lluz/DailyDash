@@ -20,11 +20,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -35,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.macrotracker.ui.navigation.Screen
 import com.macrotracker.ui.theme.AppIcons
+import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.GlassTint
 import com.macrotracker.ui.theme.MacroMotion
@@ -47,6 +49,7 @@ import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.launch
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 private val NavPillShape = RoundedCornerShape(percent = 50)
 private val NavPillHeight = 64.dp
@@ -101,7 +104,7 @@ fun PillNavigationBar(
                 .padding(horizontal = 4.dp),
         ) {
             if (items.isNotEmpty()) {
-                SelectionBubble(count = items.size, left = { left.value }, right = { right.value })
+                SelectionBubble(count = items.size, left = { left.value }, right = { right.value }, hazeState = hazeState)
             }
 
             Row(
@@ -192,24 +195,37 @@ private val BubbleLead = spring<Float>(dampingRatio = 0.78f, stiffness = 520f)
 private val BubbleTrail = spring<Float>(dampingRatio = 0.9f, stiffness = 190f)
 
 /**
- * The selected tab's bubble: a smooth raised key on the dotted glass. It covers the dots,
- * is lit from above (lighter at the top, a bright line along its upper edge) and casts a
- * small soft shadow onto the bar, so the tab you are on reads at a glance over a white
- * page or the dark app alike. While it travels it stretches between [left] and [right]
- * and flattens a little. Read in the draw phase only, so a move never recomposes the bar.
+ * The selected tab's bubble: a pane of smooth frosted glass on the dotted bar. It blurs the
+ * page behind the bar on its own, over an opaque base, so the bar's dots never show through
+ * it; a faint light hairline draws its edge and a small soft shadow lifts it off the bar.
+ * While it travels it stretches between [left] and [right] and flattens a little. The ends
+ * are read in the layout and draw phases only, so a move never recomposes the bar.
  */
 @Composable
-private fun SelectionBubble(count: Int, left: () -> Float, right: () -> Float) {
-    Spacer(
+private fun SelectionBubble(count: Int, left: () -> Float, right: () -> Float, hazeState: HazeState?) {
+    Box(
         Modifier
             .fillMaxSize()
-            .drawWithCache {
-                val cell = size.width / count
+            .layout { measurable, constraints ->
+                val width = constraints.maxWidth
+                val height = constraints.maxHeight
+                val cell = width / count.toFloat()
                 val gap = 2.dp.toPx()
-                val full = size.height - 12.dp.toPx()
-                val flatten = 6.dp.toPx()
-                val edge = 1.dp.toPx()
+                val l = min(left(), right())
+                val r = max(left(), right())
+                val h = height - 12.dp.toPx() - 6.dp.toPx() * (r - l).coerceAtMost(1f)
+                val w = (r - l) * cell + cell - 2 * gap
+                val placeable = measurable.measure(Constraints.fixed(w.roundToInt().coerceAtLeast(0), h.roundToInt().coerceAtLeast(0)))
+                layout(width, height) {
+                    placeable.place((l * cell + gap).roundToInt(), ((height - placeable.height) / 2f).roundToInt())
+                }
+            }
+            .drawWithCache {
                 val drop = 2.dp.toPx()
+                val radius = size.height / 2f
+                val outline = android.graphics.Path().apply {
+                    addRoundRect(0f, 0f, size.width, size.height, radius, radius, android.graphics.Path.Direction.CW)
+                }
                 val shadow = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
                     color = BubbleShadow.toArgb()
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -217,32 +233,27 @@ private fun SelectionBubble(count: Int, left: () -> Float, right: () -> Float) {
                     }
                 }
                 onDrawBehind {
-                    val l = min(left(), right())
-                    val r = max(left(), right())
-                    val h = full - flatten * (r - l).coerceAtMost(1f)
-                    val top = (size.height - h) / 2f
-                    val x0 = l * cell + gap
-                    val w = (r - l) * cell + cell - 2 * gap
+                    // Outside the glass only: under it the shadow would darken the page it shows.
                     drawIntoCanvas {
-                        it.nativeCanvas.drawRoundRect(x0, top + drop, x0 + w, top + h + drop, h / 2f, h / 2f, shadow)
+                        val nc = it.nativeCanvas
+                        nc.save()
+                        nc.clipOutPath(outline)
+                        nc.translate(0f, drop)
+                        nc.drawPath(outline, shadow)
+                        nc.restore()
                     }
+                }
+            }
+            .clip(CircleShape)
+            .frostedGlass(hazeState = hazeState, base = BubbleBase, tint = BubbleTint, blur = 20.dp)
+            .drawWithCache {
+                val edge = 1.dp.toPx()
+                onDrawBehind {
                     drawRoundRect(
-                        brush = Brush.verticalGradient(listOf(BubbleTop, BubbleBottom), startY = top, endY = top + h),
-                        topLeft = Offset(x0, top),
-                        size = Size(w, h),
-                        cornerRadius = CornerRadius(h / 2f),
-                    )
-                    drawRoundRect(
-                        brush = Brush.verticalGradient(
-                            0f to Color.White.copy(alpha = 0.22f),
-                            0.45f to Color.White.copy(alpha = 0.02f),
-                            1f to Color.White.copy(alpha = 0.05f),
-                            startY = top,
-                            endY = top + h,
-                        ),
-                        topLeft = Offset(x0 + edge / 2, top + edge / 2),
-                        size = Size(w - edge, h - edge),
-                        cornerRadius = CornerRadius((h - edge) / 2f),
+                        color = BubbleEdge,
+                        topLeft = Offset(edge / 2, edge / 2),
+                        size = Size(size.width - edge, size.height - edge),
+                        cornerRadius = CornerRadius((size.height - edge) / 2f),
                         style = Stroke(edge),
                     )
                 }
@@ -250,6 +261,10 @@ private fun SelectionBubble(count: Int, left: () -> Float, right: () -> Float) {
     )
 }
 
-private val BubbleTop = Color(0xF2363636)
-private val BubbleBottom = Color(0xF2242424)
+/** Under the glass: opaque, so nothing between the bubble and the page shows through. */
+private val BubbleBase = Background
+
+/** The wash over the blurred page: lighter than the bar's glass, so the tab reads raised. */
+private val BubbleTint = Color(0xB8363636)
+private val BubbleEdge = Color(0x24FFFFFF)
 private val BubbleShadow = Color(0x59000000)
