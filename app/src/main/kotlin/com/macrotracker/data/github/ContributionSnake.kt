@@ -90,7 +90,11 @@ object ContributionSnake {
         val bite = IntArray(n) { -1 }
         // Insertion-ordered, like a JS Set, so ties break exactly as they do on the web.
         val lit = LinkedHashSet<Int>()
-        for (c in 0 until n) if (level[c] > 0) lit += c
+        // The same membership as `lit` and the blocked body, as flags: the inner loop asks
+        // them thousands of times per leg, and a boxed set lookup allocated on each ask.
+        val isLit = BooleanArray(n)
+        val blocked = BooleanArray(n)
+        for (c in 0 until n) if (level[c] > 0) { lit += c; isLit[c] = true }
 
         val cost = IntArray(n)
         val from = IntArray(n)
@@ -146,6 +150,8 @@ object ContributionSnake {
         fun reach(block: Set<Int>) {
             cost.fill(-1)
             seen.fill(false)
+            blocked.fill(false)
+            for (b in block) blocked[b] = true
             size = 0
             val start = route.last()
             cost[start] = 0
@@ -157,13 +163,13 @@ object ContributionSnake {
                 seen[c] = true
                 val cw = c / 7
                 val cy = c % 7
-                val d = cost[c] + 1 + if (c != start && c in lit) CROSS else 0
+                val d = cost[c] + 1 + if (c != start && isLit[c]) CROSS else 0
                 for (k in 0 until 4) {
                     val nw = cw + if (k < 2) k * 2 - 1 else 0
                     val ny = cy + if (k < 2) 0 else k * 2 - 5
                     if (nw < 0 || nw >= w || ny < 0 || ny > 6) continue
                     val m = nw * 7 + ny
-                    if (seen[m] || m in block) continue
+                    if (seen[m] || blocked[m]) continue
                     if (cost[m] < 0 || d < cost[m]) {
                         cost[m] = d
                         from[m] = c
@@ -174,7 +180,7 @@ object ContributionSnake {
         }
 
         // It starts on the left edge, which may itself be a day worth having.
-        if (lit.remove(route[0])) bite[route[0]] = 0
+        if (lit.remove(route[0])) { bite[route[0]] = 0; isLit[route[0]] = false }
 
         fun aim(lv: Int): Int {
             var best = -1
@@ -223,7 +229,7 @@ object ContributionSnake {
                     route += cell
                     // Whatever it stands on is eaten there and then, so the head is
                     // never sitting on a day that is still lit.
-                    if (lit.remove(cell)) bite[cell] = route.size - 1
+                    if (lit.remove(cell)) { bite[cell] = route.size - 1; isLit[cell] = false }
                 }
             }
         }

@@ -15,6 +15,8 @@ data class AppUpdateInfo(
     val apkBytes: Long?,
     val htmlUrl: String,
     val tagName: String,
+    /** The release's Baseline Profile for this phone's ART, installed beside the APK; blank when there is none. */
+    val dmDownloadUrl: String = "",
 )
 
 /**
@@ -83,3 +85,10 @@ val AppUpdateUiState.updateAvailable: Boolean
 /** A download or install is under way; the sheet shows progress, not choices. */
 val AppUpdateUiState.inProgress: Boolean
     get() = this is AppUpdateUiState.Downloading || this is AppUpdateUiState.Installing
+
+/** How a version reads on screen: 2.0.0-beta.1.0 as "2.0.0 Beta 1.0"; a plain 1.1.97 stays as it is. */
+fun prettyVersion(name: String): String {
+    val m = Regex("""^(\d+(?:\.\d+)*)-(alpha|beta|rc)\.(.+)$""", RegexOption.IGNORE_CASE).matchEntire(name) ?: return name
+    val stage = m.groupValues[2].lowercase().let { if (it == "rc") "RC" else it.replaceFirstChar(Char::uppercase) }
+    return "${m.groupValues[1]} $stage ${m.groupValues[3]}"
+}

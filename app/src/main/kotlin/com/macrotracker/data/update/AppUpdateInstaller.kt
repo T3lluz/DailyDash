@@ -144,6 +144,7 @@ class AppUpdateInstaller @Inject constructor(
             throw e
         } catch (e: Exception) {
             Log.e(TAG, "Install launch failed", e)
+            repository.dropDexMetadata(file)
             _phase.value = Phase.Ready(info, file.absolutePath, "Android would not take the update: ${e.message ?: "unknown error"}")
             return
         }
@@ -183,6 +184,7 @@ class AppUpdateInstaller @Inject constructor(
             is UpdateInstallEvents.Event.Failed -> {
                 watchdog?.cancel()
                 confirmIntent = null
+                repository.dropDexMetadata(File(current.apkPath))
                 _phase.value = Phase.Ready(current.info, current.apkPath, event.message)
             }
         }

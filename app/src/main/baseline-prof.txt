@@ -1,0 +1,33 @@
+# DailyDash's Baseline Profile.
+#
+# The app updates itself from GitHub Releases, and every install drops what ART compiled.
+# Without a profile each fresh install runs interpreted and JIT-warming (the lag that
+# clears up after a while) until the phone's overnight dexopt. With one, ART compiles
+# these ahead of time: at install when the updater ships the release's .dm beside the
+# APK, otherwise from ProfileInstaller at the first launch.
+#
+# The whole app is hot: every tab, card and repository runs within a minute of opening.
+# Compose, Material 3 and the other AndroidX libraries bring their own profiles.
+
+HSPLcom/macrotracker/**->**(**)**
+Lcom/macrotracker/**;
+
+# Libraries on every screen that ship no profile of their own.
+HSPLcoil/**->**(**)**
+Lcoil/**;
+HSPLokhttp3/**->**(**)**
+Lokhttp3/**;
+HSPLokio/**->**(**)**
+Lokio/**;
+HSPLdev/chrisbanes/haze/**->**(**)**
+Ldev/chrisbanes/haze/**;
+HSPLsh/calvin/reorderable/**->**(**)**
+Lsh/calvin/reorderable/**;
+HSPLdagger/**->**(**)**
+Ldagger/**;
+HSPLcom/squareup/moshi/**->**(**)**
+Lcom/squareup/moshi/**;
+HSPLkotlinx/serialization/**->**(**)**
+Lkotlinx/serialization/**;
+HSPLkotlinx/coroutines/**->**(**)**
+Lkotlinx/coroutines/**;

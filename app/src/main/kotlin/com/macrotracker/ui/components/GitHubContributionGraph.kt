@@ -10,6 +10,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -41,6 +42,8 @@ import com.macrotracker.ui.util.rememberIsResumed
 import com.macrotracker.ui.util.rememberOnScreenFraction
 import com.macrotracker.ui.util.rememberReducedMotion
 import com.macrotracker.ui.util.trackOnScreen
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.format.TextStyle as DateTextStyle
 import java.util.Locale
@@ -79,6 +82,14 @@ private const val CORNER_RATIO = 2f / 11f
  * card is recomposed and even disposed while scrolling, and a remount picks the lap up
  * mid-stride instead of starting the year again. A different year starts over.
  */
+/** The last route solved, so a remount (a scroll back, a tab switch) never solves it again. */
+private object SnakeRoutes {
+    var signature = ""
+    var route: SnakeRoute? = null
+}
+
+private val EmptyRoute = SnakeRoute(IntArray(0), IntArray(0))
+
 private object SnakeLap {
     var signature = ""
     var t = 0L
@@ -102,14 +113,25 @@ fun GitHubContributionGraph(
     onDayTapped: ((date: String, count: Int) -> Unit)? = null,
 ) {
     val grid = remember(contributions) { ContributionGrid.from(contributions) } ?: return
-    val route = remember(grid.signature) { ContributionSnake.solve(grid) }
+    // The route is a Dijkstra per lit day: worked out off the main thread, once per year of data.
+    val routeState = remember(grid.signature) {
+        mutableStateOf(SnakeRoutes.signature.takeIf { it == grid.signature }?.let { SnakeRoutes.route })
+    }
+    LaunchedEffect(grid.signature) {
+        if (routeState.value != null) return@LaunchedEffect
+        val solved = withContext(Dispatchers.Default) { ContributionSnake.solve(grid) }
+        SnakeRoutes.signature = grid.signature
+        SnakeRoutes.route = solved
+        routeState.value = solved
+    }
+    val route = routeState.value ?: EmptyRoute
     val reduced = rememberReducedMotion()
     val resumed = rememberIsResumed()
     val onScreen = rememberOnScreenFraction()
     val running = animate && !reduced && route.cells.size >= 2 && grid.weeks >= 4
 
     val step = remember(route) {
-        (MacroMotion.Snake.LAP_MS / route.cells.size)
+        (MacroMotion.Snake.LAP_MS / route.cells.size.coerceAtLeast(1))
             .coerceIn(MacroMotion.Snake.STEP_FAST_MS, MacroMotion.Snake.STEP_SLOW_MS)
     }
     val steps = route.cells.size

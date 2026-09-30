@@ -61,15 +61,30 @@ class AppUpdateRepository @Inject constructor(
          */
         const val FOREGROUND_POLL_INTERVAL_MS = 5L * 60L * 1000L
 
+        /** A real profile .dm is a few KB; anything far bigger is not one. */
+        private const val DM_MAX_BYTES = 4 * 1024 * 1024
+
         /** Minimum gap between network checks (avoids hammering on rapid resume). */
         const val MIN_CHECK_INTERVAL_MS = 30L * 1000L
 
         /**
          * Asset naming contract used by CI and the client:
-         * DailyDash-1.1.3-vc3.apk
+         * DailyDash-1.1.3-vc3.apk. A pre-release keeps a numeric name on the APK (so 1.x
+         * clients still find it) and carries its full name in the tag, v2.0.0-beta.1.0.
          */
         private val APK_NAME_REGEX =
-            Regex("""DailyDash-([0-9]+(?:\.[0-9]+)*)-vc(\d+)\.apk""", RegexOption.IGNORE_CASE)
+            Regex("""DailyDash-([0-9]+(?:\.[0-9]+)*(?:-[0-9A-Za-z.]+)?)-vc(\d+)\.apk""", RegexOption.IGNORE_CASE)
+
+        /** The release's Baseline Profile as dex metadata: -p0 for Android 12+, -p1 for 9-11. */
+        private val DM_NAME_REGEX =
+            Regex("""DailyDash-.+-vc(\d+)-p([01])\.dm""", RegexOption.IGNORE_CASE)
+
+        /** Which .dm this phone's ART reads, or null before Android 9. */
+        private val DM_PROFILE: String? = when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> "0"
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.P -> "1"
+            else -> null
+        }
     }
 
     // Metadata calls reuse the app client; APK downloads use a quiet long-timeout client
@@ -321,12 +336,21 @@ class AppUpdateRepository @Inject constructor(
         val meta = ReleaseNotesFormatter.parseMeta(releaseNotes)
 
         var best: AppUpdateInfo? = null
+        val dmByCode = mutableMapOf<Int, String>()
         if (assets != null) {
             for (i in 0 until assets.length()) {
                 val asset = assets.optJSONObject(i) ?: continue
                 val name = asset.optString("name").orEmpty()
+                DM_NAME_REGEX.matchEntire(name)?.let { dm ->
+                    val code = dm.groupValues[1].toIntOrNull()
+                    val url = asset.optString("browser_download_url").orEmpty()
+                    if (code != null && dm.groupValues[2] == DM_PROFILE && url.isNotBlank()) dmByCode[code] = url
+                }
                 val match = APK_NAME_REGEX.matchEntire(name) ?: continue
-                val versionName = match.groupValues[1]
+                // The tag holds the full name when the file carries only its numbers (a beta).
+                val fileName = match.groupValues[1]
+                val tagVersion = tagName.removePrefix("v").trim()
+                val versionName = tagVersion.takeIf { it.startsWith(fileName) && it.length > fileName.length } ?: fileName
                 val versionCode = match.groupValues[2].toIntOrNull() ?: continue
                 val url = asset.optString("browser_download_url").orEmpty()
                 if (url.isBlank()) continue
@@ -346,7 +370,7 @@ class AppUpdateRepository @Inject constructor(
             }
         }
 
-        if (best != null) return best
+        if (best != null) return best.copy(dmDownloadUrl = dmByCode[best.versionCode].orEmpty())
 
         // Changelog-only fallback: prefer CI meta comment, then tag versionName with
         // unknown versionCode (0) so we never invent a bogus fold like 1.1.46 → 10146.
@@ -434,6 +458,7 @@ class AppUpdateRepository @Inject constructor(
             if (partFile.length() < 1_000L) throw IOException("Downloaded APK is missing or too small")
             outFile.delete()
             if (!partFile.renameTo(outFile)) throw IOException("Could not save the download")
+            downloadDexMetadata(info, outFile)
             outFile
         } catch (e: Exception) {
             partFile.delete()
@@ -441,6 +466,35 @@ class AppUpdateRepository @Inject constructor(
         } finally {
             cancelOnAbort?.dispose()
         }
+    }
+
+    /**
+     * The release's Baseline Profile, a few KB, saved beside [apk] as its .dm so the install
+     * compiles the app straight away. Best effort: without it the update installs as before.
+     */
+    private fun downloadDexMetadata(info: AppUpdateInfo, apk: File) {
+        val dm = dexMetadataFor(apk)
+        dm.delete()
+        if (info.dmDownloadUrl.isBlank()) return
+        runCatching {
+            val request = Request.Builder()
+                .url(info.dmDownloadUrl)
+                .header("User-Agent", "DailyDash/${BuildConfig.VERSION_NAME}")
+                .get()
+                .build()
+            downloadClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return
+                val bytes = response.body?.bytes() ?: return
+                if (bytes.size in 64..DM_MAX_BYTES) dm.writeBytes(bytes)
+            }
+        }.onFailure { dm.delete() }
+    }
+
+    private fun dexMetadataFor(apk: File) = File(apk.parentFile, apk.name.removeSuffix(".apk") + ".dm")
+
+    /** An install that failed goes again without the profile, in case Android refused that part. */
+    fun dropDexMetadata(apk: File) {
+        dexMetadataFor(apk).delete()
     }
 
     // ── Background checks ──────────────────────────────────────────────────
@@ -488,13 +542,14 @@ class AppUpdateRepository @Inject constructor(
     private fun installWithPackageInstaller(apkFile: File) {
         val installer = context.packageManager.packageInstaller
         val apkBytes = apkFile.length()
+        val dm = dexMetadataFor(apkFile).takeIf { it.isFile && it.length() > 0 }
         logInstallSource()
         val params = PackageInstaller.SessionParams(
             PackageInstaller.SessionParams.MODE_FULL_INSTALL,
         ).apply {
             setAppPackageName(context.packageName)
             setAppLabel("DailyDash")
-            setSize(apkBytes)
+            setSize(apkBytes + (dm?.length() ?: 0L))
             setInstallLocation(PackageInfo.INSTALL_LOCATION_AUTO)
             setInstallReason(PackageManager.INSTALL_REASON_USER)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -523,6 +578,15 @@ class AppUpdateRepository @Inject constructor(
                     session.openWrite("base.apk", 0, apkBytes).use { output ->
                         input.copyTo(output)
                         session.fsync(output)
+                    }
+                }
+                // Named after the APK it belongs to, so ART compiles base.apk with this profile at install.
+                if (dm != null) {
+                    dm.inputStream().use { input ->
+                        session.openWrite("base.dm", 0, dm.length()).use { output ->
+                            input.copyTo(output)
+                            session.fsync(output)
+                        }
                     }
                 }
 

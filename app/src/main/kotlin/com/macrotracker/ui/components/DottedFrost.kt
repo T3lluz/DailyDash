@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.createBitmap
 import com.macrotracker.ui.theme.GlassDot
 import com.macrotracker.ui.theme.GlassTint
+import dev.chrisbanes.haze.HazeInputScale
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
@@ -172,6 +173,9 @@ private fun rememberDotMask(cell: Dp, core: Dp, edge: Dp, invert: Boolean): Brus
 
 // ── The real thing: masked double-blur ───────────────────────────────────────
 
+/** The heavy glass pass is sampled at this scale; the sharp dot windows stay at full size. */
+private const val GLASS_INPUT_SCALE = 0.5f
+
 /**
  * Frosted glass perforated by a dot grid — the Cinema-Info chrome.
  *
@@ -208,6 +212,9 @@ fun Modifier.dottedGlass(
         // `.header-glass` — the pane itself.
         .hazeEffect(state = hazeState, style = glassStyle) {
             blurRadius = glassBlur
+            // A 28dp blur looks the same sampled at half size and costs a quarter of the
+            // pixels. The chrome re-blurs every frame something animates under it.
+            inputScale = HazeInputScale.Fixed(GLASS_INPUT_SCALE)
             mask = glassMask
             // Dots are the texture; grain would compete with them.
             noiseFactor = 0f
