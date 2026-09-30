@@ -51,6 +51,9 @@ import kotlin.math.min
 private val NavPillShape = RoundedCornerShape(percent = 50)
 private val NavPillHeight = 64.dp
 
+/** How far the navbar sits in from the screen's sides; the island keeps the same width. */
+val ChromeSideInset = 28.dp
+
 @Composable
 fun PillNavigationBar(
     items: List<Screen>,
@@ -84,7 +87,7 @@ fun PillNavigationBar(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 28.dp, end = 28.dp, bottom = 8.dp)
+            .padding(start = ChromeSideInset, end = ChromeSideInset, bottom = 8.dp)
             .height(NavPillHeight),
     ) {
         Box(

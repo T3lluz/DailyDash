@@ -14,6 +14,8 @@ interface TwitchRepository {
     suspend fun getLiveStreamsForTrackedChannels(forceRefresh: Boolean = false): Result<List<TwitchStream>>
     suspend fun searchChannels(query: String): Result<List<TwitchChannel>>
     fun getTrackedChannels(): List<TwitchChannel>
+    /** The live streams last fetched, without going to the network; null before the first. */
+    fun getCachedLiveStreams(): List<TwitchStream>?
     fun addTrackedChannel(channel: TwitchChannel)
     fun addTrackedChannels(channels: List<TwitchChannel>): Int
     fun removeTrackedChannel(userId: String)
@@ -60,6 +62,8 @@ class TwitchRepositoryImpl @Inject constructor(
         cachedStreams = null
         lastFetchTime = 0
     }
+
+    override fun getCachedLiveStreams(): List<TwitchStream>? = cachedStreams
 
     override fun getTrackedChannels(): List<TwitchChannel> {
         val ids = prefs.getStringSet(KEY_TRACKED, emptySet()) ?: emptySet()

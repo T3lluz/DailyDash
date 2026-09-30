@@ -37,6 +37,7 @@ import com.macrotracker.data.server.ServerIntentRequest
 import com.macrotracker.data.update.AppUpdateNotifier
 import com.macrotracker.data.update.AppUpdateUiState
 import com.macrotracker.data.update.UpdateInstallActivity
+import com.macrotracker.data.update.info
 import com.macrotracker.data.update.updateAvailable
 import com.macrotracker.ui.components.AppUpdateSheet
 import com.macrotracker.ui.components.LocalIslandClearance
@@ -258,6 +259,8 @@ fun MainScreen(
             // Without the AI tab there is nowhere for the tab to lead.
             activity = hermesActivity.takeIf { hasAiApiKey },
             onActivityClick = onHermesActivityClick,
+            updateVersion = updateState.info?.versionName?.takeIf { updateAvailable },
+            onOpenUpdate = { appUpdateViewModel.openDialog() },
         )
 
         if (!splashShown) {
@@ -301,6 +304,8 @@ private fun MainScreenScaffold(
     onSettingsUpdateBadgeClick: () -> Unit,
     activity: NavActivity?,
     onActivityClick: (NavActivity) -> Unit,
+    updateVersion: String?,
+    onOpenUpdate: () -> Unit,
 ) {
     val navHostModifier = remember { Modifier.statusBarsPadding() }
 
@@ -337,6 +342,16 @@ private fun MainScreenScaffold(
         // The web's island, hanging from the status bar over the tab screens.
         val islandVm: IslandViewModel = hiltViewModel()
         val islandItems by islandVm.items.collectAsState()
+        LaunchedEffect(updateVersion) { islandVm.setUpdateAvailable(updateVersion) }
+        // The tab you are on teaches the island a little about what matters at this hour.
+        LaunchedEffect(currentRoute) {
+            when (currentRoute) {
+                Screen.Home.route -> islandVm.visited("home")
+                Screen.Health.route -> islandVm.visited("health")
+                Screen.AI.route -> islandVm.visited("ai")
+                SettingsRoutes.SERVER_DASHBOARD -> islandVm.visited("servers")
+            }
+        }
         val uriHandler = LocalUriHandler.current
         val islandVisible = currentRoute == Screen.Home.route || currentRoute == Screen.Health.route ||
             currentRoute == Screen.Settings.route
@@ -357,13 +372,18 @@ private fun MainScreenScaffold(
             onHermes = onActivityClick,
             visible = islandVisible,
             hazeState = hazeState,
+            onHide = { item -> islandVm.hide(item) },
             onItem = { item ->
+                islandVm.tapped(item)
                 val link = item.join ?: item.href
                 when {
                     item.kind == "need" && item.thread != null -> {
                         islandVm.openThread(item.thread)
                         navController.navigateToTab(Screen.AI.route)
                     }
+                    item.route == "update" -> onOpenUpdate()
+                    item.route == "servers" -> navController.navigate(SettingsRoutes.SERVER_DASHBOARD) { launchSingleTop = true }
+                    item.route == "health" -> navController.navigateToTab(Screen.Health.route)
                     link != null -> runCatching { uriHandler.openUri(link) }
                     item.isBrief -> {
                         islandVm.briefSeen()

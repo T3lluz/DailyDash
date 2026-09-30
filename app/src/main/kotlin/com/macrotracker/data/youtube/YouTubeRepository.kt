@@ -14,6 +14,8 @@ import javax.inject.Singleton
 interface YouTubeRepository {
     /** Fetches latest videos via RSS — no API key required. */
     suspend fun getLatestVideosForTrackedChannels(): Result<List<YoutubeVideo>>
+    /** The last feed fetched, without going to the network; null before the first. */
+    fun getCachedVideos(): List<YoutubeVideo>?
     /** Searches channels by scraping YouTube — no API key required. */
     suspend fun searchChannels(query: String): Result<List<YoutubeChannel>>
     fun getTrackedChannels(): List<YoutubeChannel>
@@ -151,6 +153,8 @@ class YouTubeRepositoryImpl @Inject constructor(
             Log.e(TAG, "importSubscriptions failed", e)
         }
     }
+
+    override fun getCachedVideos(): List<YoutubeVideo>? = cachedVideos
 
     override suspend fun getLatestVideosForTrackedChannels(): Result<List<YoutubeVideo>> =
         withContext(Dispatchers.IO) {

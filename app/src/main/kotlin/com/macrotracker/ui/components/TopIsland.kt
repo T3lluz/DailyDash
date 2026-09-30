@@ -16,13 +16,14 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -32,7 +33,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -67,6 +69,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.macrotracker.data.dashboard.IslandItem
+import com.macrotracker.data.island.IslandRanking
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.MacroMotion
@@ -110,6 +113,8 @@ fun TopIsland(
     hazeState: HazeState?,
     onItem: (IslandItem) -> Unit,
     modifier: Modifier = Modifier,
+    /** A long press on an item: hidden for the rest of the day. */
+    onHide: (IslandItem) -> Unit = {},
 ) {
     val shown = islandLine(items, hermes)
     val show = visible && (shown.isNotEmpty() || hermes != null)
@@ -124,7 +129,8 @@ fun TopIsland(
         modifier = modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .padding(start = 16.dp, end = 16.dp, top = IslandTop),
+            // As wide as the navbar, whatever it holds: the two pieces of chrome frame the page alike.
+            .padding(start = ChromeSideInset, end = ChromeSideInset, top = IslandTop),
         contentAlignment = Alignment.TopCenter,
     ) {
         AnimatedVisibility(
@@ -141,14 +147,14 @@ fun TopIsland(
                     .chromeGlass(hazeState, IslandShape)
                     // After the chrome, so the size animation's clip never cuts its shadow.
                     .animateContentSize(MacroMotion.navTabSpring())
-                    .width(IntrinsicSize.Max),
+                    .fillMaxWidth(),
             ) {
                 AnimatedVisibility(
                     visible = frame.items.isNotEmpty(),
                     enter = expandVertically(MacroMotion.navTabSpring(), expandFrom = Alignment.Top) + fadeIn(MacroMotion.fadeTween()),
                     exit = shrinkVertically(MacroMotion.navTabSpring(), shrinkTowards = Alignment.Top) + fadeOut(MacroMotion.fadeTween(120)),
                 ) {
-                    ItemLine(frame.items.ifEmpty { held.items }, onItem)
+                    ItemLine(frame.items.ifEmpty { held.items }, onItem, onHide)
                 }
                 AnimatedVisibility(
                     visible = frame.hermes != null,
@@ -197,36 +203,54 @@ private class IslandHeld {
 }
 
 @Composable
-private fun ItemLine(items: List<IslandItem>, onItem: (IslandItem) -> Unit) {
+private fun ItemLine(items: List<IslandItem>, onItem: (IslandItem) -> Unit, onHide: (IslandItem) -> Unit) {
     val haptics = rememberHaptics()
-    Row(
+    // Items slide into their new places as the ranking moves them, and fade in and out.
+    LazyRow(
         modifier = Modifier
             .fillMaxWidth()
-            .height(LineHeight)
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 4.dp),
+            .height(LineHeight),
+        contentPadding = PaddingValues(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        items.forEachIndexed { i, item ->
+        itemsIndexed(items, key = { _, item -> IslandRanking.key(item) }) { i, item ->
             IslandEntry(
                 item = item,
                 // The first item gets its detail; the rest keep to their title.
                 detailed = i == 0,
                 onClick = { haptics.tick(); onItem(item) },
+                onLongClick = { haptics.reject(); onHide(item) },
+                modifier = Modifier.animateItem(
+                    fadeInSpec = MacroMotion.fadeTween(),
+                    placementSpec = MacroMotion.navTabSpring(),
+                    fadeOutSpec = MacroMotion.fadeTween(150),
+                ),
             )
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun IslandEntry(item: IslandItem, detailed: Boolean, onClick: () -> Unit) {
+private fun IslandEntry(
+    item: IslandItem,
+    detailed: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val tone = toneColor(item)
     Row(
-        modifier = Modifier
+        modifier = modifier
             .height(34.dp)
             .clip(CircleShape)
-            .clickable(role = Role.Button, onClick = onClick)
+            .combinedClickable(
+                role = Role.Button,
+                onLongClickLabel = "Hide for today",
+                onLongClick = onLongClick,
+                onClick = onClick,
+            )
             .padding(start = 4.dp, end = 10.dp)
             .semantics { contentDescription = listOf(item.title, item.sub, item.end).filter { it.isNotBlank() }.joinToString(", ") },
         verticalAlignment = Alignment.CenterVertically,
@@ -415,7 +439,7 @@ private fun RingProgress(pct: Float) {
 }
 
 private fun toneColor(item: IslandItem): Color {
-    item.color?.let { hex -> parseIslandHex(hex)?.let { if (item.kind == "cal") return it } }
+    item.color?.let { hex -> parseIslandHex(hex)?.let { if (item.kind in BRAND_KINDS) return it } }
     return when (item.tone) {
         "needs", "warn", "soon" -> Warning
         "error" -> Error
@@ -430,7 +454,21 @@ private fun parseIslandHex(hex: String): Color? {
     return if (h.length == 6) h.toLongOrNull(16)?.let { Color(0xFF000000 or it) } else null
 }
 
+/** Kinds that wear their own colour: a calendar's, Twitch's purple, YouTube's red. */
+private val BRAND_KINDS = setOf("cal", "live", "yt")
+
 private fun islandIcon(name: String): ImageVector = when (name) {
+    "server" -> AppIcons.Server
+    "radio" -> AppIcons.Radio
+    "play" -> AppIcons.Play
+    "code" -> AppIcons.Code
+    "tv" -> AppIcons.TvPlay
+    "moon" -> AppIcons.Moon
+    "sun" -> AppIcons.ThermometerSun
+    "cloud" -> AppIcons.Cloud
+    "footprints" -> AppIcons.Footprints
+    "restaurant" -> AppIcons.Restaurant
+    "download" -> AppIcons.Download
     "siren" -> AppIcons.Siren
     "calendar-clock" -> AppIcons.Clock
     "calendar" -> AppIcons.Calendar
