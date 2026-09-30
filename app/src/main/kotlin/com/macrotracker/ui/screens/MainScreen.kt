@@ -335,6 +335,11 @@ private fun MainScreenScaffold(
     }
 
     val hazeState = rememberHazeState()
+    // A screen built on a platform view (the console's WebView, the camera preview) stays out
+    // of the blur. The island and the navbar draw the blur source a second time, and a WebView
+    // drawn twice in a frame can take the app down; the chrome slides away over those screens anyway.
+    val visibleEntries by navController.visibleEntries.collectAsState()
+    val hostsPlatformView = visibleEntries.any { it.destination.route in PlatformViewRoutes }
 
     // Overlay the frosted pill on top of content so scrolling content
     // can blur through the bar (hazeSource + hazeEffect).
@@ -342,6 +347,7 @@ private fun MainScreenScaffold(
         // The web's island, hanging from the status bar over the tab screens.
         val islandVm: IslandViewModel = hiltViewModel()
         val islandItems by islandVm.items.collectAsState()
+        val islandShortTitles by islandVm.shortTitles.collectAsState()
         LaunchedEffect(updateVersion) { islandVm.setUpdateAvailable(updateVersion) }
         // The tab you are on teaches the island a little about what matters at this hour.
         LaunchedEffect(currentRoute) {
@@ -360,7 +366,7 @@ private fun MainScreenScaffold(
                 navController = navController,
                 modifier = navHostModifier
                     .fillMaxSize()
-                    .hazeSource(state = hazeState),
+                    .then(if (hostsPlatformView) Modifier else Modifier.hazeSource(state = hazeState)),
                 startDestination = startDestination,
                 onOnboardingComplete = onOnboardingComplete,
                 aiAvailable = hasAiApiKey,
@@ -368,6 +374,7 @@ private fun MainScreenScaffold(
         }
         TopIsland(
             items = islandItems,
+            shortTitles = islandShortTitles,
             hermes = activity,
             onHermes = onActivityClick,
             visible = islandVisible,
@@ -404,6 +411,9 @@ private fun MainScreenScaffold(
         )
     }
 }
+
+/** Routes whose screen is a platform view, kept out of the chrome's haze source. */
+private val PlatformViewRoutes = setOf(SubScreenRoutes.CONSOLE, SubScreenRoutes.CAMERA_SCAN)
 
 @Composable
 private fun MainBottomBar(

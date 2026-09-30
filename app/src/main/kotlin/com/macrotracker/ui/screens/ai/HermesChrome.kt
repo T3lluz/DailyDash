@@ -100,7 +100,7 @@ import androidx.compose.runtime.setValue
 
 /*
  * The frame around a Hermes conversation, shaped like the t3lluz dashboard's panel without
- * its side pane: a rail of threads (here a drawer, the phone's own place for one), the
+ * its side pane: a rail of threads (here a sheet, the phone's own place for one), the
  * conversation, and a tall composer with the pickers under the words — what Hermes may do,
  * which model it thinks with, and how hard.
  */

@@ -301,16 +301,20 @@ com.macrotracker/
                               recipe made the dots too big here). The navbar and the island take
                               `Modifier.chromeGlass(hazeState, shape)`: `chromeShadow` (the web's two-layer
                               chrome shadow, cast by the outline with the inside cut away, since a shadow under
-                              translucent glass shows through it), the clip, the dotted glass, and `glassRim` —
-                              the glass a shade darker fading in from the edge plus a faint light hairline,
-                              instead of the web's solid 2px ring, which reads as a hard grey line over white.
+                              translucent glass shows through it), the clip, the dotted glass, and `chromeOutline` —
+                              the web's plain 2px ring (`0 0 0 2px var(--line)`) in `Border`, drawn just inside
+                              the outline so the chrome keeps its size.
                               Anything that clips (`animateContentSize`, scrolling) goes after `chromeGlass`, or
                               it cuts the shadow off at the bounds.
                               `Modifier.dottedFrost()` is just the painted-dot fallback for surfaces with nothing
                               to blur (and for API < 31) — don't reach for it as the effect itself.
                               TopIsland.kt: the web's island, drawn by MainScreen under the status bar on Home,
                               Health and Settings (IslandViewModel; tap opens the chat, the event, the call, or Home).
-                              Its items are one line; while Hermes works it grows a second line for him (scanner,
+                              Its items are one line that never scrolls: `fitIslandLine` (IslandFit.kt,
+                              IslandFitTest) folds them until they fit, the last item first: detail, then a word or
+                              two for the title (`IslandShortener`: short titles from the Settings AI provider, one
+                              call per new title, kept for good; `islandShortTitle` folds by rule until then), then
+                              the countdowns, then icons only, then a "+N". While Hermes works it grows a second line for him (scanner,
                               label, clock; Done / Needs you after). `islandClearance` → `LocalIslandClearance`
                               lets `ScreenHeaderSpacer` push a tab's title down under a two-line island.
                               MailCard.kt: Home's `MAIL` (MailViewModel: optimistic actions laid over the server's

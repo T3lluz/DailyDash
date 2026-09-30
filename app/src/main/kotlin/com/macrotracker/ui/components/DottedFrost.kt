@@ -16,6 +16,8 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.addOutline
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
@@ -29,6 +31,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.createBitmap
+import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.GlassDot
 import com.macrotracker.ui.theme.GlassTint
 import dev.chrisbanes.haze.HazeInputScale
@@ -89,16 +92,9 @@ object DottedFrostSpec {
         Triple(1.dp, 5.dp, Color(0x38000000)),
     )
 
-    /**
-     * The rim: how far in from the outline the glass is shaded darker, how soft its
-     * inner side is, and how much darker. It is the glass a shade down, not a line.
-     */
-    val RimWidth: Dp = 2.5.dp
-    val RimSoftness: Dp = 2.dp
-    val RimShade = Color(0x6B000000)
-
-    /** A light hairline on the very edge, so the rim still reads over the dark app. */
-    val RimHairline = Color(0x1FFFFFFF)
+    /** The web's chrome ring, `0 0 0 2px var(--line)`: a plain line in the app's border colour. */
+    val OutlineWidth: Dp = 2.dp
+    val OutlineColor: Color = Border
 }
 
 // ── Tiling dot masks ─────────────────────────────────────────────────────────
@@ -232,7 +228,7 @@ fun Modifier.dottedGlass(
 
 /**
  * The navbar's and the island's surface in one go: the web's soft two-layer lift outside
- * the shape, the dotted glass inside it, and [glassRim] round its edge. Everything that
+ * the shape, the dotted glass inside it, and [chromeOutline] round its edge. Everything that
  * sizes or clips the chrome's content (`animateContentSize`, scrolling) goes after it, or
  * it cuts the shadow off at the bounds.
  */
@@ -241,7 +237,31 @@ fun Modifier.chromeGlass(hazeState: HazeState?, shape: Shape): Modifier = this
     .chromeShadow(shape)
     .clip(shape)
     .dottedGlass(hazeState = hazeState, shape = shape)
-    .glassRim(shape)
+    .chromeOutline(shape)
+
+/**
+ * Plain frosted glass: the backdrop blurred smooth, with no dot grid, laid over an opaque
+ * [base]. The base is what keeps it clean over other glass: whatever sits between it and
+ * the page (the navbar's dotted glass under its tab bubble) is covered, so only the page,
+ * blurred and washed with [tint], shows through. Goes after `clip(shape)`.
+ */
+fun Modifier.frostedGlass(
+    hazeState: HazeState?,
+    base: Color,
+    tint: Color,
+    blur: Dp = DottedFrostSpec.GlassBlur,
+): Modifier {
+    val under = this.background(base)
+    if (hazeState == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+        return under.background(tint)
+    }
+    return under.hazeEffect(state = hazeState) {
+        blurRadius = blur
+        noiseFactor = 0f
+        tints = listOf(HazeTint(tint))
+        fallbackTint = HazeTint(tint)
+    }
+}
 
 /**
  * The web's `--chrome-shadow` under a surface, cast by the shape's outline with its inside
@@ -281,39 +301,17 @@ fun Modifier.chromeShadow(shape: Shape): Modifier = drawWithCache {
 }
 
 /**
- * The chrome's edge on the phone. The web rings its chrome in a solid 2px line, which over
- * anything light reads as a hard grey outline round the glass. Here the edge is the glass
- * itself a shade darker, fading inward over a couple of dp, so over a white page it is
- * frosted and dark and over the dark app a faint light hairline still draws the shape.
+ * The chrome's edge, as the dashboard draws round its navbar and top bar: one solid 2dp
+ * line in the border colour, crisp over the blur. It sits just inside the outline, so the
+ * chrome keeps its size and its content keeps clear of it.
  *
  * Draws over the glass and under the content: put it after [dottedGlass].
  */
-fun Modifier.glassRim(shape: Shape): Modifier = drawWithCache {
-    val native = Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache)) }.asAndroidPath()
-    // Stroked on the outline, so half of each stroke falls outside and is clipped away.
-    val shade = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-        style = android.graphics.Paint.Style.STROKE
-        strokeWidth = DottedFrostSpec.RimWidth.toPx() * 2f
-        color = DottedFrostSpec.RimShade.toArgb()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            maskFilter = BlurMaskFilter(DottedFrostSpec.RimSoftness.toPx(), BlurMaskFilter.Blur.NORMAL)
-        }
-    }
-    val hairline = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-        style = android.graphics.Paint.Style.STROKE
-        strokeWidth = 2f
-        color = DottedFrostSpec.RimHairline.toArgb()
-    }
-    onDrawBehind {
-        drawIntoCanvas { c ->
-            val nc = c.nativeCanvas
-            nc.save()
-            nc.clipPath(native)
-            nc.drawPath(native, shade)
-            nc.drawPath(native, hairline)
-            nc.restore()
-        }
-    }
+fun Modifier.chromeOutline(shape: Shape): Modifier = drawWithCache {
+    val outline = shape.createOutline(size, layoutDirection, this)
+    // Stroked on the outline at twice the width; the outer half falls outside the clip.
+    val stroke = Stroke(DottedFrostSpec.OutlineWidth.toPx() * 2f)
+    onDrawBehind { drawOutline(outline, DottedFrostSpec.OutlineColor, style = stroke) }
 }
 
 // ── Painted-dot fallback (reduced-motion / no haze source) ───────────────────

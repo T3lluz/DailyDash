@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.macrotracker.data.dashboard.DashboardRepository
 import com.macrotracker.data.dashboard.IslandItem
+import com.macrotracker.data.dashboard.IslandShortener
 import com.macrotracker.data.hermes.HermesActivityTracker
 import com.macrotracker.data.hermes.HermesLiveFeed
 import com.macrotracker.data.island.IslandLearning
@@ -53,6 +54,7 @@ class IslandViewModel @Inject constructor(
     private val tracker: HermesActivityTracker,
     private val local: LocalIslandSource,
     private val learning: IslandLearning,
+    private val shortener: IslandShortener,
     @ApplicationContext context: Context,
 ) : ViewModel() {
 
@@ -63,8 +65,13 @@ class IslandViewModel @Inject constructor(
     private val _items = MutableStateFlow(ranked())
     val items: StateFlow<List<IslandItem>> = _items
 
+    /** Short titles by full title, for when the line has to fold its items to fit. */
+    private val _shortTitles = MutableStateFlow(shortener.cached())
+    val shortTitles: StateFlow<Map<String, String>> = _shortTitles
+
     private var job: Job? = null
     private var localJob: Job? = null
+    private var shortJob: Job? = null
 
     init {
         loadLocal()
@@ -76,6 +83,7 @@ class IslandViewModel @Inject constructor(
                 .collect { load() }
         }
         viewModelScope.launch { liveFeed.connected.filter { it }.collect { load() } }
+        viewModelScope.launch { _items.collect { shorten(it) } }
         viewModelScope.launch {
             while (true) {
                 if (ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
@@ -158,6 +166,13 @@ class IslandViewModel @Inject constructor(
         affinity = { learning.affinity(it) },
         hidden = learning.hiddenToday(),
     )
+
+    private fun shorten(items: List<IslandItem>) {
+        if (items.isEmpty() || shortJob?.isActive == true) return
+        shortJob = viewModelScope.launch {
+            shortener.shorten(items)?.let { _shortTitles.value = it }
+        }
+    }
 
     /** Opens a Hermes chat in the AI tab; the caller switches tabs. */
     fun openThread(id: String) = tracker.requestOpen(id)
