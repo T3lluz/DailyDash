@@ -119,7 +119,7 @@ fun StatsScreen(
 
             if (history.isNotEmpty() && history.none { it.totalCalories > 0 || it.totalProtein > 0 }) {
                 Text(
-                    "Nothing logged this week yet. Quick add on Home or a meal on the AI tab fills this in.",
+                    "Nothing logged this week yet. The Food card on Home or a meal on the AI tab fills this in.",
                     fontSize = 13.sp,
                     color = TextSecondary,
                     lineHeight = 18.sp,

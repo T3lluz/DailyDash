@@ -97,7 +97,7 @@ private val PAGES = listOf(
         title = "Macro tracking made easy",
         body = "Log food by typing, scanning a nutrition label with your camera, or describing your meal to Clanker in plain English. DailyDash tracks calories and protein.",
         tips = listOf(
-            "Quick add on Home for fast manual logs",
+            "The Food card on Home for fast manual logs",
             "Scan any nutrition facts label with the camera",
             "Progress bars turn red when you exceed a goal",
             "Delete entries from Recent Logs on Health",

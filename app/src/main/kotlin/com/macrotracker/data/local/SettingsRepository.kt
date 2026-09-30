@@ -352,7 +352,7 @@ class SettingsRepository @Inject constructor(
 
     private fun loadHealthWidgetOrder(): String {
         val default =
-            "DAILY_HEALTH:true,BODY_STATS:true,SLEEP:true,ACTIVITIES:true,VITALS:true,HISTORY:true,SUMMARY:true,ADD_ENTRY:true,WEEK_AT_A_GLANCE:true,RECENT_LOGS:true"
+            "DAILY_HEALTH:true,BODY_STATS:true,SLEEP:true,ACTIVITIES:true,VITALS:true,HISTORY:true,FOOD:true,WEEK_AT_A_GLANCE:true,RECENT_LOGS:true"
         val raw = prefs.getString("health_widget_order", default) ?: default
         val migrated = migrateHealthWidgetOrder(raw)
         if (migrated != raw) {
@@ -388,7 +388,7 @@ class SettingsRepository @Inject constructor(
 
         const val DEFAULT_DASHBOARD_SERVER_URL = "https://t3lluz.com"
 
-        const val DEFAULT_HOME_WIDGET_ORDER = "WEATHER:true,CALENDAR:true,BRIEFING:true,MAIL:true,UPCOMING:true,BODY_STATS:true,PROGRESS:true,QUICK_ADD:true,F1:true,GITHUB:true,SERVERS:true,YOUTUBE:true,TWITCH:true"
+        const val DEFAULT_HOME_WIDGET_ORDER = "WEATHER:true,CALENDAR:true,BRIEFING:true,MAIL:true,UPCOMING:true,BODY_STATS:true,FOOD:true,F1:true,GITHUB:true,SERVERS:true,YOUTUBE:true,TWITCH:true"
 
         /**
          * Existing installs get the Servers card appended, and Coming up placed right

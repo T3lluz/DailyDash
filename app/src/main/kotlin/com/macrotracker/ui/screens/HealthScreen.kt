@@ -83,6 +83,7 @@ import com.macrotracker.ui.components.MacroButton
 import com.macrotracker.ui.components.MacroLogItem
 import com.macrotracker.ui.components.WidgetScrollBox
 import com.macrotracker.ui.components.MacroProgressBar
+import com.macrotracker.ui.components.FoodLogForm
 import com.macrotracker.ui.components.MacroTextField
 import com.macrotracker.ui.components.PillButton
 import com.macrotracker.ui.components.RipplePullToRefreshBox
@@ -189,8 +190,7 @@ fun HealthScreen(
             Triple("ACTIVITIES", "Activities", AppIcons.Activity),
             Triple("VITALS", "Body & Vitals", AppIcons.Scale),
             Triple("HISTORY", "Trends", AppIcons.ChartLine),
-            Triple("SUMMARY", "Food today", AppIcons.Rows),
-            Triple("ADD_ENTRY", "Log food", AppIcons.Add),
+            Triple("FOOD", "Food today", AppIcons.Restaurant),
             Triple("WEEK_AT_A_GLANCE", "Food trends", AppIcons.ChartBar),
             Triple("RECENT_LOGS", "Food log", AppIcons.List),
         )
@@ -498,23 +498,28 @@ fun HealthScreen(
                             )
                         }
                     }
-                    "SUMMARY" -> {
-                        val s = summary
-                        if (s == null) {
-                            HealthSection {
-                                HealthHeader(title = "Food today", icon = AppIcons.Rows, accent = HealthNutritionTone)
-                                Spacer(modifier = Modifier.height(14.dp))
-                                ContentSkeleton(lines = 2, accent = Border)
-                            }
-                        } else {
-                            val hcStats = (healthConnectState as? HealthConnectUiState.Success)?.stats
-                            HealthSection(delayMs = 100) {
-                                HealthHeader(
-                                    title = "Food today",
-                                    icon = AppIcons.Rows,
-                                    accent = HealthNutritionTone,
-                                    modifier = Modifier.padding(bottom = 16.dp),
+                    "FOOD" -> {
+                        // What you've eaten against your goals, and the form to log more, in one section.
+                        HealthSection(delayMs = 100) {
+                            HealthHeader(
+                                title = "Food today",
+                                icon = AppIcons.Restaurant,
+                                accent = HealthNutritionTone,
+                                modifier = Modifier.padding(bottom = 16.dp),
+                            ) {
+                                PillButton(
+                                    icon = AppIcons.Camera,
+                                    label = "Scan label",
+                                    emphasized = true,
+                                    onClick = onNavigateToCameraScan,
+                                    modifier = Modifier.padding(start = 8.dp),
                                 )
+                            }
+                            val s = summary
+                            if (s == null) {
+                                ContentSkeleton(lines = 2, accent = Border)
+                            } else {
+                                val hcStats = (healthConnectState as? HealthConnectUiState.Success)?.stats
                                 val calProgress = if (s.calorieGoal > 0) s.totalCalories.toFloat() / s.calorieGoal else 0f
                                 val protProgress = if (s.proteinGoal > 0) s.totalProtein.toFloat() / s.proteinGoal else 0f
                                 MacroProgressBar(
@@ -593,99 +598,15 @@ fun HealthScreen(
                                     }
                                 }
                             }
-                        }
-                    }
-                    "ADD_ENTRY" -> {
-                        HealthSection(delayMs = 150) {
-                            HealthHeader(
-                                title = "Log food",
-                                icon = AppIcons.Add,
-                                accent = HealthNutritionTone,
-                                modifier = Modifier.padding(bottom = 16.dp),
-                            ) {
-                                PillButton(
-                                    icon = AppIcons.Camera,
-                                    label = "Scan label",
-                                    emphasized = true,
-                                    onClick = onNavigateToCameraScan,
-                                    modifier = Modifier.padding(start = 8.dp),
-                                )
-                            }
-
-                            MacroTextField(
-                                value = foodName,
-                                onValueChange = { foodName = it },
-                                placeholder = "Food Name (optional)",
-                                trailingIcon = {
-                                    if (foodName.isNotEmpty()) {
-                                        IconButton(onClick = { foodName = "" }) {
-                                            Icon(
-                                                imageVector = AppIcons.Close,
-                                                contentDescription = "Clear",
-                                            )
-                                        }
-                                    }
-                                },
-                            )
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                MacroTextField(
-                                    value = calories,
-                                    onValueChange = { calories = it },
-                                    placeholder = "Calories",
-                                    modifier = Modifier.weight(1f),
-                                    keyboardType = KeyboardType.Number,
-                                    trailingIcon = {
-                                        if (calories.isNotEmpty()) {
-                                            IconButton(onClick = { calories = "" }) {
-                                                Icon(
-                                                    imageVector = AppIcons.Close,
-                                                    contentDescription = "Clear",
-                                                )
-                                            }
-                                        }
-                                    },
-                                )
-                                MacroTextField(
-                                    value = protein,
-                                    onValueChange = { protein = it },
-                                    placeholder = "Protein (g)",
-                                    modifier = Modifier.weight(1f),
-                                    keyboardType = KeyboardType.Number,
-                                    trailingIcon = {
-                                        if (protein.isNotEmpty()) {
-                                            IconButton(onClick = { protein = "" }) {
-                                                Icon(
-                                                    imageVector = AppIcons.Close,
-                                                    contentDescription = "Clear",
-                                                )
-                                            }
-                                        }
-                                    },
-                                )
-                            }
-
-                            MacroButton(
-                                text = "Add Log",
-                                onClick = {
-                                    val cal = calories.toIntOrNull() ?: 0
-                                    val prot = protein.toIntOrNull() ?: 0
-                                    if (cal > 0 || prot > 0) {
-                                        haptics.confirm()
-                                        healthViewModel.addLog(foodName, cal, prot)
-                                        foodName = ""
-                                        calories = ""
-                                        protein = ""
-                                        Toast.makeText(context, "Entry added", Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        haptics.reject()
-                                        Toast.makeText(context, "Enter calories or protein first", Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                                modifier = Modifier.padding(top = 8.dp),
+                            FoodLogForm(
+                                name = foodName,
+                                onNameChange = { foodName = it },
+                                calories = calories,
+                                onCaloriesChange = { calories = it },
+                                protein = protein,
+                                onProteinChange = { protein = it },
+                                onAdd = { name, cal, prot -> healthViewModel.addLog(name, cal, prot) },
+                                modifier = Modifier.padding(top = 16.dp),
                             )
                         }
                     }

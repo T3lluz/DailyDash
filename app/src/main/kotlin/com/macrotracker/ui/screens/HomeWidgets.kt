@@ -17,6 +17,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import com.macrotracker.ui.components.WidgetExpandSection
+import com.macrotracker.ui.components.WidgetExpandFooter
+import com.macrotracker.ui.components.PillButton
+import com.macrotracker.ui.components.FoodLogForm
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
@@ -98,8 +105,7 @@ fun HomeWidgetItem(
             isVisible = isVisible,
         )
         "BODY_STATS" -> HomeBodyStatsWidget(viewModel, isVisible = isVisible, onOpenHealth = onNavigateToHealth)
-        "PROGRESS" -> HomeProgressWidget(viewModel = viewModel)
-        "QUICK_ADD" -> HomeQuickAddWidget(
+        "FOOD" -> HomeFoodWidget(
             viewModel = viewModel,
             onNavigateToHealth = onNavigateToHealth,
             quickFood = quickFood,
@@ -198,9 +204,20 @@ private fun HomeBodyStatsWidget(viewModel: HomeViewModel, isVisible: Boolean, on
     }
 }
 
+/**
+ * Today's food in one card: what you've eaten against your goals, and a form that
+ * unfolds under it to log more. Health's Food today is the same pair, with the log.
+ */
 @Composable
-private fun HomeProgressWidget(
+private fun HomeFoodWidget(
     viewModel: HomeViewModel,
+    onNavigateToHealth: () -> Unit,
+    quickFood: String,
+    onQuickFoodChange: (String) -> Unit,
+    quickCalories: String,
+    onQuickCaloriesChange: (String) -> Unit,
+    quickProtein: String,
+    onQuickProteinChange: (String) -> Unit,
 ) {
     val summary by viewModel.summary.collectAsState()
     val logs by viewModel.logs.collectAsState()
@@ -209,23 +226,33 @@ private fun HomeProgressWidget(
     // shoved every widget below it down the moment the query returned.
     val s = summary ?: run {
         WidgetPlaceholderCard(
-            title = "Today's progress",
-            icon = AppIcons.ChartPie,
+            title = "Food",
+            icon = AppIcons.Restaurant,
             accent = Primary,
             minHeight = WidgetPlaceholder.CompactMinHeight,
             lines = 2,
         )
         return
     }
+    // Half-typed entries keep the form open when you come back to it.
+    var logging by rememberSaveable {
+        mutableStateOf(quickFood.isNotEmpty() || quickCalories.isNotEmpty() || quickProtein.isNotEmpty())
+    }
 
     MacroCard {
         CardHeader(
-            title = "Today's progress",
-            icon = AppIcons.ChartPie,
+            title = "Food",
+            icon = AppIcons.Restaurant,
             accent = Primary,
             modifier = Modifier.padding(bottom = 12.dp),
         ) {
             LastUpdatedText(lastUpdatedAt = logsLastUpdatedAt)
+            PillButton(
+                icon = AppIcons.List,
+                label = "All logs",
+                onClick = onNavigateToHealth,
+                modifier = Modifier.padding(start = 8.dp),
+            )
         }
 
         Row(
@@ -328,113 +355,25 @@ private fun HomeProgressWidget(
             label = "Protein",
             color = Secondary,
         )
-    }
-}
 
-@Composable
-private fun HomeQuickAddWidget(
-    viewModel: HomeViewModel,
-    onNavigateToHealth: () -> Unit,
-    quickFood: String,
-    onQuickFoodChange: (String) -> Unit,
-    quickCalories: String,
-    onQuickCaloriesChange: (String) -> Unit,
-    quickProtein: String,
-    onQuickProteinChange: (String) -> Unit,
-) {
-    val context = LocalContext.current
-
-    MacroCard {
-        CardHeader(
-            title = "Quick add",
-            icon = AppIcons.Add,
-            accent = Primary,
-            modifier = Modifier.padding(bottom = 12.dp),
-        )
-
-        MacroTextField(
-            value = quickFood,
-            onValueChange = onQuickFoodChange,
-            placeholder = "Food name (optional)",
-            trailingIcon = {
-                if (quickFood.isNotEmpty()) {
-                    IconButton(onClick = { onQuickFoodChange("") }) {
-                        Icon(
-                            imageVector = AppIcons.Close,
-                            contentDescription = "Clear",
-                        )
-                    }
-                }
-            },
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            MacroTextField(
-                value = quickCalories,
-                onValueChange = onQuickCaloriesChange,
-                placeholder = "Calories",
-                modifier = Modifier.weight(1f),
-                keyboardType = KeyboardType.Number,
-                trailingIcon = {
-                    if (quickCalories.isNotEmpty()) {
-                        IconButton(onClick = { onQuickCaloriesChange("") }) {
-                            Icon(
-                                imageVector = AppIcons.Close,
-                                contentDescription = "Clear",
-                            )
-                        }
-                    }
-                },
-            )
-            MacroTextField(
-                value = quickProtein,
-                onValueChange = onQuickProteinChange,
-                placeholder = "Protein (g)",
-                modifier = Modifier.weight(1f),
-                keyboardType = KeyboardType.Number,
-                trailingIcon = {
-                    if (quickProtein.isNotEmpty()) {
-                        IconButton(onClick = { onQuickProteinChange("") }) {
-                            Icon(
-                                imageVector = AppIcons.Close,
-                                contentDescription = "Clear",
-                            )
-                        }
-                    }
-                },
+        WidgetExpandSection(visible = logging) {
+            FoodLogForm(
+                name = quickFood,
+                onNameChange = onQuickFoodChange,
+                calories = quickCalories,
+                onCaloriesChange = onQuickCaloriesChange,
+                protein = quickProtein,
+                onProteinChange = onQuickProteinChange,
+                onAdd = { name, cal, prot -> viewModel.addLog(name, cal, prot) },
+                modifier = Modifier.padding(top = 12.dp),
             )
         }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            MacroButton(
-                text = "Add",
-                onClick = {
-                    val cal = quickCalories.toIntOrNull() ?: 0
-                    val prot = quickProtein.toIntOrNull() ?: 0
-                    if (cal > 0 || prot > 0) {
-                        viewModel.addLog(quickFood, cal, prot)
-                        onQuickFoodChange("")
-                        onQuickCaloriesChange("")
-                        onQuickProteinChange("")
-                        Toast.makeText(context, "✅ Entry added!", Toast.LENGTH_SHORT).show()
-                    } else {
-                        Toast.makeText(context, "Enter calories or protein first", Toast.LENGTH_SHORT).show()
-                    }
-                },
-                modifier = Modifier.weight(1f),
-            )
-            MacroButton(
-                text = "View all logs",
-                onClick = onNavigateToHealth,
-                modifier = Modifier.weight(1f),
-                variant = ButtonVariant.SECONDARY,
-            )
-        }
+        WidgetExpandFooter(
+            expanded = logging,
+            onToggle = { logging = !logging },
+            accentColor = Primary,
+            expandLabel = "Log food",
+            collapseLabel = "Done",
+        )
     }
 }
