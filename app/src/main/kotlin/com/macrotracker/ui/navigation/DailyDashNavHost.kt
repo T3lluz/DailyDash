@@ -16,7 +16,6 @@ import com.macrotracker.ui.screens.HealthScreen
 import com.macrotracker.ui.screens.HomeScreen
 import com.macrotracker.ui.screens.ServerScreen
 import com.macrotracker.ui.screens.SettingsScreen
-import com.macrotracker.ui.screens.StatsScreen
 import com.macrotracker.ui.screens.WidgetsScreen
 import com.macrotracker.ui.screens.onboarding.PermissionsScreen
 import com.macrotracker.ui.screens.onboarding.TutorialScreen
@@ -37,7 +36,6 @@ private val TabOrder = listOf(
 )
 
 private val SubScreens = setOf(
-    SubScreenRoutes.STATS,
     SubScreenRoutes.WIDGETS,
     SubScreenRoutes.CAMERA_SCAN,
     SettingsRoutes.CONNECTIONS,
@@ -157,7 +155,6 @@ fun DailyDashNavHost(
                 onNavigateToAi = { navController.navigateToSubScreen(SettingsRoutes.AI) },
                 onNavigateToNutrition = { navController.navigateToSubScreen(SettingsRoutes.NUTRITION) },
                 onNavigateToAbout = { navController.navigateToSubScreen(SettingsRoutes.ABOUT) },
-                onNavigateToStats = { navController.navigateToSubScreen(SubScreenRoutes.STATS) },
                 onNavigateToWidgets = { navController.navigateToSubScreen(SubScreenRoutes.WIDGETS) },
                 onNavigateToServers = { navController.navigateToSubScreen(SettingsRoutes.SERVERS) },
             )
@@ -226,10 +223,6 @@ fun DailyDashNavHost(
 
         subScreen(SubScreenRoutes.CONSOLE) { entry ->
             ConsoleScreen(onNavigateBack = { navController.popSubScreen(entry) })
-        }
-
-        subScreen(SubScreenRoutes.STATS) { entry ->
-            StatsScreen(onNavigateBack = { navController.popSubScreen(entry) })
         }
 
         subScreen(SubScreenRoutes.WIDGETS) { entry ->

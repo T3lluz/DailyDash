@@ -47,7 +47,6 @@ import com.macrotracker.ui.screens.settings.SettingsStatusTone
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.HealthConnectBrand
-import com.macrotracker.ui.theme.HealthSteps
 import com.macrotracker.ui.theme.NutritionCalories
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.ServerBrand
@@ -74,7 +73,6 @@ fun SettingsScreen(
     onNavigateToAi: () -> Unit = {},
     onNavigateToNutrition: () -> Unit = {},
     onNavigateToAbout: () -> Unit = {},
-    onNavigateToStats: () -> Unit = {},
     onNavigateToWidgets: () -> Unit = {},
     onNavigateToServers: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
@@ -172,14 +170,6 @@ fun SettingsScreen(
                 summary = "Daily calorie and protein targets",
                 status = calGoal.takeIf { it.isNotBlank() }?.let { "$it kcal · ${protGoal}g" },
                 onClick = onNavigateToNutrition,
-            )
-            SettingsRowDivider()
-            SettingsNavRow(
-                icon = AppIcons.ChartBar,
-                tint = HealthSteps,
-                title = "Stats",
-                summary = "The last 7 days of calories and protein",
-                onClick = onNavigateToStats,
             )
         }
 
