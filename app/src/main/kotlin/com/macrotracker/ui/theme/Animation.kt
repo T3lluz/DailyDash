@@ -302,6 +302,20 @@ object MacroMotion {
     val widgetContentTransition: ContentTransform
         get() = contentEnter togetherWith contentExit
 
+    /**
+     * A hub's body swapping (a channel filter picked, loading turning into the feed): the new
+     * content fades in over the old while the card eases to its new height, so nothing below
+     * it jumps.
+     */
+    val hubBodySwap: ContentTransform
+        get() = ContentTransform(
+            targetContentEnter = fadeIn(fadeTween(220)),
+            initialContentExit = fadeOut(fadeTween(FADE_OUT_MS)),
+            sizeTransform = SizeTransform(clip = true) { _, _ ->
+                tween(SLIDE_MS, easing = FastOutSlowInEasing)
+            },
+        )
+
     /** Icon swap on primary CTAs (add ↔ check ↔ remove). */
     val iconSwapTransition: ContentTransform
         get() = (fadeIn(fadeTween(150)) + scaleIn(fadeTween(150))) togetherWith
