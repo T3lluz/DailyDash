@@ -1,6 +1,7 @@
 package com.macrotracker.ui.components
 
 import androidx.compose.animation.AnimatedContent
+import com.macrotracker.data.update.prettyVersion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -107,7 +108,7 @@ fun AppUpdateSheet(
             Spacer(Modifier.height(2.dp))
             Text(
                 buildString {
-                    append("DailyDash ${info.versionName}")
+                    append("DailyDash ${prettyVersion(info.versionName)}")
                     formatApkSize(info.apkBytes)?.let { append(" · $it") }
                     append(" · you have $currentVersionName")
                 },

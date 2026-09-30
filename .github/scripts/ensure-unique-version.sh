@@ -19,6 +19,9 @@ next_name() {
   local base="$1" code="$2"
   if [[ "$base" =~ ^([0-9]+\.[0-9]+\.)([0-9]+)$ ]]; then
     echo "${BASH_REMATCH[1]}${code}"
+  elif [[ "$base" =~ ^(.+-(alpha|beta|rc)\.[0-9]+\.)([0-9]+)$ ]]; then
+    # 2.0.0-beta.1.0 counts its builds in the last number: .1.1, .1.2, …
+    echo "${BASH_REMATCH[1]}$((BASH_REMATCH[3] + code - VERSION_CODE))"
   else
     echo "${base}-${code}"
   fi

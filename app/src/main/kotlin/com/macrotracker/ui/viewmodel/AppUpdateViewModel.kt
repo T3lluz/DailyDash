@@ -1,6 +1,7 @@
 package com.macrotracker.ui.viewmodel
 
 import android.content.Context
+import com.macrotracker.data.update.prettyVersion
 import android.content.Intent
 import android.util.Log
 import androidx.lifecycle.ViewModel
@@ -98,7 +99,7 @@ class AppUpdateViewModel @Inject constructor(
         }
     }
 
-    val currentVersionName: String get() = repository.currentVersionName()
+    val currentVersionName: String get() = prettyVersion(repository.currentVersionName())
     val currentVersionCode: Int get() = repository.currentVersionCode()
 
     private var checkJob: Job? = null

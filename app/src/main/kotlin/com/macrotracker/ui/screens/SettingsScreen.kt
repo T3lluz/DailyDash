@@ -1,6 +1,7 @@
 package com.macrotracker.ui.screens
 
 import androidx.activity.ComponentActivity
+import com.macrotracker.data.update.prettyVersion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -215,7 +216,7 @@ fun SettingsScreen(
 @Composable
 private fun UpdateBanner(state: AppUpdateUiState, onClick: () -> Unit) {
     val haptics = rememberHaptics()
-    val version = state.info?.versionName
+    val version = state.info?.versionName?.let(::prettyVersion)
     Row(
         modifier = Modifier
             .fillMaxWidth()

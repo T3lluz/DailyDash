@@ -1,6 +1,7 @@
 package com.macrotracker.ui.screens.settings
 
 import androidx.activity.ComponentActivity
+import com.macrotracker.data.update.prettyVersion
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -113,15 +114,15 @@ fun AboutSettingsScreen(
                 is AppUpdateUiState.Checking -> "Checking for updates…" to TextSecondary
                 is AppUpdateUiState.UpToDate -> "You're on the latest build." to Success
                 is AppUpdateUiState.Available ->
-                    "Update available: ${s.info.versionName} (build ${s.info.versionCode})" to Primary
+                    "Update available: ${prettyVersion(s.info.versionName)} (build ${s.info.versionCode})" to Primary
                 is AppUpdateUiState.NeedsPermission ->
-                    "${s.info.versionName} is ready. Android needs to allow installs from DailyDash first." to Primary
+                    "${prettyVersion(s.info.versionName)} is ready. Android needs to allow installs from DailyDash first." to Primary
                 is AppUpdateUiState.Downloading ->
-                    "Downloading ${s.info.versionName}…${s.progress?.let { " ${(it * 100).toInt()}%" } ?: ""}" to TextSecondary
+                    "Downloading ${prettyVersion(s.info.versionName)}…${s.progress?.let { " ${(it * 100).toInt()}%" } ?: ""}" to TextSecondary
                 is AppUpdateUiState.Installing ->
-                    (if (s.awaitingConfirmation) "Tap Install in Android's prompt" else "Installing ${s.info.versionName}…") to TextSecondary
+                    (if (s.awaitingConfirmation) "Tap Install in Android's prompt" else "Installing ${prettyVersion(s.info.versionName)}…") to TextSecondary
                 is AppUpdateUiState.ReadyToInstall ->
-                    (s.note ?: "${s.info.versionName} is downloaded and ready to install") to Success
+                    (s.note ?: "${prettyVersion(s.info.versionName)} is downloaded and ready to install") to Success
                 is AppUpdateUiState.Error -> s.message to Error
             }
             Text(
@@ -153,7 +154,7 @@ fun AboutSettingsScreen(
                         is AppUpdateUiState.Downloading, is AppUpdateUiState.Installing -> "Show progress"
                         is AppUpdateUiState.ReadyToInstall -> "Install update"
                         is AppUpdateUiState.Error -> "Try again"
-                        else -> "Update to ${s.info?.versionName.orEmpty()}"
+                        else -> "Update to ${prettyVersion(s.info?.versionName.orEmpty())}"
                     },
                     onClick = {
                         when (val s = updateState) {
@@ -306,7 +307,7 @@ private fun ReleaseNotesDropdown(
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = release.versionName,
+                        text = prettyVersion(release.versionName),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (release.isNewerThanInstalled) Primary else TextPrimary,
