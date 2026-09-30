@@ -1,5 +1,6 @@
 package com.macrotracker.ui.screens.health
 
+import com.macrotracker.ui.components.WidgetStateSwitch
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Canvas
@@ -127,54 +128,59 @@ fun ActivitiesSection(
             modifier = Modifier.padding(bottom = 14.dp),
         )
 
-        when (state) {
-            is ActivitiesUiState.Loading -> ContentSkeleton(lines = 5, accent = Border)
-            is ActivitiesUiState.PermissionRequired -> {
-                StatusCopy(
-                    title = "Show workouts from Garmin",
-                    body = "Allow exercise access in Health Connect. Garmin Connect (and other fitness apps) can then share walks, rides, and gym sessions here.",
-                    actionLabel = "Allow workouts",
-                    onAction = {
-                        haptics.tick()
-                        onRequestPermission()
-                    },
-                )
-            }
-            is ActivitiesUiState.Unavailable -> {
-                StatusCopy(
-                    title = "Health Connect needed",
-                    body = "Workouts appear here once Health Connect is available and a source like Garmin Connect is syncing activities.",
-                )
-            }
-            is ActivitiesUiState.Error -> {
-                StatusCopy(
-                    title = "Couldn’t load activities",
-                    body = state.message,
-                    actionLabel = "Retry",
-                    onAction = {
-                        haptics.tick()
-                        onRetry()
-                    },
-                )
-            }
-            is ActivitiesUiState.Success -> {
-                if (state.activities.isEmpty()) {
-                    StatusCopy(
-                        title = "No workouts this month or last",
-                        body = "Health Connect answered, but there were no exercise sessions in the window. Check that Garmin Connect (or Google Fit, Samsung Health, Strava…) is syncing workouts to Health Connect and that DailyDash is allowed to read Exercise.",
-                        actionLabel = "Check permissions",
-                        onAction = {
-                            haptics.tick()
-                            onRequestPermission()
-                        },
-                    )
-                } else {
-                    WeekSummary(activities = state.activities)
-                    ActivitiesList(
-                        activities = state.activities,
-                        haptics = haptics,
-                        onExpandActivity = onExpandActivity,
-                    )
+        // Each state fades into the next, and a refresh of the same state doesn't flicker.
+        WidgetStateSwitch(targetState = state, contentKey = { it::class }, label = "activities") { shown ->
+            Column {
+                when (shown) {
+                    is ActivitiesUiState.Loading -> ContentSkeleton(lines = 5, accent = Border)
+                    is ActivitiesUiState.PermissionRequired -> {
+                        StatusCopy(
+                            title = "Show workouts from Garmin",
+                            body = "Allow exercise access in Health Connect. Garmin Connect (and other fitness apps) can then share walks, rides, and gym sessions here.",
+                            actionLabel = "Allow workouts",
+                            onAction = {
+                                haptics.tick()
+                                onRequestPermission()
+                            },
+                        )
+                    }
+                    is ActivitiesUiState.Unavailable -> {
+                        StatusCopy(
+                            title = "Health Connect needed",
+                            body = "Workouts appear here once Health Connect is available and a source like Garmin Connect is syncing activities.",
+                        )
+                    }
+                    is ActivitiesUiState.Error -> {
+                        StatusCopy(
+                            title = "Couldn’t load activities",
+                            body = shown.message,
+                            actionLabel = "Retry",
+                            onAction = {
+                                haptics.tick()
+                                onRetry()
+                            },
+                        )
+                    }
+                    is ActivitiesUiState.Success -> {
+                        if (shown.activities.isEmpty()) {
+                            StatusCopy(
+                                title = "No workouts this month or last",
+                                body = "Health Connect answered, but there were no exercise sessions in the window. Check that Garmin Connect (or Google Fit, Samsung Health, Strava…) is syncing workouts to Health Connect and that DailyDash is allowed to read Exercise.",
+                                actionLabel = "Check permissions",
+                                onAction = {
+                                    haptics.tick()
+                                    onRequestPermission()
+                                },
+                            )
+                        } else {
+                            WeekSummary(activities = shown.activities)
+                            ActivitiesList(
+                                activities = shown.activities,
+                                haptics = haptics,
+                                onExpandActivity = onExpandActivity,
+                            )
+                        }
+                    }
                 }
             }
         }

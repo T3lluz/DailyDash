@@ -281,24 +281,27 @@ private fun title(state: AppUpdateUiState): String = when (state) {
     else -> "Update available"
 }
 
+/** An update's download or install: filling when the size is known, sweeping when not. */
+@Composable
+fun UpdateProgressBar(progress: Float?, modifier: Modifier = Modifier) {
+    val bar = modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp))
+    if (progress != null) {
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = bar,
+            color = Primary,
+            trackColor = Border,
+            drawStopIndicator = {},
+        )
+    } else {
+        LinearProgressIndicator(modifier = bar, color = Primary, trackColor = Border)
+    }
+}
+
 @Composable
 private fun ProgressLine(progress: Float?, label: String, trailing: String? = null) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        if (progress != null) {
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
-                color = Primary,
-                trackColor = Border,
-                drawStopIndicator = {},
-            )
-        } else {
-            LinearProgressIndicator(
-                modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
-                color = Primary,
-                trackColor = Border,
-            )
-        }
+        UpdateProgressBar(progress)
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(label, fontSize = 12.sp, color = TextSecondary, modifier = Modifier.weight(1f))

@@ -27,8 +27,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -1884,27 +1882,14 @@ private fun GitHubAccountActions(
             )
         }
         else -> {
-            Button(
+            ServiceButton(
+                label = "Connect GitHub",
+                icon = AppIcons.Account,
+                accent = GhAccent,
                 onClick = onConnect,
-                enabled = !authState.isBusy,
-                colors = ButtonDefaults.buttonColors(containerColor = GhAccent),
+                busy = authState.isBusy,
                 shape = Sharp,
-            ) {
-                if (authState.isBusy) {
-                    LoadingSpinner(color = Color.White, size = LoadingSpec.SizeInline)
-                } else {
-                    Icon(
-                        AppIcons.Account,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                    )
-                }
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    if (authState.isBusy) "Connecting…" else "Connect GitHub",
-                    fontSize = 13.sp,
-                )
-            }
+            )
         }
     }
 }

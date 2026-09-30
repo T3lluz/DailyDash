@@ -1,6 +1,5 @@
 package com.macrotracker.ui.screens
 
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -12,7 +11,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -28,28 +26,24 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.macrotracker.ui.components.BriefCard
-import com.macrotracker.ui.components.ButtonVariant
 import com.macrotracker.ui.components.CalendarCard
 import com.macrotracker.ui.components.CardHeader
 import com.macrotracker.ui.components.F1Card
 import com.macrotracker.ui.components.GitHubCard
-import com.macrotracker.ui.components.MacroButton
 import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.components.MailCard
 import com.macrotracker.ui.components.MacroProgressBar
-import com.macrotracker.ui.components.MacroTextField
 import com.macrotracker.ui.components.WeatherCard
 import com.macrotracker.ui.components.ServerCard
 import com.macrotracker.ui.components.WidgetConfig
 import com.macrotracker.ui.components.WidgetPlaceholder
 import com.macrotracker.ui.components.WidgetPlaceholderCard
 import com.macrotracker.ui.components.WidgetPromptCard
+import com.macrotracker.ui.components.WidgetStateSwitch
 import com.macrotracker.ui.components.TwitchCard
 import com.macrotracker.ui.components.UpcomingCard
 import com.macrotracker.ui.components.YoutubeCard
@@ -173,33 +167,36 @@ private fun HomeBodyStatsWidget(viewModel: HomeViewModel, isVisible: Boolean, on
         return
     }
     val healthState by viewModel.healthState.collectAsState()
-    when (val hs = healthState) {
-        is HomeHealthState.Success -> {
-            HealthGlanceCard(
-                stats = hs.stats,
-                hourlySteps = hs.hourlySteps,
-                usualHourlySteps = hs.usualHourlySteps,
-                heartRate = hs.heartRate,
-                hourlyMoveKcal = hs.hourlyMoveKcal,
-                sleepSessions = hs.sleepSessions,
-                sleepScore = hs.sleepScore,
-                lastUpdatedAt = hs.lastUpdatedAt,
-                onOpen = onOpenHealth,
-            )
-        }
-        is HomeHealthState.Loading -> {
-            WidgetPlaceholderCard(title = "Body Stats", icon = AppIcons.HeartPulse, accent = HealthHeartRate)
-        }
-        HomeHealthState.Unavailable -> {
-            // An empty state with a way out: the Health tab has the Connect prompt.
-            WidgetPromptCard(
-                title = "Body Stats",
-                message = "Connect Health Connect in Settings or Health to see steps, heart rate, and sleep here.",
-                actionLabel = "Open Health",
-                actionIcon = AppIcons.HeartPulse,
-                accent = HealthHeartRate,
-                onAction = onOpenHealth,
-            )
+    // Fades from the placeholder into the card, and only when the kind of state changes.
+    WidgetStateSwitch(targetState = healthState, contentKey = { it::class }, label = "bodyStats") { hs ->
+        when (hs) {
+            is HomeHealthState.Success -> {
+                HealthGlanceCard(
+                    stats = hs.stats,
+                    hourlySteps = hs.hourlySteps,
+                    usualHourlySteps = hs.usualHourlySteps,
+                    heartRate = hs.heartRate,
+                    hourlyMoveKcal = hs.hourlyMoveKcal,
+                    sleepSessions = hs.sleepSessions,
+                    sleepScore = hs.sleepScore,
+                    lastUpdatedAt = hs.lastUpdatedAt,
+                    onOpen = onOpenHealth,
+                )
+            }
+            is HomeHealthState.Loading -> {
+                WidgetPlaceholderCard(title = "Body Stats", icon = AppIcons.HeartPulse, accent = HealthHeartRate)
+            }
+            HomeHealthState.Unavailable -> {
+                // An empty state with a way out: the Health tab has the Connect prompt.
+                WidgetPromptCard(
+                    title = "Body Stats",
+                    message = "Connect Health Connect in Settings or Health to see steps, heart rate, and sleep here.",
+                    actionLabel = "Open Health",
+                    actionIcon = AppIcons.HeartPulse,
+                    accent = HealthHeartRate,
+                    onAction = onOpenHealth,
+                )
+            }
         }
     }
 }

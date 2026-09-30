@@ -21,7 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -49,6 +48,7 @@ import com.macrotracker.ui.components.ButtonVariant
 import com.macrotracker.ui.components.CardHeader
 import com.macrotracker.ui.components.ContentSkeleton
 import com.macrotracker.ui.components.MacroButton
+import com.macrotracker.ui.components.UpdateProgressBar
 import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.components.MarkdownText
 import com.macrotracker.ui.theme.Background
@@ -132,19 +132,9 @@ fun AboutSettingsScreen(
                 modifier = Modifier.padding(bottom = 8.dp),
             )
             when (val s = updateState) {
-                is AppUpdateUiState.Downloading -> LinearProgressIndicator(
-                    progress = { s.progress ?: 0f },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 10.dp),
-                    color = Primary,
-                )
-                is AppUpdateUiState.Installing -> LinearProgressIndicator(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 10.dp),
-                    color = Primary,
-                )
+                // The same bar as the update sheet; an unknown size sweeps instead of sitting at zero.
+                is AppUpdateUiState.Downloading -> UpdateProgressBar(s.progress, Modifier.padding(bottom = 10.dp))
+                is AppUpdateUiState.Installing -> UpdateProgressBar(null, Modifier.padding(bottom = 10.dp))
                 else -> Unit
             }
 

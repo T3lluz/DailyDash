@@ -28,8 +28,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -1147,38 +1145,20 @@ private fun NoTwitchChannelsPrompt(
                     onCancelLogin = onCancelLogin,
                 )
             } else {
-                Button(
+                ServiceButton(
+                    label = "Connect Twitch",
+                    icon = AppIcons.Account,
+                    accent = TwPurple,
                     onClick = onConnectTwitch,
-                    enabled = !authState.isBusy,
-                    colors = ButtonDefaults.buttonColors(containerColor = TwPurple),
-                    shape = RoundedCornerShape(10.dp),
-                ) {
-                    if (authState.isBusy) {
-                        LoadingSpinner(color = Color.White, size = LoadingSpec.SizeInline)
-                    } else {
-                        Icon(AppIcons.Account, null, modifier = Modifier.size(16.dp))
-                    }
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        if (authState.isBusy) "Connecting…" else "Connect Twitch",
-                        fontSize = 13.sp,
-                    )
-                }
+                    busy = authState.isBusy,
+                )
                 Spacer(modifier = Modifier.height(8.dp))
                 TextButton(onClick = onOpenSettings) {
                     Text("Search channels", color = TextSecondary, fontSize = 13.sp)
                 }
             }
         } else {
-            Button(
-                onClick = onOpenSettings,
-                colors = ButtonDefaults.buttonColors(containerColor = TwPurple),
-                shape = RoundedCornerShape(10.dp),
-            ) {
-                Icon(AppIcons.Add, null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Add Channels", fontSize = 13.sp)
-            }
+            ServiceButton(label = "Add channels", icon = AppIcons.Add, accent = TwPurple, onClick = onOpenSettings)
         }
         authState.statusMessage?.let { msg ->
             Spacer(modifier = Modifier.height(10.dp))

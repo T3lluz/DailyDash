@@ -2,6 +2,8 @@ package com.macrotracker.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.core.updateTransition
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -102,18 +104,20 @@ fun rememberWidgetCrossAxisScrollLock(): NestedScrollConnection {
  */
 
 /** Crossfades between widget states (loading, success, error) without positional movement. */
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun <T> WidgetStateSwitch(
     targetState: T,
     modifier: Modifier = Modifier,
     label: String = "widgetState",
+    /** What counts as a new state: pass `{ it::class }` to fade between kinds, not on every refresh. */
+    contentKey: (T) -> Any? = { it },
     content: @Composable (T) -> Unit,
 ) {
-    Crossfade(
-        targetState = targetState,
+    updateTransition(targetState, label = label).Crossfade(
         modifier = modifier,
         animationSpec = MacroMotion.fadeTween(),
-        label = label,
+        contentKey = contentKey,
         content = content,
     )
 }

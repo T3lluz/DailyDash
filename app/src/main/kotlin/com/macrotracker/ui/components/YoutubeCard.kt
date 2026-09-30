@@ -38,8 +38,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -1252,37 +1250,19 @@ private fun NoChannelsPrompt(
             )
         }
         if (!googleState.isConnected) {
-            Button(
+            ServiceButton(
+                label = "Connect Google",
+                icon = AppIcons.Account,
+                accent = YtRed,
                 onClick = onConnectGoogle,
-                enabled = !googleState.isBusy,
-                colors = ButtonDefaults.buttonColors(containerColor = YtRed),
-                shape = RoundedCornerShape(10.dp),
-            ) {
-                if (googleState.isBusy) {
-                    LoadingSpinner(color = Color.White, size = LoadingSpec.SizeInline)
-                } else {
-                    Icon(AppIcons.Account, null, modifier = Modifier.size(16.dp))
-                }
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    if (googleState.isBusy) "Connecting…" else "Connect Google",
-                    fontSize = 13.sp,
-                )
-            }
+                busy = googleState.isBusy,
+            )
             Spacer(modifier = Modifier.height(8.dp))
             TextButton(onClick = onOpenSettings) {
                 Text("Search channels", color = TextSecondary, fontSize = 13.sp)
             }
         } else {
-            Button(
-                onClick = onOpenSettings,
-                colors = ButtonDefaults.buttonColors(containerColor = YtRed),
-                shape = RoundedCornerShape(10.dp),
-            ) {
-                Icon(AppIcons.Add, null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Add Channels", fontSize = 13.sp)
-            }
+            ServiceButton(label = "Add channels", icon = AppIcons.Add, accent = YtRed, onClick = onOpenSettings)
         }
         googleState.statusMessage?.let { msg ->
             Spacer(modifier = Modifier.height(10.dp))
@@ -1737,42 +1717,46 @@ private fun SearchTab(
         Spacer(Modifier.height(10.dp))
 
         // ── Full search results ───────────────────────────────────────────
-        when (val s = channelSearchState) {
-            is ChannelSearchState.Loading -> Box(Modifier.fillMaxWidth().height(60.dp), Alignment.Center) {
-                LoadingSpinner(color = YtRed)
-            }
-            is ChannelSearchState.Success -> {
-                if (s.channels.isEmpty()) {
-                    Text("No channels found.", fontSize = 13.sp, color = TextSecondary)
-                } else {
-                    Text(
-                        "${s.channels.size} channel${if (s.channels.size != 1) "s" else ""} found",
-                        fontSize = 11.sp,
-                        color = TextTertiary,
-                        modifier = Modifier.padding(bottom = 6.dp),
-                    )
-                    s.channels.forEach { channel ->
-                        val tracked = viewModel.isChannelTracked(channel.channelId)
-                        ChannelListRow(
-                            channel = channel.copy(isTracked = tracked),
-                            isTracked = tracked,
-                            justAdded = recentlyAdded.contains(channel.channelId),
-                            onToggle = {
-                                if (tracked) { haptics.reject(); viewModel.removeChannel(channel.channelId) }
-                                else { haptics.confirm(); viewModel.addChannel(channel) }
-                            },
-                        )
+        WidgetStateSwitch(targetState = channelSearchState, contentKey = { it::class }, label = "channelSearch") { s ->
+            Column {
+                when (s) {
+                    is ChannelSearchState.Loading -> Box(Modifier.fillMaxWidth().height(60.dp), Alignment.Center) {
+                        LoadingSpinner(color = YtRed)
                     }
-                }
-            }
-            is ChannelSearchState.Error -> Text("⚠ ${s.message}", fontSize = 13.sp, color = Error)
-            ChannelSearchState.Idle -> {
-                if (!showSuggestions) {
-                    Text(
-                        "Type a channel name to search",
-                        fontSize = 12.sp,
-                        color = TextSecondary,
-                    )
+                    is ChannelSearchState.Success -> {
+                        if (s.channels.isEmpty()) {
+                            Text("No channels found.", fontSize = 13.sp, color = TextSecondary)
+                        } else {
+                            Text(
+                                "${s.channels.size} channel${if (s.channels.size != 1) "s" else ""} found",
+                                fontSize = 11.sp,
+                                color = TextTertiary,
+                                modifier = Modifier.padding(bottom = 6.dp),
+                            )
+                            s.channels.forEach { channel ->
+                                val tracked = viewModel.isChannelTracked(channel.channelId)
+                                ChannelListRow(
+                                    channel = channel.copy(isTracked = tracked),
+                                    isTracked = tracked,
+                                    justAdded = recentlyAdded.contains(channel.channelId),
+                                    onToggle = {
+                                        if (tracked) { haptics.reject(); viewModel.removeChannel(channel.channelId) }
+                                        else { haptics.confirm(); viewModel.addChannel(channel) }
+                                    },
+                                )
+                            }
+                        }
+                    }
+                    is ChannelSearchState.Error -> Text("⚠ ${s.message}", fontSize = 13.sp, color = Error)
+                    ChannelSearchState.Idle -> {
+                        if (!showSuggestions) {
+                            Text(
+                                "Type a channel name to search",
+                                fontSize = 12.sp,
+                                color = TextSecondary,
+                            )
+                        }
+                    }
                 }
             }
         }

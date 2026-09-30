@@ -1,5 +1,6 @@
 package com.macrotracker.ui.screens.health
 
+import com.macrotracker.ui.components.WidgetStateSwitch
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Canvas
@@ -186,75 +187,85 @@ fun VitalsSection(
             modifier = Modifier.padding(bottom = 4.dp),
         )
 
-        when {
-            state is VitalsUiState.Loading -> ContentSkeleton(lines = 3, accent = Border)
-            state is VitalsUiState.Unavailable -> StatusCopy(
-                title = "Health Connect isn't sharing yet",
-                body = "Connect Health Connect above to see your weight, heart-rate variability, " +
-                    "VO₂ max and other vitals here.",
-            )
-            tiles.isEmpty() -> StatusCopy(
-                title = "Nothing measured yet",
-                body = "Readings from a smart scale, watch or blood-pressure cuff show up here once " +
-                    "they sync to Health Connect.",
-                actionLabel = if (vitals?.notShared?.isNotEmpty() == true) "Check permissions" else null,
-                onAction = if (vitals?.notShared?.isNotEmpty() == true) {
-                    {
-                        haptics.tick()
-                        onRequestPermission()
-                    }
-                } else {
-                    null
-                },
-            )
-            else -> {
-                if (vitalTiles.isNotEmpty()) {
-                    VitalsOverview(
-                        tiles = overview,
-                        now = now,
-                        open = open,
-                        onPick = { toggle(it) },
+        val phase = when {
+            state is VitalsUiState.Loading -> 0
+            state is VitalsUiState.Unavailable -> 1
+            tiles.isEmpty() -> 2
+            else -> 3
+        }
+        WidgetStateSwitch(targetState = phase, label = "vitals") { shown ->
+            Column {
+                when (shown) {
+                    0 -> ContentSkeleton(lines = 3, accent = Border)
+                    1 -> StatusCopy(
+                        title = "Health Connect isn't sharing yet",
+                        body = "Connect Health Connect above to see your weight, heart-rate variability, " +
+                            "VO₂ max and other vitals here.",
                     )
-                    vitalTiles.forEachIndexed { i, tile ->
-                        key(tile.kind) {
-                            if (i > 0) InsetHairline() else Hairline()
-                            VitalListRow(
-                                tile = tile,
-                                zone = zone,
+                    2 -> StatusCopy(
+                        title = "Nothing measured yet",
+                        body = "Readings from a smart scale, watch or blood-pressure cuff show up here once " +
+                            "they sync to Health Connect.",
+                        actionLabel = if (vitals?.notShared?.isNotEmpty() == true) "Check permissions" else null,
+                        onAction = if (vitals?.notShared?.isNotEmpty() == true) {
+                            {
+                                haptics.tick()
+                                onRequestPermission()
+                            }
+                        } else {
+                            null
+                        },
+                    )
+                    else -> {
+                        if (vitalTiles.isNotEmpty()) {
+                            VitalsOverview(
+                                tiles = overview,
                                 now = now,
-                                open = open == tile.kind.name,
-                                onClick = if (tile.series.size >= 2) { { toggle(tile) } } else null,
+                                open = open,
+                                onPick = { toggle(it) },
                             )
-                            VitalDetailPanel(
-                                tile = tile,
-                                visible = open == tile.kind.name,
-                                zone = zone,
-                                haptics = haptics,
-                                birthYear = knownYear,
-                                onEditBirthYear = { askBirthYear = true },
-                            )
+                            vitalTiles.forEachIndexed { i, tile ->
+                                key(tile.kind) {
+                                    if (i > 0) InsetHairline() else Hairline()
+                                    VitalListRow(
+                                        tile = tile,
+                                        zone = zone,
+                                        now = now,
+                                        open = open == tile.kind.name,
+                                        onClick = if (tile.series.size >= 2) { { toggle(tile) } } else null,
+                                    )
+                                    VitalDetailPanel(
+                                        tile = tile,
+                                        visible = open == tile.kind.name,
+                                        zone = zone,
+                                        haptics = haptics,
+                                        birthYear = knownYear,
+                                        onEditBirthYear = { askBirthYear = true },
+                                    )
+                                }
+                            }
                         }
-                    }
-                }
-                if (bodyTiles.isNotEmpty()) {
-                    HealthGroupLabel(if (vitalTiles.isEmpty()) "Measures" else "Body")
-                    bodyTiles.forEachIndexed { i, tile ->
-                        key(tile.kind) {
-                            if (i > 0) InsetHairline()
-                            VitalReadingRow(
-                                tile = tile,
-                                zone = zone,
-                                open = open == tile.kind.name,
-                                onClick = if (tile.series.size >= 2) { { toggle(tile) } } else null,
-                            )
-                            VitalDetailPanel(
-                                tile = tile,
-                                visible = open == tile.kind.name,
-                                zone = zone,
-                                haptics = haptics,
-                                birthYear = knownYear,
-                                onEditBirthYear = { askBirthYear = true },
-                            )
+                        if (bodyTiles.isNotEmpty()) {
+                            HealthGroupLabel(if (vitalTiles.isEmpty()) "Measures" else "Body")
+                            bodyTiles.forEachIndexed { i, tile ->
+                                key(tile.kind) {
+                                    if (i > 0) InsetHairline()
+                                    VitalReadingRow(
+                                        tile = tile,
+                                        zone = zone,
+                                        open = open == tile.kind.name,
+                                        onClick = if (tile.series.size >= 2) { { toggle(tile) } } else null,
+                                    )
+                                    VitalDetailPanel(
+                                        tile = tile,
+                                        visible = open == tile.kind.name,
+                                        zone = zone,
+                                        haptics = haptics,
+                                        birthYear = knownYear,
+                                        onEditBirthYear = { askBirthYear = true },
+                                    )
+                                }
+                            }
                         }
                     }
                 }
