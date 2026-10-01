@@ -52,7 +52,8 @@ internal object MarkdownParser {
 
     private fun isUl(t: String) = ulRx.containsMatchIn(t)
     private fun isOl(t: String) = olRx.containsMatchIn(t)
-    private fun indentOf(line: String) = line.length - line.trimStart(' ').length
+    // Any leading whitespace counts (tabs, no-break spaces), the same as the block loop's trim().
+    private fun indentOf(line: String) = line.length - line.trimStart().length
     private fun isFence(t: String) = t.startsWith("```") || t.startsWith("~~~")
 
     private fun cells(row: String): List<String> =
@@ -72,6 +73,7 @@ internal object MarkdownParser {
             }
             while (i < lines.size) {
                 val t = lines[i].trim()
+                val start = i
                 when {
                     t.isEmpty() -> { flush(); i++ }
                     isFence(t) -> { flush(); out += fence() }
@@ -87,6 +89,8 @@ internal object MarkdownParser {
                     isTableStart(t) -> { flush(); out += table() }
                     else -> { para += t; i++ }
                 }
+                // Every pass moves on at least a line, so odd input reads as text instead of hanging.
+                if (i == start) { para += t; i++ }
             }
             flush()
             return out

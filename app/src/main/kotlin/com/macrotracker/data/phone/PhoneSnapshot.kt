@@ -1,6 +1,7 @@
 package com.macrotracker.data.phone
 
 import android.app.ActivityManager
+import androidx.core.location.LocationManagerCompat
 import android.app.AlarmManager
 import android.app.KeyguardManager
 import android.app.NotificationManager
@@ -290,7 +291,7 @@ class PhoneSnapshot @Inject constructor(
             ?.let { o.put("airplane", it == 1) }
         runCatching { Settings.Global.getInt(cr, Settings.Global.BLUETOOTH_ON) }.getOrNull()
             ?.let { o.put("bluetooth", it != 0) }
-        runCatching { context.getSystemService(LocationManager::class.java)?.isLocationEnabled }.getOrNull()
+        runCatching { context.getSystemService(LocationManager::class.java)?.let(LocationManagerCompat::isLocationEnabled) }.getOrNull()
             ?.let { o.put("location", it) }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             context.getSystemService(PowerManager::class.java)?.currentThermalStatus?.let { s ->

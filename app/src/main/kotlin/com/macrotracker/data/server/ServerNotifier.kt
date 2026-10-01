@@ -1,17 +1,16 @@
 package com.macrotracker.data.server
 
-import android.Manifest
+import com.macrotracker.data.notifyIfAllowed
+import com.macrotracker.data.canPostNotifications
 import android.app.NotificationChannel
 import android.app.NotificationChannelGroup
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
 import com.macrotracker.MainActivity
 import com.macrotracker.R
 import com.macrotracker.data.local.SettingsRepository
@@ -83,10 +82,7 @@ class ServerNotifier @Inject constructor(
             group = GROUP_ID
         }
 
-    fun hasPermission(): Boolean =
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
-            PackageManager.PERMISSION_GRANTED
+    fun hasPermission(): Boolean = context.canPostNotifications()
 
     /** Compares this poll's advisories against what is already on screen. */
     fun evaluate(runtime: ServerRuntime, settings: ServerNotificationSettings) {
@@ -158,8 +154,7 @@ class ServerNotifier @Inject constructor(
             .setOnlyAlertOnce(true)
             .build()
 
-        if (!hasPermission()) return
-        runCatching { manager.notify(notificationId(runtime.profile.id, advisory.key), notification) }
+        manager.notifyIfAllowed(context, notificationId(runtime.profile.id, advisory.key), notification)
     }
 
     private fun channelFor(advisory: ServerAdvisory): String = when {

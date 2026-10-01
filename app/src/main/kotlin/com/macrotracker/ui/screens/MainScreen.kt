@@ -1,7 +1,7 @@
 package com.macrotracker.ui.screens
 
 import android.app.Activity
-import androidx.activity.ComponentActivity
+import com.macrotracker.ui.util.findActivity
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -12,15 +12,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -35,7 +35,6 @@ import com.macrotracker.BuildConfig
 import com.macrotracker.data.remote.AiProvider
 import com.macrotracker.data.server.ServerIntentRequest
 import com.macrotracker.data.update.AppUpdateNotifier
-import com.macrotracker.data.update.AppUpdateUiState
 import com.macrotracker.data.update.UpdateInstallActivity
 import com.macrotracker.data.update.info
 import com.macrotracker.data.update.updateAvailable
@@ -78,7 +77,7 @@ fun MainScreen(
     openRequest: StateFlow<String?>? = null,
     onOpenRequestHandled: () -> Unit = {},
 ) {
-    val activity = LocalContext.current as ComponentActivity
+    val activity = LocalContext.current.findActivity()
     val appUpdateViewModel: AppUpdateViewModel = hiltViewModel(viewModelStoreOwner = activity)
     val onboardingCompleted by onboardingViewModel.onboardingCompleted.collectAsState()
     val splashShown by onboardingViewModel.splashShown.collectAsState()

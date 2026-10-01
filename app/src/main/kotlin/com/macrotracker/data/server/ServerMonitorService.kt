@@ -1,6 +1,7 @@
 package com.macrotracker.data.server
 
 import android.app.Service
+import com.macrotracker.data.notifyIfAllowed
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -167,10 +168,8 @@ class ServerMonitorService : Service() {
                     val notification = withContext(Dispatchers.Default) {
                         live.build(selected, frame.link, frame.others, ServerMonitorService::class.java, frame.detailed)
                     }
-                    runCatching {
-                        NotificationManagerCompat.from(this@ServerMonitorService)
-                            .notify(ServerNotifier.LIVE_NOTIFICATION_ID, notification)
-                    }
+                    NotificationManagerCompat.from(this@ServerMonitorService)
+                        .notifyIfAllowed(this@ServerMonitorService, ServerNotifier.LIVE_NOTIFICATION_ID, notification)
                 }
         }
     }

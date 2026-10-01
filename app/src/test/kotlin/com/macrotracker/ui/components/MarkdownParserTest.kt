@@ -96,4 +96,13 @@ class MarkdownParserTest {
         val hours = (0..11).map(::step) + listOf(18, 24).map(::step)
         assertEquals(listOf("0", "2", "4", "6", "8", "10", "18", "24"), everyOtherHour(hours).map { it.time })
     }
+
+    @Test(timeout = 2_000)
+    fun `a list indented with a tab or a no-break space still parses, and never hangs`() {
+        val tab = MarkdownParser.parse("\t- one\n\t- two").single() as MdBlock.ListBlock
+        assertEquals(2, tab.items.size)
+        val nbsp = MarkdownParser.parse("\u00A0- one\n\u00A0- two").single() as MdBlock.ListBlock
+        assertEquals(2, nbsp.items.size)
+        MarkdownParser.parse("text\n\u2003* odd\n\t\t1. deeper\n\u00A0> quote")
+    }
 }
