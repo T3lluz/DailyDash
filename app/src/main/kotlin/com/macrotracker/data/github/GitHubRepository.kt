@@ -780,11 +780,12 @@ class GitHubRepositoryImpl @Inject constructor(
                     ?.lineSequence()?.firstOrNull()?.trim()
                 val ref = payload.str("ref")?.removePrefix("refs/heads/")
                 val head = payload.str("head")
-                title = buildString {
-                    append("$n commit")
-                    if (n != 1) append("s")
-                    if (!ref.isNullOrBlank()) append(" → $ref")
-                    if (!first.isNullOrBlank()) append(" · $first")
+                // The events API often leaves a push's commit list empty; "0 commits" read as
+                // nothing happened. Say what the push did instead.
+                title = when {
+                    !first.isNullOrBlank() -> first + if (n > 1) " (+${n - 1} more)" else ""
+                    !ref.isNullOrBlank() -> "Pushed to $ref"
+                    else -> "Pushed"
                 }
                 url = if (!head.isNullOrBlank()) {
                     "https://github.com/$repoName/commit/$head"

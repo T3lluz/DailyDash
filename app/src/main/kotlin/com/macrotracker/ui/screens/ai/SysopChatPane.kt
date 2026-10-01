@@ -49,6 +49,10 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.delay
 import com.macrotracker.ui.theme.AppIcons
+import com.macrotracker.ui.theme.TextSecondary
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.foundation.layout.size
 
 val SysopIdentity = BotIdentity(
     name = "Sysop",
@@ -69,6 +73,7 @@ fun SysopChatPane(
     modifier: Modifier = Modifier,
     /** Switches Tech support to Hermes on the dashboard server; null hides the option. */
     onUseHermes: (() -> Unit)? = null,
+    onOpenConsole: (() -> Unit)? = null,
 ) {
     val bot = ChatBot.SYSOP
     val state by viewModel.state(bot).collectAsState()
@@ -117,6 +122,11 @@ fun SysopChatPane(
                 active = state.loading,
                 accent = ServerBrand,
             ) {
+                if (onOpenConsole != null) {
+                    IconButton(onClick = { haptics.tick(); onOpenConsole() }, modifier = Modifier.size(36.dp)) {
+                        Icon(AppIcons.SquareTerminal, contentDescription = "Console", tint = TextSecondary, modifier = Modifier.size(19.dp))
+                    }
+                }
                 if (state.loading) {
                     PillButton(
                         icon = AppIcons.Close,

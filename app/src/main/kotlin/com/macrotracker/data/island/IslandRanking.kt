@@ -29,8 +29,8 @@ enum class DayPart {
  * How the island orders what it has: what waits on you first, then what is on now, then
  * what is soon, then the rest. Inside each of those, what happens sooner goes first (a
  * countdown under a quarter of an hour, then within the hour, then within three), the
- * server's background lines ("ambient") after the rest, then what you tend to open at this
- * time of day, and ties keep the order they arrived in (the server's own ranking first).
+ * server's background lines ("ambient") after the rest and something to watch (a stream,
+ * new videos) after those, then what you tend to open at this time of day, and ties keep the order they arrived in (the server's own ranking first).
  * The line shows the first [MAX_SHOWN]; the rest wait behind its "+N". As the day moves,
  * countdowns shrink and habits change with the hour, so the three on show change with it.
  * Pure, so IslandRankingTest pins it.
@@ -94,12 +94,32 @@ object IslandRanking {
             .sortedWith(
                 compareBy<IndexedValue<IslandItem>> { tier(it.value) }
                     .thenBy { soonness(it.value, now) }
-                    .thenBy { if (it.value.ambient) 1 else 0 }
+                    .thenBy { weight(it.value) }
                     .thenByDescending { (affinity(it.value.kind).coerceIn(0f, 1f) * AFFINITY_STEPS).toInt() }
                     .thenBy { it.index },
             )
             .map { it.value }
             .take(max)
+
+    /** Something to watch: worth a glance, never ahead of where you have to be or what is coming. */
+    private val LEISURE = setOf("live", "yt")
+
+    private fun weight(item: IslandItem): Int = when {
+        item.kind in LEISURE -> 2
+        item.ambient -> 1
+        else -> 0
+    }
+
+    /**
+     * The server's line and the phone's, as one. The phone reads its own calendar, so an event
+     * it has (on now, or next) replaces the server's line for the same event, which lags and
+     * says "tomorrow" of a shift that has already started; the rest is [withoutServerCovered].
+     */
+    fun merge(server: List<IslandItem>, phone: List<IslandItem>): List<IslandItem> {
+        val phoneEvents = phone.filter { it.kind == "cal" }.map { it.title.trim().lowercase() }.toSet()
+        val kept = server.filterNot { it.kind == "cal" && it.title.trim().lowercase() in phoneEvents }
+        return kept + withoutServerCovered(kept, phone)
+    }
 
     /**
      * How soon an item happens, in steps so a minute's change doesn't reorder the line:

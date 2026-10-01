@@ -43,4 +43,38 @@ class DailyBriefTest {
         assertNull(b.prev)
         assertFalse(b.isDone)
     }
+
+    @Test
+    fun `the body splits into its headed parts`() {
+        val brief = DailyBrief(
+            date = "2026-10-01", state = "done", by = "Rocky", thread = null, atSec = null, error = null, prev = null,
+            text = """
+                Wet morning and a gale warning until 13:00, then Jobb Kino at 16:30.
+
+                **Today**
+                - 16:30–23:00 Jobb Kino
+                - Rain, 15 °C, about 12 mm
+
+                **Server**
+                - Round clear: 22/23 containers up
+                  and disks at 43%
+
+                **Heads-up**
+                - Same shift again Fri 02 Oct
+            """.trimIndent(),
+        )
+        val sections = brief.sections
+        org.junit.Assert.assertEquals(listOf("Today", "Server", "Heads-up"), sections.map { it.title })
+        org.junit.Assert.assertEquals(2, sections[0].items.size)
+        org.junit.Assert.assertEquals("Round clear: 22/23 containers up and disks at 43%", sections[1].items.single())
+    }
+
+    @Test
+    fun `a body without headings has no sections`() {
+        val brief = DailyBrief(
+            date = "d", state = "done", by = "R", thread = null, atSec = null, error = null, prev = null,
+            text = "Lead.\n\nJust a paragraph of prose.",
+        )
+        org.junit.Assert.assertTrue(brief.sections.isEmpty())
+    }
 }

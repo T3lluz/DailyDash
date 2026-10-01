@@ -31,7 +31,6 @@ fun UsageScreen(
     Column(Modifier.fillMaxSize().background(Background)) {
         SubScreenHeader(
             title = "Usage",
-            subtitle = "What the agents spent, and what runs when",
             onNavigateBack = onNavigateBack,
             modifier = Modifier.padding(horizontal = 16.dp),
             trailing = {

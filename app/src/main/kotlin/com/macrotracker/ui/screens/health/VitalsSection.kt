@@ -181,7 +181,7 @@ fun VitalsSection(
             icon = AppIcons.Scale,
             accent = HealthWeight,
             subtitle = when {
-                tiles.isNotEmpty() -> "${tiles.size} measures · tap one for its trend"
+                tiles.isNotEmpty() -> "${tiles.size} measures"
                 else -> "Weight, HRV, VO₂ max, blood pressure and more"
             },
             modifier = Modifier.padding(bottom = 4.dp),
@@ -969,12 +969,6 @@ private fun VitalsOverview(
         fontWeight = FontWeight.SemiBold,
         color = TextPrimary,
     )
-    Text(
-        "Latest readings against your last 30 days",
-        fontSize = 13.sp,
-        color = TextSecondary,
-        modifier = Modifier.padding(top = 2.dp),
-    )
     Spacer(modifier = Modifier.height(12.dp))
 }
 
@@ -1245,7 +1239,8 @@ private fun VitalDetail(
         Spacer(modifier = Modifier.height(12.dp))
         VitalSummaryRow(tile)
 
-        tile.note?.let {
+        // Only an estimate says how it was worked out; a measured reading needs no paragraph.
+        tile.note?.takeIf { tile.badge != null }?.let {
             Spacer(modifier = Modifier.height(8.dp))
             Text(it, fontSize = 13.sp, color = TextSecondary, lineHeight = 18.sp)
         }

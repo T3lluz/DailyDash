@@ -44,6 +44,9 @@ import com.macrotracker.data.health.computeSleepConsistency
 import com.macrotracker.data.health.formatEveningOffset
 import com.macrotracker.data.health.minutesFromEvening
 import com.macrotracker.ui.components.ContentSkeleton
+import com.macrotracker.ui.components.WidgetExpandFooter
+import com.macrotracker.ui.components.WidgetExpandSection
+import androidx.compose.runtime.mutableStateOf
 import com.macrotracker.ui.components.StatusCopy
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Border
@@ -86,6 +89,8 @@ fun SleepSection(
         ?: nights.lastIndex
     val night = nights.getOrNull(selectedIndex)
     val consistency = remember(nights) { computeSleepConsistency(nights.map { it.toSpan() }, goal, zone) }
+    // The night at a glance by default; its stats, hypnogram and the two weeks open on request.
+    var detailed by rememberSaveable { mutableStateOf(false) }
 
     HealthSection(delayMs = delayMs) {
         HealthHeader(
@@ -117,9 +122,11 @@ fun SleepSection(
                     contentKey = { it.date },
                     label = "sleepNight",
                 ) { shown ->
-                    NightDetail(night = shown, zone = zone, haptics = haptics)
+                    NightDetail(night = shown, zone = zone, haptics = haptics, detailed = detailed)
                 }
 
+                WidgetExpandSection(visible = detailed) {
+                Column {
                 if (nights.size >= 2) {
                     Spacer(modifier = Modifier.height(18.dp))
                     HealthSectionLabel(
@@ -172,6 +179,15 @@ fun SleepSection(
                         color = TextTertiary,
                     )
                 }
+                }
+                }
+                WidgetExpandFooter(
+                    expanded = detailed,
+                    onToggle = { haptics.tick(); detailed = !detailed },
+                    accentColor = HealthSleep,
+                    expandLabel = "Stages and two weeks",
+                    collapseLabel = "Less",
+                )
             }
         }
     }
@@ -190,7 +206,7 @@ private fun nightSubtitle(night: SleepNight): String {
 }
 
 @Composable
-private fun NightDetail(night: SleepNight, zone: ZoneId, haptics: HapticHelper) {
+private fun NightDetail(night: SleepNight, zone: ZoneId, haptics: HapticHelper, detailed: Boolean) {
     val timeFmt = remember { DateTimeFormatter.ofPattern("HH:mm") }
     val score = night.score
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -232,6 +248,18 @@ private fun NightDetail(night: SleepNight, zone: ZoneId, haptics: HapticHelper) 
             }
         }
 
+        // The stage mix is on the Sleep tile above this card; here it opens with the rest.
+        WidgetExpandSection(visible = detailed) {
+        Column {
+        if (score != null && night.hasStages) {
+            Spacer(modifier = Modifier.height(16.dp))
+            SleepStageMix(
+                deepMinutes = score.deepMinutes,
+                lightMinutes = score.lightMinutes,
+                remMinutes = score.remMinutes,
+                awakeMinutes = score.awakeMinutes,
+            )
+        }
         Spacer(modifier = Modifier.height(18.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             HealthStatTile(
@@ -254,14 +282,9 @@ private fun NightDetail(night: SleepNight, zone: ZoneId, haptics: HapticHelper) 
 
         if (score != null && night.hasStages) {
             Spacer(modifier = Modifier.height(16.dp))
-            SleepStageMix(
-                deepMinutes = score.deepMinutes,
-                lightMinutes = score.lightMinutes,
-                remMinutes = score.remMinutes,
-                awakeMinutes = score.awakeMinutes,
-            )
-            Spacer(modifier = Modifier.height(12.dp))
             SleepNightHypnogram(sessions = night.sessions, haptics = haptics)
+        }
+        }
         }
     }
 }

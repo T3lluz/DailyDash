@@ -183,7 +183,7 @@ class IslandViewModel @Inject constructor(
     private fun stale(atMs: Long): Boolean = atMs > 0 && System.currentTimeMillis() - atMs > SERVER_STALE_MS
 
     private fun ranked(): List<IslandItem> = IslandRanking.rank(
-        items = filtered(serverItems + appItems + IslandRanking.withoutServerCovered(serverItems, localItems)),
+        items = filtered(appItems + IslandRanking.merge(serverItems, localItems)),
         affinity = { learning.affinity(it) },
         hidden = learning.hiddenToday(),
     )

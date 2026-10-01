@@ -1,5 +1,10 @@
 package com.macrotracker.ui.screens
 
+import com.macrotracker.ui.screens.health.sleepTileOf
+import com.macrotracker.ui.screens.health.buildMetricTiles
+import com.macrotracker.ui.screens.health.MetricTilesSection
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import android.content.ActivityNotFoundException
 import com.macrotracker.ui.theme.NutritionProtein
 import android.content.Context
@@ -117,6 +122,7 @@ import com.macrotracker.ui.theme.AppIcons
 @Composable
 fun HealthScreen(
     onNavigateToCameraScan: () -> Unit,
+    onOpenMealChat: () -> Unit = {},
     healthViewModel: HealthViewModel = hiltViewModel(),
     dashboardViewModel: DashboardViewModel = hiltViewModel(),
 ) {
@@ -163,6 +169,7 @@ fun HealthScreen(
             // workouts, the heart and body, then food. Today's readings, Trends and Food
             // trends were folded into these (WidgetEditor's MergedWidgetIds).
             Triple("DAILY_HEALTH", "Today", AppIcons.HeartFilled),
+            Triple("GLANCE", "At a glance", AppIcons.Grid),
             Triple("SLEEP", "Sleep", AppIcons.Moon),
             Triple("ACTIVITIES", "Activity", AppIcons.Activity),
             Triple("VITALS", "Body & Vitals", AppIcons.Scale),
@@ -270,6 +277,32 @@ fun HealthScreen(
             HealthMetricEntry(HealthMetric.FLOORS_CLIMBED, floorsClimbedState),
             HealthMetricEntry(HealthMetric.CALORIES, activeCaloriesState),
         )
+    }
+
+    // "At a glance": last night and a tile per measure, each opening the section with the rest.
+    val glanceSleep = remember(sleepNights, today) { sleepTileOf(sleepNights.lastOrNull(), today) }
+    val glanceTiles = remember(
+        vitals, stepsState, activeCaloriesState, distanceState, floorsClimbedState,
+        restingHeartRateState, oxygenSaturationState, respiratoryRateState, lastSevenDays, today,
+    ) {
+        buildMetricTiles(
+            vitals = vitals,
+            steps = stepsState,
+            energy = activeCaloriesState,
+            distance = distanceState,
+            floors = floorsClimbedState,
+            restingFallback = restingHeartRateState,
+            oxygenFallback = oxygenSaturationState,
+            breathingFallback = respiratoryRateState,
+            history = lastSevenDays,
+            today = today,
+        )
+    }
+    val scrollScope = rememberCoroutineScope()
+    val openSection: (String) -> Unit = { id ->
+        val index = visibleConfigs.indexOfFirst { it.id == id }
+        // The header is the list's first item.
+        if (index >= 0) scrollScope.launch { listState.animateScrollToItem(index + 1) }
     }
 
     CompositionLocalProvider(LocalTickersPaused provides tickersPaused) {
@@ -394,6 +427,15 @@ fun HealthScreen(
                                 haptics.tick()
                                 requestHealthAccess()
                             },
+                        )
+                    }
+                    "GLANCE" -> {
+                        MetricTilesSection(
+                            sleep = glanceSleep,
+                            tiles = glanceTiles,
+                            haptics = haptics,
+                            loading = healthConnectState is HealthConnectUiState.Loading || !metricsLoaded,
+                            onOpen = openSection,
                         )
                     }
                     "SLEEP" -> {
@@ -553,6 +595,7 @@ fun HealthScreen(
                                 protein = protein,
                                 onProteinChange = { protein = it },
                                 onAdd = { name, cal, prot -> healthViewModel.addLog(name, cal, prot) },
+                                onAskAi = onOpenMealChat,
                                 modifier = Modifier.padding(top = 16.dp),
                             )
                             Spacer(modifier = Modifier.height(18.dp))

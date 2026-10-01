@@ -131,7 +131,7 @@ fun SettingsScreen(
                 icon = AppIcons.Link,
                 tint = HealthConnectBrand,
                 title = "Connections",
-                summary = "Health Connect, weather, calendar, the dashboard and phone hub",
+                summary = "Health, calendar, dashboard, phone hub",
                 status = "$connectedCount of 3 on",
                 statusTone = if (connectedCount == 3) SettingsStatusTone.GOOD else SettingsStatusTone.PLAIN,
                 onClick = onNavigateToConnections,
@@ -141,7 +141,7 @@ fun SettingsScreen(
                 icon = AppIcons.Sparkles,
                 tint = AiTint,
                 title = "AI",
-                summary = "Provider, keys and models for chat, scans and briefs",
+                summary = "Provider and model",
                 status = if (aiReady) aiProvider.displayName else "Set up",
                 statusTone = if (aiReady) SettingsStatusTone.PLAIN else SettingsStatusTone.ATTENTION,
                 onClick = onNavigateToAi,
@@ -152,7 +152,7 @@ fun SettingsScreen(
                 icon = AppIcons.Server,
                 tint = ServerBrand,
                 title = "Servers",
-                summary = "Your machines over SSH: live stats, alerts and the ongoing notification",
+                summary = "SSH, alerts, live notification",
                 status = if (servers.isEmpty()) "Add" else "$online of ${servers.size} online",
                 statusTone = when {
                     servers.isEmpty() -> SettingsStatusTone.PLAIN
@@ -168,7 +168,7 @@ fun SettingsScreen(
                 icon = AppIcons.Flame,
                 tint = NutritionCalories,
                 title = "Nutrition goals",
-                summary = "Daily calorie and protein targets",
+                summary = "Calorie and protein targets",
                 status = calGoal.takeIf { it.isNotBlank() }?.let { "$it kcal · ${protGoal}g" },
                 onClick = onNavigateToNutrition,
             )
@@ -179,7 +179,7 @@ fun SettingsScreen(
                 icon = AppIcons.Blocks,
                 tint = Primary,
                 title = "Widgets",
-                summary = "Weather, calendar, F1, servers and GitHub on your home screen",
+                summary = "Home screen widgets",
                 status = widgetsPlaced?.let { n -> if (n == 0) "None placed" else "$n placed" },
                 onClick = onNavigateToWidgets,
             )
@@ -190,7 +190,7 @@ fun SettingsScreen(
                 icon = AppIcons.Info,
                 tint = TextSecondary,
                 title = "About",
-                summary = "Version, updates, release notes and the intro",
+                summary = "Version and updates",
                 status = if (updateState.updateAvailable) "Update" else updateViewModel.currentVersionName,
                 statusTone = when {
                     updateState.updateAvailable -> SettingsStatusTone.ATTENTION

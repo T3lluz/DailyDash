@@ -91,8 +91,10 @@ private fun DrawScope.drawRing(tone: Color, progress: Float, radius: Float, stro
             size = arcSize,
             style = Stroke(stroke),
         )
-        // The tail: a round start in the deep shade.
-        drawCircle(deep, radius = stroke / 2f, center = pointOn(c, radius, 0f))
+        // The tail: a round start in the deep shade, while there is a tail to see. Once the
+        // ring has closed, the second lap starts over it, and a cap there poked out from under
+        // the lap as a dark notch at twelve o'clock.
+        if (sweep < 360f) drawCircle(deep, radius = stroke / 2f, center = pointOn(c, radius, 0f))
         if (sweep > 360f) {
             drawArc(
                 brush = Brush.sweepGradient(
@@ -109,8 +111,9 @@ private fun DrawScope.drawRing(tone: Color, progress: Float, radius: Float, stro
             )
         }
         val head = pointOn(c, radius, sweep)
-        if (progress > 0.92f) {
-            // Light falls from behind the head onto the ring underneath it.
+        if (progress > 0.97f) {
+            // Light falls from behind the head onto the ring underneath it, once the head
+            // reaches its own tail.
             val ahead = pointOn(c, radius, sweep + 4f)
             drawCircle(
                 brush = Brush.radialGradient(

@@ -83,6 +83,30 @@ class IslandRankingTest {
         assertEquals(listOf("now", "rain"), ranked.map { it.kind })
     }
 
+    @Test fun `a stream or new videos never push out what is coming`() {
+        val ranked = IslandRanking.rank(
+            listOf(item("live", "accent", "ohnePixel"), item("yt", "quiet"), item("rain", "info", ambient = true), item("now", "quiet")),
+            affinity = { if (it == "live") 0.9f else 0.25f },
+        )
+        assertEquals(listOf("now", "rain", "live", "yt"), ranked.map { it.kind })
+    }
+
+    @Test fun `the event you are in leads, with how long is left`() {
+        val ranked = IslandRanking.rank(
+            listOf(item("live", "accent", "ohnePixel"), item("srv", "warn", "HomeLab"), item("cal", "live", "Jobb Kino", end = "4 h 44 min left")),
+            flat,
+        )
+        assertEquals(listOf("cal", "srv", "live"), ranked.map { it.kind })
+    }
+
+    @Test fun `the phone's own event replaces the server's line for it`() {
+        val server = listOf(item("cal", "quiet", "Jobb Kino", end = "tomorrow"), item("cal", "quiet", "Dentist"))
+        val phone = listOf(item("cal", "live", "Jobb Kino", end = "4 h left"), item("steps", "quiet"))
+        val merged = IslandRanking.merge(server, phone)
+        assertEquals(listOf("Dentist", "Jobb Kino", "steps"), merged.map { it.title })
+        assertEquals("live", merged.first { it.title == "Jobb Kino" }.tone)
+    }
+
     @Test fun `countdowns read as minutes`() {
         val noon = LocalTime.of(12, 0)
         assertEquals(25, IslandRanking.minutesUntil("in 25 min", noon))

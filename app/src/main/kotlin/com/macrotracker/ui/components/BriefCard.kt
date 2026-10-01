@@ -1,5 +1,15 @@
 package com.macrotracker.ui.components
 
+import com.macrotracker.ui.viewmodel.IslandViewModel
+import com.macrotracker.ui.util.findActivity
+import com.macrotracker.data.dashboard.IslandItem
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Row
 import kotlinx.coroutines.delay
 import com.macrotracker.ui.util.LaunchedWhileResumed
@@ -60,6 +70,15 @@ fun BriefCard(
     viewModel: BriefViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+    // The island's own items (the activity's view model, the same one the island reads):
+    // what is on now and next, the weather, a server in trouble, steps, mail. The morning's
+    // words go stale by the afternoon; these don't.
+    val activity = LocalContext.current.findActivity()
+    val island: IslandViewModel = hiltViewModel(viewModelStoreOwner = activity)
+    val islandItems by island.items.collectAsState()
+    val now = remember(islandItems) {
+        islandItems.filterNot { it.isBrief || it.kind == "update" }.take(NOW_ROWS)
+    }
 
     // On every return to Home, and every 10 minutes while it is open: a phone left alive
     // overnight showed yesterday's briefing. While one is being written, look sooner, in
@@ -88,6 +107,7 @@ fun BriefCard(
         }
         is BriefUiState.Ready -> BriefContent(
             brief = s.brief,
+            now = now,
             error = s.error,
             onRun = viewModel::run,
             onChat = s.brief.thread?.let { id -> { viewModel.openThread(id); onOpenChat() } },
@@ -101,6 +121,7 @@ private val BriefZone: ZoneId = ZoneId.of("Europe/Oslo")
 @Composable
 private fun BriefContent(
     brief: DailyBrief,
+    now: List<IslandItem>,
     error: String?,
     onRun: () -> Unit,
     onChat: (() -> Unit)?,
@@ -140,17 +161,25 @@ private fun BriefContent(
 
         when {
             done -> {
-                MarkdownText(brief.lead, color = TextPrimary, fontSize = 15.sp, lineHeight = 21.sp)
+                MarkdownText(brief.lead, color = TextPrimary, fontSize = 16.sp, lineHeight = 22.sp)
+                NowRows(now)
                 val body = brief.body
+                val sections = remember(brief.text) { brief.sections }
                 if (body.isNotBlank()) {
                     WidgetExpandSection(visible = expanded) {
-                        MarkdownText(body, modifier = Modifier.padding(top = 8.dp), fontSize = 13.sp)
+                        if (sections.isNotEmpty()) {
+                            Column(modifier = Modifier.padding(top = 14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                sections.forEach { BriefSectionBlock(it) }
+                            }
+                        } else {
+                            MarkdownText(body, modifier = Modifier.padding(top = 8.dp), fontSize = 13.sp)
+                        }
                     }
                     WidgetExpandFooter(
                         expanded = expanded,
                         onToggle = { expanded = !expanded },
                         accentColor = BriefAccent,
-                        expandLabel = "Read all",
+                        expandLabel = if (sections.isNotEmpty()) "Morning notes" else "Read all",
                     )
                 }
             }
@@ -184,3 +213,63 @@ private fun BriefContent(
         }
     }
 }
+
+private const val NOW_ROWS = 4
+
+/** "Right now", from the island: each thing with its icon, what it is, and when. */
+@Composable
+private fun NowRows(items: List<IslandItem>) {
+    if (items.isEmpty()) return
+    Column(modifier = Modifier.padding(top = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("RIGHT NOW", fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp, color = TextTertiary)
+        items.forEach { item ->
+            val tone = toneColor(item)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier.size(30.dp).clip(CircleShape).background(tone.copy(alpha = 0.16f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(islandIcon(item.icon), contentDescription = null, tint = tone, modifier = Modifier.size(15.dp))
+                }
+                Spacer(Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(item.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (item.sub.isNotBlank()) {
+                        Text(item.sub, fontSize = 12.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                if (item.end.isNotBlank()) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(item.end, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (item.tone == "live") tone else TextSecondary, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+/** One of the morning's parts: its heading in small capitals with an icon, then its points. */
+@Composable
+private fun BriefSectionBlock(section: DailyBrief.Section) {
+    val key = section.title.lowercase(Locale.US)
+    val icon = when {
+        "server" in key || "host" in key -> AppIcons.Server
+        "today" in key || "calendar" in key || "day" in key -> AppIcons.Calendar
+        "weather" in key -> AppIcons.CloudRain
+        "head" in key || "watch" in key || "warn" in key -> AppIcons.Bell
+        "mail" in key -> AppIcons.Mail
+        else -> AppIcons.Sparkles
+    }
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, tint = BriefAccent, modifier = Modifier.size(13.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(section.title.uppercase(Locale.getDefault()), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp, color = TextTertiary)
+        }
+        Column(modifier = Modifier.padding(top = 6.dp, start = 19.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            section.items.forEach { line ->
+                MarkdownText(line, color = TextSecondary, fontSize = 13.sp, lineHeight = 18.sp)
+            }
+        }
+    }
+}
+

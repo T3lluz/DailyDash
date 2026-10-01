@@ -1,5 +1,10 @@
 package com.macrotracker.ui.components
 
+import coil.compose.SubcomposeAsyncImage
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.border
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import android.text.format.DateFormat
 import com.macrotracker.ui.util.LaunchedWhileResumed
 import androidx.compose.foundation.background
@@ -219,7 +224,13 @@ private fun UpcomingContent(
     val clock = remember(context) {
         DateTimeFormatter.ofPattern(if (DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm a", Locale.getDefault())
     }
-    val events = remember(feed.events, calendars) { feed.events.filter(calendars::shows) }
+    val shown = remember(feed.events, calendars) { feed.events.filter(calendars::shows) }
+    val sources = remember(shown) { upcomingSources(shown) }
+    // One source at a time (Calendar, Sonarr, Stremio, ...), or all of them; a source that
+    // has gone from the feed since it was picked lets the strip go back to all.
+    var picked by rememberSaveable { mutableStateOf<String?>(null) }
+    val source = picked?.takeIf { id -> sources.any { it.id == id } }
+    val events = remember(shown, source) { if (source == null) shown else shown.filter { sourceOf(it) == source } }
     val slots = remember(events, today) { buildSlots(events, today, zone) }
 
     MacroCard(borderColor = UpcomingAccent.copy(alpha = 0.16f)) {
@@ -265,6 +276,14 @@ private fun UpcomingContent(
             val want = indexById(slots, focusId)
             if (want >= 0 && want != carouselState.currentItem) carouselState.scrollToItem(want)
         }
+        // A new filter keeps the card in focus when it is still there, else goes to today.
+        var lastSource by remember { mutableStateOf(source) }
+        LaunchedEffect(source) {
+            if (source == lastSource) return@LaunchedEffect
+            lastSource = source
+            val want = indexById(slots, focusId).takeIf { it >= 0 } ?: defaultIndex(slots, null, today, Instant.now())
+            carouselState.scrollToItem(want.coerceIn(0, slots.lastIndex))
+        }
         // A swipe that lands on a new card ticks once; buttons already tick for themselves.
         LaunchedEffect(carouselState) {
             snapshotFlow { carouselState.currentItem }
@@ -302,6 +321,18 @@ private fun UpcomingContent(
         )
         error?.let { UpcomingNotice(it) }
         feed.stremioError?.let { UpcomingNotice("Stremio: $it") }
+        if (sources.size > 1) {
+            SourceFilter(
+                sources = sources,
+                selected = source,
+                total = shown.size,
+                onSelect = { id ->
+                    haptics.tick()
+                    picked = if (id == source) null else id
+                },
+                modifier = Modifier.padding(top = 12.dp),
+            )
+        }
         Spacer(Modifier.height(12.dp))
 
         val uriHandler = LocalUriHandler.current
@@ -420,6 +451,102 @@ private fun NavArrow(
             tint = if (enabled) TextSecondary else TextPlaceholder,
             modifier = Modifier.size(18.dp),
         )
+    }
+}
+
+// ── Source filter ─────────────────────────────────────────────────────────────────────────
+
+/** Where entries come from, as the filter names them. */
+private data class UpcomingSource(val id: String, val label: String, val color: Color, val count: Int, val iconUrl: String?)
+
+private fun sourceOf(event: UpcomingEvent): String =
+    if (event.isCalendar) "gcal" else event.service.trim().lowercase().ifBlank { "other" }
+
+private val SOURCE_ORDER = listOf("gcal", "sonarr", "radarr", "stremio", "f1")
+
+private fun upcomingSources(events: List<UpcomingEvent>): List<UpcomingSource> =
+    events.groupBy(::sourceOf)
+        .map { (id, list) ->
+            UpcomingSource(
+                id = id,
+                label = when (id) {
+                    "gcal" -> "Calendar"
+                    "f1" -> "F1"
+                    else -> id.replaceFirstChar { it.uppercase() }
+                },
+                color = SERVICE_BRAND[id] ?: list.firstNotNullOfOrNull { parseHex(it.brand) } ?: TextTertiary,
+                count = list.size,
+                iconUrl = list.firstNotNullOfOrNull { it.serviceIconUrl },
+            )
+        }
+        .sortedWith(compareBy<UpcomingSource> { SOURCE_ORDER.indexOf(it.id).let { i -> if (i < 0) Int.MAX_VALUE else i } }.thenBy { it.label })
+
+/** All, then a chip per source with its colour and count; tapping the picked one goes back to all. */
+@Composable
+private fun SourceFilter(
+    sources: List<UpcomingSource>,
+    selected: String?,
+    total: Int,
+    onSelect: (String?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val scroll = rememberScrollState()
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalEdgeFade(scroll)
+            .horizontalScroll(scroll),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        SourceChip(label = "All", count = total, color = null, iconUrl = null, selected = selected == null, onClick = { onSelect(null) })
+        sources.forEach { src ->
+            SourceChip(
+                label = src.label,
+                count = src.count,
+                color = src.color,
+                iconUrl = src.iconUrl,
+                selected = selected == src.id,
+                onClick = { onSelect(src.id) },
+            )
+        }
+    }
+}
+
+/** A source by its own mark (Sonarr's, Stremio's, Google Calendar's, F1's), its name and count. */
+@Composable
+private fun SourceChip(label: String, count: Int, color: Color?, iconUrl: String?, selected: Boolean, onClick: () -> Unit) {
+    val context = LocalContext.current
+    val request = remember(iconUrl) {
+        iconUrl?.let { ImageRequest.Builder(context).data(it).decoderFactory(SvgDecoder.Factory()).build() }
+    }
+    val shape = RoundedCornerShape(50)
+    Row(
+        modifier = Modifier
+            .clip(shape)
+            .background(if (selected) Color.White.copy(alpha = 0.10f) else Color.Transparent)
+            .border(1.dp, if (selected) Color.Transparent else Border, shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        when {
+            request != null -> {
+                SubcomposeAsyncImage(
+                    model = request,
+                    contentDescription = null,
+                    modifier = Modifier.size(15.dp),
+                    error = { if (color != null) Box(Modifier.size(7.dp).clip(CircleShape).background(color)) },
+                )
+                Spacer(Modifier.width(6.dp))
+            }
+            color != null -> {
+                Box(Modifier.size(7.dp).clip(CircleShape).background(color))
+                Spacer(Modifier.width(6.dp))
+            }
+        }
+        Text(label, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = if (selected) TextPrimary else TextSecondary)
+        Spacer(Modifier.width(6.dp))
+        Text(count.toString(), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextTertiary)
     }
 }
 

@@ -266,8 +266,9 @@ private fun ServerTile(
         }
         if (facts.isNotEmpty()) {
             Spacer(Modifier.height(9.dp))
+            val factsScroll = rememberScrollState()
             Row(
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                modifier = Modifier.fillMaxWidth().horizontalEdgeFade(factsScroll).horizontalScroll(factsScroll),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 facts.forEach { ServerFactChip(it) }

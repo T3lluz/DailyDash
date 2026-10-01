@@ -19,7 +19,8 @@ import kotlin.math.roundToInt
 /**
  * The one way to log food by hand, on Home's Food card and Health's Food today alike:
  * a name, calories and protein, and Add. The caller keeps the text so it survives the
- * card scrolling away.
+ * card scrolling away. [onAskAi] puts "Estimate with AI" beside Add, for a meal whose
+ * numbers aren't on a label: it opens the meal chat, which logs what it estimates.
  */
 @Composable
 fun FoodLogForm(
@@ -31,6 +32,7 @@ fun FoodLogForm(
     onProteinChange: (String) -> Unit,
     onAdd: (name: String, calories: Int, protein: Int) -> Unit,
     modifier: Modifier = Modifier,
+    onAskAi: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
 
@@ -62,24 +64,36 @@ fun FoodLogForm(
                 trailingIcon = clearIcon(protein) { onProteinChange("") },
             )
         }
-        MacroButton(
-            text = "Add",
-            // MacroButton gives the tap its own haptic; a second one here buzzed twice.
-            onClick = {
-                val cal = calories.toDecimalOrNull()?.roundToInt() ?: 0
-                val prot = protein.toDecimalOrNull()?.roundToInt() ?: 0
-                if (cal > 0 || prot > 0) {
-                    onAdd(name, cal, prot)
-                    onNameChange("")
-                    onCaloriesChange("")
-                    onProteinChange("")
-                    Toast.makeText(context, "Logged", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(context, "Enter calories or protein first", Toast.LENGTH_SHORT).show()
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-        )
+        val add = {
+            val cal = calories.toDecimalOrNull()?.roundToInt() ?: 0
+            val prot = protein.toDecimalOrNull()?.roundToInt() ?: 0
+            if (cal > 0 || prot > 0) {
+                onAdd(name, cal, prot)
+                onNameChange("")
+                onCaloriesChange("")
+                onProteinChange("")
+                Toast.makeText(context, "Logged", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, "Enter calories or protein first", Toast.LENGTH_SHORT).show()
+            }
+        }
+        // MacroButton gives the tap its own haptic; a second one here buzzed twice.
+        if (onAskAi == null) {
+            MacroButton(text = "Add", onClick = add, modifier = Modifier.fillMaxWidth())
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                MacroButton(text = "Add", onClick = add, modifier = Modifier.weight(1f))
+                MacroButton(
+                    text = "Estimate with AI",
+                    onClick = onAskAi,
+                    variant = ButtonVariant.SECONDARY,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
     }
 }
 

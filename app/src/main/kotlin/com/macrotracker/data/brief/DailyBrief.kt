@@ -34,7 +34,47 @@ data class DailyBrief(
     val lead: String get() = text.trim().lineSequence().firstOrNull { it.isNotBlank() }.orEmpty()
     val body: String get() = text.trim().lines().dropWhile { it.isBlank() }.drop(1).joinToString("\n").trim()
 
+    /** One part of the body: a bold heading on its own line ("**Server**") and its bullets. */
+    data class Section(val title: String, val items: List<String>)
+
+    /**
+     * The body in its parts, as the writer lays it out: `**Today**`, `**Server**`,
+     * `**Heads-up**`, each with its bullets. Empty when the body isn't laid out that way, so
+     * the card falls back to the text as written.
+     */
+    val sections: List<Section>
+        get() {
+            val out = ArrayList<Section>()
+            var title: String? = null
+            var items = ArrayList<String>()
+            fun close() {
+                val t = title ?: return
+                if (items.isNotEmpty()) out += Section(t, items.toList())
+            }
+            for (raw in body.lines()) {
+                val line = raw.trim()
+                if (line.isEmpty()) continue
+                val heading = HEADING.matchEntire(line)
+                when {
+                    heading != null -> {
+                        close()
+                        title = heading.groupValues[1].trim().trimEnd(':')
+                        items = ArrayList()
+                    }
+                    title != null && BULLET.containsMatchIn(line) -> items += line.replace(BULLET, "").trim()
+                    title != null && items.isNotEmpty() -> items[items.lastIndex] = items.last() + " " + line
+                    title != null -> items += line
+                    else -> return emptyList()
+                }
+            }
+            close()
+            return out
+        }
+
     companion object {
+        private val HEADING = Regex("""^(?:#{1,4}\s*|\*\*)([^*#]+?)(?:\*\*)?:?$""")
+        private val BULLET = Regex("""^(?:[-*\u2022]|\d+[.)])\s+""")
+
         fun parse(o: JSONObject): DailyBrief = DailyBrief(
             date = o.optString("date"),
             state = o.optString("state"),

@@ -1,6 +1,18 @@
 package com.macrotracker.ui.screens.ai
 
 import android.Manifest
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.withStyle
+import com.macrotracker.data.hermes.HermesFileChange
+import com.macrotracker.data.hermes.HermesNarration
 import com.macrotracker.ui.util.LaunchedWhileResumed
 import android.content.pm.PackageManager
 import android.os.Build
@@ -49,7 +61,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -140,6 +151,7 @@ fun HermesChatPane(
     onUsePhoneAi: (() -> Unit)?,
     modifier: Modifier = Modifier,
     onOpenUsage: () -> Unit = {},
+    onOpenConsole: () -> Unit = {},
     usageViewModel: com.macrotracker.ui.viewmodel.UsageViewModel = androidx.hilt.navigation.compose.hiltViewModel(),
 ) {
     val usageState by usageViewModel.state.collectAsState()
@@ -151,6 +163,7 @@ fun HermesChatPane(
     }
     val state by viewModel.state.collectAsState()
     val turns by viewModel.turns.collectAsState()
+    val favouriteModels by viewModel.favouriteModels.collectAsState()
     val haptics = rememberHaptics()
     val listState = rememberLazyListState()
     val density = LocalDensity.current
@@ -216,10 +229,20 @@ fun HermesChatPane(
     fun send(text: String) {
         val body = text.trim()
         if (body.isEmpty() && state.attachments.isEmpty()) return
-        // The pickers are sheets here, so their commands open them.
-        when (body.lowercase()) {
-            "/model" -> { draft = ""; sheet = HermesSheet.MODEL; return }
-            "/mode", "/plan" -> { draft = ""; sheet = HermesSheet.MODE; return }
+        // The picker is a sheet here, so its command opens it.
+        if (body.lowercase() == "/model") { draft = ""; sheet = HermesSheet.MODEL; return }
+        // "/plan check the disk": the chat goes to Plan, and the rest is asked in it.
+        val word = body.removePrefix("/").substringBefore(' ').lowercase()
+        if (body.startsWith("/") && word in ModeCommands) {
+            haptics.tick()
+            viewModel.setModeKind(ModeCommands.getValue(word))
+            val rest = body.substringAfter(' ', "").trim()
+            draft = ""
+            if (rest.isEmpty()) return
+            forceFollow = true
+            viewModel.send(rest)
+            askForNotifications()
+            return
         }
         haptics.click()
         draft = ""
@@ -261,6 +284,8 @@ fun HermesChatPane(
                     onClear = { state.threadId?.let { id -> confirmClear = current ?: placeholderThread(id, state.threadTitle) } },
                     onDelete = { state.threadId?.let { id -> confirmDelete = current ?: placeholderThread(id, state.threadTitle) } },
                     onUsePhoneAi = onUsePhoneAi,
+                    onOpenConsole = onOpenConsole,
+                    onOpenUsage = onOpenUsage,
                 )
                 // The chat on screen is read as it moves, so it never gets its own dot.
                 LaunchedEffect(state.threadId, current?.updatedMs) { viewModel.markSeen(state.threadId) }
@@ -287,11 +312,16 @@ fun HermesChatPane(
                     ) {
                         if (state.items.isEmpty() && !state.loadingThread && state.live == null) {
                             item(key = "greeting") {
-                                BotBubble(
-                                    identity = HermesIdentity,
-                                    text = "Hermes here, on the server itself. I can look at it directly: logs, containers, " +
-                                        "disks, services. Anything that would change something comes back to you as a card to approve first.",
-                                )
+                                // Said the way his answers are: a byline, then plain words.
+                                Column {
+                                    TurnByline(live = false, meta = "")
+                                    Text(
+                                        "Ask about the server: logs, containers, disks, services.",
+                                        color = TextSecondary,
+                                        fontSize = 15.sp,
+                                        lineHeight = 22.sp,
+                                    )
+                                }
                             }
                         }
                         if (state.loadingThread) {
@@ -387,7 +417,10 @@ fun HermesChatPane(
                             haptics.tick()
                             when {
                                 entry.local && entry.name == "model" -> { draft = ""; sheet = HermesSheet.MODEL }
-                                entry.local && entry.name == "mode" -> { draft = ""; sheet = HermesSheet.MODE }
+                                entry.local && entry.name in ModeCommands -> {
+                                    draft = ""
+                                    viewModel.setModeKind(ModeCommands.getValue(entry.name))
+                                }
                                 entry.args.isNotBlank() -> draft = "/${entry.name} "
                                 else -> send("/${entry.name}")
                             }
@@ -399,7 +432,18 @@ fun HermesChatPane(
                 }
                 HermesComposer(
                     value = draft,
-                    onValueChange = { draft = it },
+                    onValueChange = { typed ->
+                        // "/plan " (the space is the Enter): the mode switches as you type and the
+                        // box empties, so what you type next is asked in that mode. The web's way.
+                        val live = Regex("^/(\\w+) $").matchEntire(typed)?.groupValues?.get(1)?.lowercase()
+                        if (live != null && live in ModeCommands) {
+                            haptics.tick()
+                            viewModel.setModeKind(ModeCommands.getValue(live))
+                            draft = ""
+                        } else {
+                            draft = typed
+                        }
+                    },
                     onSend = { send(draft) },
                     onStop = { viewModel.stop() },
                     // Not while a chat is opening: its transcript replaced the message just sent.
@@ -419,14 +463,13 @@ fun HermesChatPane(
                     uploading = state.uploading,
                     onAttach = { attachLauncher.launch("*/*") },
                     onRemoveAttachment = viewModel::removeAttachment,
-                    onPickMode = { sheet = HermesSheet.MODE },
+                    onClearMode = { viewModel.setModeKind("write") },
                     onPickModel = { sheet = HermesSheet.MODEL },
-                    onPickDepth = { sheet = HermesSheet.DEPTH },
                     hazeState = chatHaze,
                     usage = {
                         ComposerUsageRing(
-                            usage = usageState.usage,
-                            onCursor = (state.currentModel?.id ?: current?.model.orEmpty()).startsWith("cursor"),
+                            usage = usageState,
+                            model = state.currentModel,
                             chat = current,
                             onOpenUsage = onOpenUsage,
                         )
@@ -475,13 +518,9 @@ fun HermesChatPane(
         HermesPickerSheet(
             sheet = which,
             status = state.status,
-            modeId = state.modeId,
+            favourites = favouriteModels,
+            onToggleFavourite = viewModel::toggleFavourite,
             onDismiss = { sheet = null },
-            onPickMode = { mode ->
-                haptics.tick()
-                sheet = null
-                viewModel.setMode(mode.id)
-            },
             onPickFamily = { family ->
                 haptics.tick()
                 sheet = null
@@ -661,163 +700,472 @@ private fun OutputNote(text: String) {
     }
 }
 
+/**
+ * Hermes' reply the way Claude's apps draw one while it works and after: a byline, the work
+ * folded into one grey line (thinking, what it said between steps, the steps themselves),
+ * then the answer as plain text, and what it changed as a list of files to open.
+ */
 @Composable
 private fun AssistantTurn(item: HermesItem.Assistant) {
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-        BotAvatar(HermesIdentity, size = 30.dp, live = false, modifier = Modifier.padding(top = 2.dp))
-        Spacer(Modifier.width(9.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            if (!item.think.isNullOrBlank()) {
-                Foldout(
-                    label = item.thinkMs?.let { "Thought for ${(it / 1000).coerceAtLeast(1)}s" } ?: "Thinking",
-                    icon = AppIcons.Sparkles,
-                ) {
-                    Text(item.think, color = TextSecondary, fontSize = 12.sp, lineHeight = 17.sp)
-                }
-            }
-            if (item.tools.isNotEmpty()) {
-                Foldout(
-                    label = if (item.tools.size == 1) "1 step" else "${item.tools.size} steps",
-                    icon = AppIcons.List,
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        item.tools.forEach { ToolRow(it) }
-                    }
-                }
-            }
-            if (!item.say.isNullOrBlank()) {
-                Text(
-                    item.say,
-                    color = TextTertiary,
-                    fontSize = 12.sp,
-                    lineHeight = 17.sp,
-                    modifier = Modifier.padding(bottom = 6.dp),
-                )
-            }
-            if (item.text.isNotBlank()) {
-                Box(
-                    modifier = Modifier
-                        .clip(BotBubbleShape)
-                        .background(Surface)
-                        .border(1.dp, Border, BotBubbleShape)
-                        .padding(horizontal = 14.dp, vertical = 11.dp),
-                ) {
-                    MarkdownText(markdown = item.text, fontSize = 14.sp, lineHeight = 20.sp, color = TextPrimary, linkColor = ServerBrand, breaks = true)
-                }
-            }
-            if (item.changes.isNotEmpty()) {
-                Spacer(Modifier.height(6.dp))
-                ChangesCard(item.changes)
-            }
-            val meta = listOfNotNull(
-                item.ms?.let { "${(it / 1000).coerceAtLeast(1)}s" },
-                item.model?.substringAfter(':')?.takeIf { it.isNotBlank() },
-            ).joinToString(" · ")
-            if (meta.isNotBlank()) {
-                Text(meta, color = TextTertiary, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
-            }
+    val split = remember(item.key, item.text, item.notes, item.tools.size) {
+        HermesNarration.split(item.text, item.notes, item.tools.size)
+    }
+    val notes = remember(split, item.say) {
+        listOfNotNull(item.say?.trim()?.takeIf { it.isNotEmpty() }) + split.notes
+    }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        TurnByline(
+            live = false,
+            meta = listOfNotNull(
+                item.ms?.let(::turnClock),
+                item.model?.let { HermesModelName(it) ?: it.substringAfter(':') }?.takeIf { it.isNotBlank() },
+            ).joinToString(" · "),
+        )
+        if (notes.isNotEmpty() || item.tools.isNotEmpty() || !item.think.isNullOrBlank()) {
+            WorkTrail(
+                think = item.think,
+                thinkMs = item.thinkMs,
+                notes = notes,
+                tools = item.tools,
+                ms = item.ms,
+            )
+        }
+        if (split.answer.isNotBlank()) {
+            MarkdownText(
+                markdown = split.answer,
+                fontSize = 15.sp,
+                lineHeight = 22.sp,
+                color = TextPrimary,
+                linkColor = ServerBrand,
+                breaks = true,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+        if (item.changes.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
+            ChangesCard(item.changes)
         }
     }
 }
 
+/** `46s`, `2m 05s`. */
+private fun turnClock(ms: Long): String {
+    val s = (ms / 1000).coerceAtLeast(1)
+    return if (s < 60) "${s}s" else "${s / 60}m ${"%02d".format(s % 60)}s"
+}
+
+/** Who is speaking, small: Hermes' face, his name, and how long the turn took on what. */
 @Composable
-private fun Foldout(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, content: @Composable () -> Unit) {
+private fun TurnByline(live: Boolean, meta: String, trailing: (@Composable () -> Unit)? = null) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        BotAvatar(HermesIdentity, size = 22.dp, live = live)
+        Spacer(Modifier.width(8.dp))
+        Text("Hermes", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        if (meta.isNotBlank()) {
+            Text(
+                "  ·  $meta",
+                color = TextTertiary,
+                fontSize = 11.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+        }
+        if (trailing != null) {
+            Spacer(Modifier.weight(1f))
+            trailing()
+        }
+    }
+}
+
+/**
+ * The work behind an answer, closed to one grey line until tapped. Opened, it is a rail of
+ * what happened: the thinking (its own fold), each thing Hermes said on the way, and each
+ * step with what it touched. A step opens to the rest of its output.
+ */
+@Composable
+private fun WorkTrail(
+    think: String?,
+    thinkMs: Long?,
+    notes: List<String>,
+    tools: List<HermesTool>,
+    ms: Long?,
+) {
     var open by rememberSaveable { mutableStateOf(false) }
-    Column(modifier = Modifier.padding(bottom = 6.dp)) {
+    val failed = tools.count { it.failed }
+    val label = buildString {
+        append(
+            when {
+                tools.isEmpty() && notes.isEmpty() -> thinkMs?.let { "Thought for ${turnClock(it)}" } ?: "Thought"
+                ms != null -> "Worked for ${turnClock(ms)}"
+                else -> "Worked"
+            },
+        )
+        if (tools.isNotEmpty()) append(" · ${tools.size} ${if (tools.size == 1) "step" else "steps"}")
+        if (failed > 0) append(" · $failed failed")
+    }
+    val turn = animateFloatAsState(if (open) 90f else 0f, label = "trail")
+    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
         Row(
             modifier = Modifier
                 .clip(RoundedCornerShape(8.dp))
                 .clickable { open = !open }
-                .padding(vertical = 3.dp, horizontal = 2.dp),
+                .padding(vertical = 4.dp, horizontal = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(icon, null, tint = TextTertiary, modifier = Modifier.size(12.dp))
-            Spacer(Modifier.width(5.dp))
-            Text(label, color = TextTertiary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.width(3.dp))
-            Icon(if (open) AppIcons.ChevronUp else AppIcons.ChevronDown, null, tint = TextTertiary, modifier = Modifier.size(12.dp))
+            Icon(
+                AppIcons.ChevronRight,
+                null,
+                tint = TextTertiary,
+                modifier = Modifier.size(14.dp).graphicsLayer { rotationZ = turn.value },
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(label, color = TextTertiary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
         }
         AnimatedVisibility(open, enter = MacroMotion.expandEnter, exit = MacroMotion.expandExit) {
-            Box(
-                modifier = Modifier
-                    .padding(top = 4.dp)
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(SurfaceChrome)
-                    .padding(10.dp),
-            ) { content() }
+            TrailRail(modifier = Modifier.padding(top = 4.dp)) {
+                if (!think.isNullOrBlank()) ThoughtEntry(think, thinkMs)
+                notes.forEach { NoteEntry(it) }
+                tools.forEach { ToolEntry(it) }
+            }
         }
     }
 }
 
+/** A hairline down the left, the way a run of steps hangs together in Claude Code. */
 @Composable
-private fun ToolRow(tool: HermesTool) {
-    Row(verticalAlignment = Alignment.Top) {
-        Icon(
-            when {
-                tool.failed -> AppIcons.Close
-                tool.running -> AppIcons.Clock
-                else -> AppIcons.Check
-            },
-            null,
-            tint = when {
-                tool.failed -> ServerCritical
-                tool.running -> ServerBrand
-                else -> ServerGood
-            },
-            modifier = Modifier.size(12.dp).padding(top = 1.dp),
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(tool.name, color = TextPrimary, fontSize = 11.sp, fontFamily = Mono)
-        if (tool.preview.isNotBlank()) {
+private fun TrailRail(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = 8.dp)
+            .drawBehind {
+                drawLine(
+                    color = Border,
+                    start = Offset(0f, 2.dp.toPx()),
+                    end = Offset(0f, size.height - 2.dp.toPx()),
+                    strokeWidth = 1.5.dp.toPx(),
+                )
+            }
+            .padding(start = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp),
+    ) { content() }
+}
+
+@Composable
+private fun ThoughtEntry(think: String, thinkMs: Long?) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    Column {
+        Row(
+            modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { open = !open },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(AppIcons.Sparkles, null, tint = TextTertiary, modifier = Modifier.size(12.dp))
             Spacer(Modifier.width(6.dp))
             Text(
-                tool.preview.lineSequence().firstOrNull().orEmpty(),
+                thinkMs?.let { "Thought for ${turnClock(it)}" } ?: "Thinking",
+                color = TextSecondary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+            )
+            Spacer(Modifier.width(2.dp))
+            Icon(if (open) AppIcons.ChevronUp else AppIcons.ChevronDown, null, tint = TextTertiary, modifier = Modifier.size(12.dp))
+        }
+        AnimatedVisibility(open, enter = MacroMotion.expandEnter, exit = MacroMotion.expandExit) {
+            Text(
+                think.trim(),
                 color = TextTertiary,
-                fontSize = 11.sp,
-                fontFamily = Mono,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                fontSize = 12.sp,
+                lineHeight = 17.sp,
+                fontStyle = FontStyle.Italic,
+                modifier = Modifier.padding(top = 4.dp, start = 18.dp),
             )
         }
     }
 }
 
+/** Something Hermes said on the way: grey, small, never a bubble. */
 @Composable
-private fun ChangesCard(changes: List<com.macrotracker.data.hermes.HermesFileChange>) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(SurfaceChrome)
-            .border(1.dp, Border, RoundedCornerShape(10.dp))
-            .padding(10.dp),
-        verticalArrangement = Arrangement.spacedBy(3.dp),
-    ) {
-        Text(
-            if (changes.size == 1) "1 file changed" else "${changes.size} files changed",
-            color = TextSecondary,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-        )
-        changes.take(8).forEach { c ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
+private fun NoteEntry(text: String) {
+    MarkdownText(
+        markdown = text,
+        fontSize = 12.5.sp,
+        lineHeight = 18.sp,
+        color = TextSecondary,
+        linkColor = ServerBrand,
+        breaks = true,
+    )
+}
+
+/** One step: whether it worked, what kind of step, what it touched; tap for the rest. */
+@Composable
+private fun ToolEntry(tool: HermesTool) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    val preview = tool.preview.trim()
+    val first = preview.lineSequence().firstOrNull().orEmpty()
+    val more = preview.length > first.length
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(6.dp))
+                .clickable(enabled = more) { open = !open },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ToolStatusDot(tool)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                toolVerb(tool.name),
+                color = TextSecondary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+            )
+            if (first.isNotBlank()) {
+                Spacer(Modifier.width(6.dp))
                 Text(
-                    c.path.substringAfterLast('/'),
-                    color = TextPrimary,
+                    first,
+                    color = TextTertiary,
                     fontSize = 11.sp,
                     fontFamily = Mono,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                Text("+${c.plus}", color = ServerGood, fontSize = 11.sp, fontFamily = Mono)
-                Spacer(Modifier.width(6.dp))
-                Text("−${c.minus}", color = ServerCritical, fontSize = 11.sp, fontFamily = Mono)
+            } else {
+                Spacer(Modifier.weight(1f))
+            }
+            if (more) {
+                Icon(if (open) AppIcons.ChevronUp else AppIcons.ChevronDown, null, tint = TextTertiary, modifier = Modifier.size(12.dp))
+            }
+        }
+        AnimatedVisibility(open && more, enter = MacroMotion.expandEnter, exit = MacroMotion.expandExit) {
+            Box(Modifier.padding(top = 6.dp)) { MonoBlock(preview, maxLines = 20) }
+        }
+    }
+}
+
+@Composable
+private fun ToolStatusDot(tool: HermesTool) {
+    val color = when {
+        tool.failed -> ServerCritical
+        tool.running -> ServerBrand
+        else -> ServerGood
+    }
+    Box(
+        Modifier
+            .size(7.dp)
+            .clip(CircleShape)
+            .background(if (tool.running) color.copy(alpha = 0.55f) else color),
+    )
+}
+
+/** `read_file` → "Read", `terminal` → "Ran": the step as a verb, as Claude Code labels its tools. */
+private fun toolVerb(name: String): String {
+    val n = name.lowercase()
+    return when {
+        n == "terminal" || n.contains("shell") || n.contains("bash") || n.contains("exec") -> "Ran"
+        n.contains("search") && (n.contains("file") || n.contains("code")) -> "Searched files"
+        n.contains("grep") || n.contains("glob") -> "Searched files"
+        n.contains("web") && n.contains("search") -> "Searched the web"
+        n.contains("read") || n.contains("view") || n == "cat" -> "Read"
+        n.contains("write") || n.contains("create") -> "Wrote"
+        n.contains("edit") || n.contains("patch") || n.contains("replace") -> "Edited"
+        n.contains("fetch") || n.contains("browse") || n.contains("extract") -> "Fetched"
+        n.contains("memory") -> "Memory"
+        n.contains("skill") -> "Skill"
+        n.contains("todo") || n.contains("plan") -> "Planned"
+        n.contains("delegate") || n.contains("agent") -> "Delegated"
+        else -> name.replace('_', ' ').replaceFirstChar { it.uppercase() }
+    }
+}
+
+/**
+ * What the turn changed, as Claude Code lists it under a reply: the total, then a row per
+ * file with its counts and an arrow at the far right that opens the diff.
+ */
+@Composable
+private fun ChangesCard(changes: List<HermesFileChange>) {
+    var showAll by rememberSaveable { mutableStateOf(false) }
+    val plus = changes.sumOf { it.plus }
+    val minus = changes.sumOf { it.minus }
+    val shown = if (showAll) changes else changes.take(CHANGES_SHOWN)
+    val shape = RoundedCornerShape(12.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(SurfaceChrome)
+            .border(1.dp, Border, shape),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 14.dp, top = 10.dp, bottom = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(AppIcons.Code, null, tint = TextSecondary, modifier = Modifier.size(14.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(
+                if (changes.size == 1) "1 file changed" else "${changes.size} files changed",
+                color = TextPrimary,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f),
+            )
+            Text("+$plus", color = ServerGood, fontSize = 12.sp, fontFamily = Mono, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.width(6.dp))
+            Text("−$minus", color = ServerCritical, fontSize = 12.sp, fontFamily = Mono, fontWeight = FontWeight.SemiBold)
+        }
+        shown.forEach { change ->
+            HorizontalDivider(color = Border, thickness = 1.dp)
+            FileChangeRow(change)
+        }
+        if (changes.size > CHANGES_SHOWN && !showAll) {
+            HorizontalDivider(color = Border, thickness = 1.dp)
+            Text(
+                "Show ${changes.size - CHANGES_SHOWN} more",
+                color = ServerBrand,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showAll = true }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+            )
+        }
+    }
+}
+
+private const val CHANGES_SHOWN = 5
+
+@Composable
+private fun FileChangeRow(change: HermesFileChange) {
+    var open by rememberSaveable(change.path) { mutableStateOf(false) }
+    val turn = animateFloatAsState(if (open) 90f else 0f, label = "file")
+    val name = change.path.substringAfterLast('/')
+    val dir = change.path.substringBeforeLast('/', "").split('/').filter { it.isNotBlank() }.takeLast(3).joinToString("/")
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { open = !open }
+                .padding(start = 12.dp, end = 10.dp, top = 9.dp, bottom = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ChangeStatusBadge(change.status)
+            Spacer(Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(name, color = TextPrimary, fontSize = 12.5.sp, fontFamily = Mono, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (dir.isNotBlank()) {
+                    Text(dir, color = TextTertiary, fontSize = 10.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            Spacer(Modifier.width(8.dp))
+            Text("+${change.plus}", color = ServerGood, fontSize = 11.sp, fontFamily = Mono)
+            Spacer(Modifier.width(5.dp))
+            Text("−${change.minus}", color = ServerCritical, fontSize = 11.sp, fontFamily = Mono)
+            Spacer(Modifier.width(8.dp))
+            Icon(
+                AppIcons.ChevronRight,
+                contentDescription = if (open) "Hide changes" else "Show changes",
+                tint = TextSecondary,
+                modifier = Modifier.size(18.dp).graphicsLayer { rotationZ = turn.value },
+            )
+        }
+        AnimatedVisibility(open, enter = MacroMotion.expandEnter, exit = MacroMotion.expandExit) {
+            Box(Modifier.padding(start = 10.dp, end = 10.dp, bottom = 10.dp)) {
+                val diff = change.diff
+                if (diff != null) {
+                    DiffBlock(diff)
+                } else {
+                    Text(
+                        "No diff was captured for this one.",
+                        color = TextTertiary,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(horizontal = 2.dp, vertical = 4.dp),
+                    )
+                }
             }
         }
     }
 }
+
+@Composable
+private fun ChangeStatusBadge(status: String) {
+    val (letter, color) = when (status.lowercase()) {
+        "added", "new", "a" -> "A" to ServerGood
+        "deleted", "removed", "d" -> "D" to ServerCritical
+        "renamed", "r" -> "R" to ServerBrand
+        else -> "M" to ServerWarn
+    }
+    Box(
+        modifier = Modifier
+            .size(18.dp)
+            .clip(RoundedCornerShape(5.dp))
+            .background(color.copy(alpha = 0.14f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(letter, color = color, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = Mono)
+    }
+}
+
+/** A unified diff, its added and removed lines tinted, scrolled sideways rather than wrapped. */
+@Composable
+private fun DiffBlock(diff: String) {
+    val lines = remember(diff) { diff.trimEnd().lines().filterNot { it.startsWith("diff --git") || it.startsWith("index ") } }
+    val body = remember(lines) {
+        buildAnnotatedString {
+            lines.take(DIFF_LINES).forEachIndexed { i, line ->
+                if (i > 0) append('\n')
+                val added = line.startsWith("+") && !line.startsWith("+++")
+                val removed = line.startsWith("-") && !line.startsWith("---")
+                val tint = when {
+                    added -> ServerGood
+                    removed -> ServerCritical
+                    line.startsWith("@@") -> ServerBrand
+                    line.startsWith("+++") || line.startsWith("---") -> TextTertiary
+                    else -> null
+                }
+                val style = when {
+                    added || removed -> SpanStyle(color = tint!!, background = tint.copy(alpha = 0.10f))
+                    tint != null -> SpanStyle(color = tint)
+                    else -> null
+                }
+                if (style != null) withStyle(style) { append(line) } else append(line)
+            }
+        }
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(ServerWell),
+    ) {
+        Text(
+            body,
+            color = TextSecondary,
+            fontSize = 11.sp,
+            lineHeight = 15.sp,
+            fontFamily = Mono,
+            softWrap = false,
+            modifier = Modifier
+                .horizontalScroll(rememberScrollState())
+                .padding(10.dp),
+        )
+        if (lines.size > DIFF_LINES) {
+            Text(
+                "${lines.size - DIFF_LINES} more lines",
+                color = TextTertiary,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(start = 10.dp, bottom = 8.dp),
+            )
+        }
+    }
+}
+
+private const val DIFF_LINES = 160
 
 /** A command Hermes ran by itself: the prompt line, exit code, time, and the output folded in. */
 @Composable
@@ -826,7 +1174,6 @@ private fun TerminalCard(item: HermesItem.Exec) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 39.dp)
             .clip(CardShape)
             .background(SurfaceChrome)
             .border(1.dp, Border, CardShape)
@@ -1054,7 +1401,6 @@ private fun QuestionCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 39.dp)
             .clip(CardShape)
             .background(Surface)
             .border(1.dp, if (card.open) ServerBrand.copy(alpha = 0.5f) else Border, CardShape)
@@ -1092,7 +1438,7 @@ private fun QuestionCard(
 @Composable
 private fun WebRow(item: HermesItem.Web) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(start = 39.dp),
+        modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(if (item.kind == "search") AppIcons.Search else AppIcons.Link, null, tint = TextTertiary, modifier = Modifier.size(12.dp))
@@ -1111,7 +1457,11 @@ private fun WebRow(item: HermesItem.Web) {
     }
 }
 
-/** The turn as it happens: what Hermes is doing, a clock, the tool trail, and the words as they arrive. */
+/**
+ * The turn as it happens, as a Claude chat shows one: the scanner and what Hermes is doing
+ * with a clock, the work so far on its rail (what he said on the way, every step, the
+ * thinking's last lines), and the answer writing itself underneath in plain text.
+ */
 @Composable
 private fun LiveTurn(live: HermesLive) {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -1122,68 +1472,52 @@ private fun LiveTurn(live: HermesLive) {
         }
     }
     val elapsed = ((now - live.startedAtMs) / 1000).coerceAtLeast(0)
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-        BotAvatar(HermesIdentity, size = 30.dp, live = true, modifier = Modifier.padding(top = 2.dp))
-        Spacer(Modifier.width(9.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                WorkingScanner(color = ServerBrand, blockSize = 5.dp, gap = 2.dp)
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    HermesActivityLabel.of(live).text,
-                    color = TextSecondary,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                Spacer(Modifier.width(8.dp))
-                Text("${elapsed / 60}:${"%02d".format(elapsed % 60)}", color = TextTertiary, fontSize = 11.sp, fontFamily = Mono)
-            }
-            if (live.tools.isNotEmpty()) {
-                Spacer(Modifier.height(6.dp))
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(SurfaceChrome)
-                        .padding(horizontal = 10.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    live.tools.takeLast(5).forEach { ToolRow(it) }
-                }
-            }
-            if (live.think.isNotBlank() && live.got.isBlank()) {
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    live.think.takeLast(280).substringAfter('\n'),
-                    color = TextTertiary,
-                    fontSize = 12.sp,
-                    lineHeight = 16.sp,
-                    maxLines = 4,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            if (live.got.isNotBlank()) {
-                Spacer(Modifier.height(6.dp))
-                Box(
-                    modifier = Modifier
-                        .clip(BotBubbleShape)
-                        .background(Surface)
-                        .border(1.dp, Border, BotBubbleShape)
-                        .padding(horizontal = 14.dp, vertical = 11.dp),
-                ) {
-                    MarkdownText(
-                        markdown = live.got,
-                        fontSize = 14.sp,
-                        lineHeight = 20.sp,
-                        color = TextPrimary,
-                        linkColor = ServerBrand,
-                        breaks = true,
-                        streaming = true,
+    Column(modifier = Modifier.fillMaxWidth()) {
+        TurnByline(live = true, meta = "") {
+            Text("${elapsed / 60}:${"%02d".format(elapsed % 60)}", color = TextTertiary, fontSize = 11.sp, fontFamily = Mono)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 2.dp, bottom = 6.dp)) {
+            WorkingScanner(color = ServerBrand, blockSize = 5.dp, gap = 2.dp)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                HermesActivityLabel.of(live).text,
+                color = TextSecondary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        val thinking = live.think.isNotBlank() && live.got.isBlank()
+        if (thinking || live.notes.isNotEmpty() || live.tools.isNotEmpty()) {
+            TrailRail(modifier = Modifier.padding(bottom = 8.dp)) {
+                live.notes.forEach { NoteEntry(it) }
+                live.tools.takeLast(LIVE_STEPS).forEach { ToolEntry(it) }
+                if (thinking) {
+                    Text(
+                        live.think.takeLast(320).substringAfter('\n').trim(),
+                        color = TextTertiary,
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp,
+                        fontStyle = FontStyle.Italic,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
         }
+        if (live.got.isNotBlank()) {
+            MarkdownText(
+                markdown = live.got,
+                fontSize = 15.sp,
+                lineHeight = 22.sp,
+                color = TextPrimary,
+                linkColor = ServerBrand,
+                breaks = true,
+                streaming = true,
+            )
+        }
     }
 }
+
+private const val LIVE_STEPS = 8

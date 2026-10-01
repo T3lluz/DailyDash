@@ -1,6 +1,8 @@
 package com.macrotracker.data.island
 
 import android.content.Context
+import com.macrotracker.data.calendar.CalendarEvent
+import com.macrotracker.data.calendar.CalendarRepository
 import com.macrotracker.data.dashboard.IslandItem
 import com.macrotracker.data.github.GitHubRepository
 import com.macrotracker.data.health.HealthStats
@@ -29,9 +31,9 @@ import javax.inject.Singleton
 
 /**
  * What the phone itself knows that is worth a place on the island, beside the server's line:
- * a server in trouble, channels live, new videos, reviews waiting, tonight's episode, last
- * night's sleep in the morning, steps left in the evening, food left around meals, and the
- * weather now. Each source is read from what the app already has (caches, the database,
+ * the event you are in (and how long is left) and the next one, a server in trouble,
+ * channels live, new videos, reviews waiting, tonight's episode, last night's sleep in the
+ * morning, steps left in the evening, food left around meals, and the weather now. Each source is read from what the app already has (caches, the database,
  * Health Connect) and never waits on the network, so the island stays quick and works off
  * the tailnet too. A source that fails or has nothing to say is simply left out.
  */
@@ -46,10 +48,12 @@ class LocalIslandSource @Inject constructor(
     private val health: HealthConnectRepository,
     private val macros: MacroRepository,
     private val settings: SettingsRepository,
+    private val calendar: CalendarRepository,
 ) {
     suspend fun collect(now: LocalDateTime = LocalDateTime.now()): List<IslandItem> = withContext(Dispatchers.IO) {
         val hour = now.hour
         buildList {
+            addAll(calendarItems(now))
             serverAlert()?.let(::add)
             twitchLive()?.let(::add)
             upcomingTonight(now)?.let(::add)
@@ -84,6 +88,71 @@ class LocalIslandSource @Inject constructor(
 
     private fun sameDay(epochMs: Long, now: LocalDateTime): Boolean =
         java.time.Instant.ofEpochMilli(epochMs).atZone(java.time.ZoneId.systemDefault()).toLocalDate() == now.toLocalDate()
+
+    /**
+     * The event you are in, with how long is left and a ring for how far through it you are,
+     * and the next timed one in the coming hours. Read from the phone's own calendar, which
+     * knows "now" better than the server's line (that one lags, and drops what has started).
+     */
+    private suspend fun calendarItems(now: LocalDateTime): List<IslandItem> {
+        if (!settings.calendarEnabled.value || !calendar.hasPermission()) return emptyList()
+        // The same window as the Home card, so this rides its five-minute cache.
+        val events = runCatching { calendar.readEvents(extraDays = CalendarRepository.WINDOW_DAYS, calendarIds = null) }
+            .getOrNull().orEmpty()
+            .filter { !it.isAllDay && it.title.isNotBlank() }
+        val current = events
+            .filter { !it.startTime.isAfter(now) && it.endTime.isAfter(now) }
+            .minByOrNull { it.endTime }
+        val next = events
+            .filter { it.startTime.isAfter(now) && Duration.between(now, it.startTime).toMinutes() <= NEXT_EVENT_MINUTES }
+            .minByOrNull { it.startTime }
+        return listOfNotNull(current?.let { eventNow(it, now) }, next?.let { eventNext(it, now) })
+    }
+
+    private fun eventNow(event: CalendarEvent, now: LocalDateTime): IslandItem {
+        val total = Duration.between(event.startTime, event.endTime).seconds.coerceAtLeast(1)
+        val done = Duration.between(event.startTime, now).seconds.coerceIn(0, total)
+        val left = Duration.between(now, event.endTime).toMinutes().coerceAtLeast(1)
+        return item(
+            kind = "cal",
+            tone = "live",
+            icon = "calendar",
+            title = event.title.trim(),
+            sub = listOfNotNull("until ${event.endTime.format(CLOCK)}", event.location.takeIf { it.isNotBlank() }).joinToString(" · "),
+            end = "${spanText(left)} left",
+            href = event.meetingLink,
+            color = hex(event.calendarColor),
+            ring = done * 100f / total,
+            route = "calendar",
+        )
+    }
+
+    private fun eventNext(event: CalendarEvent, now: LocalDateTime): IslandItem {
+        val minutes = Duration.between(now, event.startTime).toMinutes().coerceAtLeast(0)
+        return item(
+            kind = "cal",
+            tone = if (minutes <= 60) "soon" else "quiet",
+            icon = "calendar",
+            title = event.title.trim(),
+            sub = listOfNotNull(
+                "${event.startTime.format(CLOCK)}–${event.endTime.format(CLOCK)}",
+                event.location.takeIf { it.isNotBlank() },
+            ).joinToString(" · "),
+            end = if (minutes <= 180) "in ${spanText(minutes)}" else event.startTime.format(CLOCK),
+            href = event.meetingLink,
+            color = hex(event.calendarColor),
+            route = "calendar",
+        )
+    }
+
+    /** 25 -> "25 min", 80 -> "1 h 20 min", 120 -> "2 h": the words the island's countdowns read. */
+    private fun spanText(minutes: Long): String = when {
+        minutes < 60 -> "$minutes min"
+        minutes % 60 == 0L -> "${minutes / 60} h"
+        else -> "${minutes / 60} h ${minutes % 60} min"
+    }
+
+    private fun hex(color: Int): String = String.format(Locale.US, "#%06x", color and 0xFFFFFF)
 
     private fun serverAlert(): IslandItem? {
         val worst = servers.runtimes.value.values.mapNotNull { rt ->
@@ -314,6 +383,8 @@ class LocalIslandSource @Inject constructor(
         const val HEALTH_TIMEOUT_MS = 4_000L
         const val HEALTH_CACHE_MS = 5 * 60_000L
         const val STEP_GOAL = 10_000L
+        /** How far ahead the next event shows: the rest of a working day. */
+        const val NEXT_EVENT_MINUTES = 8 * 60L
         const val TWITCH_PURPLE = "#9146ff"
         const val YOUTUBE_RED = "#ff0033"
         val CLOCK: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
