@@ -304,7 +304,10 @@ fun HermesChatPane(
                         items(state.items, key = { it.key }) { item ->
                             HermesItemView(
                                 item = item,
-                                state = state,
+                                // Only what the cards read, not the whole state: with the state,
+                                // every streamed token re-ran every row on screen.
+                                busy = state.busy,
+                                running = state.running,
                                 onDecide = { card, i, run ->
                                     haptics.click()
                                     forceFollow = true
@@ -598,7 +601,8 @@ private fun HermesUnreachable(
 @Composable
 private fun HermesItemView(
     item: HermesItem,
-    state: HermesUiState,
+    busy: Boolean,
+    running: Set<String>,
     onDecide: (HermesItem.Ask, Int, Boolean) -> Unit,
     onAnswer: (HermesItem.Clarify, String) -> Unit,
 ) {
@@ -607,8 +611,8 @@ private fun HermesItemView(
         is HermesItem.Output -> OutputNote(item.text)
         is HermesItem.Assistant -> AssistantTurn(item)
         is HermesItem.Exec -> TerminalCard(item)
-        is HermesItem.Ask -> ApprovalCard(item, state, onDecide)
-        is HermesItem.Clarify -> QuestionCard(item, enabled = !state.busy, onAnswer = onAnswer)
+        is HermesItem.Ask -> ApprovalCard(item, busy, running, onDecide)
+        is HermesItem.Clarify -> QuestionCard(item, enabled = !busy, onAnswer = onAnswer)
         is HermesItem.Web -> WebRow(item)
         is HermesItem.Error -> BotBubble(identity = HermesIdentity, text = item.text, isError = true)
     }
@@ -906,7 +910,8 @@ private fun MonoBlock(text: String, maxLines: Int) {
 @Composable
 private fun ApprovalCard(
     card: HermesItem.Ask,
-    state: HermesUiState,
+    busy: Boolean,
+    running: Set<String>,
     onDecide: (HermesItem.Ask, Int, Boolean) -> Unit,
 ) {
     val grave = card.cmds.any { it.risk == "grave" }
@@ -932,8 +937,8 @@ private fun ApprovalCard(
             Spacer(Modifier.height(10.dp))
             ApprovalRow(
                 cmd = cmd,
-                running = "${card.id}:$i" in state.running,
-                enabled = !state.busy,
+                running = "${card.id}:$i" in running,
+                enabled = !busy,
                 onRun = { onDecide(card, i, true) },
                 onSkip = { onDecide(card, i, false) },
             )

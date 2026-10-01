@@ -183,6 +183,10 @@ fun SysopChatPane(
                 }
             }
 
+            // Read here, not inside each row's actions: a row that read `state` re-ran for every
+            // streamed token, so the whole chat recomposed while a reply came in.
+            val lastMessageId = state.messages.lastOrNull()?.id
+            val replying = state.loading
             LazyColumn(
                 state = listState,
                 modifier = Modifier
@@ -239,7 +243,7 @@ fun SysopChatPane(
                                             )
                                         }
                                     }
-                                } else if (message.id == state.messages.lastOrNull()?.id && !state.loading) {
+                                } else if (message.id == lastMessageId && !replying) {
                                     Row(modifier = Modifier.padding(top = 6.dp)) {
                                         SmallActionChip(
                                             icon = AppIcons.Refresh,
