@@ -1,6 +1,11 @@
 package com.macrotracker.ui.screens
 
 import com.macrotracker.ui.theme.BorderStrong
+import com.macrotracker.ui.util.preparePhoto
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 import com.macrotracker.ui.theme.SurfaceElevated
 import android.Manifest
 import android.content.Context
@@ -268,26 +273,27 @@ private fun MacrosChatPane(
     var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
     var pendingCameraFile by remember { mutableStateOf<File?>(null) }
 
-    fun submitMealPhoto(bitmap: Bitmap?) {
-        if (bitmap == null) {
-            Toast.makeText(context, "Couldn't read that image.", Toast.LENGTH_SHORT).show()
-            return
-        }
-        forceFollow = true
-        viewModel.sendMealPhoto(mealPhotoToBase64(bitmap))
-    }
+    val photoScope = rememberCoroutineScope()
 
-    fun decodeUri(uri: Uri): Bitmap? = try {
-        context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
-    } catch (_: Exception) {
-        null
+    /** Scaled, turned upright and encoded off the main thread; a full-size decode could run out of memory. */
+    fun submitMealPhoto(uri: Uri) {
+        photoScope.launch {
+            val photo = withContext(Dispatchers.Default) { preparePhoto(context, uri, maxSide = 1280) }
+            if (photo == null) {
+                Toast.makeText(context, "Couldn't read that image.", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            forceFollow = true
+            viewModel.sendMealPhoto(photo.base64)
+            photo.bitmap.recycle()
+        }
     }
 
     val galleryLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent(),
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        submitMealPhoto(decodeUri(uri))
+        submitMealPhoto(uri)
     }
 
     val takePictureLauncher = rememberLauncherForActivityResult(
@@ -298,9 +304,21 @@ private fun MacrosChatPane(
         pendingCameraUri = null
         pendingCameraFile = null
         if (success && uri != null) {
-            submitMealPhoto(decodeUri(uri))
+            // The file is read off the main thread, so it is deleted once that is done.
+            photoScope.launch {
+                val photo = withContext(Dispatchers.Default) { preparePhoto(context, uri, maxSide = 1280) }
+                file?.delete()
+                if (photo == null) {
+                    Toast.makeText(context, "Couldn't read that image.", Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
+                forceFollow = true
+                viewModel.sendMealPhoto(photo.base64)
+                photo.bitmap.recycle()
+            }
+        } else {
+            file?.delete()
         }
-        file?.delete()
     }
 
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
@@ -563,25 +581,6 @@ private fun launchMealCamera(
     } catch (e: Exception) {
         Toast.makeText(context, e.message ?: "Couldn't open camera.", Toast.LENGTH_SHORT).show()
     }
-}
-
-private fun mealPhotoToBase64(bitmap: Bitmap): String {
-    val maxSide = 1280
-    val scaled = if (bitmap.width <= maxSide && bitmap.height <= maxSide) {
-        bitmap
-    } else {
-        val scale = maxSide.toFloat() / maxOf(bitmap.width, bitmap.height)
-        Bitmap.createScaledBitmap(
-            bitmap,
-            (bitmap.width * scale).toInt().coerceAtLeast(1),
-            (bitmap.height * scale).toInt().coerceAtLeast(1),
-            true,
-        )
-    }
-    val stream = ByteArrayOutputStream()
-    scaled.compress(Bitmap.CompressFormat.JPEG, 70, stream)
-    if (scaled !== bitmap) scaled.recycle()
-    return Base64.encodeToString(stream.toByteArray(), Base64.NO_WRAP)
 }
 
 // ── Chrome ───────────────────────────────────────────────────────────────────

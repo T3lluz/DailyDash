@@ -208,6 +208,19 @@ fun HealthScreen(
         dashboardViewModel.loadData(forceRefresh = true)
     }
 
+    // Every "Allow" on the tab goes through here. Without Health Connect on the phone
+    // (Android 8-13 before it is installed) the permission screen does not exist, and
+    // launching it crashed; the Play Store page to install it opens instead.
+    val requestHealthAccess: () -> Unit = remember(hcPermissionLauncher) {
+        {
+            try {
+                hcPermissionLauncher.launch(healthViewModel.healthConnectPermissions)
+            } catch (_: ActivityNotFoundException) {
+                openHealthConnectInstall(context)
+            }
+        }
+    }
+
     // First visit to this tab happens while the Activity is already resumed, so
     // ON_RESUME never fires. Load now, then again on later resumes (30s throttle).
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -310,7 +323,7 @@ fun HealthScreen(
                 is HealthConnectUiState.PermissionRequired -> {
                     HealthConnectCard(
                         onRequestPermission = {
-                            hcPermissionLauncher.launch(healthViewModel.healthConnectPermissions)
+                            requestHealthAccess()
                         }
                     )
                 }
@@ -392,7 +405,7 @@ fun HealthScreen(
                             loaded = sleepLoaded,
                             haptics = haptics,
                             onRequestPermission = {
-                                hcPermissionLauncher.launch(healthViewModel.healthConnectPermissions)
+                                requestHealthAccess()
                             },
                         )
                     }
@@ -401,7 +414,7 @@ fun HealthScreen(
                             state = vitalsState,
                             haptics = haptics,
                             onRequestPermission = {
-                                hcPermissionLauncher.launch(healthViewModel.healthConnectPermissions)
+                                requestHealthAccess()
                             },
                             birthYear = birthYear,
                             onSetBirthYear = healthViewModel::setBirthYear,
@@ -412,7 +425,7 @@ fun HealthScreen(
                             state = activitiesState,
                             haptics = haptics,
                             onRequestPermission = {
-                                hcPermissionLauncher.launch(healthViewModel.healthConnectPermissions)
+                                requestHealthAccess()
                             },
                             onRetry = { healthViewModel.retryHealthConnect() },
                             onExpandActivity = { healthViewModel.onActivityExpanded(it) },
@@ -443,7 +456,7 @@ fun HealthScreen(
                             notShared = missingPermissions.map { it.label },
                             onAllow = {
                                 haptics.tick()
-                                hcPermissionLauncher.launch(healthViewModel.healthConnectPermissions)
+                                requestHealthAccess()
                             },
                         )
                     }
@@ -835,6 +848,17 @@ private fun MacroTrendsSection(
  * that resyncs the AppOp behind health reads once it has drifted from the
  * runtime grant — the app cannot set an AppOp itself.
  */
+private fun openHealthConnectInstall(context: Context) {
+    val id = "com.google.android.apps.healthdata"
+    for (uri in listOf("market://details?id=$id", "https://play.google.com/store/apps/details?id=$id")) {
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uri)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            return
+        } catch (_: ActivityNotFoundException) {
+        }
+    }
+}
+
 private fun openHealthConnectSettings(context: Context) {
     val candidates = listOf(
         Intent("android.health.connect.action.MANAGE_HEALTH_PERMISSIONS")

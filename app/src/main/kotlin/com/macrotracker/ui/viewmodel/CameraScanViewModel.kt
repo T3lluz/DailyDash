@@ -1,6 +1,8 @@
 package com.macrotracker.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
+import java.util.Locale
+import com.macrotracker.util.toDecimalOrNull
 import androidx.lifecycle.viewModelScope
 import com.macrotracker.data.local.MacroLogEntity
 import com.macrotracker.data.local.MacroRepository
@@ -141,14 +143,14 @@ class CameraScanViewModel @Inject constructor(
     ): LogSummary? {
         val r = _result.value ?: return null
         
-        val cals = calsStr.toDoubleOrNull()?.toInt()?.coerceAtLeast(0) ?: r.caloriesPerServing
+        val cals = calsStr.toDecimalOrNull()?.toInt()?.coerceAtLeast(0) ?: r.caloriesPerServing
         // Protein can be a decimal, so we keep it as a double to avoid issues when the user types a decimal
-        val prot = protStr.toDoubleOrNull()?.coerceAtLeast(0.0) ?: r.proteinPerServing.toDouble()
+        val prot = protStr.toDecimalOrNull()?.coerceAtLeast(0.0) ?: r.proteinPerServing.toDouble()
         
         val fallbackServings = if (r.servingsPerContainer > 0) r.servingsPerContainer else 1.0
-        var finalServs = servsStr.toDoubleOrNull()?.coerceAtLeast(0.0) ?: fallbackServings
-        var finalServSize = servSizeStr.toDoubleOrNull()?.toInt()?.coerceAtLeast(0) ?: r.servingSizeGrams
-        var finalPkgWeight = pkgWeightStr.toDoubleOrNull()?.toInt()?.coerceAtLeast(0) ?: r.packageWeightGrams
+        var finalServs = servsStr.toDecimalOrNull()?.coerceAtLeast(0.0) ?: fallbackServings
+        var finalServSize = servSizeStr.toDecimalOrNull()?.toInt()?.coerceAtLeast(0) ?: r.servingSizeGrams
+        var finalPkgWeight = pkgWeightStr.toDecimalOrNull()?.toInt()?.coerceAtLeast(0) ?: r.packageWeightGrams
 
         if (finalServs <= 0 && finalServSize > 0 && finalPkgWeight > 0) {
             finalServs = finalPkgWeight.toDouble() / finalServSize
@@ -160,7 +162,7 @@ class CameraScanViewModel @Inject constructor(
             finalPkgWeight = (finalServs * finalServSize).toInt()
         }
 
-        val amt = amtStr.toDoubleOrNull()?.coerceAtLeast(0.0) ?: 0.0
+        val amt = amtStr.toDecimalOrNull()?.coerceAtLeast(0.0) ?: 0.0
         
         val multiplier = when (unitStr) {
             "servings" -> amt
@@ -222,6 +224,6 @@ class CameraScanViewModel @Inject constructor(
 
     private fun formatNum(v: Int): String = if (v > 0) v.toString() else ""
     private fun formatDouble(v: Double): String = if (v > 0) {
-        if (v == v.toLong().toDouble()) v.toLong().toString() else "%.2f".format(v)
+        if (v == v.toLong().toDouble()) v.toLong().toString() else String.format(Locale.US, "%.2f", v)
     } else ""
 }
