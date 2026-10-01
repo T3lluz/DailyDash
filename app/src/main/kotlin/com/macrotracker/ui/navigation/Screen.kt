@@ -50,4 +50,7 @@ object SubScreenRoutes {
 
     /** What the agents spent and what runs when (UsageScreen). */
     const val USAGE = "usage"
+
+    /** Estimating a meal with the AI (MealChatScreen), pushed from Food. */
+    const val MEAL_CHAT = "meal_chat"
 }

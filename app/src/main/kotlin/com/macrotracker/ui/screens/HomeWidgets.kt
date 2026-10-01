@@ -79,6 +79,7 @@ fun HomeWidgetItem(
     onNavigateToServers: () -> Unit,
     onOpenHermes: () -> Unit,
     onOpenConsole: () -> Unit,
+    onOpenMealChat: () -> Unit,
     onRequestLocationPermission: () -> Unit,
     onRequestCalendarPermission: () -> Unit,
     hasLocationPermission: () -> Boolean,
@@ -112,6 +113,7 @@ fun HomeWidgetItem(
         "FOOD" -> HomeFoodWidget(
             viewModel = viewModel,
             onNavigateToHealth = onNavigateToHealth,
+            onOpenMealChat = onOpenMealChat,
             quickFood = quickFood,
             onQuickFoodChange = onQuickFoodChange,
             quickCalories = quickCalories,
@@ -234,6 +236,7 @@ private fun HomeBodyStatsWidget(viewModel: HomeViewModel, isVisible: Boolean, on
 private fun HomeFoodWidget(
     viewModel: HomeViewModel,
     onNavigateToHealth: () -> Unit,
+    onOpenMealChat: () -> Unit,
     quickFood: String,
     onQuickFoodChange: (String) -> Unit,
     quickCalories: String,
@@ -315,6 +318,7 @@ private fun HomeFoodWidget(
                 protein = quickProtein,
                 onProteinChange = onQuickProteinChange,
                 onAdd = { name, cal, prot -> viewModel.addLog(name, cal, prot) },
+                onAskAi = onOpenMealChat,
                 modifier = Modifier.padding(top = 12.dp),
             )
         }

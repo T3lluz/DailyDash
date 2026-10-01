@@ -14,6 +14,7 @@ import com.macrotracker.ui.screens.AIScreen
 import com.macrotracker.ui.screens.CameraScanScreen
 import com.macrotracker.ui.screens.HealthScreen
 import com.macrotracker.ui.screens.HomeScreen
+import com.macrotracker.ui.screens.MealChatScreen
 import com.macrotracker.ui.screens.ServerScreen
 import com.macrotracker.ui.screens.SettingsScreen
 import com.macrotracker.ui.screens.WidgetsScreen
@@ -44,6 +45,7 @@ private val SubScreens = setOf(
     OnboardingRoutes.PERMISSIONS,
     OnboardingRoutes.TUTORIAL,
     SubScreenRoutes.CAMERA_SCAN,
+    SubScreenRoutes.MEAL_CHAT,
     SettingsRoutes.CONNECTIONS,
     SettingsRoutes.AI,
     SettingsRoutes.NUTRITION,
@@ -131,11 +133,15 @@ fun DailyDashNavHost(
                 onNavigateToServers = { navController.navigateToSubScreen(SettingsRoutes.SERVER_DASHBOARD) },
                 onOpenHermes = { navController.navigateToTab(Screen.AI.route) },
                 onOpenConsole = { navController.navigateToSubScreen(SubScreenRoutes.CONSOLE) },
+                onOpenMealChat = { navController.navigateToSubScreen(SubScreenRoutes.MEAL_CHAT) },
             )
         }
 
         composable(Screen.Health.route) {
-            HealthScreen(onNavigateToCameraScan = { navController.navigateToSubScreen(SubScreenRoutes.CAMERA_SCAN) })
+            HealthScreen(
+                onNavigateToCameraScan = { navController.navigateToSubScreen(SubScreenRoutes.CAMERA_SCAN) },
+                onOpenMealChat = { navController.navigateToSubScreen(SubScreenRoutes.MEAL_CHAT) },
+            )
         }
 
         composable(
@@ -146,11 +152,9 @@ fun DailyDashNavHost(
             ),
         ) { entry ->
             AIScreen(
-                onNavigateToCameraScan = { navController.navigateToSubScreen(SubScreenRoutes.CAMERA_SCAN) },
                 onNavigateToAiSettings = { navController.navigateToSubScreen(SettingsRoutes.AI) },
                 onOpenConsole = { navController.navigateToSubScreen(SubScreenRoutes.CONSOLE) },
                 onOpenUsage = { navController.navigateToSubScreen(SubScreenRoutes.USAGE) },
-                initialTab = entry.arguments?.getString(Screen.AI.ARG_TAB),
                 serverHandoffId = entry.arguments?.getString(Screen.AI.ARG_SEED),
             )
         }
@@ -232,6 +236,14 @@ fun DailyDashNavHost(
 
         subScreen(SubScreenRoutes.WIDGETS) { entry ->
             WidgetsScreen(onNavigateBack = { navController.popSubScreen(entry) })
+        }
+
+        subScreen(SubScreenRoutes.MEAL_CHAT) { entry ->
+            MealChatScreen(
+                onNavigateBack = { navController.popSubScreen(entry) },
+                onNavigateToCameraScan = { navController.navigateToSubScreen(SubScreenRoutes.CAMERA_SCAN) },
+                onNavigateToAiSettings = { navController.navigateToSubScreen(SettingsRoutes.AI) },
+            )
         }
 
         subScreen(SubScreenRoutes.CAMERA_SCAN) { entry ->
