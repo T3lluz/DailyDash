@@ -71,12 +71,16 @@ fun parseWidgetConfig(configStr: String, defaultOrder: List<Triple<String, Strin
     return configs
 }
 
-/** Cards merged into one: Today's progress and Quick add became Home's Food, Food today and Log food Health's. */
+/**
+ * Cards merged into one: Today's progress and Quick add became Home's Food; Food today,
+ * Log food and Food log became Health's.
+ */
 private val MergedWidgetIds = mapOf(
     "PROGRESS" to "FOOD",
     "QUICK_ADD" to "FOOD",
     "SUMMARY" to "FOOD",
     "ADD_ENTRY" to "FOOD",
+    "RECENT_LOGS" to "FOOD",
 )
 
 fun encodeWidgetConfig(configs: List<WidgetConfig>): String {

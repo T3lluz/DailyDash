@@ -352,7 +352,7 @@ class SettingsRepository @Inject constructor(
 
     private fun loadHealthWidgetOrder(): String {
         val default =
-            "DAILY_HEALTH:true,BODY_STATS:true,SLEEP:true,ACTIVITIES:true,VITALS:true,HISTORY:true,FOOD:true,WEEK_AT_A_GLANCE:true,RECENT_LOGS:true"
+            "DAILY_HEALTH:true,BODY_STATS:true,SLEEP:true,ACTIVITIES:true,VITALS:true,HISTORY:true,FOOD:true,WEEK_AT_A_GLANCE:true"
         val raw = prefs.getString("health_widget_order", default) ?: default
         val migrated = migrateHealthWidgetOrder(raw)
         if (migrated != raw) {

@@ -9,6 +9,9 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.background
+import com.macrotracker.ui.theme.MacroMotion
+import com.macrotracker.ui.components.FoodLogList
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -182,7 +185,6 @@ fun HealthScreen(
             Triple("HISTORY", "Trends", AppIcons.ChartLine),
             Triple("FOOD", "Food today", AppIcons.Restaurant),
             Triple("WEEK_AT_A_GLANCE", "Food trends", AppIcons.ChartBar),
-            Triple("RECENT_LOGS", "Food log", AppIcons.List),
         )
     }
     val parsedConfigs = remember(healthWidgetOrder) {
@@ -541,6 +543,10 @@ fun HealthScreen(
                                 val calRemaining = (s.calorieGoal - s.totalCalories).coerceAtLeast(0)
                                 val proteinRemaining = (s.proteinGoal - s.totalProtein).coerceAtLeast(0)
                                 Spacer(modifier = Modifier.height(12.dp))
+                                // What's left, and the day's balance against what has been burned:
+                                // one line each, where Burned and In / Out used to say it twice.
+                                val burnedOut = hcStats?.totalCaloriesBurned?.takeIf { it > 0 }
+                                    ?: hcStats?.activeCaloriesBurned?.takeIf { it > 0 }
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -551,39 +557,9 @@ fun HealthScreen(
                                         sub = "${proteinRemaining}g protein",
                                         modifier = Modifier.weight(1f),
                                     )
-                                    // Total burn counts what the body spends at rest too;
-                                    // active alone is the fallback for sources without it.
-                                    val totalBurn = hcStats?.totalCaloriesBurned?.takeIf { it > 0 }?.roundToInt()
-                                    val activeBurn = hcStats?.activeCaloriesBurned?.takeIf { it > 0 }?.roundToInt()
-                                    if (hcStats != null && (totalBurn != null || activeBurn != null || hcStats.steps > 0)) {
-                                        HealthStatTile(
-                                            label = "Burned",
-                                            value = when {
-                                                totalBurn != null -> "$totalBurn kcal"
-                                                activeBurn != null -> "$activeBurn active"
-                                                else -> String.format(Locale.US, "%,d steps", hcStats.steps)
-                                            },
-                                            sub = buildList {
-                                                if (totalBurn != null && activeBurn != null) add("$activeBurn active")
-                                                if (hcStats.steps > 0 && (totalBurn != null || activeBurn != null)) {
-                                                    add(String.format(Locale.US, "%,d steps", hcStats.steps))
-                                                }
-                                            }.joinToString(" · ").ifBlank { null },
-                                            modifier = Modifier.weight(1f),
-                                        )
-                                    }
-                                }
-
-                                // Energy balance: intake vs what's been burned so far today.
-                                val burnedOut = hcStats?.totalCaloriesBurned?.takeIf { it > 0 }
-                                    ?: hcStats?.activeCaloriesBurned?.takeIf { it > 0 }
-                                if (burnedOut != null && s.totalCalories > 0) {
-                                    val net = s.totalCalories - burnedOut.roundToInt()
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    ) {
+                                    if (burnedOut != null && s.totalCalories > 0) {
+                                        val out = burnedOut.roundToInt()
+                                        val net = s.totalCalories - out
                                         HealthStatTile(
                                             label = "Energy balance",
                                             value = when {
@@ -591,16 +567,17 @@ fun HealthScreen(
                                                 net < 0 -> "$net kcal"
                                                 else -> "Even"
                                             },
-                                            sub = if (net > 0) "surplus so far" else "deficit so far",
-                                            modifier = Modifier.weight(1f),
-                                        )
-                                        HealthStatTile(
-                                            label = "In / Out",
-                                            value = "${s.totalCalories} / ${burnedOut.roundToInt()}",
-                                            sub = "kcal",
+                                            sub = "${s.totalCalories} in · $out out",
                                             modifier = Modifier.weight(1f),
                                         )
                                     }
+                                }
+
+                                // Today's entries, newest first; the old Food log card showed them again.
+                                if (logs.isNotEmpty()) {
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text("Logged today", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary)
+                                    FoodLogList(logs = logs, onDelete = { healthViewModel.deleteLog(it) })
                                 }
                             }
                             FoodLogForm(
@@ -630,37 +607,6 @@ fun HealthScreen(
                             onDateSelected = { healthViewModel.selectMacroDate(it) },
                             onDeleteLog = { healthViewModel.deleteLog(it) },
                         )
-                    }
-                    "RECENT_LOGS" -> {
-                        HealthSection(delayMs = 250) {
-                            HealthHeader(
-                                title = "Food log",
-                                icon = AppIcons.List,
-                                accent = HealthNutritionTone,
-                                modifier = Modifier.padding(bottom = 8.dp),
-                            )
-
-                            if (logs.isEmpty()) {
-                                Text(
-                                    "No logs yet today.",
-                                    color = TextSecondary,
-                                    fontStyle = FontStyle.Italic,
-                                    modifier = Modifier
-                                        .padding(top = 12.dp)
-                                        .fillMaxWidth(),
-                                )
-                            } else {
-                                val reversedLogs = remember(logs) { logs.asReversed().take(20) }
-                                WidgetScrollBox {
-                                    reversedLogs.forEach { log ->
-                                        MacroLogItem(
-                                            log = log,
-                                            onDelete = { healthViewModel.deleteLog(it) },
-                                        )
-                                    }
-                                }
-                            }
-                        }
                     }
                 }
             }
@@ -797,7 +743,13 @@ private fun MacroTrendsSection(
             }
         }
 
-        // The picked day's food reads as the second half of the same section, not a card of its own.
+        // A picked past day's food reads as the second half of the same section. Today's is
+        // already listed in Food today, so it is not repeated here.
+        AnimatedVisibility(
+            visible = selectedDate != today.format(dateFormat),
+            enter = MacroMotion.expandEnter,
+            exit = MacroMotion.expandExit,
+        ) {
         Column(modifier = Modifier.fillMaxWidth().padding(bottom = 22.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 10.dp)) {
                 Icon(AppIcons.CalendarDays, contentDescription = null, tint = HealthNutritionTone, modifier = Modifier.size(18.dp))
@@ -820,7 +772,7 @@ private fun MacroTrendsSection(
             }
 
             Text(
-                "Food Logs",
+                "Food logged",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary,
@@ -828,21 +780,16 @@ private fun MacroTrendsSection(
             )
             if (selectedLogs.isEmpty()) {
                 Text(
-                    "No food logs for this day.",
+                    "No food logged that day.",
                     color = TextSecondary,
-                    fontStyle = FontStyle.Italic,
                     fontSize = 13.sp,
                 )
             } else {
                 WidgetScrollBox {
-                    selectedLogs.forEach { log ->
-                        MacroLogItem(
-                            log = log,
-                            onDelete = onDeleteLog,
-                        )
-                    }
+                    FoodLogList(logs = selectedLogs, onDelete = onDeleteLog)
                 }
             }
+        }
         }
     }
 }
