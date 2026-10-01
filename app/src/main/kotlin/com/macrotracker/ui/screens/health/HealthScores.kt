@@ -1,6 +1,5 @@
 package com.macrotracker.ui.screens.health
 
-import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import com.macrotracker.data.health.HealthStats
 import java.util.Locale
@@ -44,21 +43,6 @@ data class SleepNightScore(
     val awakeMinutes: Long,
     val label: String,
 )
-
-/**
- * All-day HR effort levels (not workout training zones).
- * Anchored to resting HR so a quiet day reads as mostly Rest/Daily,
- * not a fake "Zone 1 of max HR" pie.
- */
-data class HeartRateEffort(
-    val restSec: Long,
-    val dailySec: Long,
-    val activeSec: Long,
-    val highSec: Long,
-    val restingAnchorBpm: Int,
-) {
-    val totalSec: Long get() = restSec + dailySec + activeSec + highSec
-}
 
 fun computeTodayActivity(
     stats: HealthStats?,
@@ -219,51 +203,6 @@ private fun stageBandScore(
     // ~half credit 8pp outside band, near-zero 20pp outside
     val factor = exp(-((dist * 100.0) / 10.0).let { it * it } / 50.0)
     return (maxPts * factor).coerceIn(0.0, maxPts)
-}
-
-/**
- * Bucket all-day HR into Rest / Daily / Active / High using resting HR as the floor.
- * Training-zone % of max HR is misleading for 24h samples (everything looks like "Rest").
- */
-fun computeHeartRateEffort(
-    samples: List<HeartRateRecord.Sample>,
-    restingBpm: Long? = null,
-): HeartRateEffort? {
-    if (samples.size < 8) return null
-    val sorted = samples.sortedBy { it.time }
-    val anchor = (
-        restingBpm?.takeIf { it in 35L..100L }
-            ?: sorted.map { it.beatsPerMinute }.sorted()
-                .let { it.getOrNull(it.size / 10) } // ~10th percentile as resting proxy
-            ?: 65L
-        ).toInt().coerceIn(40, 100)
-
-    // Rest: near resting · Daily: light movement · Active: brisk · High: hard effort
-    val restCeil = anchor + 10
-    val dailyCeil = (anchor + 35).coerceAtLeast(restCeil + 15)
-    val activeCeil = (anchor + 70).coerceAtLeast(dailyCeil + 20)
-
-    var rest = 0L
-    var daily = 0L
-    var active = 0L
-    var high = 0L
-
-    for (i in 0 until sorted.lastIndex) {
-        val a = sorted[i]
-        val b = sorted[i + 1]
-        val gapSec = java.time.Duration.between(a.time, b.time).seconds.coerceAtLeast(0)
-        if (gapSec <= 0L || gapSec > 600L) continue
-        val bpm = a.beatsPerMinute
-        when {
-            bpm <= restCeil -> rest += gapSec
-            bpm <= dailyCeil -> daily += gapSec
-            bpm <= activeCeil -> active += gapSec
-            else -> high += gapSec
-        }
-    }
-    val total = rest + daily + active + high
-    if (total < 60L) return null
-    return HeartRateEffort(rest, daily, active, high, anchor)
 }
 
 fun formatMinutesCompact(minutes: Long): String {

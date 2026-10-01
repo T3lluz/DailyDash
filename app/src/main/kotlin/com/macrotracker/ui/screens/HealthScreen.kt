@@ -52,18 +52,20 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.macrotracker.ui.screens.health.ActivitiesSection
+import com.macrotracker.ui.screens.health.ActivitySection
+import com.macrotracker.ui.screens.health.ActivityTrends
+import com.macrotracker.ui.screens.health.ActivityWeekControls
+import com.macrotracker.ui.screens.health.Hairline
+import com.macrotracker.ui.screens.health.activityWeekLabel
 import com.macrotracker.ui.screens.health.AnimatedMacroBarChart
 import com.macrotracker.ui.screens.health.DailyHealthSection
 import com.macrotracker.ui.screens.health.HealthMetric
 import com.macrotracker.ui.screens.health.HealthMetricEntry
 import com.macrotracker.ui.screens.health.HealthChip
 import com.macrotracker.ui.screens.health.HealthStatTile
-import com.macrotracker.ui.screens.health.HealthTrendsSection
 import com.macrotracker.ui.screens.health.HealthHeader
 import com.macrotracker.ui.screens.health.HealthSection
 import com.macrotracker.ui.screens.health.SleepSection
-import com.macrotracker.ui.screens.health.TodaysReadingsSection
 import com.macrotracker.ui.screens.health.VitalsSection
 import com.macrotracker.ui.screens.health.computeSleepNightScore
 import com.macrotracker.data.health.readinessFrom
@@ -134,8 +136,6 @@ fun HealthScreen(
     val activitiesState by healthViewModel.activitiesState.collectAsState()
 
     val selectedDate by healthViewModel.selectedDate.collectAsState()
-    val intradayHeartRate by healthViewModel.intradayHeartRate.collectAsState()
-    val detailedSleep by healthViewModel.detailedSleep.collectAsState()
     val todaySleepSessions by healthViewModel.todaySleepSessions.collectAsState()
     val weekStartDay by healthViewModel.weekStartDay.collectAsState()
     val weeksBack by healthViewModel.weeksBack.collectAsState()
@@ -152,16 +152,6 @@ fun HealthScreen(
     var selectedMetric by rememberSaveable { mutableStateOf(HealthMetric.STEPS) }
     var isEditMode by rememberSaveable { mutableStateOf(false) }
 
-    LaunchedEffect(selectedMetric) {
-        healthViewModel.setDetailMetric(
-            when (selectedMetric) {
-                HealthMetric.HEART_RATE -> HealthViewModel.DetailMetric.HEART_RATE
-                HealthMetric.SLEEP -> HealthViewModel.DetailMetric.SLEEP
-                else -> HealthViewModel.DetailMetric.NONE
-            },
-        )
-    }
-
     var foodName by rememberSaveable { mutableStateOf("") }
     var calories by rememberSaveable { mutableStateOf("") }
     var protein by rememberSaveable { mutableStateOf("") }
@@ -169,16 +159,14 @@ fun HealthScreen(
 
     val defaultHealthWidgets = remember {
         listOf(
-            // Today and its numbers, then the night, workouts and the body over time,
-            // then food: each name says what the section holds.
+            // One section per thing, each shown once: the day, the night, movement and
+            // workouts, the heart and body, then food. Today's readings, Trends and Food
+            // trends were folded into these (WidgetEditor's MergedWidgetIds).
             Triple("DAILY_HEALTH", "Today", AppIcons.HeartFilled),
-            Triple("BODY_STATS", "Today's readings", AppIcons.HeartRateMonitor),
             Triple("SLEEP", "Sleep", AppIcons.Moon),
-            Triple("ACTIVITIES", "Activities", AppIcons.Activity),
+            Triple("ACTIVITIES", "Activity", AppIcons.Activity),
             Triple("VITALS", "Body & Vitals", AppIcons.Scale),
-            Triple("HISTORY", "Trends", AppIcons.ChartLine),
-            Triple("FOOD", "Food today", AppIcons.Restaurant),
-            Triple("WEEK_AT_A_GLANCE", "Food trends", AppIcons.ChartBar),
+            Triple("FOOD", "Food", AppIcons.Restaurant),
         )
     }
     val parsedConfigs = remember(healthWidgetOrder) {
@@ -274,6 +262,15 @@ fun HealthScreen(
     }
     // Rolling seven days for the Today's readings sparklines, whatever week Trends shows.
     val lastSevenDays by healthViewModel.recentDays.collectAsState()
+    // Today's activity numbers beyond the rings (distance, floors); TodayReadings picks them.
+    val todayReadings = remember(stepsState, distanceState, floorsClimbedState, activeCaloriesState) {
+        listOf(
+            HealthMetricEntry(HealthMetric.STEPS, stepsState),
+            HealthMetricEntry(HealthMetric.DISTANCE, distanceState),
+            HealthMetricEntry(HealthMetric.FLOORS_CLIMBED, floorsClimbedState),
+            HealthMetricEntry(HealthMetric.CALORIES, activeCaloriesState),
+        )
+    }
 
     CompositionLocalProvider(LocalTickersPaused provides tickersPaused) {
     RipplePullToRefreshBox(
@@ -390,6 +387,13 @@ fun HealthScreen(
                             hourlySteps = hourlySteps,
                             usualHourlySteps = usualHourlySteps,
                             loading = healthConnectState is HealthConnectUiState.Loading,
+                            readings = todayReadings,
+                            history = lastSevenDays,
+                            notShared = missingPermissions.map { it.label },
+                            onAllow = {
+                                haptics.tick()
+                                requestHealthAccess()
+                            },
                         )
                     }
                     "SLEEP" -> {
@@ -414,102 +418,70 @@ fun HealthScreen(
                         )
                     }
                     "ACTIVITIES" -> {
-                        ActivitiesSection(
+                        ActivitySection(
                             state = activitiesState,
                             haptics = haptics,
                             onRequestPermission = {
                                 requestHealthAccess()
                             },
                             onRetry = { healthViewModel.retryHealthConnect() },
+                            onOpenHealthConnect = { openHealthConnectSettings(context) },
                             onExpandActivity = { healthViewModel.onActivityExpanded(it) },
-                        )
-                    }
-                    "BODY_STATS" -> {
-                        // Every enabled metric gets a row; one with nothing yet today folds
-                        // into the section's last line instead of disappearing.
-                        val metricEntries = remember(
-                            heartRateState, restingHeartRateState, oxygenSaturationState,
-                            respiratoryRateState, stepsState, distanceState,
-                            floorsClimbedState, activeCaloriesState,
-                        ) {
-                            listOf(
-                                HealthMetricEntry(HealthMetric.HEART_RATE, heartRateState),
-                                HealthMetricEntry(HealthMetric.RESTING_HEART_RATE, restingHeartRateState),
-                                HealthMetricEntry(HealthMetric.OXYGEN_SATURATION, oxygenSaturationState),
-                                HealthMetricEntry(HealthMetric.RESPIRATORY_RATE, respiratoryRateState),
-                                HealthMetricEntry(HealthMetric.STEPS, stepsState),
-                                HealthMetricEntry(HealthMetric.DISTANCE, distanceState),
-                                HealthMetricEntry(HealthMetric.FLOORS_CLIMBED, floorsClimbedState),
-                                HealthMetricEntry(HealthMetric.CALORIES, activeCaloriesState),
-                            )
-                        }
-                        TodaysReadingsSection(
-                            loading = !metricsLoaded,
-                            entries = metricEntries,
-                            history = lastSevenDays,
-                            notShared = missingPermissions.map { it.label },
-                            onAllow = {
-                                haptics.tick()
-                                requestHealthAccess()
+                            weekLabel = activityWeekLabel(healthHistory, weeksBack),
+                            weekControls = {
+                                ActivityWeekControls(
+                                    weeksBack = weeksBack,
+                                    weekStartDay = weekStartDay,
+                                    haptics = haptics,
+                                    onPreviousWeek = { healthViewModel.previousWeek() },
+                                    onNextWeek = { healthViewModel.nextWeek() },
+                                    onWeekStartDaySelected = { healthViewModel.setWeekStartDay(it) },
+                                )
+                            },
+                            trends = {
+                                if (healthHistory.isEmpty()) {
+                                    // Hold the chart's place while the week loads, so the
+                                    // workouts below don't jump when it lands.
+                                    if (healthConnectState is HealthConnectUiState.Loading || healthConnectState is HealthConnectUiState.Success) {
+                                        ContentSkeleton(lines = 4, accent = Border)
+                                    } else {
+                                        Text(
+                                            "Your weeks of steps and movement show here once Health Connect shares them.",
+                                            fontSize = 13.sp,
+                                            color = TextSecondary,
+                                        )
+                                    }
+                                } else {
+                                    ActivityTrends(
+                                        metricsReady = metricsLoaded,
+                                        healthHistory = healthHistory,
+                                        previousWeek = previousWeekHistory,
+                                        selectedDate = selectedDate,
+                                        selectedMetric = selectedMetric,
+                                        weeksBack = weeksBack,
+                                        haptics = haptics,
+                                        enabled = { metric ->
+                                            when (metric) {
+                                                HealthMetric.STEPS -> stepsState.isEnabled
+                                                HealthMetric.DISTANCE -> distanceState.isEnabled
+                                                HealthMetric.FLOORS_CLIMBED -> floorsClimbedState.isEnabled
+                                                HealthMetric.CALORIES -> activeCaloriesState.isEnabled
+                                                else -> false
+                                            }
+                                        },
+                                        onDateSelected = { healthViewModel.selectDate(it) },
+                                        onMetricSelected = { selectedMetric = it },
+                                    )
+                                }
                             },
                         )
                     }
-                    "HISTORY" -> {
-                        if (healthHistory.isEmpty()) {
-                            // Reserve the slot instead of collapsing to nothing —
-                            // an empty section used to shove the rest of the list
-                            // down the instant the week query returned.
-                            HealthSection {
-                                HealthHeader(title = "Trends", icon = AppIcons.ChartLine, accent = Primary)
-                                Spacer(modifier = Modifier.height(14.dp))
-                                // A skeleton only while a read is out; without Health Connect it
-                                // stayed a skeleton for good.
-                                if (healthConnectState is HealthConnectUiState.Loading || healthConnectState is HealthConnectUiState.Success) {
-                                    ContentSkeleton(lines = 4, accent = Border)
-                                } else {
-                                    Text(
-                                        "Your weeks of steps, heart rate and sleep show here once Health Connect shares them.",
-                                        fontSize = 13.sp,
-                                        color = TextSecondary,
-                                    )
-                                }
-                            }
-                        } else {
-                            HealthTrendsSection(
-                                metricsReady = metricsLoaded,
-                                healthHistory = healthHistory,
-                                previousWeek = previousWeekHistory,
-                                selectedDate = selectedDate,
-                                selectedMetric = selectedMetric,
-                                intradayHeartRate = intradayHeartRate,
-                                detailedSleep = detailedSleep,
-                                weekStartDay = weekStartDay,
-                                weeksBack = weeksBack,
-                                haptics = haptics,
-                                isStepsEnabled = stepsState.isEnabled,
-                                isHeartRateEnabled = heartRateState.isEnabled,
-                                isRestingHeartRateEnabled = restingHeartRateState.isEnabled,
-                                isSpo2Enabled = oxygenSaturationState.isEnabled,
-                                isRespRateEnabled = respiratoryRateState.isEnabled,
-                                isDistanceEnabled = distanceState.isEnabled,
-                                isFloorsEnabled = floorsClimbedState.isEnabled,
-                                isActiveCaloriesEnabled = activeCaloriesState.isEnabled,
-                                onDateSelected = { healthViewModel.selectDate(it) },
-                                onMetricSelected = { selectedMetric = it },
-                                onWeekStartDaySelected = {
-                                    healthViewModel.setWeekStartDay(it)
-                                    haptics.tick()
-                                },
-                                onPreviousWeek = { healthViewModel.previousWeek() },
-                                onNextWeek = { healthViewModel.nextWeek() },
-                            )
-                        }
-                    }
                     "FOOD" -> {
-                        // What you've eaten against your goals, and the form to log more, in one section.
+                        // One card for food: today against the goals, the form to log more, then
+                        // the weeks (7/14/30 days) with the picked day's log under the chart.
                         HealthSection(delayMs = 100) {
                             HealthHeader(
-                                title = "Food today",
+                                title = "Food",
                                 icon = AppIcons.Restaurant,
                                 accent = HealthNutritionTone,
                                 modifier = Modifier.padding(bottom = 16.dp),
@@ -572,13 +544,6 @@ fun HealthScreen(
                                         )
                                     }
                                 }
-
-                                // Today's entries, newest first; the old Food log card showed them again.
-                                if (logs.isNotEmpty()) {
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Text("Logged today", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary)
-                                    FoodLogList(logs = logs, onDelete = { healthViewModel.deleteLog(it) })
-                                }
                             }
                             FoodLogForm(
                                 name = foodName,
@@ -590,23 +555,25 @@ fun HealthScreen(
                                 onAdd = { name, cal, prot -> healthViewModel.addLog(name, cal, prot) },
                                 modifier = Modifier.padding(top = 16.dp),
                             )
+                            Spacer(modifier = Modifier.height(18.dp))
+                            Hairline()
+                            Spacer(modifier = Modifier.height(14.dp))
+                            MacroTrends(
+                                rangeDays = macroRangeDays,
+                                metric = macroMetric,
+                                macroHistory = macroHistory,
+                                selectedDate = macroSelectedDate,
+                                selectedLogs = macroSelectedLogs,
+                                todayLogs = logs,
+                                loading = macroHistoryLoading,
+                                macroInsights = macroInsights,
+                                haptics = haptics,
+                                onRangeDaysSelected = { healthViewModel.setMacroRangeDays(it) },
+                                onMetricSelected = { healthViewModel.setMacroMetric(it) },
+                                onDateSelected = { healthViewModel.selectMacroDate(it) },
+                                onDeleteLog = { healthViewModel.deleteLog(it) },
+                            )
                         }
-                    }
-                    "WEEK_AT_A_GLANCE" -> {
-                        MacroTrendsSection(
-                            rangeDays = macroRangeDays,
-                            metric = macroMetric,
-                            macroHistory = macroHistory,
-                            selectedDate = macroSelectedDate,
-                            selectedLogs = macroSelectedLogs,
-                            loading = macroHistoryLoading,
-                            macroInsights = macroInsights,
-                            haptics = haptics,
-                            onRangeDaysSelected = { healthViewModel.setMacroRangeDays(it) },
-                            onMetricSelected = { healthViewModel.setMacroMetric(it) },
-                            onDateSelected = { healthViewModel.selectMacroDate(it) },
-                            onDeleteLog = { healthViewModel.deleteLog(it) },
-                        )
                     }
                 }
             }
@@ -620,12 +587,14 @@ fun HealthScreen(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun MacroTrendsSection(
+private fun MacroTrends(
     rangeDays: Int,
     metric: String,
     macroHistory: List<DailySummary>,
     selectedDate: String,
     selectedLogs: List<MacroLogEntity>,
+    /** Today's entries, listed when today is the picked day. */
+    todayLogs: List<MacroLogEntity>,
     loading: Boolean,
     macroInsights: com.macrotracker.ui.screens.health.MacroRangeInsights?,
     haptics: HapticHelper,
@@ -658,11 +627,12 @@ private fun MacroTrendsSection(
     val avgMetric = metricValues.filter { it > 0 }.let { if (it.isEmpty()) 0.0 else it.average() }
 
     Column {
-        HealthSection(delayMs = 70) {
-            HealthHeader(
-                title = "Food trends",
-                icon = AppIcons.ChartBar,
-                accent = HealthNutritionTone,
+        Column {
+            Text(
+                "Over time",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = TextSecondary,
                 modifier = Modifier.padding(bottom = 10.dp),
             )
 
@@ -743,14 +713,20 @@ private fun MacroTrendsSection(
             }
         }
 
-        // A picked past day's food reads as the second half of the same section. Today's is
-        // already listed in Food today, so it is not repeated here.
+        // Today's log under the chart while today is picked (its totals are at the top of the
+        // card), and a past day's totals and log when one is picked instead.
+        val pickedToday = selectedDate == today.format(dateFormat)
+        if (pickedToday && todayLogs.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("Logged today", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary)
+            FoodLogList(logs = todayLogs, onDelete = onDeleteLog)
+        }
         AnimatedVisibility(
-            visible = selectedDate != today.format(dateFormat),
+            visible = !pickedToday,
             enter = MacroMotion.expandEnter,
             exit = MacroMotion.expandExit,
         ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 22.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 10.dp)) {
                 Icon(AppIcons.CalendarDays, contentDescription = null, tint = HealthNutritionTone, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))

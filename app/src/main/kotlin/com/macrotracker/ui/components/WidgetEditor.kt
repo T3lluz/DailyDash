@@ -73,7 +73,9 @@ fun parseWidgetConfig(configStr: String, defaultOrder: List<Triple<String, Strin
 
 /**
  * Cards merged into one: Today's progress and Quick add became Home's Food; Food today,
- * Log food and Food log became Health's.
+ * Log food, Food log and Food trends became Health's. On Health, Today's readings went into
+ * Today and Trends into Activity. A mapping only applies on a screen that no longer has the
+ * old card (Home still has its own BODY_STATS).
  */
 private val MergedWidgetIds = mapOf(
     "PROGRESS" to "FOOD",
@@ -81,6 +83,9 @@ private val MergedWidgetIds = mapOf(
     "SUMMARY" to "FOOD",
     "ADD_ENTRY" to "FOOD",
     "RECENT_LOGS" to "FOOD",
+    "WEEK_AT_A_GLANCE" to "FOOD",
+    "BODY_STATS" to "DAILY_HEALTH",
+    "HISTORY" to "ACTIVITIES",
 )
 
 fun encodeWidgetConfig(configs: List<WidgetConfig>): String {

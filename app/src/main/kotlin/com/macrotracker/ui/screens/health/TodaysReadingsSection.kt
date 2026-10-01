@@ -1,8 +1,6 @@
 package com.macrotracker.ui.screens.health
 
 import androidx.compose.foundation.layout.Spacer
-import com.macrotracker.ui.theme.Border
-import com.macrotracker.ui.components.ContentSkeleton
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -21,7 +19,6 @@ import androidx.compose.ui.unit.sp
 import com.macrotracker.data.health.DailyHealthStats
 import com.macrotracker.ui.components.HealthMetricUiState
 import com.macrotracker.ui.theme.AppIcons
-import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.Success
 import com.macrotracker.ui.theme.TextSecondary
 import java.time.LocalDate
@@ -40,93 +37,61 @@ data class HealthMetricEntry(
     val state: HealthMetricUiState,
 )
 
-/** Activity first, then heart, then breathing, so the row colours fall into groups. */
-private val ReadingOrder = listOf(
-    HealthMetric.STEPS,
+/**
+ * The numbers Today adds under its rings. Steps and active energy are rings already, and
+ * heart rate, blood oxygen and breathing are Body & Vitals', so only these get a row here.
+ */
+private val TodayExtraMetrics = listOf(
     HealthMetric.DISTANCE,
-    HealthMetric.CALORIES,
     HealthMetric.FLOORS_CLIMBED,
-    HealthMetric.HEART_RATE,
-    HealthMetric.RESTING_HEART_RATE,
-    HealthMetric.OXYGEN_SATURATION,
-    HealthMetric.RESPIRATORY_RATE,
 )
 
 /**
- * Today's readings: the day's numbers as Apple Health's summary lists them, one measure a
- * row. Each row is the metric's name in its colour, today's number big with its unit, one
- * plain line against yesterday, and the week beside it (bars for totals, dots for rates).
- * Metrics with nothing yet today fold into one line at the foot rather than showing a dash.
+ * The rest of today's activity, under Today's rings: one Apple Health summary row per
+ * metric, today's number big with its unit, one plain line against yesterday and the week
+ * beside it. Metrics with nothing yet today fold into one line rather than showing a dash,
+ * and what Health Connect doesn't share is one line with the button that asks for it.
  */
 @Composable
-fun TodaysReadingsSection(
+fun TodayReadings(
     entries: List<HealthMetricEntry>,
     history: List<DailyHealthStats>,
     notShared: List<String>,
     onAllow: () -> Unit,
-    modifier: Modifier = Modifier,
-    delayMs: Long = 0L,
-    /** The first read is still out: a skeleton holds the place, so the card doesn't pop in later. */
-    loading: Boolean = false,
 ) {
-    val enabled = entries.filter { it.state.isEnabled }
-    if (enabled.isEmpty()) {
-        if (loading) {
-            HealthSection(modifier = modifier, delayMs = delayMs) {
-                HealthHeader(
-                    title = "Today's readings",
-                    icon = AppIcons.HeartRateMonitor,
-                    accent = Primary,
-                    modifier = Modifier.padding(bottom = 12.dp),
-                )
-                ContentSkeleton(lines = 4, accent = Border)
-            }
-        }
-        return
-    }
-    val shown = enabled.filter { it.state.hasValue }.sortedBy { ReadingOrder.indexOf(it.metric) }
-    val waiting = enabled.filter { it.state.isEmpty }.sortedBy { ReadingOrder.indexOf(it.metric) }
+    val enabled = entries.filter { it.state.isEnabled && it.metric in TodayExtraMetrics }
+    val shown = enabled.filter { it.state.hasValue }.sortedBy { TodayExtraMetrics.indexOf(it.metric) }
+    val waiting = enabled.filter { it.state.isEmpty }.sortedBy { TodayExtraMetrics.indexOf(it.metric) }
+    if (shown.isEmpty() && waiting.isEmpty() && notShared.isEmpty()) return
     val today = LocalDate.now()
 
-    HealthSection(modifier = modifier, delayMs = delayMs) {
-        HealthHeader(
-            title = "Today's readings",
-            icon = AppIcons.HeartRateMonitor,
-            accent = Primary,
-            subtitle = "So far today, beside the last seven days",
-            modifier = Modifier.padding(bottom = 4.dp),
+    Spacer(modifier = Modifier.height(18.dp))
+    Hairline()
+    shown.forEachIndexed { i, entry ->
+        if (i > 0) InsetHairline()
+        ReadingRow(entry, history, today)
+    }
+
+    if (waiting.isNotEmpty()) {
+        if (shown.isNotEmpty()) InsetHairline()
+        Text(
+            "Nothing yet today: " + waiting.joinToString(" · ") { readingName(it.metric) },
+            fontSize = 13.sp,
+            lineHeight = 18.sp,
+            color = TextSecondary,
+            modifier = Modifier.padding(start = ReadingRowTextInset, top = 12.dp, bottom = 10.dp),
         )
+    }
 
-        shown.forEachIndexed { i, entry ->
-            if (i > 0) InsetHairline()
-            ReadingRow(entry, history, today)
-        }
-
-        if (waiting.isNotEmpty()) {
-            if (shown.isNotEmpty()) InsetHairline()
-            Text(
-                "Nothing yet today: " + waiting.joinToString(" · ") { readingName(it.metric) },
-                fontSize = 13.sp,
-                lineHeight = 18.sp,
-                color = TextSecondary,
-                modifier = Modifier.padding(start = ReadingRowTextInset, top = 12.dp, bottom = 10.dp),
-            )
-        }
-
-        if (notShared.isNotEmpty()) {
-            if (shown.isNotEmpty() || waiting.isNotEmpty()) {
-                Hairline()
-            } else {
-                Spacer(modifier = Modifier.height(4.dp))
-            }
-            HealthPromptRow(
-                icon = AppIcons.Lock,
-                title = "Not shared with DailyDash",
-                body = notShared.joinToString(" · "),
-                action = "Allow",
-                onClick = onAllow,
-            )
-        }
+    if (notShared.isNotEmpty()) {
+        if (shown.isNotEmpty() || waiting.isNotEmpty()) Hairline()
+        HealthPromptRow(
+            icon = AppIcons.Lock,
+            title = "Not shared with DailyDash",
+            body = notShared.joinToString(" · "),
+            action = "Allow",
+            onClick = onAllow,
+        )
     }
 }
 

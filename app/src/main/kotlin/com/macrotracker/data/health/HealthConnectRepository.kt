@@ -211,6 +211,13 @@ class HealthConnectRepository @Inject constructor(
         /** Generous headroom for a heavy training month. */
         const val ACTIVITY_HISTORY_LIMIT = 60
 
+        /**
+         * With nothing in the usual window, the card reaches this far back for the latest
+         * workouts, so a quiet month shows the last walk instead of an empty card.
+         */
+        const val ACTIVITY_FALLBACK_DAYS = 183
+        const val ACTIVITY_FALLBACK_LIMIT = 8
+
         /** Sessions enriched per round trip so a month doesn't flood the IPC. */
         private const val ENRICH_BATCH = 8
 
