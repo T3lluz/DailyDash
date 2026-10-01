@@ -58,7 +58,7 @@ import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.AppUpdateViewModel
 import com.macrotracker.ui.viewmodel.ServerViewModel
 import com.macrotracker.ui.viewmodel.SettingsViewModel
-import com.macrotracker.ui.viewmodel.StatsViewModel
+import com.macrotracker.ui.viewmodel.GoalsViewModel
 
 /** The AI row's tint: the same lilac the widgets' AI line uses. */
 private val AiTint = Color(0xFFB4A7F5)
@@ -77,7 +77,7 @@ fun SettingsScreen(
     onNavigateToWidgets: () -> Unit = {},
     onNavigateToServers: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
-    statsViewModel: StatsViewModel = hiltViewModel(),
+    goalsViewModel: GoalsViewModel = hiltViewModel(),
     serverViewModel: ServerViewModel = hiltViewModel(),
 ) {
     val activity = LocalContext.current.findActivity()
@@ -90,15 +90,15 @@ fun SettingsScreen(
     val aiProvider by viewModel.aiProvider.collectAsState()
     val aiReady by viewModel.aiReady.collectAsState()
     val widgetsPlaced by viewModel.widgetsPlaced.collectAsState()
-    val calGoal by statsViewModel.calGoal.collectAsState()
-    val protGoal by statsViewModel.protGoal.collectAsState()
+    val calGoal by goalsViewModel.calGoal.collectAsState()
+    val protGoal by goalsViewModel.protGoal.collectAsState()
     val servers by serverViewModel.profiles.collectAsState()
     val runtimes by serverViewModel.runtimes.collectAsState()
 
     // Coming back from Android's permission screens or a widget drop changes what's true.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         viewModel.refreshConnectionStatus()
-        statsViewModel.loadData()
+        goalsViewModel.loadData()
     }
 
     val connectedCount = listOf(healthConnected, weatherConnected, calendarConnected).count { it }
