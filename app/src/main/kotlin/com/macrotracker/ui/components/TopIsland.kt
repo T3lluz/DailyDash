@@ -649,7 +649,7 @@ private fun RingProgress(pct: Float) {
     )
 }
 
-private fun toneColor(item: IslandItem): Color {
+internal fun toneColor(item: IslandItem): Color {
     item.color?.let { hex -> parseIslandHex(hex)?.let { if (item.kind in BRAND_KINDS) return it } }
     return when (item.tone) {
         "needs", "warn", "soon" -> Warning
@@ -668,7 +668,7 @@ private fun parseIslandHex(hex: String): Color? {
 /** Kinds that wear their own colour: a calendar's, Twitch's purple, YouTube's red. */
 private val BRAND_KINDS = setOf("cal", "live", "yt")
 
-private fun islandIcon(name: String): ImageVector = when (name) {
+internal fun islandIcon(name: String): ImageVector = when (name) {
     "server" -> AppIcons.Server
     "radio" -> AppIcons.Radio
     "play" -> AppIcons.Play
