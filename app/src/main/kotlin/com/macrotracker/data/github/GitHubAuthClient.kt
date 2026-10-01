@@ -419,7 +419,8 @@ class GitHubAuthClient @Inject constructor(
             Log.w(TAG, "Custom Tabs unavailable — falling back to ACTION_VIEW", e)
             val fallback = Intent(Intent.ACTION_VIEW, url.toUri())
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(fallback)
+            // No browser at all: say so through the sign-in state instead of crashing.
+            runCatching { context.startActivity(fallback) }.onFailure { Log.w(TAG, "No app can open the sign-in page", it) }
         }
     }
 

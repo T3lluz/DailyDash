@@ -85,6 +85,8 @@
         android:hardwareAccelerated="true"
         android:largeHeap="true"
         android:enableOnBackInvokedCallback="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:theme="@style/Theme.DailyDash">
 
         <!-- Shares downloaded update APKs with the system package installer -->

@@ -98,12 +98,13 @@ class CalendarRepository @Inject constructor(
         }
 
         val now = System.currentTimeMillis()
-        if (cachedEvents != null &&
+        val cached = cachedEvents // read once: a clear on another thread can't null it mid-check
+        if (cached != null &&
             cacheCalendarIds == calendarIds &&
             cacheExtraDays == extraDays &&
             now - cacheTimestamp < CACHE_TTL_MS
         ) {
-            return@withContext cachedEvents!!
+            return@withContext cached
         }
 
         val zone = ZoneId.systemDefault()

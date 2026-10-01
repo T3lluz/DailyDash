@@ -579,7 +579,7 @@ private fun DaysChart(u: UsageSnapshot) {
         day?.let { d ->
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(
-                    LocalDate.parse(d.date).format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH)),
+                    dayLabel(d.date, "EEE d MMM"),
                     fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary,
                 )
                 Spacer(Modifier.width(8.dp))
@@ -618,7 +618,7 @@ private fun DaysChart(u: UsageSnapshot) {
             }
         }
         Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
-            Text(LocalDate.parse(days.first().date).format(DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)), fontSize = 11.sp, color = TextTertiary)
+            Text(dayLabel(days.first().date, "d MMM"), fontSize = 11.sp, color = TextTertiary)
             Spacer(Modifier.weight(1f))
             Text("busiest ${formatUsd(max)}", fontSize = 11.sp, color = TextTertiary)
             Spacer(Modifier.weight(1f))
@@ -940,3 +940,7 @@ internal fun ComposerUsageRing(
         }
     }
 }
+
+/** A usage day's date for display; a row the bridge sent without one shows as it came, not a crash. */
+private fun dayLabel(date: String, pattern: String): String =
+    runCatching { LocalDate.parse(date).format(DateTimeFormatter.ofPattern(pattern, Locale.ENGLISH)) }.getOrDefault(date)

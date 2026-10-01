@@ -106,14 +106,15 @@ class GitHubRepositoryImpl @Inject constructor(
             lastFetchTime = 0L
         }
 
+        val snapshot = cached // read once: a clear outside the lock can't null it mid-check
         val cacheValid = !forceRefresh &&
-            cached != null &&
+            snapshot != null &&
             cachedUserKey == cacheKey &&
             lastFetchTime > 0L &&
             (now - lastFetchTime) < CACHE_DURATION_MS
 
-        if (cacheValid) {
-            return@withLock Result.success(cached!!)
+        if (cacheValid && snapshot != null) {
+            return@withLock Result.success(snapshot)
         }
 
         return@withLock try {

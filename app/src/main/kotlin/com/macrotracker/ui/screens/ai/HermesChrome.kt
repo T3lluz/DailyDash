@@ -796,11 +796,12 @@ internal fun SlashPalette(entries: List<SlashEntry>, onPick: (SlashEntry) -> Uni
         contentPadding = PaddingValues(vertical = 6.dp),
     ) {
         var group: String? = null
-        entries.forEach { e ->
+        // Indexed keys: a group or command that repeats can't crash the list with a duplicate key.
+        entries.forEachIndexed { i, e ->
             if (e.group != group) {
                 group = e.group
                 val heading = e.group
-                item(key = "g-$heading") {
+                item(key = "g-$i-$heading") {
                     Text(
                         heading.uppercase(),
                         color = TextTertiary,
@@ -811,7 +812,7 @@ internal fun SlashPalette(entries: List<SlashEntry>, onPick: (SlashEntry) -> Uni
                     )
                 }
             }
-            item(key = "c-${e.local}-${e.name}") {
+            item(key = "c-$i-${e.local}-${e.name}") {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -954,13 +955,13 @@ private fun ModelList(status: HermesStatus?, onPick: (HermesCatalog.Family) -> U
     Spacer(Modifier.height(6.dp))
     LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp)) {
         var group: String? = null
-        shown.forEach { f ->
+        shown.forEachIndexed { i, f ->
             if (f.group != group) {
                 group = f.group
                 val heading = f.group
-                item(key = "g-$heading") { RailHeading(heading) }
+                item(key = "g-$i-$heading") { RailHeading(heading) }
             }
-            item(key = "f-${f.key}") {
+            item(key = "f-$i-${f.key}") {
                 OptionRow(
                     selected = f.current,
                     icon = null,

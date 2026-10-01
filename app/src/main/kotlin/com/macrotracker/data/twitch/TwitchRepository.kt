@@ -152,8 +152,9 @@ class TwitchRepositoryImpl @Inject constructor(
     override suspend fun getLiveStreamsForTrackedChannels(forceRefresh: Boolean): Result<List<TwitchStream>> =
         withContext(Dispatchers.IO) {
             val now = System.currentTimeMillis()
-            if (!forceRefresh && cachedStreams != null && (now - lastFetchTime) < CACHE_DURATION_MS) {
-                return@withContext Result.success(cachedStreams!!)
+            val cached = cachedStreams // read once: an invalidate on another thread can't null it mid-check
+            if (!forceRefresh && cached != null && (now - lastFetchTime) < CACHE_DURATION_MS) {
+                return@withContext Result.success(cached)
             }
 
             val tracked = getTrackedChannels()

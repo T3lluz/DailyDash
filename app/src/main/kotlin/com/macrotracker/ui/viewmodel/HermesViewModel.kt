@@ -1,6 +1,7 @@
 package com.macrotracker.ui.viewmodel
 
 import android.content.Context
+import com.macrotracker.util.readAtMost
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.lifecycle.ViewModel
@@ -616,9 +617,9 @@ class HermesViewModel @Inject constructor(
                     val name = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
                         if (c.moveToFirst()) c.getString(0) else null
                     } ?: uri.lastPathSegment ?: "file"
-                    val bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
-                        ?: throw HermesException("Could not read that file")
-                    if (bytes.size > MAX_UPLOAD_BYTES) throw HermesException("That file is over 8 MB")
+                    val stream = resolver.openInputStream(uri) ?: throw HermesException("Could not read that file")
+                    val bytes = stream.use { it.readAtMost(MAX_UPLOAD_BYTES) }
+                        ?: throw HermesException("That file is over 8 MB")
                     Triple(name, mime, bytes)
                 }
                 val attachment = client.upload(name, mime, bytes)

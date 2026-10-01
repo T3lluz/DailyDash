@@ -1,5 +1,6 @@
 package com.macrotracker.data.server
 
+import android.util.Log
 import android.app.Service
 import com.macrotracker.data.notifyIfAllowed
 import android.content.BroadcastReceiver
@@ -110,7 +111,13 @@ class ServerMonitorService : Service() {
         // Must post a notification within a few seconds of startForegroundService,
         // so go up with a placeholder before the first poll has any data.
         if (!started) {
-            startForegroundCompat(live.build(null, null, emptyList(), ServerMonitorService::class.java))
+            // Android 12+ refuses a foreground start from the background (a sticky restart
+            // after the process was killed): that threw and crash-looped. Stand down instead;
+            // the toggle or the next boot starts it again.
+            if (!startForegroundCompat(live.build(null, null, emptyList(), ServerMonitorService::class.java))) {
+                stopSelf()
+                return START_NOT_STICKY
+            }
             started = true
             repository.acquire(TAG)
             observeRuntimes()
@@ -187,13 +194,16 @@ class ServerMonitorService : Service() {
         }
     }
 
-    private fun startForegroundCompat(notification: android.app.Notification) {
+    /** @return false when Android would not let the service into the foreground. */
+    private fun startForegroundCompat(notification: android.app.Notification): Boolean {
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
         } else {
             0
         }
-        ServiceCompat.startForeground(this, ServerNotifier.LIVE_NOTIFICATION_ID, notification, type)
+        return runCatching {
+            ServiceCompat.startForeground(this, ServerNotifier.LIVE_NOTIFICATION_ID, notification, type)
+        }.onFailure { Log.w(TAG, "Not allowed into the foreground: ${it.message}") }.isSuccess
     }
 
     override fun onDestroy() {

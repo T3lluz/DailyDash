@@ -171,12 +171,13 @@ class WeatherRepository @Inject constructor(
         // Round to 2 decimal places (~1 km) for cache key comparison
         val roundedLat = (lat * 100).roundToLong().toDouble() / 100
         val roundedLon = (lon * 100).roundToLong().toDouble() / 100
-        if (cachedWeather != null &&
+        val cached = cachedWeather // read once: a clear on another thread can't null it mid-check
+        if (cached != null &&
             roundedLat == cachedLat && roundedLon == cachedLon &&
             now - cacheTimestamp < CACHE_TTL_MS
         ) {
             Log.d(TAG, "Returning cached weather")
-            return@withContext cachedWeather!!
+            return@withContext cached
         }
 
         val url = "$BASE_URL?lat=${String.format(Locale.US, "%.4f", lat)}&lon=${String.format(Locale.US, "%.4f", lon)}"

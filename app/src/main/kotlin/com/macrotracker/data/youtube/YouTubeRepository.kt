@@ -159,8 +159,9 @@ class YouTubeRepositoryImpl @Inject constructor(
     override suspend fun getLatestVideosForTrackedChannels(): Result<List<YoutubeVideo>> =
         withContext(Dispatchers.IO) {
             val now = System.currentTimeMillis()
-            if (cachedVideos != null && (now - lastFetchTime) < CACHE_DURATION) {
-                return@withContext Result.success(cachedVideos!!)
+            val cached = cachedVideos // read once: an invalidate on another thread can't null it mid-check
+            if (cached != null && (now - lastFetchTime) < CACHE_DURATION) {
+                return@withContext Result.success(cached)
             }
 
             val trackedChannels = getTrackedChannels()

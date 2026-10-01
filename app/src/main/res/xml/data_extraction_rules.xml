@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12 and newer: the same as backup_rules.xml, for cloud backup and device transfer. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="server_settings.xml" />
+        <exclude domain="sharedpref" path="phone_hub.xml" />
+        <exclude domain="sharedpref" path="app_update_prefs.xml" />
+        <exclude domain="sharedpref" path="daily_dash_widget_instances.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="server_settings.xml" />
+        <exclude domain="sharedpref" path="phone_hub.xml" />
+        <exclude domain="sharedpref" path="app_update_prefs.xml" />
+        <exclude domain="sharedpref" path="daily_dash_widget_instances.xml" />
+    </device-transfer>
+</data-extraction-rules>
