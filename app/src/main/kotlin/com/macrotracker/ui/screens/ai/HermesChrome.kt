@@ -1,5 +1,9 @@
 package com.macrotracker.ui.screens.ai
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -152,6 +156,8 @@ internal fun HermesHeader(
     onClear: () -> Unit,
     onDelete: () -> Unit,
     onUsePhoneAi: (() -> Unit)?,
+    onOpenConsole: () -> Unit,
+    onOpenUsage: () -> Unit,
 ) {
     val haptics = rememberHaptics()
     var menuOpen by remember { mutableStateOf(false) }
@@ -163,7 +169,7 @@ internal fun HermesHeader(
     ) {
         Box {
             IconButton(onClick = { haptics.tick(); onOpenRail() }) {
-                Icon(AppIcons.Rows, contentDescription = "Chats", tint = TextSecondary, modifier = Modifier.size(22.dp))
+                Icon(AppIcons.History, contentDescription = "Chats", tint = TextSecondary, modifier = Modifier.size(21.dp))
             }
             if (railAttention) {
                 Box(
@@ -176,26 +182,35 @@ internal fun HermesHeader(
                 )
             }
         }
+        // The title opens the chats too, as ChatGPT's and Claude's do; rename is in the menu.
         Column(
             modifier = Modifier
                 .weight(1f)
                 .clip(RoundedCornerShape(8.dp))
-                .clickable(enabled = hasThread) { haptics.tick(); onRename() }
+                .clickable { haptics.tick(); onOpenRail() }
                 .padding(horizontal = 4.dp, vertical = 2.dp),
         ) {
-            Text(
-                title.ifBlank { "New chat" },
-                color = TextPrimary,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    title.ifBlank { "New chat" },
+                    color = TextPrimary,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                Spacer(Modifier.width(3.dp))
+                Icon(AppIcons.ChevronDown, contentDescription = null, tint = TextTertiary, modifier = Modifier.size(14.dp))
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ChatStatusDot(active = working, accent = ServerBrand)
                 Spacer(Modifier.width(6.dp))
                 Text(status, color = TextTertiary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+        }
+        IconButton(onClick = { haptics.tick(); onOpenConsole() }) {
+            Icon(AppIcons.SquareTerminal, contentDescription = "Console", tint = TextSecondary, modifier = Modifier.size(20.dp))
         }
         IconButton(onClick = { haptics.tick(); onNewChat() }) {
             Icon(AppIcons.NewChat, contentDescription = "New chat", tint = TextSecondary, modifier = Modifier.size(21.dp))
@@ -214,8 +229,9 @@ internal fun HermesHeader(
                     MenuRow(if (pinned) "Unpin" else "Pin to the top", AppIcons.Star) { menuOpen = false; onTogglePin() }
                     MenuRow("Clear this chat", AppIcons.Refresh) { menuOpen = false; onClear() }
                     MenuRow("Delete this chat", AppIcons.Delete, danger = true) { menuOpen = false; onDelete() }
-                    if (onUsePhoneAi != null) HorizontalDivider(color = Border)
+                    HorizontalDivider(color = Border)
                 }
+                MenuRow("Usage and schedule", AppIcons.ChartColumn) { menuOpen = false; onOpenUsage() }
                 if (onUsePhoneAi != null) {
                     MenuRow("Use this phone's AI instead", AppIcons.Bot) { menuOpen = false; onUsePhoneAi() }
                 }
@@ -540,9 +556,9 @@ internal fun HermesComposer(
     uploading: Boolean,
     onAttach: () -> Unit,
     onRemoveAttachment: (String) -> Unit,
-    onPickMode: () -> Unit,
+    /** Back to Agent from /plan or /ask. */
+    onClearMode: () -> Unit,
     onPickModel: () -> Unit,
-    onPickDepth: () -> Unit,
     hazeState: HazeState?,
     /** The usage ring, beside send (ComposerUsageRing). */
     usage: (@Composable () -> Unit)? = null,
@@ -616,43 +632,15 @@ internal fun HermesComposer(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                PickerChip(
-                    icon = modeIcon(mode.kind),
-                    label = mode.label,
-                    tint = modeColor(mode.kind),
-                    onClick = onPickMode,
-                )
-                PickerChip(
-                    icon = AppIcons.Sparkles,
-                    label = when {
-                        switchingModel -> "switching…"
-                        model != null -> model.familyLabel.ifBlank { model.label }
-                        else -> modelFallback ?: "Model"
-                    },
-                    tint = TextSecondary,
-                    loading = switchingModel,
+                // Agent needs no word on the bar; a chat in /plan or /ask shows it, tap to leave.
+                if (mode.kind != "write") ModeTag(mode, onClearMode)
+                ModelPill(
+                    model = model,
+                    fallback = modelFallback,
+                    switching = switchingModel,
+                    modifiers = modifiers,
                     onClick = onPickModel,
                 )
-                if (modifiers.any) {
-                    val cur = modifiers.current
-                    val depth = if (modifiers.efforts.size > 1) {
-                        cur?.effort?.takeIf { it.isNotBlank() }?.let { HermesCatalog.EFFORT_LABEL[it] ?: it } ?: "Auto"
-                    } else {
-                        null
-                    }
-                    val extra = listOfNotNull("Fast".takeIf { cur?.fast == true }, "Thinking".takeIf { cur?.think == true })
-                    PickerChip(
-                        icon = when {
-                            depth != null -> AppIcons.Flame
-                            extra.firstOrNull() == "Fast" -> AppIcons.Bolt
-                            extra.isNotEmpty() -> AppIcons.Sparkles
-                            else -> AppIcons.Blocks
-                        },
-                        label = depth ?: extra.firstOrNull() ?: HermesCatalog.ctxLabel(modifiers.window).ifBlank { "Depth" },
-                        tint = TextSecondary,
-                        onClick = onPickDepth,
-                    )
-                }
             }
             Spacer(Modifier.width(6.dp))
             usage?.let {
@@ -685,41 +673,92 @@ internal fun HermesComposer(
     }
 }
 
+/**
+ * Model and depth as one pill, the way the web's composer keeps them together: the brand,
+ * the family, then its depth and Fast / Thinking when the family has them. One tap opens
+ * the one sheet with both.
+ */
 @Composable
-private fun PickerChip(
-    icon: ImageVector,
-    label: String,
-    tint: Color,
+private fun ModelPill(
+    model: HermesModelOption?,
+    fallback: String?,
+    switching: Boolean,
+    modifiers: HermesCatalog.Modifiers,
     onClick: () -> Unit,
-    loading: Boolean = false,
 ) {
     val haptics = rememberHaptics()
+    val cur = modifiers.current
+    val depth = if (modifiers.efforts.size > 1) {
+        cur?.effort?.takeIf { it.isNotBlank() }?.let { HermesCatalog.EFFORT_LABEL[it] ?: it } ?: "Auto"
+    } else {
+        null
+    }
+    val name = when {
+        switching -> "Switching\u2026"
+        model != null -> model.familyLabel.ifBlank { model.label }
+        else -> fallback ?: "Pick a model"
+    }
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(999.dp))
             .background(ServerWell)
             .border(1.dp, Border, RoundedCornerShape(999.dp))
             .clickable { haptics.tick(); onClick() }
+            .semantics { contentDescription = listOfNotNull("Model $name", depth?.let { "$it depth" }).joinToString(", ") }
+            .padding(start = 4.dp, end = 9.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (switching) {
+            Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) { LoadingSpinner(color = ServerBrand, size = 13.dp) }
+        } else {
+            BrandMark(model?.group.orEmpty(), model?.family ?: model?.id.orEmpty(), size = 22.dp)
+        }
+        Spacer(Modifier.width(6.dp))
+        Text(
+            name,
+            color = TextPrimary,
+            fontSize = 12.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = 120.dp),
+        )
+        if (depth != null && !switching) {
+            Text("  \u00b7  ", color = TextTertiary, fontSize = 12.sp)
+            Text(depth, color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+        }
+        if (cur?.fast == true && modifiers.fast && !switching) {
+            Spacer(Modifier.width(4.dp))
+            Icon(AppIcons.Bolt, contentDescription = null, tint = ServerWarn, modifier = Modifier.size(12.dp))
+        }
+        if (cur?.think == true && modifiers.think && !switching) {
+            Spacer(Modifier.width(4.dp))
+            Icon(AppIcons.Sparkles, contentDescription = null, tint = ServerBrand, modifier = Modifier.size(12.dp))
+        }
+        Spacer(Modifier.width(3.dp))
+        Icon(AppIcons.ChevronDown, null, tint = TextTertiary, modifier = Modifier.size(12.dp))
+    }
+}
+
+/** "Plan \u00d7": the chat is not in Agent; a tap puts it back. */
+@Composable
+private fun ModeTag(mode: HermesMode, onClear: () -> Unit) {
+    val haptics = rememberHaptics()
+    val tint = modeColor(mode.kind)
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(tint.copy(alpha = 0.14f))
+            .clickable { haptics.tick(); onClear() }
+            .semantics { contentDescription = "${mode.label} mode, tap for Agent" }
             .padding(start = 9.dp, end = 7.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (loading) {
-            LoadingSpinner(color = tint, size = 13.dp)
-        } else {
-            Icon(icon, null, tint = tint, modifier = Modifier.size(13.dp))
-        }
+        Icon(modeIcon(mode.kind), null, tint = tint, modifier = Modifier.size(13.dp))
         Spacer(Modifier.width(5.dp))
-        Text(
-            label,
-            color = TextPrimary,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.widthIn(max = 140.dp),
-        )
-        Spacer(Modifier.width(2.dp))
-        Icon(AppIcons.ChevronDown, null, tint = TextTertiary, modifier = Modifier.size(12.dp))
+        Text(mode.label, color = tint, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Spacer(Modifier.width(4.dp))
+        Icon(AppIcons.Close, null, tint = tint, modifier = Modifier.size(11.dp))
     }
 }
 
@@ -764,10 +803,15 @@ internal fun AttachmentChip(attachment: HermesAttachment, onRemove: (() -> Unit)
 /** One entry in the palette: a command of the page's own, or one Hermes answers itself. */
 internal data class SlashEntry(val name: String, val args: String, val desc: String, val group: String, val local: Boolean)
 
+/** The modes, by kind: each brain's own Agent, Plan and Ask (HermesViewModel.setModeKind). */
+internal val ModeCommands = mapOf("agent" to "write", "plan" to "read", "ask" to "ask")
+
 internal val LocalSlash = listOf(
+    SlashEntry("agent", "", "Make changes on its own (the default)", "Mode", true),
+    SlashEntry("plan", "", "Read and plan; describe changes, don't make them", "Mode", true),
+    SlashEntry("ask", "", "Ask before changing anything", "Mode", true),
     SlashEntry("new", "", "Start a new chat", "This app", true),
-    SlashEntry("model", "", "Pick the model Hermes thinks with", "This app", true),
-    SlashEntry("mode", "", "Pick what Hermes may do here", "This app", true),
+    SlashEntry("model", "", "Pick the model and its depth", "This app", true),
     SlashEntry("title", "name", "Rename this chat", "This app", true),
     SlashEntry("clear", "", "Empty this chat; Hermes forgets it too", "This app", true),
     SlashEntry("stop", "", "Stop the answer in progress", "This app", true),
@@ -835,36 +879,36 @@ internal fun SlashPalette(entries: List<SlashEntry>, onPick: (SlashEntry) -> Uni
 
 // ── Pickers ─────────────────────────────────────────────────────────────────
 
-internal enum class HermesSheet { MODE, MODEL, DEPTH }
+internal enum class HermesSheet { MODEL }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun HermesPickerSheet(
     sheet: HermesSheet,
     status: HermesStatus?,
-    modeId: String,
+    favourites: List<String>,
+    onToggleFavourite: (String) -> Unit,
     onDismiss: () -> Unit,
-    onPickMode: (HermesMode) -> Unit,
     onPickFamily: (HermesCatalog.Family) -> Unit,
     onPickEffort: (String) -> Unit,
     onToggleThink: () -> Unit,
     onToggleFast: () -> Unit,
     onPickWindow: (Int) -> Unit,
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = sheet == HermesSheet.MODEL)
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = Surface) {
         Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 8.dp)) {
             when (sheet) {
-                HermesSheet.MODE -> ModeList(status, modeId, onPickMode)
-                HermesSheet.MODEL -> ModelList(status, onPickFamily)
-                HermesSheet.DEPTH -> DepthList(status, onPickEffort, onToggleThink, onToggleFast, onPickWindow)
+                HermesSheet.MODEL -> ModelList(status, favourites, onToggleFavourite, onPickFamily) {
+                    DepthQuick(status, onPickEffort, onToggleThink, onToggleFast, onPickWindow)
+                }
             }
         }
     }
 }
 
 @Composable
-private fun SheetTitle(title: String, subtitle: String? = null) {
+internal fun SheetTitle(title: String, subtitle: String? = null) {
     Column(Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp)) {
         Text(title, color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         if (subtitle != null) Text(subtitle, color = TextTertiary, fontSize = 12.sp, lineHeight = 16.sp)
@@ -913,47 +957,43 @@ private fun OptionRow(
 }
 
 @Composable
-private fun ModeList(status: HermesStatus?, modeId: String, onPick: (HermesMode) -> Unit) {
-    val model = HermesCatalog.current(status)
-    val modes = HermesCatalog.modes(status, model)
-    val current = HermesCatalog.modeFor(status, modeId, model)
-    val from = if (status?.modes?.get(HermesCatalog.sourceOf(model)).isNullOrEmpty()) "Hermes' own brain" else "${model?.group}'s CLI"
-    SheetTitle("Mode", "What Hermes may do in this chat")
-    modes.forEach { m ->
-        OptionRow(
-            selected = m.id == current.id,
-            icon = modeIcon(m.kind),
-            iconTint = modeColor(m.kind),
-            label = m.label,
-            note = m.desc.ifBlank { m.cap },
-            onClick = { onPick(m) },
-        )
-    }
-    Text(
-        "Modes from $from. Deletes, the proxy and reboots always come back as a card to approve.",
-        color = TextTertiary,
-        fontSize = 11.sp,
-        lineHeight = 15.sp,
-        modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
-    )
-}
-
-@Composable
-private fun ModelList(status: HermesStatus?, onPick: (HermesCatalog.Family) -> Unit) {
+private fun ModelList(
+    status: HermesStatus?,
+    favourites: List<String>,
+    onToggleFavourite: (String) -> Unit,
+    onPick: (HermesCatalog.Family) -> Unit,
+    header: @Composable () -> Unit = {},
+) {
     var query by remember { mutableStateOf("") }
     val families = remember(status) { HermesCatalog.families(status) }
     val q = query.trim().lowercase()
-    val shown = remember(families, q) {
+    // Starred families head the list in the order they were starred, and leave their group
+    // so nothing shows twice; a search lists every match where it lives.
+    val starred = remember(families, favourites, q) {
+        if (q.isNotEmpty()) emptyList() else favourites.mapNotNull { key -> families.firstOrNull { it.key == key } }
+    }
+    val shown = remember(families, q, starred) {
         families.filter { f ->
-            if (q.isEmpty()) !f.hidden
+            if (q.isEmpty()) !f.hidden && f !in starred
             else "${f.label} ${f.note.orEmpty()} ${f.key} ${f.group}".lowercase().contains(q)
         }
     }
     val hidden = families.count { it.hidden }
-    SheetTitle("Model", "Hermes' own setting: the web dashboard sees the same pick")
-    SearchBox(value = query, onValueChange = { query = it }, hint = "Find a model…", modifier = Modifier.padding(horizontal = 16.dp))
-    Spacer(Modifier.height(6.dp))
-    LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp)) {
+    SheetTitle("Model")
+    LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp)) {
+        item(key = "depth") { header() }
+        item(key = "search") {
+            SearchBox(value = query, onValueChange = { query = it }, hint = "Find a model\u2026", modifier = Modifier.padding(horizontal = 16.dp))
+            Spacer(Modifier.height(6.dp))
+        }
+        if (starred.isNotEmpty()) {
+            item(key = "g-favourites") { RailHeading("Favourites") }
+            starred.forEach { f ->
+                item(key = "fav-${f.key}") {
+                    ModelRow(f, starred = true, onPick = onPick, onToggleFavourite = onToggleFavourite)
+                }
+            }
+        }
         var group: String? = null
         shown.forEachIndexed { i, f ->
             if (f.group != group) {
@@ -962,15 +1002,7 @@ private fun ModelList(status: HermesStatus?, onPick: (HermesCatalog.Family) -> U
                 item(key = "g-$i-$heading") { RailHeading(heading) }
             }
             item(key = "f-$i-${f.key}") {
-                OptionRow(
-                    selected = f.current,
-                    icon = null,
-                    iconTint = TextSecondary,
-                    label = f.label,
-                    note = f.note,
-                    onClick = { onPick(f) },
-                    leading = { BrandMark(f.group, f.label) },
-                )
+                ModelRow(f, starred = f.key in favourites, onPick = onPick, onToggleFavourite = onToggleFavourite)
             }
         }
         if (shown.isEmpty()) {
@@ -983,48 +1015,49 @@ private fun ModelList(status: HermesStatus?, onPick: (HermesCatalog.Family) -> U
                 )
             }
         }
-        item(key = "foot") {
-            Text(
-                buildString {
-                    append("Each chat remembers its last model and switches Hermes back when you open it. ")
-                    append(
-                        if (status?.linked == true) "These are the brains this server is signed in to, through the bridge."
-                        else "Hermes is on its own endpoint; picking a machine model links it to the bridge.",
-                    )
-                    if (q.isEmpty() && hidden > 0) append(" Search to show $hidden more: OpenCode's billed models, which Claude and Cursor already cover.")
-                },
-                color = TextTertiary,
-                fontSize = 11.sp,
-                lineHeight = 15.sp,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-            )
-        }
     }
 }
 
-/** A lettered disc per provider, standing in for the web's logos. */
+/** The model's maker as its logo (ModelLogo), by the web's matching rules. */
 @Composable
-private fun BrandMark(group: String, label: String) {
-    val l = label.lowercase()
-    val (letter, color) = when {
-        group == "Hermes' own" -> "H" to ServerBrand
-        "claude" in l || "opus" in l || "sonnet" in l || "haiku" in l -> "A" to Color(0xFFD97757)
-        "grok" in l || group == "Grok Bot" -> "X" to TextPrimary
-        "gpt" in l || "codex" in l -> "O" to Color(0xFF10A37F)
-        "gemini" in l -> "G" to Color(0xFF4285F4)
-        "composer" in l || l == "auto" || group == "Cursor" -> "C" to TextSecondary
-        else -> group.take(1).uppercase() to TextSecondary
-    }
-    Box(
-        Modifier.size(32.dp).clip(CircleShape).background(color.copy(alpha = 0.16f)),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(letter, color = color, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-    }
+internal fun BrandMark(group: String, family: String, size: androidx.compose.ui.unit.Dp = 32.dp) {
+    ModelLogo(ModelBrands.brandOf(family, group), size)
 }
 
+/** A family in the picker: its logo, name and what it offers, a tick when on, and a star to keep it on top. */
 @Composable
-private fun DepthList(
+private fun ModelRow(
+    f: HermesCatalog.Family,
+    starred: Boolean,
+    onPick: (HermesCatalog.Family) -> Unit,
+    onToggleFavourite: (String) -> Unit,
+) {
+    val haptics = rememberHaptics()
+    OptionRow(
+        selected = f.current,
+        icon = null,
+        iconTint = TextSecondary,
+        label = f.label,
+        note = f.note,
+        onClick = { onPick(f) },
+        leading = { BrandMark(f.group, f.key) },
+        trailing = {
+            if (f.current) Icon(AppIcons.Check, null, tint = ServerBrand, modifier = Modifier.size(18.dp))
+            IconButton(onClick = { haptics.tick(); onToggleFavourite(f.key) }, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    if (starred) AppIcons.StarFilled else AppIcons.Star,
+                    contentDescription = if (starred) "Remove from favourites" else "Add to favourites",
+                    tint = if (starred) ServerWarn else TextTertiary,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+        },
+    )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DepthQuick(
     status: HermesStatus?,
     onPickEffort: (String) -> Unit,
     onToggleThink: () -> Unit,
@@ -1033,87 +1066,52 @@ private fun DepthList(
 ) {
     val mods = HermesCatalog.modifiers(status)
     val cur = mods.current ?: return
-    SheetTitle("Depth and context", cur.familyLabel.ifBlank { cur.label })
-    androidx.compose.foundation.lazy.LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp)) {
-        if (mods.efforts.size > 1) {
-            item(key = "h-depth") { RailHeading("Depth") }
-            if (mods.hasBase) {
-                item(key = "e-auto") {
-                    OptionRow(
-                        selected = cur.effort.isBlank(),
-                        icon = AppIcons.Refresh,
-                        iconTint = TextSecondary,
-                        label = "Auto",
-                        note = "Whatever ${cur.group} does by default for this model",
-                        onClick = { onPickEffort("") },
-                    )
+    if (!mods.any) return
+    Column(modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 12.dp)) {
+        Text(
+            "DEPTH",
+            color = TextTertiary,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.8.sp,
+        )
+        Spacer(Modifier.height(8.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (mods.efforts.size > 1) {
+                if (mods.hasBase) DepthChip("Auto", null, cur.effort.isBlank()) { onPickEffort("") }
+                mods.efforts.forEach { e ->
+                    DepthChip(HermesCatalog.EFFORT_LABEL[e] ?: e, null, cur.effort == e) { onPickEffort(e) }
                 }
             }
-            items(mods.efforts, key = { "e-$it" }) { e ->
-                OptionRow(
-                    selected = cur.effort == e,
-                    icon = AppIcons.Flame,
-                    iconTint = ServerWarn.copy(alpha = 0.4f + 0.6f * (HermesCatalog.EFFORTS.indexOf(e) + 1) / HermesCatalog.EFFORTS.size),
-                    label = HermesCatalog.EFFORT_LABEL[e] ?: e,
-                    note = HermesCatalog.EFFORT_NOTE[e],
-                    onClick = { onPickEffort(e) },
-                )
-            }
-        }
-        if (mods.think || mods.fast) {
-            item(key = "h-also") { RailHeading("Also") }
-            if (mods.think) {
-                item(key = "think") {
-                    OptionRow(
-                        selected = false,
-                        icon = AppIcons.Sparkles,
-                        iconTint = ServerBrand,
-                        label = "Thinking",
-                        note = if (cur.think) "Reasons before it answers" else "Turn reasoning on",
-                        onClick = onToggleThink,
-                        trailing = { ToggleSwitch(cur.think, onToggleThink) },
-                    )
-                }
-            }
-            if (mods.fast) {
-                item(key = "fast") {
-                    OptionRow(
-                        selected = false,
-                        icon = AppIcons.Bolt,
-                        iconTint = ServerWarn,
-                        label = "Fast",
-                        note = if (cur.fast) "On the fast servers" else "Ask for the fast servers",
-                        onClick = onToggleFast,
-                        trailing = { ToggleSwitch(cur.fast, onToggleFast) },
-                    )
+            if (mods.fast) DepthChip("Fast", AppIcons.Bolt, cur.fast, onToggleFast)
+            if (mods.think) DepthChip("Thinking", AppIcons.Sparkles, cur.think, onToggleThink)
+            if (mods.contexts.size > 1) {
+                mods.contexts.forEach { n ->
+                    DepthChip("${HermesCatalog.ctxLabel(n)} context", AppIcons.Blocks, n == mods.window) { onPickWindow(n) }
                 }
             }
         }
-        if (mods.contexts.size > 1) {
-            item(key = "h-ctx") { RailHeading("Context") }
-            items(mods.contexts, key = { "w-$it" }) { n ->
-                OptionRow(
-                    selected = n == mods.window,
-                    icon = AppIcons.Blocks,
-                    iconTint = TextSecondary,
-                    label = HermesCatalog.ctxLabel(n),
-                    note = when (n) {
-                        cur.ctxDefault -> "Default for this model"
-                        cur.ctxMax -> "The most it keeps; slower and costs more"
-                        else -> null
-                    },
-                    onClick = { onPickWindow(n) },
-                )
-            }
-            item(key = "ctx-foot") {
-                Text(
-                    "How much of the chat this model keeps in mind.",
-                    color = TextTertiary,
-                    fontSize = 11.sp,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
-                )
-            }
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider(color = Border)
+    }
+}
+
+@Composable
+private fun DepthChip(label: String, icon: ImageVector?, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(if (selected) ServerBrand.copy(alpha = 0.16f) else ServerWell)
+            .border(1.dp, if (selected) ServerBrand.copy(alpha = 0.55f) else Border, RoundedCornerShape(999.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icon != null) {
+            Icon(icon, null, tint = if (selected) ServerBrand else TextSecondary, modifier = Modifier.size(13.dp))
+            Spacer(Modifier.width(5.dp))
         }
+        Text(label, color = if (selected) TextPrimary else TextSecondary, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 

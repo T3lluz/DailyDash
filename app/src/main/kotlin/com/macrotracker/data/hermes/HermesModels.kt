@@ -155,7 +155,15 @@ data class HermesTool(val name: String, val state: String, val preview: String) 
     val running: Boolean get() = state == "started" || state == "running"
 }
 
-data class HermesFileChange(val path: String, val plus: Int, val minus: Int)
+data class HermesFileChange(
+    val path: String,
+    val plus: Int,
+    val minus: Int,
+    /** The unified diff, when the bridge captured one. */
+    val diff: String? = null,
+    /** `added`, `deleted`, `modified`, or blank. */
+    val status: String = "",
+)
 
 data class HermesAskCommand(
     val cmd: String,
@@ -196,6 +204,8 @@ sealed interface HermesItem {
         val ms: Long?,
         val model: String?,
         val changes: List<HermesFileChange>,
+        /** What Hermes said between its steps, when the stream told us; else [HermesNarration] reads it from [text]. */
+        val notes: List<String>? = null,
     ) : HermesItem
 
     data class Exec(
@@ -248,6 +258,8 @@ data class HermesLive(
     val tools: List<HermesTool> = emptyList(),
     val phase: String = "",
     val round: Int = 0,
+    /** Lines Hermes wrote and then went on to a step: narration, not the answer. */
+    val notes: List<String> = emptyList(),
 )
 
 /** One server-sent event from `/ai/chat` or `/ai/threads/{id}/watch`. */

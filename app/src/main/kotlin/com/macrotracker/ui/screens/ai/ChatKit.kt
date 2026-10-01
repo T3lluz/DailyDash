@@ -198,11 +198,12 @@ fun FollowChatOnKeyboard(listState: LazyListState, shouldFollow: () -> Boolean) 
  * so the composer never jumps when the keyboard starts to open or finishes closing.
  */
 @Composable
-internal fun composerBottomGap(): Dp {
+internal fun composerBottomGap(clearsNavPill: Boolean = true): Dp {
     val density = LocalDensity.current
     val ime = with(density) { WindowInsets.ime.getBottom(density).toDp() }
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val clearNav = navBottom + PillNavClearance
+    // A pushed screen has no nav pill, only the system bar.
+    val clearNav = navBottom + if (clearsNavPill) PillNavClearance else 10.dp
     return (clearNav - ime).coerceAtLeast(10.dp)
 }
 
@@ -514,8 +515,9 @@ fun ChatComposer(
     accent: Color,
     hazeState: HazeState?,
     leading: (@Composable () -> Unit)? = null,
+    clearsNavPill: Boolean = true,
 ) {
-    val bottomPad = composerBottomGap()
+    val bottomPad = composerBottomGap(clearsNavPill)
     val canSend = enabled && value.isNotBlank()
     val sendBackground by animateColorAsState(
         targetValue = if (canSend) accent else Border,

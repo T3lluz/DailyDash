@@ -353,6 +353,8 @@ class HermesClient @Inject constructor(
         private const val CONNECT_TIMEOUT_S = 6L
         private const val READ_TIMEOUT_S = 20L
         private const val STREAM_READ_TIMEOUT_S = 60L
+        /** A diff past this is cut: the chat shows its start, and a rewrite of a whole file is no read on a phone. */
+        private const val MAX_DIFF_CHARS = 24_000
         /**
          * Items that arrive mid-stream need keys no other stream can repeat: a turn that is
          * rejoined after a dropped connection is a second stream into the same list.
@@ -583,6 +585,8 @@ class HermesClient @Inject constructor(
                     path = c.optString("path").ifBlank { c.optString("name") },
                     plus = c.optInt("plus"),
                     minus = c.optInt("minus"),
+                    diff = c.optString("diff").takeIf { it.isNotBlank() }?.take(MAX_DIFF_CHARS),
+                    status = c.optString("status"),
                 )
             }
         }

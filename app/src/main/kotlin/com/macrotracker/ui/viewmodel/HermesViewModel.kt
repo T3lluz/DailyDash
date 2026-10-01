@@ -65,7 +65,7 @@ data class HermesUiState(
     /** The turn in progress; null when Hermes is idle in this thread. */
     val live: HermesLive? = null,
     /** The mode sent with each turn: the thread's own until the person picks another. */
-    val modeId: String = HermesPermission.ASK.id,
+    val modeId: String = HermesViewModel.AGENT_MODE,
     /** Approval rows being run right now, as `askId:index`. */
     val running: Set<String> = emptySet(),
     /** One-line problem to show above the composer (a send that failed, a stop that did not). */
@@ -119,7 +119,7 @@ class HermesViewModel @Inject constructor(
     private val lastPrefs = context.getSharedPreferences("hermes_last", Context.MODE_PRIVATE)
     private val _state = MutableStateFlow(
         HermesUiState(
-            modeId = settings.hermesPermission.value,
+            modeId = AGENT_MODE,
             seen = seenPrefs.all.mapNotNull { (k, v) -> (v as? Long)?.let { k to it } }.toMap(),
         ),
     )
@@ -251,11 +251,6 @@ class HermesViewModel @Inject constructor(
     fun setViewing(onScreen: Boolean) {
         activity.setViewing(if (onScreen) _state.value.threadId else null)
     }
-
-    /** The AI tab's pane when it was last left (AIScreen opens on it). */
-    fun lastAiTab(): String? = settings.getAiLastTab()
-
-    fun rememberAiTab(id: String) = settings.setAiLastTab(id)
 
     /** The person picked a bot; that sticks until they pick the other. */
     fun setUsesHermes(useHermes: Boolean) {
@@ -455,7 +450,8 @@ class HermesViewModel @Inject constructor(
                 loadingThread = false,
                 notice = null,
                 queued = null,
-                modeId = settings.hermesPermission.value,
+                // A new chat is always Agent; /plan and /ask change it for that chat.
+                modeId = AGENT_MODE,
             )
         }
     }
@@ -532,13 +528,27 @@ class HermesViewModel @Inject constructor(
 
     // ── Mode and model ──────────────────────────────────────────────────────
 
-    /** A mode from the current brain's CLI; it sticks to this thread and to new ones. */
+    /** A mode from the current brain's CLI, for this chat; a new chat starts in Agent again. */
     fun setMode(id: String) {
-        settings.setHermesPermission(id)
         _state.update { it.copy(modeId = id) }
         val threadId = _state.value.threadId ?: return
         viewModelScope.launch { runCatching { client.setMode(threadId, id) } }
     }
+
+    /**
+     * `/agent`, `/plan`, `/ask`: the current brain's mode of that kind (Cursor's Plan, Claude's
+     * Plan; Cursor's Agent, Claude's Accept edits), as the web's slash commands pick it.
+     */
+    fun setModeKind(kind: String) {
+        val modes = HermesCatalog.modes(_state.value.status)
+        val pick = modes.firstOrNull { it.kind == kind } ?: return
+        setMode(pick.id)
+    }
+
+    /** Starred model families, which head the picker. */
+    val favouriteModels: StateFlow<List<String>> = settings.hermesFavouriteModels
+
+    fun toggleFavourite(family: String) = settings.toggleHermesFavourite(family)
 
     /** A family from the picker, at the depth and modifiers last chosen where it has them. */
     fun pickFamily(family: HermesCatalog.Family) {
@@ -899,9 +909,17 @@ class HermesViewModel @Inject constructor(
                         phase = if (live.phase.isBlank() || live.phase == "sending") "thinking" else live.phase,
                     ),
                 )
-                is HermesEvent.Tool -> s.copy(live = live.copy(tools = mergeTool(live.tools, event.tool), phase = event.tool.name))
+                // Words written before a step were narration ("Checking the logs first"), not the answer.
+                is HermesEvent.Tool -> s.copy(
+                    live = live.copy(
+                        tools = mergeTool(live.tools, event.tool),
+                        phase = event.tool.name,
+                        notes = if (live.got.isNotBlank()) (live.notes + live.got.trim()).takeLast(MAX_LIVE_NOTES) else live.notes,
+                        got = "",
+                    ),
+                )
                 is HermesEvent.Phase -> s.copy(live = live.copy(phase = event.text))
-                is HermesEvent.Round -> s.copy(live = live.copy(got = "", think = "", tools = emptyList(), round = event.n))
+                is HermesEvent.Round -> s.copy(live = live.copy(got = "", think = "", tools = emptyList(), notes = emptyList(), round = event.n))
                 is HermesEvent.Final -> s.copy(
                     items = s.items + HermesItem.Assistant(
                         key = "live-final-${System.nanoTime()}",
@@ -913,8 +931,9 @@ class HermesViewModel @Inject constructor(
                         ms = event.ms,
                         model = null,
                         changes = emptyList(),
+                        notes = live.notes.takeIf { it.isNotEmpty() },
                     ),
-                    live = live.copy(got = "", think = "", tools = emptyList()),
+                    live = live.copy(got = "", think = "", tools = emptyList(), notes = emptyList()),
                 )
                 is HermesEvent.Item -> s.copy(items = s.items + event.item)
                 is HermesEvent.Done -> s.copy(
@@ -1040,15 +1059,19 @@ class HermesViewModel @Inject constructor(
         }
     }.trim()
 
-    private companion object {
-        const val KEY_LAST_THREAD = "thread"
-        const val MAX_REJOINS = 6
-        const val REJOIN_DELAY_MS = 700L
-        const val THINK_KEEP = 6_000
-        const val MAX_LIVE_TOOLS = 30
-        const val REPORT_OUTPUT_CHARS = 3_000
-        const val SLOW_POLL_MS = 60_000L
-        const val MAX_UPLOAD_BYTES = 8 * 1024 * 1024
-        const val MAX_ATTACHMENTS = 8
+    companion object {
+        /** Every new chat's mode; its kind maps it onto each brain's own (HermesCatalog.modeFor). */
+        const val AGENT_MODE = "agent"
+
+        private const val KEY_LAST_THREAD = "thread"
+        private const val MAX_REJOINS = 6
+        private const val REJOIN_DELAY_MS = 700L
+        private const val THINK_KEEP = 6_000
+        private const val MAX_LIVE_TOOLS = 30
+        private const val MAX_LIVE_NOTES = 30
+        private const val REPORT_OUTPUT_CHARS = 3_000
+        private const val SLOW_POLL_MS = 60_000L
+        private const val MAX_UPLOAD_BYTES = 8 * 1024 * 1024
+        private const val MAX_ATTACHMENTS = 8
     }
 }

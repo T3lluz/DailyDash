@@ -95,6 +95,18 @@ class SettingsRepository @Inject constructor(
     private val _hermesPermission = MutableStateFlow(prefs.getString(KEY_HERMES_PERMISSION, "ask") ?: "ask")
     val hermesPermission: StateFlow<String> = _hermesPermission
 
+    /** Model families starred in Hermes' picker, in the order they were starred; they head the list. */
+    private val _hermesFavouriteModels = MutableStateFlow(
+        prefs.getString(KEY_HERMES_FAVOURITE_MODELS, null).orEmpty().split('\n').filter { it.isNotBlank() },
+    )
+    val hermesFavouriteModels: StateFlow<List<String>> = _hermesFavouriteModels
+
+    fun toggleHermesFavourite(family: String) {
+        val now = _hermesFavouriteModels.value.let { if (family in it) it - family else it + family }
+        prefs.edit { putString(KEY_HERMES_FAVOURITE_MODELS, now.joinToString("\n")) }
+        _hermesFavouriteModels.value = now
+    }
+
     /** The web dashboard's calendar switches, as it last synced them; they decide which of your events Coming up shows. */
     private val _dashboardCalendars = MutableStateFlow(readDashboardCalendars())
     val dashboardCalendars: StateFlow<DashboardCalendars> = _dashboardCalendars
@@ -296,13 +308,6 @@ class SettingsRepository @Inject constructor(
         _dashboardServerUrl.value = trimmed
     }
 
-    /** The AI tab's pane (Macros or Tech support / Hermes) when it was last left, to open on next time. */
-    fun getAiLastTab(): String? = prefs.getString(KEY_AI_LAST_TAB, null)
-
-    fun setAiLastTab(id: String) {
-        if (prefs.getString(KEY_AI_LAST_TAB, null) != id) prefs.edit { putString(KEY_AI_LAST_TAB, id) }
-    }
-
     fun setTechSupportBrain(brain: String) {
         prefs.edit { putString(KEY_TECH_SUPPORT_BRAIN, brain) }
         _techSupportBrain.value = brain
@@ -395,9 +400,9 @@ class SettingsRepository @Inject constructor(
         const val KEY_FOOD_TRENDS_METRIC = "food_trends_metric"
         const val KEY_DASHBOARD_SERVER_URL = "dashboard_server_url"
         const val KEY_TECH_SUPPORT_BRAIN = "tech_support_brain"
-        const val KEY_AI_LAST_TAB = "ai_last_tab"
         const val KEY_HERMES_LAST_REACHABLE = "hermes_last_reachable"
         const val KEY_HERMES_PERMISSION = "hermes_permission"
+        const val KEY_HERMES_FAVOURITE_MODELS = "hermes_favourite_models"
         const val KEY_DASHBOARD_CALS = "dashboard_cals"
         const val KEY_DASHBOARD_CAL_MINE = "dashboard_cal_mine"
         const val KEY_BIRTH_YEAR = "birth_year"
