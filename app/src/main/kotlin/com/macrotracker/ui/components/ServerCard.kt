@@ -1,6 +1,7 @@
 package com.macrotracker.ui.components
 
 import androidx.compose.foundation.background
+import com.macrotracker.ui.util.rememberIsResumed
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -77,12 +78,15 @@ fun ServerCard(
     val link by viewModel.dashboardLink.collectAsState()
     val haptics = rememberHaptics()
 
-    DisposableEffect(isVisible) {
-        if (isVisible) viewModel.startPolling()
-        onDispose { viewModel.stopPolling() }
+    // Only while Home is on screen: a stopped app left the SSH probes running at full rate.
+    val resumed = rememberIsResumed()
+    val polling = isVisible && resumed
+    DisposableEffect(polling) {
+        if (polling) viewModel.startPolling()
+        onDispose { if (polling) viewModel.stopPolling() }
     }
-    LaunchedEffect(isVisible, profiles.isNotEmpty()) {
-        if (isVisible && profiles.isNotEmpty()) viewModel.followDashboard(HOME_DASHBOARD_REFRESH_MS)
+    LaunchedEffect(polling, profiles.isNotEmpty()) {
+        if (polling && profiles.isNotEmpty()) viewModel.followDashboard(HOME_DASHBOARD_REFRESH_MS)
     }
 
     if (profiles.isEmpty()) {

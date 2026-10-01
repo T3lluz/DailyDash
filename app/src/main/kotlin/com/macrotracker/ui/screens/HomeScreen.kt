@@ -1,6 +1,7 @@
 package com.macrotracker.ui.screens
 
 import android.Manifest
+import com.macrotracker.ui.util.LaunchedWhileResumed
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -194,15 +195,17 @@ fun HomeScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // Keep weather + What to Wear fresh while Home is open (forced location + forecast refetch).
-    LaunchedEffect(Unit) {
+    // Keep weather + What to Wear fresh while Home is on screen. Not forced: the caches
+    // expire on their own (forecast 8 min, location 5 min), so this refetches without
+    // wiping them, and nothing runs while the app is in the background.
+    LaunchedWhileResumed {
         while (true) {
             delay(10 * 60 * 1000L)
             today = LocalDate.now()
             greeting = greetingNow()
             val weatherVisible = currentConfigs.any { it.id == "WEATHER" && it.isVisible }
             if (weatherVisible && hasLocationPermission()) {
-                viewModel.loadWeather(hasPermission = true, forceRefresh = true)
+                viewModel.loadWeather(hasPermission = true)
             }
         }
     }

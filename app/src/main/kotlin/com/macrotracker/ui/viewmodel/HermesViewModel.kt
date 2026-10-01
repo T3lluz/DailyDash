@@ -250,9 +250,10 @@ class HermesViewModel @Inject constructor(
     }
 
     /** Status and the thread list; opens the newest thread the first time. */
-    fun refresh() {
+    /** [quiet] re-checks without showing "checking", for the background retry while Hermes is down. */
+    fun refresh(quiet: Boolean = false) {
         viewModelScope.launch {
-            _state.update { it.copy(reach = if (it.reach == HermesReach.READY) it.reach else HermesReach.CHECKING) }
+            if (!quiet) _state.update { it.copy(reach = if (it.reach == HermesReach.READY) it.reach else HermesReach.CHECKING) }
             try {
                 val status = client.status()
                 val threads = client.threads().filter { it.kind != "duty" }
@@ -325,7 +326,12 @@ class HermesViewModel @Inject constructor(
             launch {
                 while (true) {
                     delay(SLOW_POLL_MS)
-                    if (_state.value.reach == HermesReach.READY) refreshThreads()
+                    // Down stays down only until Hermes answers again; no Retry tap needed.
+                    when (_state.value.reach) {
+                        HermesReach.READY -> refreshThreads()
+                        HermesReach.DOWN -> refresh(quiet = true)
+                        else -> Unit
+                    }
                 }
             }
             // Whatever happened while the pane was away: a turn may have started or ended.
@@ -333,6 +339,8 @@ class HermesViewModel @Inject constructor(
             feed.events.collect { event ->
                 when (event.optString("ch")) {
                     "hello" -> {
+                        // The feed is back, so the server is too: re-check if Hermes looked down.
+                        if (_state.value.reach == HermesReach.DOWN) refresh(quiet = true)
                         refreshThreads()
                         _state.value.threadId?.let(::reloadOpenThread)
                     }

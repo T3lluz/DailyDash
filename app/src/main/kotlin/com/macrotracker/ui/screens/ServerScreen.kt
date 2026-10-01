@@ -1,6 +1,8 @@
 package com.macrotracker.ui.screens
 
 import androidx.compose.foundation.background
+import com.macrotracker.ui.util.LaunchedWhileResumed
+import com.macrotracker.ui.util.rememberIsResumed
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -123,11 +125,13 @@ fun ServerScreen(
     // Polling is reference-counted, so holding it for the lifetime of the screen
     // is enough — the home card and the live notification share these sessions.
     // This screen also asks for the detail lane: container usage, ports, the journal.
-    DisposableEffect(Unit) {
-        viewModel.startPolling(detailed = true)
-        onDispose { viewModel.stopPolling() }
+    // Held while the screen is in front; the live notification keeps its own hold.
+    val resumed = rememberIsResumed()
+    DisposableEffect(resumed) {
+        if (resumed) viewModel.startPolling(detailed = true)
+        onDispose { if (resumed) viewModel.stopPolling() }
     }
-    LaunchedEffect(Unit) { viewModel.followDashboard(DASHBOARD_REFRESH_MS) }
+    LaunchedWhileResumed { viewModel.followDashboard(DASHBOARD_REFRESH_MS) }
     val dashboardLink by viewModel.dashboardLink.collectAsState()
 
     val sectionOrder by viewModel.sectionOrder.collectAsState()

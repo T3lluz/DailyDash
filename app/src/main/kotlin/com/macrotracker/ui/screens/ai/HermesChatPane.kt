@@ -1,6 +1,7 @@
 package com.macrotracker.ui.screens.ai
 
 import android.Manifest
+import com.macrotracker.ui.util.LaunchedWhileResumed
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
@@ -142,11 +143,10 @@ fun HermesChatPane(
     usageViewModel: com.macrotracker.ui.viewmodel.UsageViewModel = androidx.hilt.navigation.compose.hiltViewModel(),
 ) {
     val usageState by usageViewModel.state.collectAsState()
-    LaunchedEffect(usageViewModel) {
-        usageViewModel.load()
+    LaunchedWhileResumed(usageViewModel) {
         while (true) {
-            kotlinx.coroutines.delay(3 * 60_000L)
             usageViewModel.load()
+            kotlinx.coroutines.delay(3 * 60_000L)
         }
     }
     val state by viewModel.state.collectAsState()
@@ -179,15 +179,15 @@ fun HermesChatPane(
     }
     FollowChatOnKeyboard(listState) { forceFollow || nearBottom }
 
-    // The bridge's change feed, while the pane is on screen: a chat started on the desk
-    // shows up in the chat list as it happens.
-    DisposableEffect(viewModel) {
-        viewModel.startLive()
+    // The bridge's change feed, while the pane is on screen and the app in front: a chat
+    // started on the desk shows up in the chat list as it happens. On return it catches up.
+    val resumed = rememberIsResumed()
+    DisposableEffect(viewModel, resumed) {
+        if (resumed) viewModel.startLive()
         onDispose { viewModel.stopLive() }
     }
 
     // While this chat is on screen its turns end without a notification or a navbar "Done".
-    val resumed = rememberIsResumed()
     DisposableEffect(viewModel, resumed, state.threadId) {
         viewModel.setViewing(resumed)
         onDispose { viewModel.setViewing(false) }

@@ -1,6 +1,7 @@
 package com.macrotracker.ui.components
 
 import androidx.compose.animation.animateContentSize
+import com.macrotracker.ui.util.LaunchedWhileResumed
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -84,12 +85,11 @@ fun MailCard(
     val overlay by viewModel.overlay.collectAsState()
     var notice by remember { mutableStateOf<MailEvent?>(null) }
 
-    LaunchedEffect(isVisible) {
-        if (!isVisible) return@LaunchedEffect
-        viewModel.load()
+    LaunchedWhileResumed(isVisible) {
+        if (!isVisible) return@LaunchedWhileResumed
         while (true) {
-            delay(2 * 60_000L)
             viewModel.load()
+            delay(2 * 60_000L)
         }
     }
     LaunchedEffect(viewModel) {

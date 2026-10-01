@@ -103,6 +103,8 @@ class YouTubeViewModel @Inject constructor(
         // Videos load lazily when YoutubeCard first becomes visible / calls loadLatestVideos().
     }
 
+    private var loadJob: Job? = null
+
     fun loadTrackedChannels() {
         _trackedChannels.value = youtubeRepository.getTrackedChannels()
     }
@@ -112,12 +114,19 @@ class YouTubeViewModel @Inject constructor(
         val tracked = youtubeRepository.getTrackedChannels()
         _trackedChannels.value = tracked
         if (tracked.isEmpty()) {
+            loadJob?.cancel()
             _youtubeState.value = YouTubeUiState.NoChannels
             return
         }
+        // One load at a time: a forced one replaces the running one, any other joins it.
+        if (loadJob?.isActive == true) {
+            if (!forceRefresh) return
+            loadJob?.cancel()
+        }
         val current = _youtubeState.value
-        viewModelScope.launch {
-            if (current !is YouTubeUiState.Success || forceRefresh) {
+        loadJob = viewModelScope.launch {
+            // A refresh keeps the videos on screen; only a first load shows the skeleton.
+            if (current !is YouTubeUiState.Success) {
                 _youtubeState.value = YouTubeUiState.Loading
             }
             youtubeRepository.getLatestVideosForTrackedChannels()
@@ -131,7 +140,7 @@ class YouTubeViewModel @Inject constructor(
                 }
                 .onFailure { e ->
                     Log.e(TAG, "Failed to load YouTube videos", e)
-                    // Restore prior success (force refresh sets Loading first) or show Error.
+                    // Keep what was on screen, or show the error on a first load.
                     if (current is YouTubeUiState.Success) {
                         _youtubeState.value = current
                     } else {

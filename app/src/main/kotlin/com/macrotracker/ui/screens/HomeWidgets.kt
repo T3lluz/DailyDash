@@ -87,7 +87,7 @@ fun HomeWidgetItem(
         "MAIL" -> MailCard(isVisible = isVisible, onOpenHermes = onOpenHermes)
         "SERVERS" -> ServerCard(isVisible = isVisible, onOpenServers = onNavigateToServers, onOpenConsole = onOpenConsole)
         "YOUTUBE" -> YoutubeCard()
-        "TWITCH" -> TwitchCard()
+        "TWITCH" -> TwitchCard(isVisible = isVisible)
         "WEATHER" -> HomeWeatherWidget(
             viewModel = viewModel,
             onRequestPermission = onRequestLocationPermission,

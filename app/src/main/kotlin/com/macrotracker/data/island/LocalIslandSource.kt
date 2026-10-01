@@ -3,6 +3,7 @@ package com.macrotracker.data.island
 import android.content.Context
 import com.macrotracker.data.dashboard.IslandItem
 import com.macrotracker.data.github.GitHubRepository
+import com.macrotracker.data.health.HealthStats
 import com.macrotracker.data.health.HealthConnectRepository
 import com.macrotracker.data.local.MacroRepository
 import com.macrotracker.data.local.SettingsRepository
@@ -54,10 +55,11 @@ class LocalIslandSource @Inject constructor(
             upcomingTonight(now)?.let(::add)
             if (hour in 8..20) githubReviews()?.let(::add)
             if (hour in 12..23) youtubeToday(now)?.let(::add)
-            if (settings.masterHealthConnectEnabled.value) {
-                val stats = withTimeoutOrNull(HEALTH_TIMEOUT_MS) {
-                    runCatching { if (health.hasAnyPermissions()) health.readTodayStats() else null }.getOrNull()
-                }
+            // Health Connect only at the hours its items show, and at most every few minutes:
+            // the island re-collects every minute and these reads are not free.
+            val wantsHealth = hour in 5..10 || hour in 16..22
+            if (wantsHealth && settings.masterHealthConnectEnabled.value) {
+                val stats = todayStats(now)
                 if (stats != null) {
                     if (hour in 5..10 && stats.sleepMinutes > 0) add(sleep(stats.sleepMinutes))
                     if (hour in 16..22) add(steps(stats.steps))
@@ -67,6 +69,21 @@ class LocalIslandSource @Inject constructor(
             weatherNow(now)?.let(::add)
         }
     }
+
+    private var statsCache: Pair<Long, HealthStats?>? = null
+
+    private suspend fun todayStats(now: LocalDateTime): HealthStats? {
+        val at = System.currentTimeMillis()
+        statsCache?.let { (readAt, stats) -> if (at - readAt < HEALTH_CACHE_MS && sameDay(readAt, now)) return stats }
+        val stats = withTimeoutOrNull(HEALTH_TIMEOUT_MS) {
+            runCatching { if (health.hasAnyPermissions()) health.readTodayStats() else null }.getOrNull()
+        }
+        statsCache = at to stats
+        return stats
+    }
+
+    private fun sameDay(epochMs: Long, now: LocalDateTime): Boolean =
+        java.time.Instant.ofEpochMilli(epochMs).atZone(java.time.ZoneId.systemDefault()).toLocalDate() == now.toLocalDate()
 
     private fun serverAlert(): IslandItem? {
         val worst = servers.runtimes.value.values.mapNotNull { rt ->
@@ -268,6 +285,7 @@ class LocalIslandSource @Inject constructor(
         const val WEATHER_PREFS = "daily_dash_weather_cache"
         const val WEATHER_FRESH_MS = 3L * 60 * 60 * 1000
         const val HEALTH_TIMEOUT_MS = 4_000L
+        const val HEALTH_CACHE_MS = 5 * 60_000L
         const val STEP_GOAL = 10_000L
         const val TWITCH_PURPLE = "#9146ff"
         const val YOUTUBE_RED = "#ff0033"

@@ -1,6 +1,7 @@
 package com.macrotracker.ui.components
 
 import androidx.compose.animation.*
+import com.macrotracker.ui.util.LaunchedWhileResumed
 import androidx.compose.animation.core.*
 import androidx.core.graphics.toColorInt
 import androidx.compose.foundation.Image
@@ -1123,8 +1124,9 @@ private fun LiveCountdown(
     val tickersPaused = LocalTickersPaused.current
     var secondsLeft by remember(dateStr, timeStr) { mutableLongStateOf(secondsUntilRace(dateStr, timeStr)) }
 
-    LaunchedEffect(dateStr, timeStr, tickersPaused) {
-        if (tickersPaused) return@LaunchedEffect
+    LaunchedWhileResumed(dateStr, timeStr, tickersPaused) {
+        if (tickersPaused) return@LaunchedWhileResumed
+        secondsLeft = secondsUntilRace(dateStr, timeStr)
         while (secondsLeft > 0) {
             delay(1000L)
             secondsLeft = secondsUntilRace(dateStr, timeStr)

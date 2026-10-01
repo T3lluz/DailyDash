@@ -1,6 +1,9 @@
 package com.macrotracker.ui.util
 
 import android.provider.Settings
+import kotlinx.coroutines.CoroutineScope
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -45,6 +48,17 @@ fun rememberIsResumed(): Boolean {
         onDispose { owner.lifecycle.removeObserver(observer) }
     }
     return resumed
+}
+
+/**
+ * Runs [block] while the host screen is resumed and cancels it when the app goes to the
+ * background or another screen covers this one; it starts again from the top on return.
+ * For refresh loops and ticking clocks, so none of them run (or hit the network) unseen.
+ */
+@Composable
+fun LaunchedWhileResumed(vararg keys: Any?, block: suspend CoroutineScope.() -> Unit) {
+    val owner = LocalLifecycleOwner.current
+    LaunchedEffect(owner, *keys) { owner.repeatOnLifecycle(Lifecycle.State.RESUMED, block) }
 }
 
 /**

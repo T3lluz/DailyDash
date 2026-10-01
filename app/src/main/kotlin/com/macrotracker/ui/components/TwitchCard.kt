@@ -1,6 +1,7 @@
 package com.macrotracker.ui.components
 
 import android.content.Context
+import com.macrotracker.ui.util.LaunchedWhileResumed
 import android.content.Intent
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -141,7 +142,7 @@ private fun formatLiveFor(startedAt: String): String {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TwitchCard(viewModel: TwitchViewModel = hiltViewModel()) {
+fun TwitchCard(isVisible: Boolean = true, viewModel: TwitchViewModel = hiltViewModel()) {
     val haptics = rememberHaptics()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -174,10 +175,10 @@ fun TwitchCard(viewModel: TwitchViewModel = hiltViewModel()) {
         if (twitchState is TwitchUiState.Idle) {
             viewModel.loadLiveStreams()
         }
-        viewModel.startLiveAutoRefresh()
     }
-    DisposableEffect(Unit) {
-        onDispose { viewModel.stopLiveAutoRefresh() }
+    // Live checks only while the card is on screen and the app is in front.
+    LaunchedWhileResumed(isVisible) {
+        if (isVisible) viewModel.followLive()
     }
 
     MacroCard(borderColor = TwPurple.copy(alpha = 0.22f)) {
