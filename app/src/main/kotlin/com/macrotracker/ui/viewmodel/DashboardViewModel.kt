@@ -156,7 +156,7 @@ class DashboardViewModel @Inject constructor(
 
     fun loadDataThrottled() {
         val now = System.currentTimeMillis()
-        if (lastLoadMs > 0 && now - lastLoadMs < 30_000L) return
+        if (lastLoadMs > 0 && now - lastLoadMs < HealthViewModel.RESUME_RELOAD_MS) return
         loadData()
     }
 

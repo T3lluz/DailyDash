@@ -67,6 +67,9 @@ class HealthViewModel @Inject constructor(
 ) : ViewModel() {
 
     companion object {
+        /** How long a Health Connect load stays good for a return to the tab. */
+        const val RESUME_RELOAD_MS = 3 * 60_000L
+
         private const val TAG = "HealthViewModel"
 
         /** How far back Trends can page, in weeks before this one. */
@@ -212,7 +215,10 @@ class HealthViewModel @Inject constructor(
      */
     fun loadDataOnResume(force: Boolean = false) {
         val now = System.currentTimeMillis()
-        if (!force && lastResumeLoadMs > 0 && now - lastResumeLoadMs < 30_000L) return
+        // A full load is some forty Health Connect reads (90 days of vitals, two months of
+        // workouts); every return to the tab after 30 s ran them all, a stretch of jank each
+        // time. Pull to refresh still forces it, and food follows its own changes.
+        if (!force && lastResumeLoadMs > 0 && now - lastResumeLoadMs < RESUME_RELOAD_MS) return
         lastResumeLoadMs = now
         loadData()
         loadHealthConnect(silent = true)

@@ -1,6 +1,7 @@
 package com.macrotracker.ui.screens.health
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.ui.graphics.TransformOrigin
 import kotlinx.coroutines.flow.first
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.animation.core.animateDpAsState
@@ -71,8 +72,11 @@ fun AnimatedHealthBarChart(
     chartKey: Any? = null,
 ) {
     val chartMax = max(values.maxOrNull() ?: 1.0, 1.0)
-    val reveal = remember(chartKey, values) { Animatable(0f) }
-    LaunchedEffect(chartKey, values) {
+    // The reveal plays for a new chart (week, metric), not for new numbers: keyed on the
+    // values too, today's steps ticking up collapsed and regrew every bar. It is read in
+    // the draw phase (scaleY), so it redraws the bars instead of recomposing the chart.
+    val reveal = remember(chartKey) { Animatable(0f) }
+    LaunchedEffect(chartKey) {
         reveal.snapTo(0f)
         reveal.animateTo(1f, MacroMotion.chartRevealTween())
     }
@@ -141,7 +145,7 @@ fun AnimatedHealthBarChart(
         ) {
             values.forEachIndexed { index, value ->
                 val selected = index == selectedIndex
-                val fraction = ((value / chartMax).toFloat() * reveal.value).coerceIn(0f, 1f)
+                val fraction = (value / chartMax).toFloat().coerceIn(0f, 1f)
                 val targetHeight = (14 + fraction * 140).dp
                 val animatedHeight by animateDpAsState(
                     targetValue = targetHeight,
@@ -174,6 +178,10 @@ fun AnimatedHealthBarChart(
                         modifier = Modifier
                             .width(if (selected) 26.dp else 18.dp)
                             .height(animatedHeight)
+                            .graphicsLayer {
+                                scaleY = reveal.value
+                                transformOrigin = TransformOrigin(0.5f, 1f)
+                            }
                             .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 4.dp, bottomEnd = 4.dp))
                             .background(color.copy(alpha = if (selected) barAlpha else barAlpha * 0.45f)),
                     )
@@ -393,8 +401,10 @@ fun AnimatedMacroBarChart(
     modifier: Modifier = Modifier,
 ) {
     val maxValue = max(values.maxOrNull() ?: 1, 1)
-    val reveal = remember(values, color) { Animatable(0f) }
-    LaunchedEffect(values, color) {
+    // Plays for a new metric; new numbers (a range switch, a meal logged) ease the bars
+    // instead. Read in the draw phase, so the chart is not recomposed every frame.
+    val reveal = remember(color) { Animatable(0f) }
+    LaunchedEffect(color) {
         reveal.snapTo(0f)
         reveal.animateTo(1f, MacroMotion.chartRevealTween())
     }
@@ -437,7 +447,7 @@ fun AnimatedMacroBarChart(
         ) {
             values.forEachIndexed { index, value ->
                 val selected = index == selectedIndex
-                val fraction = (value.toFloat() / maxValue) * reveal.value
+                val fraction = value.toFloat() / maxValue
                 val h = (10 + fraction * 110).dp
                 val animatedH by animateDpAsState(h, MacroMotion.entranceSpring(), label = "macroBar_$index")
                 Column(
@@ -453,6 +463,10 @@ fun AnimatedMacroBarChart(
                         modifier = Modifier
                             .fillMaxWidth(if (useScroll) 1f else 0.7f)
                             .height(animatedH)
+                            .graphicsLayer {
+                                scaleY = reveal.value
+                                transformOrigin = TransformOrigin(0.5f, 1f)
+                            }
                             .clip(RoundedCornerShape(8.dp))
                             .background(if (selected) color else color.copy(alpha = 0.35f)),
                     )
