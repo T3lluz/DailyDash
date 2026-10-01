@@ -102,7 +102,7 @@ fun SleepSection(
                 title = "No sleep recorded",
                 body = "Nights from your watch or phone show up here once they sync to Health Connect " +
                     "and Sleep is shared with DailyDash.",
-                actionLabel = "Check permissions",
+                actionLabel = "Allow access",
                 onAction = {
                     haptics.tick()
                     onRequestPermission()

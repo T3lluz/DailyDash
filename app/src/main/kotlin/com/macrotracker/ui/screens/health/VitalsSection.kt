@@ -206,7 +206,7 @@ fun VitalsSection(
                         title = "Nothing measured yet",
                         body = "Readings from a smart scale, watch or blood-pressure cuff show up here once " +
                             "they sync to Health Connect.",
-                        actionLabel = if (vitals?.notShared?.isNotEmpty() == true) "Check permissions" else null,
+                        actionLabel = if (vitals?.notShared?.isNotEmpty() == true) "Allow access" else null,
                         onAction = if (vitals?.notShared?.isNotEmpty() == true) {
                             {
                                 haptics.tick()

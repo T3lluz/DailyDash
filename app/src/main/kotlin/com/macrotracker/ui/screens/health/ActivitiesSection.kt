@@ -137,7 +137,7 @@ fun ActivitiesSection(
                         StatusCopy(
                             title = "Show workouts from Garmin",
                             body = "Allow exercise access in Health Connect. Garmin Connect (and other fitness apps) can then share walks, rides, and gym sessions here.",
-                            actionLabel = "Allow workouts",
+                            actionLabel = "Allow access",
                             onAction = {
                                 haptics.tick()
                                 onRequestPermission()
@@ -166,7 +166,7 @@ fun ActivitiesSection(
                             StatusCopy(
                                 title = "No workouts this month or last",
                                 body = "Health Connect answered, but there were no exercise sessions in the window. Check that Garmin Connect (or Google Fit, Samsung Health, Strava…) is syncing workouts to Health Connect and that DailyDash is allowed to read Exercise.",
-                                actionLabel = "Check permissions",
+                                actionLabel = "Allow access",
                                 onAction = {
                                     haptics.tick()
                                     onRequestPermission()

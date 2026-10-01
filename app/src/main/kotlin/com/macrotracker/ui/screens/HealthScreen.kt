@@ -195,6 +195,7 @@ fun HealthScreen(
     val floorsClimbedState by dashboardViewModel.floorsClimbedState.collectAsState()
     val activeCaloriesState by dashboardViewModel.activeCaloriesState.collectAsState()
     val missingPermissions by dashboardViewModel.missingPermissions.collectAsState()
+    val metricsLoaded by dashboardViewModel.loaded.collectAsState()
 
     // Health Connect permission launcher
     val hcPermissionLauncher = rememberLauncherForActivityResult(
@@ -321,14 +322,14 @@ fun HealthScreen(
                 }
                 is HealthConnectUiState.NotAvailable -> {
                     HealthConnectCard(
-                        title = "Health Connect Unavailable",
+                        title = "Health Connect isn't available",
                         message = "Health Connect isn’t available on this device. Macro tracking still works.",
                         onRequestPermission = null,
                     )
                 }
                 is HealthConnectUiState.Error -> {
                     HealthConnectCard(
-                        title = "Health Connect Error",
+                        title = "Health Connect didn't answer",
                         message = hc.message,
                         actionLabel = "Retry",
                         onRequestPermission = { healthViewModel.loadHealthConnect() },
@@ -443,6 +444,7 @@ fun HealthScreen(
                             )
                         }
                         TodaysReadingsSection(
+                            loading = !metricsLoaded,
                             entries = metricEntries,
                             history = lastSevenDays,
                             notShared = missingPermissions.map { it.label },
@@ -460,10 +462,21 @@ fun HealthScreen(
                             HealthSection {
                                 HealthHeader(title = "Trends", icon = AppIcons.ChartLine, accent = Primary)
                                 Spacer(modifier = Modifier.height(14.dp))
-                                ContentSkeleton(lines = 4, accent = Border)
+                                // A skeleton only while a read is out; without Health Connect it
+                                // stayed a skeleton for good.
+                                if (healthConnectState is HealthConnectUiState.Loading || healthConnectState is HealthConnectUiState.Success) {
+                                    ContentSkeleton(lines = 4, accent = Border)
+                                } else {
+                                    Text(
+                                        "Your weeks of steps, heart rate and sleep show here once Health Connect shares them.",
+                                        fontSize = 13.sp,
+                                        color = TextSecondary,
+                                    )
+                                }
                             }
                         } else {
                             HealthTrendsSection(
+                                metricsReady = metricsLoaded,
                                 healthHistory = healthHistory,
                                 previousWeek = previousWeekHistory,
                                 selectedDate = selectedDate,

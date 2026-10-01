@@ -1,6 +1,7 @@
 package com.macrotracker.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
+import kotlinx.coroutines.joinAll
 import androidx.lifecycle.viewModelScope
 import com.macrotracker.data.health.HealthConnectRepository
 import com.macrotracker.data.local.SettingsRepository
@@ -160,6 +161,11 @@ class DashboardViewModel @Inject constructor(
         loadData()
     }
 
+    private val _loaded = MutableStateFlow(false)
+
+    /** The first load has answered: until then every metric reads as off, which is not true. */
+    val loaded: StateFlow<Boolean> = _loaded
+
     fun loadData(forceRefresh: Boolean = false) {
         loadJob?.cancel()
         lastLoadMs = System.currentTimeMillis()
@@ -177,7 +183,7 @@ class DashboardViewModel @Inject constructor(
             }
 
             val missing = mutableListOf<Metric>()
-            for (spec in specs) {
+            val reads = specs.map { spec ->
                 val toggleOn = masterEnabled && spec.toggle()
                 val permissionOk = spec.permission in granted
                 if (toggleOn && available && !permissionOk) missing += spec.metric
@@ -185,6 +191,8 @@ class DashboardViewModel @Inject constructor(
             }
             // Ordered by the spec table so the summary reads the same every load.
             _missingPermissions.value = missing
+            reads.joinAll()
+            _loaded.value = true
         }
     }
 

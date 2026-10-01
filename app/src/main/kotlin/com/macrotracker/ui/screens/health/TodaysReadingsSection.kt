@@ -1,6 +1,8 @@
 package com.macrotracker.ui.screens.health
 
 import androidx.compose.foundation.layout.Spacer
+import com.macrotracker.ui.theme.Border
+import com.macrotracker.ui.components.ContentSkeleton
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -64,9 +66,24 @@ fun TodaysReadingsSection(
     onAllow: () -> Unit,
     modifier: Modifier = Modifier,
     delayMs: Long = 0L,
+    /** The first read is still out: a skeleton holds the place, so the card doesn't pop in later. */
+    loading: Boolean = false,
 ) {
     val enabled = entries.filter { it.state.isEnabled }
-    if (enabled.isEmpty()) return
+    if (enabled.isEmpty()) {
+        if (loading) {
+            HealthSection(modifier = modifier, delayMs = delayMs) {
+                HealthHeader(
+                    title = "Today's readings",
+                    icon = AppIcons.HeartRateMonitor,
+                    accent = Primary,
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
+                ContentSkeleton(lines = 4, accent = Border)
+            }
+        }
+        return
+    }
     val shown = enabled.filter { it.state.hasValue }.sortedBy { ReadingOrder.indexOf(it.metric) }
     val waiting = enabled.filter { it.state.isEmpty }.sortedBy { ReadingOrder.indexOf(it.metric) }
     val today = LocalDate.now()
