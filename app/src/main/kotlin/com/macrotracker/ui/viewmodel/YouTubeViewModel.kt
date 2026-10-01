@@ -1,6 +1,9 @@
 package com.macrotracker.ui.viewmodel
 
 import android.app.Activity
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.channels.Channel
 import android.app.PendingIntent
 import android.content.Intent
 import android.util.Log
@@ -90,8 +93,10 @@ class YouTubeViewModel @Inject constructor(
     val googleState: StateFlow<YouTubeGoogleUiState> = _googleState
 
     /** One-shot: UI should launch the PendingIntent for Google consent. */
-    private val _consentRequests = MutableSharedFlow<PendingIntent>(extraBufferCapacity = 1)
-    val consentRequests: SharedFlow<PendingIntent> = _consentRequests
+    // A channel, not a shared flow: a request made while the card is off screen (or mid
+    // rotation) waits for it instead of being dropped, which left Connect busy for good.
+    private val _consentRequests = Channel<PendingIntent>(Channel.BUFFERED)
+    val consentRequests: Flow<PendingIntent> = _consentRequests.receiveAsFlow()
 
     private var debounceJob: Job? = null
     private var authJob: Job? = null
@@ -158,6 +163,7 @@ class YouTubeViewModel @Inject constructor(
     fun searchChannels(query: String) {
         if (query.isBlank()) { _channelSearchState.value = ChannelSearchState.Idle; return }
         debounceJob?.cancel()
+        _suggestionsLoading.value = false
         viewModelScope.launch {
             _channelSearchState.value = ChannelSearchState.Loading
             _searchSuggestions.value = emptyList()
@@ -298,7 +304,7 @@ class YouTubeViewModel @Inject constructor(
             when (val outcome = googleAuthClient.authorize(activity)) {
                 is AuthorizeOutcome.Ready -> handleAuthReady(outcome)
                 is AuthorizeOutcome.NeedsConsent -> {
-                    _consentRequests.emit(outcome.pendingIntent)
+                    _consentRequests.send(outcome.pendingIntent)
                     // Keep busy until consent returns.
                 }
                 is AuthorizeOutcome.Failed -> setGoogleError(outcome.message)

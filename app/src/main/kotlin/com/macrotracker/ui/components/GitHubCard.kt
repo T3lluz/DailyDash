@@ -1876,7 +1876,7 @@ private fun GitHubAccountActions(
         }
         !authState.isConfigured -> {
             Text(
-                "Add GITHUB_CLIENT_ID to local.properties and rebuild, then tap Connect.",
+                "GitHub sign-in isn't set up in this build.",
                 fontSize = 12.sp,
                 color = TextSecondary,
             )

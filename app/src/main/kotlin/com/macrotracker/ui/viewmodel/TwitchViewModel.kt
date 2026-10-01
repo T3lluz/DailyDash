@@ -165,6 +165,8 @@ class TwitchViewModel @Inject constructor(
             return
         }
         debounceJob?.cancel()
+        // A pending suggestion lookup is cancelled with it; its spinner must go too.
+        _suggestionsLoading.value = false
         viewModelScope.launch {
             _channelSearchState.value = TwitchChannelSearchState.Loading
             _searchSuggestions.value = emptyList()
@@ -179,6 +181,8 @@ class TwitchViewModel @Inject constructor(
 
     fun onSearchQueryChanged(query: String) {
         debounceJob?.cancel()
+        // Clearing the box clears the last search's results, as YouTube's does.
+        if (query.isBlank()) _channelSearchState.value = TwitchChannelSearchState.Idle
         if (query.length < 2) {
             _searchSuggestions.value = emptyList()
             _suggestionsLoading.value = false
@@ -270,8 +274,7 @@ class TwitchViewModel @Inject constructor(
         if (_authState.value.isBusy) return
         if (!authClient.isConfigured()) {
             setAuthError(
-                "Twitch Client ID/Secret missing — add TWITCH_CLIENT_ID and " +
-                    "TWITCH_CLIENT_SECRET to local.properties",
+                "Twitch isn't set up in this build (no client ID and secret)",
             )
             return
         }

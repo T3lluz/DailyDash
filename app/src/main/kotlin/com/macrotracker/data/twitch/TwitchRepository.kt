@@ -164,8 +164,7 @@ class TwitchRepositoryImpl @Inject constructor(
                 ?: return@withContext Result.failure(
                     Exception(
                         if (!authClient.isConfigured()) {
-                            "Twitch Client ID/Secret missing — add TWITCH_CLIENT_ID and " +
-                                "TWITCH_CLIENT_SECRET to local.properties"
+                            "Twitch isn't set up in this build (no client ID and secret)"
                         } else if (!authClient.isConnected()) {
                             "Connect Twitch to load live streams"
                         } else {
@@ -174,7 +173,16 @@ class TwitchRepositoryImpl @Inject constructor(
                     ),
                 )
 
-            helixApi.getStreams(token, tracked.map { it.userId })
+            var result = helixApi.getStreams(token, tracked.map { it.userId })
+            // A 401 on a token that looked valid (revoked, or expired early): refresh the
+            // user's once, else fall back to the app's, instead of failing every poll and
+            // leaving the card on stale "live" streams.
+            if ((result.exceptionOrNull() as? TwitchHttpException)?.code == 401) {
+                authClient.forgetAppToken()
+                val retry = authClient.refreshAccessToken() ?: authClient.appAccessToken()
+                if (retry != null && retry != token) result = helixApi.getStreams(retry, tracked.map { it.userId })
+            }
+            result
                 .map { streams ->
                     val thumbs = tracked.associate { it.userId to it.profileImageUrl }
                     val enriched = streams.map { s ->
@@ -192,8 +200,7 @@ class TwitchRepositoryImpl @Inject constructor(
             ?: return Result.failure(
                 Exception(
                     if (!authClient.isConfigured()) {
-                        "Twitch Client ID/Secret missing — add TWITCH_CLIENT_ID and " +
-                            "TWITCH_CLIENT_SECRET to local.properties"
+                        "Twitch isn't set up in this build (no client ID and secret)"
                     } else {
                         "Connect Twitch to search channels"
                     },

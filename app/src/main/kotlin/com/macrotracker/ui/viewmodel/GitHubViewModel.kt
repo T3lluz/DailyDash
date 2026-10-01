@@ -148,7 +148,7 @@ class GitHubViewModel @Inject constructor(
         if (_authState.value.isBusy) return
         if (!authClient.isConfigured()) {
             setAuthError(
-                "GitHub Client ID missing — add GITHUB_CLIENT_ID to local.properties and rebuild",
+                "GitHub isn't set up in this build (no client ID)",
             )
             return
         }

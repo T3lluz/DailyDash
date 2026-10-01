@@ -103,8 +103,7 @@ class TwitchAuthClient @Inject constructor(
     suspend fun authorizeInteractively(): TwitchAuthOutcome {
         if (!isConfigured()) {
             return TwitchAuthOutcome.Failed(
-                "Twitch Client ID/Secret missing — add TWITCH_CLIENT_ID and " +
-                    "TWITCH_CLIENT_SECRET to local.properties",
+                "Twitch isn't set up in this build (no client ID and secret)",
             )
         }
         return authMutex.withLock {
@@ -215,6 +214,9 @@ class TwitchAuthClient @Inject constructor(
      */
     suspend fun appAccessToken(): String? = withContext(Dispatchers.IO) {
         if (!isConfigured()) return@withContext null
+        // Kept until shortly before it expires: asking for a new one on every poll and search
+        // doubled each request.
+        appToken?.let { (token, expiresAt) -> if (System.currentTimeMillis() < expiresAt - 60_000L) return@withContext token }
         try {
             val body = FormBody.Builder()
                 .add("client_id", clientId())
@@ -228,12 +230,23 @@ class TwitchAuthClient @Inject constructor(
                     Log.w(TAG, "app token failed ${response.code}")
                     return@withContext null
                 }
-                JSONObject(raw).optString("access_token").takeIf { it.isNotBlank() }
+                val json = JSONObject(raw)
+                json.optString("access_token").takeIf { it.isNotBlank() }?.also { token ->
+                    appToken = token to System.currentTimeMillis() + json.optLong("expires_in", 3_600L) * 1000L
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "appAccessToken failed", e)
             null
         }
+    }
+
+    @Volatile
+    private var appToken: Pair<String, Long>? = null
+
+    /** A 401 on the app token: drop it so the next call asks for a fresh one. */
+    fun forgetAppToken() {
+        appToken = null
     }
 
     suspend fun revoke(): Result<Unit> = withContext(Dispatchers.IO) {

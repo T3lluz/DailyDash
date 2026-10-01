@@ -230,8 +230,7 @@ class TwitchHelixApi @Inject constructor(
         if (id.isBlank()) {
             return Result.failure(
                 Exception(
-                    "Twitch Client ID missing — add TWITCH_CLIENT_ID and " +
-                        "TWITCH_CLIENT_SECRET to local.properties",
+                    "Twitch isn't set up in this build (no client ID and secret)",
                 ),
             )
         }
@@ -246,7 +245,7 @@ class TwitchHelixApi @Inject constructor(
             okHttpClient.newCall(request).execute().use { response ->
                 val body = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    return Result.failure(Exception(parseApiError(body, response.code)))
+                    return Result.failure(TwitchHttpException(response.code, parseApiError(body, response.code)))
                 }
                 Result.success(JSONObject(body))
             }
@@ -272,3 +271,6 @@ class TwitchHelixApi @Inject constructor(
         }
     }
 }
+
+/** A Helix call Twitch refused, with its HTTP status, so a 401 can be told from the rest. */
+class TwitchHttpException(val code: Int, message: String) : Exception(message)

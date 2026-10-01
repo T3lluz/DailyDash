@@ -98,7 +98,7 @@ class GitHubAuthClient @Inject constructor(
     suspend fun authorizeInteractively(): GitHubAuthOutcome {
         if (!isConfigured()) {
             return GitHubAuthOutcome.Failed(
-                "GitHub Client ID missing — add GITHUB_CLIENT_ID to local.properties",
+                "GitHub isn't set up in this build (no client ID)",
             )
         }
         return authMutex.withLock {

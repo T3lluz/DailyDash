@@ -154,13 +154,11 @@ fun YoutubeCard(viewModel: YouTubeViewModel = hiltViewModel()) {
     var showSettings by remember { mutableStateOf(false) }
     var settingsStartTab by remember { mutableIntStateOf(0) }
     var expanded by rememberSaveable { mutableStateOf(false) }
-    var selectedChannelId by rememberSaveable { mutableStateOf<String?>(null) }
+    var pickedChannelId by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedTabName by rememberSaveable { mutableStateOf(YtHubTab.FEED.name) }
-    LaunchedEffect(trackedChannels) {
-        if (selectedChannelId != null && trackedChannels.none { it.channelId == selectedChannelId }) {
-            selectedChannelId = null
-        }
-    }
+    // Worked out in the same frame: a pick of a channel no longer watched reads as no pick at
+    // once, instead of dimming every picture for a frame until an effect cleared it.
+    val selectedChannelId = pickedChannelId?.takeIf { id -> trackedChannels.any { it.channelId == id } }
     val selectedTab = YtHubTab.entries.find { it.name == selectedTabName } ?: YtHubTab.FEED
 
     val consentLauncher = rememberLauncherForActivityResult(
@@ -252,7 +250,7 @@ fun YoutubeCard(viewModel: YouTubeViewModel = hiltViewModel()) {
                         videos = successVideos,
                         trackedChannels = trackedChannels,
                         selectedChannelId = selectedChannelId,
-                        onChannelSelected = { selectedChannelId = it },
+                        onChannelSelected = { pickedChannelId = it },
                         onOpenManage = {
                             expanded = true
                             selectedTabName = YtHubTab.CHANNELS.name
@@ -318,7 +316,7 @@ fun YoutubeCard(viewModel: YouTubeViewModel = hiltViewModel()) {
                                 trackedChannels = trackedChannels,
                                 googleState = googleState,
                                 selectedChannelId = selectedChannelId,
-                                onChannelSelected = { selectedChannelId = it },
+                                onChannelSelected = { pickedChannelId = it },
                                 onRetry = { viewModel.loadLatestVideos(forceRefresh = true) },
                                 onOpenSearch = {
                                     haptics.click()
@@ -1586,6 +1584,10 @@ private fun SearchTab(
 ) {
     val suggestions        by viewModel.searchSuggestions.collectAsState()
     val suggestionsLoading by viewModel.suggestionsLoading.collectAsState()
+    // Read from the live list, so removing a channel from the results updates its row
+    // (a plain lookup in composition did not, so only adding showed).
+    val trackedList by viewModel.trackedChannels.collectAsState()
+    val trackedIds = remember(trackedList) { trackedList.map { it.channelId }.toSet() }
 
     // Show the suggestions dropdown whenever the user is actively typing (query ≥ 2 chars)
     // and we have results or are loading — regardless of whether a full search was done before.
@@ -1656,7 +1658,7 @@ private fun SearchTab(
                     }
                 } else {
                     suggestions.forEachIndexed { idx, channel ->
-                        val tracked = viewModel.isChannelTracked(channel.channelId)
+                        val tracked = channel.channelId in trackedIds
                         val justAdded = recentlyAdded.contains(channel.channelId)
                         SuggestionRow(
                             channel = channel,
@@ -1734,7 +1736,7 @@ private fun SearchTab(
                                 modifier = Modifier.padding(bottom = 6.dp),
                             )
                             s.channels.forEach { channel ->
-                                val tracked = viewModel.isChannelTracked(channel.channelId)
+                                val tracked = channel.channelId in trackedIds
                                 ChannelListRow(
                                     channel = channel.copy(isTracked = tracked),
                                     isTracked = tracked,

@@ -161,14 +161,12 @@ fun TwitchCard(isVisible: Boolean = true, viewModel: TwitchViewModel = hiltViewM
     var showSettings by remember { mutableStateOf(false) }
     var settingsStartTab by remember { mutableIntStateOf(0) }
     var expanded by rememberSaveable { mutableStateOf(false) }
-    var selectedChannelId by rememberSaveable { mutableStateOf<String?>(null) }
+    var pickedChannelId by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedTabName by rememberSaveable { mutableStateOf(TwHubTab.LIVE.name) }
-    LaunchedEffect(twitchState) {
-        val live = (twitchState as? TwitchUiState.Success)?.streams ?: return@LaunchedEffect
-        if (selectedChannelId != null && live.none { it.userId == selectedChannelId }) {
-            selectedChannelId = null
-        }
-    }
+    // Worked out in the same frame: once the picked channel goes offline the filter reads as
+    // none at once, instead of showing "Nobody live" for a frame until an effect cleared it.
+    val liveNow = (twitchState as? TwitchUiState.Success)?.streams
+    val selectedChannelId = pickedChannelId?.takeIf { id -> liveNow == null || liveNow.any { it.userId == id } }
     val selectedTab = TwHubTab.entries.find { it.name == selectedTabName } ?: TwHubTab.LIVE
 
     LaunchedEffect(Unit) {
@@ -238,7 +236,7 @@ fun TwitchCard(isVisible: Boolean = true, viewModel: TwitchViewModel = hiltViewM
                         streams = successStreams,
                         watching = trackedChannels,
                         selectedChannelId = selectedChannelId,
-                        onChannelSelected = { selectedChannelId = it },
+                        onChannelSelected = { pickedChannelId = it },
                         onOpenManage = {
                             expanded = true
                             selectedTabName = TwHubTab.CHANNELS.name
@@ -301,7 +299,7 @@ fun TwitchCard(isVisible: Boolean = true, viewModel: TwitchViewModel = hiltViewM
                                 streams = successStreams,
                                 authState = authState,
                                 selectedChannelId = selectedChannelId,
-                                onChannelSelected = { selectedChannelId = it },
+                                onChannelSelected = { pickedChannelId = it },
                                 onRetry = { viewModel.loadLiveStreams(forceRefresh = true) },
                                 onOpenSearch = {
                                     haptics.tick()
@@ -1246,7 +1244,7 @@ private fun TwitchAccountCard(
                         authState.isConnected ->
                             "Follows ready to sync"
                         !authState.isConfigured ->
-                            "Add TWITCH_CLIENT_ID + SECRET in local.properties"
+                            "Twitch isn't set up in this build"
                         authState.isAwaitingBrowser ->
                             "Approve DailyDash on twitch.tv/activate"
                         else ->
@@ -1369,6 +1367,14 @@ private fun TwitchSettingsSheet(
 
     var activeTab by remember { mutableIntStateOf(initialTab.coerceIn(0, 1)) }
     var searchQuery by remember { mutableStateOf("") }
+    val trackedIds = remember(trackedChannels) { trackedChannels.map { it.userId }.toSet() }
+    // Leaving the search tab clears it, as YouTube's sheet does.
+    LaunchedEffect(activeTab) {
+        if (activeTab != 1) {
+            searchQuery = ""
+            viewModel.clearChannelSearch()
+        }
+    }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(horizontal = 20.dp).padding(top = 12.dp)) {
@@ -1574,7 +1580,14 @@ private fun TwitchSettingsSheet(
                                 modifier = Modifier.padding(vertical = 12.dp),
                             )
                         }
-                        is TwitchChannelSearchState.Success -> {
+                        is TwitchChannelSearchState.Success -> if (state.channels.isEmpty()) {
+                            Text(
+                                "No channels found.",
+                                fontSize = 13.sp,
+                                color = TextSecondary,
+                                modifier = Modifier.padding(vertical = 12.dp),
+                            )
+                        } else {
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1585,7 +1598,9 @@ private fun TwitchSettingsSheet(
                                 items(state.channels, key = { it.userId }) { channel ->
                                     ChannelSearchRow(
                                         channel = channel,
-                                        recentlyAdded = channel.userId in recentlyAdded,
+                                        // From the live list, not the search's snapshot: the row
+                                        // went back to "Add" a moment after adding.
+                                        recentlyAdded = channel.userId in recentlyAdded || channel.userId in trackedIds,
                                         onAdd = {
                                             haptics.confirm()
                                             viewModel.addChannel(channel)
