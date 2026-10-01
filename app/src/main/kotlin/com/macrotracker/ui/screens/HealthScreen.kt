@@ -98,6 +98,7 @@ import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.HapticHelper
 import com.macrotracker.ui.util.LocalTickersPaused
 import com.macrotracker.ui.util.rememberHaptics
+import com.macrotracker.ui.util.rememberToday
 import com.macrotracker.ui.viewmodel.DashboardViewModel
 import com.macrotracker.ui.viewmodel.HealthConnectUiState
 import com.macrotracker.ui.viewmodel.HealthViewModel
@@ -246,7 +247,16 @@ fun HealthScreen(
         if (scannedProtein != null) protein = scannedProtein.toString()
     }
 
-    val todayFormatted = remember { LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE, MMM d")) }
+    // Today as a state that turns at midnight, so a tab left open moves to the new day.
+    val today = rememberToday()
+    var shownDay by remember { mutableStateOf(today) }
+    LaunchedEffect(today) {
+        if (today != shownDay) {
+            shownDay = today
+            healthViewModel.rollToToday(today)
+        }
+    }
+    val todayFormatted = remember(today) { today.format(DateTimeFormatter.ofPattern("EEEE, MMM d")) }
 
     val visibleConfigs = remember(parsedConfigs) {
         parsedConfigs.filter { it.isVisible }
@@ -267,20 +277,13 @@ fun HealthScreen(
     // Readiness comes from what the Sleep and Body & Vitals reads already
     // returned, so it costs no other Health Connect round trip.
     val vitals = (vitalsState as? VitalsUiState.Success)?.vitals
-    val today = LocalDate.now()
     val todaySessionScore = remember(todaySleepSessions) { computeSleepNightScore(todaySleepSessions)?.score }
     val lastNightScore = sleepNights.lastOrNull()?.takeIf { it.date == today }?.score?.score ?: todaySessionScore
     val readiness = remember(vitals, lastNightScore) {
         vitals?.let { readinessFrom(it, lastNightScore) }
     }
     // Rolling seven days for the Today's readings sparklines, whatever week Trends shows.
-    val lastSevenDays = remember(healthHistory, previousWeekHistory, weeksBack) {
-        if (weeksBack != 0) {
-            emptyList()
-        } else {
-            (previousWeekHistory + healthHistory).filter { !it.date.isAfter(today) }.takeLast(7)
-        }
-    }
+    val lastSevenDays by healthViewModel.recentDays.collectAsState()
 
     CompositionLocalProvider(LocalTickersPaused provides tickersPaused) {
     RipplePullToRefreshBox(
@@ -686,9 +689,10 @@ private fun MacroTrendsSection(
     onDeleteLog: (String) -> Unit,
 ) {
     val dateFormat = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd") }
-    val dates = remember(rangeDays) {
+    val today = LocalDate.now()
+    val dates = remember(rangeDays, today) {
         (0 until rangeDays).map { i ->
-            LocalDate.now().minusDays((rangeDays - 1 - i).toLong()).format(dateFormat)
+            today.minusDays((rangeDays - 1 - i).toLong()).format(dateFormat)
         }
     }
     val metricValues = dates.map { date ->

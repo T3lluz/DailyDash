@@ -1,6 +1,10 @@
 package com.macrotracker.ui.util
 
 import android.provider.Settings
+import kotlinx.coroutines.delay
+import java.time.Duration
+import java.time.LocalDateTime
+import java.time.LocalDate
 import kotlinx.coroutines.CoroutineScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.runtime.LaunchedEffect
@@ -59,6 +63,23 @@ fun rememberIsResumed(): Boolean {
 fun LaunchedWhileResumed(vararg keys: Any?, block: suspend CoroutineScope.() -> Unit) {
     val owner = LocalLifecycleOwner.current
     LaunchedEffect(owner, *keys) { owner.repeatOnLifecycle(Lifecycle.State.RESUMED, block) }
+}
+
+/**
+ * Today's date as state: it turns at midnight while the screen is open, and is re-read on
+ * every return to it, so headers and "today" picks never stay on yesterday.
+ */
+@Composable
+fun rememberToday(): LocalDate {
+    var today by remember { mutableStateOf(LocalDate.now()) }
+    LaunchedWhileResumed {
+        while (true) {
+            today = LocalDate.now()
+            val untilMidnight = Duration.between(LocalDateTime.now(), today.plusDays(1).atStartOfDay()).toMillis()
+            delay(untilMidnight.coerceAtLeast(1_000L) + 500L)
+        }
+    }
+    return today
 }
 
 /**

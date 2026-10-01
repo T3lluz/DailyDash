@@ -97,6 +97,15 @@ class HealthViewModel @Inject constructor(
     private val _previousWeekHistory = MutableStateFlow<List<DailyHealthStats>>(emptyList())
     val previousWeekHistory: StateFlow<List<DailyHealthStats>> = _previousWeekHistory
 
+    /** The last seven days to today, for Today's readings, whatever week Trends is paged to. */
+    private val _recentDays = MutableStateFlow<List<DailyHealthStats>>(emptyList())
+    val recentDays: StateFlow<List<DailyHealthStats>> = _recentDays
+
+    private var weekJob: Job? = null
+
+    /** The day the snapshot on screen was read. */
+    private var statsDay: LocalDate? = null
+
     private val _vitalsState = MutableStateFlow<VitalsUiState>(VitalsUiState.Loading)
     val vitalsState: StateFlow<VitalsUiState> = _vitalsState
 
@@ -236,16 +245,41 @@ class HealthViewModel @Inject constructor(
         }
     }
 
-    /** Week navigation only needs Health Connect history — skip re-reading today's macros. */
+    /**
+     * Week navigation only needs Health Connect history — skip re-reading today's macros.
+     * The newest tap wins: a quick run of taps used to finish in any order.
+     */
     private fun reloadWeekOnly() {
-        viewModelScope.launch {
+        weekJob?.cancel()
+        weekJob = viewModelScope.launch {
             if (settingsRepository.masterHealthConnectEnabled.value &&
                 healthConnectRepository.isAvailable() &&
                 healthConnectRepository.hasAnyPermissions()
             ) {
                 loadWeekHistory()
+                followSelectionIntoWeek()
             }
         }
+    }
+
+    /** The picked day moves with the week, to the same weekday, so the day panel and detail chart follow. */
+    private fun followSelectionIntoWeek() {
+        val (start, end) = getWeekRange()
+        val picked = _selectedDate.value
+        if (!picked.isBefore(start) && !picked.isAfter(end)) return
+        val offset = ((picked.dayOfWeek.value - start.dayOfWeek.value) + 7) % 7
+        selectDate(minOf(start.plusDays(offset.toLong()), LocalDate.now()))
+    }
+
+    /**
+     * The tab stayed open past midnight: the picks that were "today" move to the new today,
+     * and the day's numbers reload. Picks of an older day stay where they are.
+     */
+    fun rollToToday(day: LocalDate) {
+        val yesterday = day.minusDays(1)
+        if (_selectedDate.value == yesterday) selectDate(day)
+        if (_macroSelectedDate.value == yesterday.format(dateFormat)) selectMacroDate(day.format(dateFormat))
+        loadData()
     }
 
     private fun getWeekRange(): Pair<LocalDate, LocalDate> {
@@ -266,6 +300,7 @@ class HealthViewModel @Inject constructor(
         val current = both.filter { !it.date.isBefore(start) }
         _previousWeekHistory.value = both.filter { it.date.isBefore(start) }
         _healthHistory.value = current
+        if (_weeksBack.value == 0) _recentDays.value = both.filter { !it.date.isAfter(LocalDate.now()) }.takeLast(7)
         _weekInsights.value = computeWeekInsights(current)
     }
 
@@ -315,6 +350,8 @@ class HealthViewModel @Inject constructor(
     fun setMacroRangeDays(days: Int) {
         if (_macroRangeDays.value == days) return
         _macroRangeDays.value = days
+        // Back to today: a day picked in the 30-day view may not be in the 7-day one.
+        _macroSelectedDate.value = today
         loadMacroHistory()
     }
 
@@ -498,10 +535,15 @@ class HealthViewModel @Inject constructor(
                             )
                         }
                     }
-                    // A momentary empty read shouldn't wipe a good snapshot.
-                    stats.steps == 0L && current is HealthConnectUiState.Success && current.stats.steps > 0 ->
+                    // A momentary empty read shouldn't wipe a good snapshot, but after midnight
+                    // 0 is simply the new day's count, not a glitch to hide with yesterday's.
+                    stats.steps == 0L && current is HealthConnectUiState.Success && current.stats.steps > 0 &&
+                        statsDay == LocalDate.now() ->
                         _healthConnectState.value = current.copy(isRefreshing = false)
-                    else -> _healthConnectState.value = HealthConnectUiState.Success(stats)
+                    else -> {
+                        _healthConnectState.value = HealthConnectUiState.Success(stats)
+                        statsDay = LocalDate.now()
+                    }
                 }
             }
             // Detail datasets only when the HR/Sleep panel is open.

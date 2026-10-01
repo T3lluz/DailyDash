@@ -1,6 +1,8 @@
 package com.macrotracker.ui.screens.health
 
 import androidx.compose.animation.core.Animatable
+import kotlinx.coroutines.flow.first
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
@@ -419,6 +421,12 @@ fun AnimatedMacroBarChart(
         }
         val scroll = rememberScrollState()
         val useScroll = values.size > 10
+        // 14 and 30 days scroll: open at the end, where today is.
+        LaunchedEffect(useScroll, values.size) {
+            if (!useScroll) return@LaunchedEffect
+            val end = snapshotFlow { scroll.maxValue }.first { it in 1 until Int.MAX_VALUE }
+            scroll.scrollTo(end)
+        }
         Row(
             modifier = Modifier
                 .fillMaxSize()
