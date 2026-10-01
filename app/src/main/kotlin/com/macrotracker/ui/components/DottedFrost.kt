@@ -167,13 +167,20 @@ private fun rememberDotMask(cell: Dp, core: Dp, edge: Dp, invert: Boolean): Brus
     }
 }
 
-// ── The real thing: masked double-blur ───────────────────────────────────────
+// ── The real thing: glass under sharp dot windows ────────────────────────────
 
 /** The heavy glass pass is sampled at this scale; the sharp dot windows stay at full size. */
 private const val GLASS_INPUT_SCALE = 0.5f
 
 /**
  * Frosted glass perforated by a dot grid — the Cinema-Info chrome.
+ *
+ * The glass is one unmasked heavy blur, sampled at [GLASS_INPUT_SCALE]; the dot windows are
+ * a light full-size blur masked to the dot cores, drawn over it. The web masks the glass too
+ * (holes where the dots go), but here that mask would be sampled at the glass's scale: haze
+ * applies it to the half-size layer, so the holes came out twice as big at twice the pitch,
+ * off the dot grid, and the bare page showed through them. Over opaque glass the dots cover
+ * their holes anyway, and their faded rims blend into glass instead of the raw page.
  *
  * Apply to a surface that sits above a `hazeSource`, after `clip(shape)`.
  * When [hazeState] is null (or the device can't blur) it degrades to the tinted
@@ -200,18 +207,16 @@ fun Modifier.dottedGlass(
             .dottedFrost(color = dotColor, cell = cell, core = core)
     }
 
-    val glassMask = rememberDotMask(cell, core, edge, invert = true)
     val dotMask = rememberDotMask(cell, core, edge, invert = false)
     val glassStyle = CupertinoMaterials.ultraThin(containerColor = tint)
 
     return this
-        // `.header-glass` — the pane itself.
+        // `.header-glass` — the pane itself. Unmasked: see above.
         .hazeEffect(state = hazeState, style = glassStyle) {
             blurRadius = glassBlur
             // A 28dp blur looks the same sampled at half size and costs a quarter of the
             // pixels. The chrome re-blurs every frame something animates under it.
             inputScale = HazeInputScale.Fixed(GLASS_INPUT_SCALE)
-            mask = glassMask
             // Dots are the texture; grain would compete with them.
             noiseFactor = 0f
             fallbackTint = HazeTint(tint.copy(alpha = 0.92f))
