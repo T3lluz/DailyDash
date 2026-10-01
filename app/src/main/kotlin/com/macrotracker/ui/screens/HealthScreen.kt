@@ -44,7 +44,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -73,7 +72,6 @@ import com.macrotracker.data.local.MacroLogEntity
 import com.macrotracker.ui.components.ContentSkeleton
 import com.macrotracker.ui.components.HealthConnectCard
 import com.macrotracker.ui.components.LoadingRow
-import com.macrotracker.ui.components.MacroLogItem
 import com.macrotracker.ui.components.WidgetScrollBox
 import com.macrotracker.ui.components.MacroProgressBar
 import com.macrotracker.ui.components.FoodLogForm
@@ -94,7 +92,6 @@ import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.NutritionCalories
 import com.macrotracker.ui.theme.HealthNutritionTone
 import com.macrotracker.ui.theme.Primary
-import com.macrotracker.ui.theme.Secondary
 import com.macrotracker.ui.theme.Success
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
@@ -118,9 +115,6 @@ import com.macrotracker.ui.theme.AppIcons
 @Composable
 fun HealthScreen(
     onNavigateToCameraScan: () -> Unit,
-    scannedFoodName: String? = null,
-    scannedCalories: Int? = null,
-    scannedProtein: Int? = null,
     healthViewModel: HealthViewModel = hiltViewModel(),
     dashboardViewModel: DashboardViewModel = hiltViewModel(),
 ) {
@@ -240,13 +234,6 @@ fun HealthScreen(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-
-    // Handle scanned food data
-    LaunchedEffect(scannedFoodName, scannedCalories, scannedProtein) {
-        if (scannedFoodName != null) foodName = scannedFoodName
-        if (scannedCalories != null) calories = scannedCalories.toString()
-        if (scannedProtein != null) protein = scannedProtein.toString()
     }
 
     // Today as a state that turns at midnight, so a tab left open moves to the new day.

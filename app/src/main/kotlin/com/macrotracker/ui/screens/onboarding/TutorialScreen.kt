@@ -100,7 +100,7 @@ private val PAGES = listOf(
             "The Food card on Home for fast manual logs",
             "Scan any nutrition facts label with the camera",
             "Progress bars turn red when you exceed a goal",
-            "Delete entries from Recent Logs on Health",
+            "Delete an entry with its ✕ in Food today on Health",
         ),
     ),
     TutorialPage(
@@ -119,7 +119,7 @@ private val PAGES = listOf(
         icon = AppIcons.Heart,
         accentColor = HealthConnectBrand,
         badge = "Health",
-        title = "Optional Health Metrics",
+        title = "Optional health metrics",
         body = "Connect Health Connect to layer in steps, heart rate, sleep, workouts, floors climbed and active calories alongside your nutrition data. Read-only — DailyDash never writes to Health Connect.",
         tips = listOf(
             "Enable Health Connect in Settings → Connections",
@@ -136,7 +136,7 @@ private val PAGES = listOf(
         tips = listOf(
             "Set daily goals in Settings → Nutrition",
             "The dashed line marks your average for the range",
-            "Settings → Stats shows your last 7 days",
+            "Pick a past day to see what you ate that day",
         ),
     ),
     TutorialPage(

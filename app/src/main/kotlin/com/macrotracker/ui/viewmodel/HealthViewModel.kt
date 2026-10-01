@@ -19,9 +19,7 @@ import com.macrotracker.data.local.SettingsRepository
 import com.macrotracker.ui.screens.health.MacroRangeInsights
 import com.macrotracker.ui.screens.health.SleepNight
 import com.macrotracker.ui.screens.health.buildSleepNights
-import com.macrotracker.ui.screens.health.WeekHealthInsights
 import com.macrotracker.ui.screens.health.computeMacroInsights
-import com.macrotracker.ui.screens.health.computeWeekInsights
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -130,8 +128,6 @@ class HealthViewModel @Inject constructor(
     val refreshing: StateFlow<Boolean> = _refreshing
     private var refreshGeneration = 0
 
-    private val _weekInsights = MutableStateFlow<WeekHealthInsights?>(null)
-    val weekInsights: StateFlow<WeekHealthInsights?> = _weekInsights
 
     private val _macroInsights = MutableStateFlow<MacroRangeInsights?>(null)
     val macroInsights: StateFlow<MacroRangeInsights?> = _macroInsights
@@ -301,7 +297,6 @@ class HealthViewModel @Inject constructor(
         _previousWeekHistory.value = both.filter { it.date.isBefore(start) }
         _healthHistory.value = current
         if (_weeksBack.value == 0) _recentDays.value = both.filter { !it.date.isAfter(LocalDate.now()) }.takeLast(7)
-        _weekInsights.value = computeWeekInsights(current)
     }
 
     /**

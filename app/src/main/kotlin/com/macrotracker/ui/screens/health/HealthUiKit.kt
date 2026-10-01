@@ -317,28 +317,3 @@ fun HealthSectionLabel(
     }
 }
 
-/** Thin progress bar that fills with the chart reveal curve. */
-@Composable
-fun HealthProgressBar(
-    progress: Float,
-    color: Color,
-    modifier: Modifier = Modifier,
-    heightDp: Float = 4f,
-) {
-    val animated by animateFloatAsState(
-        targetValue = progress.coerceIn(0f, 1f),
-        animationSpec = MacroMotion.chartRevealTween(),
-        label = "healthProgress",
-    )
-    Canvas(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(heightDp.dp),
-    ) {
-        drawRoundRect(color = color.copy(alpha = 0.15f), size = size, cornerRadius = CornerRadius(size.height / 2f))
-        val w = size.width * animated
-        if (w > 0f) {
-            drawRoundRect(color = color, size = Size(w, size.height), cornerRadius = CornerRadius(size.height / 2f))
-        }
-    }
-}
