@@ -487,27 +487,33 @@ fun F1Card(
                     ContentSkeleton(lines = 3, accent = Hairline, surface = RowSurface)
                 }
                 is F1UiState.Error -> {
-                    if (!expanded) {
-                        Spacer(Modifier.height(12.dp))
-                        F1Error(onRefresh)
+                    WidgetExpandSection(visible = !expanded) {
+                        Column {
+                            Spacer(Modifier.height(12.dp))
+                            F1Error(onRefresh)
+                        }
                     }
                 }
                 is F1UiState.Success -> {
-                    // Collapsed glance only — expanded hub starts fresh at the tabs
-                    if (!expanded) {
-                        Spacer(Modifier.height(12.dp))
-                        F1CollapsedWidget(state.f1Data)
+                    // The glance folds away while the hub unfolds, so the card eases between heights.
+                    WidgetExpandSection(visible = !expanded) {
+                        Column {
+                            Spacer(Modifier.height(12.dp))
+                            F1CollapsedWidget(state.f1Data)
+                        }
                     }
                 }
             }
 
-            if (!expanded) {
-                WidgetExpandFooter(
-                    expanded = false,
-                    onToggle = { expanded = true },
-                    accentColor = F1Red,
-                    expandLabel = "Open hub",
-                )
+            WidgetExpandSection(visible = !expanded) {
+                Column {
+                    WidgetExpandFooter(
+                        expanded = false,
+                        onToggle = { expanded = true },
+                        accentColor = F1Red,
+                        expandLabel = "Open hub",
+                    )
+                }
             }
 
             WidgetExpandSection(visible = expanded && isVisible) {

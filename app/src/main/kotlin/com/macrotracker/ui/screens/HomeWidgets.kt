@@ -1,6 +1,10 @@
 package com.macrotracker.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import android.content.pm.PackageManager
+import android.Manifest
 import com.macrotracker.ui.theme.NutritionProtein
 import com.macrotracker.ui.theme.NutritionCalories
 import androidx.compose.ui.graphics.Color
@@ -159,10 +163,16 @@ private fun HomeCalendarWidget(
     isVisible: Boolean,
 ) {
     val calendarState by viewModel.calendarState.collectAsState()
+    val context = LocalContext.current
     CalendarCard(
         state = calendarState,
         onRequestPermission = onRequestPermission,
         isVisible = isVisible,
+        onRetry = {
+            viewModel.loadCalendar(
+                ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED,
+            )
+        },
     )
 }
 

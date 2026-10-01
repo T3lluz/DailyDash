@@ -66,8 +66,6 @@ sealed class WeatherUiState {
         val warnings: List<WeatherWarning> = emptyList(),
     ) : WeatherUiState()
     data object PermissionRequired : WeatherUiState()
-    /** User granted only approximate (coarse) location — weather works but precision is limited. */
-    data object ApproximateLocation : WeatherUiState()
     data class Error(val message: String) : WeatherUiState()
 }
 
@@ -86,7 +84,6 @@ sealed class HomeHealthState {
     data object Error : HomeHealthState()
     data class Success(
         val stats: HealthStats,
-        val isRefreshing: Boolean = false,
         val lastUpdatedAt: Instant? = null,
         /** Today's steps per hour from midnight (24 entries), empty when not shared. */
         val hourlySteps: List<Long> = emptyList(),
@@ -276,7 +273,11 @@ class HomeViewModel @Inject constructor(
         hasCalendarPermission: Boolean,
         force: Boolean = false,
         widgetIds: Set<String> = emptySet(),
+        /** On resume: refresh only cards already loaded; the rest load when scrolled to. */
+        onlyLoaded: Boolean = false,
     ) {
+        val widgetIds = if (onlyLoaded) widgetIds intersect loadedWidgetIds else widgetIds
+        if (onlyLoaded && widgetIds.isEmpty()) return
         val now = System.currentTimeMillis()
         val pendingWidgets = if (force) widgetIds else widgetIds - loadedWidgetIds - loadingWidgetIds
         // Throttle full refreshes, but always allow first-time loads for newly visible widgets.
@@ -399,10 +400,9 @@ class HomeViewModel @Inject constructor(
         }
 
         val current = _healthState.value
+        // A silent refresh keeps the card as it is until the new numbers land.
         if (!silent || current !is HomeHealthState.Success) {
             _healthState.value = HomeHealthState.Loading
-        } else {
-            _healthState.value = current.copy(isRefreshing = true)
         }
 
         try {
@@ -445,7 +445,6 @@ class HomeViewModel @Inject constructor(
                 ?.atZone(java.time.ZoneId.systemDefault())?.toLocalDate() == LocalDate.now()
             if (stats.steps == 0L && current is HomeHealthState.Success && current.stats.steps > 0 && sameDay) {
                 Log.w(TAG, "Health Connect returned 0 steps, keeping previous value to avoid flicker")
-                _healthState.value = current.copy(isRefreshing = false)
             } else {
                 _healthState.value = HomeHealthState.Success(
                     stats = stats,
@@ -462,11 +461,7 @@ class HomeViewModel @Inject constructor(
             throw e
         } catch (e: Exception) {
             Log.e(TAG, "Failed to read health data for home: ${e.message}", e)
-            if (current !is HomeHealthState.Success) {
-                _healthState.value = HomeHealthState.Error
-            } else {
-                _healthState.value = current.copy(isRefreshing = false)
-            }
+            if (current !is HomeHealthState.Success) _healthState.value = HomeHealthState.Error
         }
     }
 

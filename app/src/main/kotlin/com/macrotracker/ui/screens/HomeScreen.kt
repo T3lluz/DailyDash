@@ -2,6 +2,7 @@ package com.macrotracker.ui.screens
 
 import android.Manifest
 import com.macrotracker.ui.util.LaunchedWhileResumed
+import com.macrotracker.ui.util.requestOrOpenSettings
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -37,6 +38,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.macrotracker.ui.components.WidgetEditor
+import com.macrotracker.ui.components.WidgetPromptCard
 import com.macrotracker.ui.components.RipplePullToRefreshBox
 import com.macrotracker.ui.components.rippleAnchor
 import com.macrotracker.ui.components.draggableWidgetItems
@@ -175,6 +177,8 @@ fun HomeScreen(
                         hasCalendarPermission = hasCalendarPermission(),
                         force = false,
                         widgetIds = visibleIds,
+                        // Cards never scrolled to load when they come into view, not on every resume.
+                        onlyLoaded = true,
                     )
                     if ("YOUTUBE" in visibleIds) {
                         youtubeViewModel.loadLatestVideos(forceRefresh = false)
@@ -285,16 +289,22 @@ fun HomeScreen(
 
         val onRequestLocationPermission = remember(locationPermissionLauncher) {
             {
-                locationPermissionLauncher.launch(
-                    arrayOf(
-                        Manifest.permission.ACCESS_FINE_LOCATION,
-                        Manifest.permission.ACCESS_COARSE_LOCATION,
-                    ),
-                )
+                context.requestOrOpenSettings(Manifest.permission.ACCESS_FINE_LOCATION) {
+                    locationPermissionLauncher.launch(
+                        arrayOf(
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION,
+                        ),
+                    )
+                }
             }
         }
         val onRequestCalendarPermission = remember(calendarPermissionLauncher) {
-            { calendarPermissionLauncher.launch(Manifest.permission.READ_CALENDAR) }
+            {
+                context.requestOrOpenSettings(Manifest.permission.READ_CALENDAR) {
+                    calendarPermissionLauncher.launch(Manifest.permission.READ_CALENDAR)
+                }
+            }
         }
         val hasLocationPermissionFn = remember(context) { { hasLocationPermission() } }
 
@@ -339,6 +349,18 @@ fun HomeScreen(
                             viewModel.updateHomeWidgetOrder(encodeWidgetConfig(newConfigs))
                         },
                         onClose = { isEditMode = false },
+                    )
+                }
+            } else if (visibleConfigs.isEmpty()) {
+                // Every card hidden left the page blank under the greeting.
+                item(key = "empty") {
+                    WidgetPromptCard(
+                        title = "Nothing on Home yet",
+                        message = "Pick the cards you want here: weather, calendar, F1, servers and more.",
+                        actionLabel = "Edit widgets",
+                        actionIcon = AppIcons.Edit,
+                        accent = Primary,
+                        onAction = { isEditMode = true },
                     )
                 }
             } else {

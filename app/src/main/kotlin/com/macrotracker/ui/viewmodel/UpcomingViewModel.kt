@@ -28,7 +28,6 @@ sealed interface UpcomingUiState {
     /** [error] is set when a refresh failed and [feed] is the last good copy. */
     data class Success(
         val feed: UpcomingFeed,
-        val isRefreshing: Boolean = false,
         val error: String? = null,
     ) : UpcomingUiState
 
@@ -77,11 +76,8 @@ class UpcomingViewModel @Inject constructor(
             loadJob?.cancel()
         }
         loadJob = viewModelScope.launch {
-            val before = _state.value
-            _state.value = when (before) {
-                is UpcomingUiState.Success -> before.copy(isRefreshing = true)
-                else -> UpcomingUiState.Loading
-            }
+            // A refresh keeps the feed on screen; only a first load shows the placeholder.
+            if (_state.value !is UpcomingUiState.Success) _state.value = UpcomingUiState.Loading
             repository.getFeed(forceRefresh).fold(
                 onSuccess = { _state.value = UpcomingUiState.Success(it) },
                 onFailure = { e ->

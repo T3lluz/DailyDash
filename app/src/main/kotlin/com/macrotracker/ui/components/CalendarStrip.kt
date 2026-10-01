@@ -193,7 +193,7 @@ internal fun CalendarContent(
 
 /** Ticks once a minute, so "in 12 min" and the progress of a running meeting stay true. */
 @Composable
-private fun rememberMinuteClock() = remember { mutableLongStateOf(System.currentTimeMillis()) }.also { clock ->
+internal fun rememberMinuteClock() = remember { mutableLongStateOf(System.currentTimeMillis()) }.also { clock ->
     LaunchedWhileResumed {
         while (true) {
             clock.longValue = System.currentTimeMillis()

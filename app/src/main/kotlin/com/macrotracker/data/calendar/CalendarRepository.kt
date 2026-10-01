@@ -16,8 +16,6 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -51,39 +49,6 @@ data class CalendarEvent(
             val urlPattern = Regex("""https?://\S+""")
             return urlPattern.find(description)?.value
         }
-
-    val formattedTime: String
-        get() {
-            if (isAllDay) return "All day"
-            val fmt = DateTimeFormatter.ofPattern("h:mm a")
-            return "${startTime.format(fmt)} – ${endTime.format(fmt)}"
-        }
-
-    val isHappeningNow: Boolean
-        get() {
-            val now = LocalDateTime.now()
-            return now.isAfter(startTime) && now.isBefore(endTime)
-        }
-
-    /** e.g. "Tomorrow", "Wednesday", "Mar 12" */
-    val relativeDay: String
-        get() {
-            val today = LocalDate.now()
-            val eventDate = startTime.toLocalDate()
-            val daysUntil = ChronoUnit.DAYS.between(today, eventDate)
-            return when {
-                daysUntil == 0L -> "Today"
-                daysUntil == 1L -> "Tomorrow"
-                daysUntil in 2..6 -> eventDate.dayOfWeek.name
-                    .lowercase()
-                    .replaceFirstChar { it.uppercase() }
-                else -> eventDate.format(DateTimeFormatter.ofPattern("MMM d"))
-            }
-        }
-
-    /** e.g. "Tomorrow · 9:00 AM – 10:00 AM" */
-    val formattedDateAndTime: String
-        get() = "$relativeDay · $formattedTime"
 }
 
 @Singleton

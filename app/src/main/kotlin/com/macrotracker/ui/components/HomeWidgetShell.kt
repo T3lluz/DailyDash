@@ -460,18 +460,8 @@ fun WidgetPromptCard(
             }
             if (onAction != null) {
                 Spacer(modifier = Modifier.width(12.dp))
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(accent.copy(alpha = 0.1f))
-                        .clickable(onClick = onAction)
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(actionIcon, contentDescription = null, tint = accent, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(actionLabel, color = accent, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1)
-                }
+                // The app's pill, with its haptic and button role, like every other card action.
+                PillButton(icon = actionIcon, label = actionLabel, onClick = onAction, accent = accent)
             }
         }
     }

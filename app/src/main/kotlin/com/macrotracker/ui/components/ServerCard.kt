@@ -134,9 +134,9 @@ fun ServerCard(
         ) {
             onOpenConsole?.let { HubHeaderAction(AppIcons.SquareTerminal, "Console", it) }
             if (criticalCount > 0) {
-                ServerTag("$criticalCount CRITICAL", ServerCritical)
+                ServerTag("$criticalCount critical", ServerCritical)
             } else {
-                ServerTag("$online/${profiles.size} UP", if (online == profiles.size) ServerGood else ServerWarn)
+                ServerTag("$online/${profiles.size} up", if (online == profiles.size) ServerGood else ServerWarn)
             }
         }
         Spacer(modifier = Modifier.height(12.dp))

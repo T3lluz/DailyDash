@@ -1,6 +1,7 @@
 ﻿package com.macrotracker.ui.components
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -53,8 +54,11 @@ class DraggableWidgetListState<T>(
     val isDragActive: Boolean
         get() = ::reorderableState.isInitialized && reorderableState.isAnyItemDragging
 
+    /** A drag moved things and the new order is not saved yet; the old saved order must not win. */
+    private var pendingCommit = false
+
     fun syncExternalItems(items: List<T>) {
-        if (!isDragActive && workingList.toList() != items) {
+        if (!isDragActive && !pendingCommit && workingList.toList() != items) {
             workingList.clear()
             workingList.addAll(items)
         }
@@ -65,6 +69,14 @@ class DraggableWidgetListState<T>(
         val toIndex = workingList.indexOfFirst { itemKey(it) == toKey }
         if (fromIndex < 0 || toIndex < 0 || fromIndex == toIndex) return
         workingList.add(toIndex, workingList.removeAt(fromIndex))
+        // Mid-drag only the list on screen moves; the order is saved once, on drop.
+        // Saving on every swap rewrote the setting and recomposed the screen each time.
+        if (isDragActive) pendingCommit = true else onReorder(workingList.toList())
+    }
+
+    internal fun commitIfPending() {
+        if (!pendingCommit) return
+        pendingCommit = false
         onReorder(workingList.toList())
     }
 }
@@ -93,6 +105,9 @@ fun <T> rememberDraggableWidgetListState(
     }
     state.reorderableState = reorderableState
 
+    LaunchedEffect(state) {
+        snapshotFlow { state.isDragActive }.collect { dragging -> if (!dragging) state.commitIfPending() }
+    }
     LaunchedEffect(items, state.isDragActive) {
         state.syncExternalItems(items)
     }
