@@ -779,7 +779,7 @@ private fun collapsedPulse(hub: GhHub): List<GhPulse> {
                 meta = "${n.repoFullName} · ${notificationReason(n.reason)}",
                 at = n.updatedAt,
                 url = n.htmlUrl,
-                tag = n.type.take(8).uppercase(),
+                tag = ghTag(n.type),
                 tagColor = GhAccent,
             ),
         )
@@ -842,7 +842,7 @@ private fun collapsedPulse(hub: GhHub): List<GhPulse> {
                 at = act.createdAt,
                 url = act.htmlUrl,
                 avatarUrl = act.actorAvatarUrl,
-                tag = act.type.removeSuffix("Event").uppercase().take(8),
+                tag = ghTag(act.type),
                 tagColor = GhAccent,
             ),
         )
@@ -1346,7 +1346,7 @@ private fun NotificationRow(item: GitHubNotification, onClick: () -> Unit) {
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        StatusTag(item.type.take(8).uppercase(), GhAccent)
+        StatusTag(ghTag(item.type), GhAccent)
         GhRelative(item.updatedAt)
     }
 }
@@ -2043,7 +2043,7 @@ private fun ActivityRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        StatusTag(item.type.removeSuffix("Event").uppercase().take(8), GhAccent)
+        StatusTag(ghTag(item.type), GhAccent)
         GhRelative(item.createdAt)
     }
 }
@@ -2334,4 +2334,29 @@ private fun languageColor(language: String): Color = when (language.lowercase())
     "shell" -> Color(0xFF89E051)
     "dart" -> Color(0xFF00B4AB)
     else -> GhAccent
+}
+
+/**
+ * GitHub's type names as a word that fits a tag: `PullRequest` and `PullRequestEvent` are
+ * "PR", `IssueCommentEvent` is "COMMENT". Cutting them at eight letters left "PULLREQU".
+ */
+internal fun ghTag(type: String): String = when (type.removeSuffix("Event")) {
+    "PullRequest" -> "PR"
+    "PullRequestReview" -> "REVIEW"
+    "PullRequestReviewComment", "IssueComment", "CommitComment" -> "COMMENT"
+    "Issue", "Issues" -> "ISSUE"
+    "Push" -> "PUSH"
+    "Create" -> "CREATE"
+    "Delete" -> "DELETE"
+    "Watch" -> "STAR"
+    "Fork" -> "FORK"
+    "Release" -> "RELEASE"
+    "Discussion" -> "DISCUSS"
+    "CheckSuite", "CheckRun", "WorkflowRun" -> "CI"
+    "Commit" -> "COMMIT"
+    "RepositoryVulnerabilityAlert", "SecurityAdvisory" -> "SECURITY"
+    "Member" -> "MEMBER"
+    "Public" -> "PUBLIC"
+    "Gollum" -> "WIKI"
+    else -> type.removeSuffix("Event").replace(Regex("([a-z])([A-Z])"), "$1 $2").substringBefore(' ').uppercase().take(8)
 }

@@ -38,8 +38,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
@@ -360,25 +358,18 @@ private fun EventCarouselCard(event: CalendarEvent, look: MediaItemLook, now: Lo
         null
     }
 
+    // The calendar's colour is the card's tint; no stripe down its edge.
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(color.copy(alpha = 0.16f).compositeOver(Surface))
-            .drawBehind {
-                // The calendar's colour down the left, and along the bottom how far a running meeting has got.
-                drawRect(color, size = Size(4.dp.toPx(), size.height))
-                if (progress != null) {
-                    drawRect(color.copy(alpha = 0.25f), topLeft = androidx.compose.ui.geometry.Offset(0f, size.height - 3.dp.toPx()), size = Size(size.width, 3.dp.toPx()))
-                    drawRect(color, topLeft = androidx.compose.ui.geometry.Offset(0f, size.height - 3.dp.toPx()), size = Size(size.width * progress, 3.dp.toPx()))
-                }
-            },
+            .background(color.copy(alpha = 0.14f).compositeOver(Surface)),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxHeight()
                 .followVisible(look)
                 .graphicsLayer { alpha = look.textAlpha() }
-                .padding(start = 14.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
+                .padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -394,7 +385,7 @@ private fun EventCarouselCard(event: CalendarEvent, look: MediaItemLook, now: Lo
                 )
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    durationLabel(event),
+                    if (progress != null) leftLabel(event.endTime, nowTime) else durationLabel(event),
                     fontSize = 10.sp,
                     color = TextTertiary,
                     maxLines = 1,
@@ -449,6 +440,25 @@ private fun EventCarouselCard(event: CalendarEvent, look: MediaItemLook, now: Lo
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+            // How far a running event has got, as a track inside the card.
+            if (progress != null) {
+                Spacer(Modifier.weight(1f))
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(color.copy(alpha = 0.22f)),
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth(progress)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(color),
+                    )
+                }
+            }
         }
 
         // A peek is too narrow for words; it shows the day and the time instead.
@@ -490,6 +500,16 @@ private fun notesSnippet(event: CalendarEvent): String? {
         .replace(Regex("\\s+"), " ")
         .trim()
         .takeIf { it.length >= 3 }
+}
+
+/** "4 h 5 min left", "25 min left". */
+private fun leftLabel(end: LocalDateTime, now: LocalDateTime): String {
+    val m = Duration.between(now, end).toMinutes().coerceAtLeast(1)
+    return when {
+        m < 60 -> "$m min left"
+        m % 60 == 0L -> "${m / 60} h left"
+        else -> "${m / 60} h ${m % 60} min left"
+    }
 }
 
 private fun durationLabel(event: CalendarEvent): String {
@@ -599,9 +619,8 @@ private fun AgendaRow(event: CalendarEvent, onOpen: (CalendarEvent) -> Unit) {
         }
         Box(
             Modifier
-                .width(3.dp)
-                .height(30.dp)
-                .clip(RoundedCornerShape(2.dp))
+                .size(8.dp)
+                .clip(CircleShape)
                 .background(color),
         )
         Spacer(Modifier.width(10.dp))

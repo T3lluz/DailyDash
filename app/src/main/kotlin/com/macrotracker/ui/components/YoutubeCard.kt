@@ -647,40 +647,15 @@ private fun YoutubeChannelFilter(
             }
     }
     if (channels.isEmpty()) return
-    val newToday = remember(videos) {
-        val cutoff = newCutoff()
-        videos.count { publishedAt(it)?.isAfter(cutoff) == true }
-    }
+    // Who posted today is the dot on their picture; a "58 new" chip in front said it again.
     ChannelAvatarRow(
         channels = channels,
         selectedId = selectedChannelId,
         onSelect = onChannelSelected,
         selectedRing = YtRed,
         markColor = YtRed,
-        leading = if (newToday > 0 && selectedChannelId == null) {
-            { NewTodayChip(newToday) }
-        } else {
-            null
-        },
         modifier = Modifier.padding(bottom = bottomGap),
     )
-}
-
-@Composable
-private fun NewTodayChip(count: Int) {
-    val shape = RoundedCornerShape(999.dp)
-    Row(
-        modifier = Modifier
-            .clip(shape)
-            .background(YtRed.copy(alpha = 0.14f))
-            .border(0.5.dp, YtRed.copy(alpha = 0.35f), shape)
-            .padding(horizontal = 10.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
-    ) {
-        Box(modifier = Modifier.size(5.dp).clip(CircleShape).background(YtRed))
-        Text("$count new", fontSize = 10.sp, color = YtRed, fontWeight = FontWeight.Bold)
-    }
 }
 
 /** A quiet line where videos would be. */

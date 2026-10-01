@@ -174,8 +174,9 @@ private fun MailContent(
             return@MacroCard
         }
         Spacer(Modifier.height(10.dp))
+        val mailTabsScroll = rememberScrollState()
         Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            modifier = Modifier.fillMaxWidth().horizontalEdgeFade(mailTabsScroll).horizontalScroll(mailTabsScroll),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             MailTab.entries.filter { it == MailTab.NEEDS || counts[it].orEmpty().isNotEmpty() }.forEach { t ->
