@@ -46,8 +46,7 @@ import kotlin.math.roundToInt
  * Today, the top of the Health tab. It opens with a sentence rather than a number, the
  * way Oura and Apple's highlights do ("Well recovered, ahead of your usual pace."), then
  * the three rings with their numbers in each ring's colour, and today's steps drawn against
- * a usual day, then the day's other activity numbers (distance, floors) beside their week.
- * Heart and breathing live in Body & Vitals, the night in Sleep.
+ * a usual day. Every other number is a tile in "At a glance" under it.
  */
 @Composable
 fun DailyHealthSection(
@@ -173,7 +172,9 @@ fun DailyHealthSection(
             )
         }
 
-        TodayReadings(entries = readings, history = history, notShared = notShared, onAllow = onAllow)
+        // Distance, floors and the rest are tiles under this card now ("At a glance"); what
+        // Health Connect doesn't share is still asked for here, once.
+        TodayReadings(entries = emptyList(), history = history, notShared = notShared, onAllow = onAllow)
     }
 }
 

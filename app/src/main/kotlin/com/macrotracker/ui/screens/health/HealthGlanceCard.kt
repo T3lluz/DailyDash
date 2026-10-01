@@ -350,7 +350,7 @@ internal fun todayReadouts(activity: TodayActivitySnapshot, sleepMin: Long): Lis
     RingReadout(
         label = "Move",
         value = "${activity.activeCalories.roundToInt()}",
-        goal = "/${activity.activeCalGoal.roundToInt()} KCAL",
+        goal = "/${activity.activeCalGoal.roundToInt()} kcal",
         tone = HealthMove,
     ),
 )
