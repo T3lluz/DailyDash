@@ -62,9 +62,7 @@ class IslandViewModel @Inject constructor(
     // The server's last line, until it is too old to be true: away from the tailnet overnight,
     // "on now" and "in 10 min" items stayed up for good.
     private var serverAtMs: Long = 0L
-    private var serverItems: List<IslandItem> = repository.cachedIsland()
-        ?.also { serverAtMs = it.atMs }
-        ?.takeIf { !stale(it.atMs) }?.items.orEmpty()
+    private var serverItems: List<IslandItem> = emptyList()
     private var localItems: List<IslandItem> = emptyList()
     private var appItems: List<IslandItem> = emptyList()
     private val _items = MutableStateFlow(ranked())
@@ -79,6 +77,15 @@ class IslandViewModel @Inject constructor(
     private var shortJob: Job? = null
 
     init {
+        // The last line is read from disk off the main thread (this is built in the first frame).
+        viewModelScope.launch {
+            val cached = withContext(Dispatchers.IO) { repository.cachedIsland() }
+            if (cached != null && serverItems.isEmpty() && !stale(cached.atMs)) {
+                serverAtMs = cached.atMs
+                serverItems = cached.items
+                publish()
+            }
+        }
         loadLocal()
         viewModelScope.launch {
             liveFeed.events

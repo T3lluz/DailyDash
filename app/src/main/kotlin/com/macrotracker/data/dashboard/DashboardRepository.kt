@@ -49,10 +49,13 @@ class DashboardRepository @Inject constructor(
     // ── island ──
     fun cachedIsland(): IslandFeed? = kept("island")?.let(::parseIsland)
 
+    // Kept and parsed on IO: the client hands back on the caller's thread, which is main.
     suspend fun island(): IslandFeed {
         val o = client.island()
-        keep("island", o)
-        return parseIsland(o)
+        return withContext(Dispatchers.IO) {
+            keep("island", o)
+            parseIsland(o)
+        }
     }
 
     // ── mail ──
@@ -79,8 +82,10 @@ class DashboardRepository @Inject constructor(
     suspend fun usage(fresh: Boolean = false): UsageSnapshot {
         val o = client.usage(fresh)
         if (o.has("error")) throw IOException(o.optString("error"))
-        keep("usage", o)
-        return parseUsage(o)
+        return withContext(Dispatchers.IO) {
+            keep("usage", o)
+            parseUsage(o)
+        }
     }
 
     // ── schedule ──
@@ -88,8 +93,10 @@ class DashboardRepository @Inject constructor(
 
     suspend fun schedule(): ScheduleSnapshot {
         val o = client.schedule()
-        keep("schedule", o)
-        return parseSchedule(o)
+        return withContext(Dispatchers.IO) {
+            keep("schedule", o)
+            parseSchedule(o)
+        }
     }
 
     suspend fun saveAsk(ask: ScheduledAsk) {

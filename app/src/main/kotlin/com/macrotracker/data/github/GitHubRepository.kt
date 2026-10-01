@@ -1,6 +1,8 @@
 package com.macrotracker.data.github
 
 import android.content.Context
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.CoroutineScope
 import android.util.Log
 import androidx.core.content.edit
 import com.macrotracker.BuildConfig
@@ -77,9 +79,9 @@ class GitHubRepositoryImpl @Inject constructor(
             settings.githubToken.value.isNotBlank() ||
             BuildConfig.GITHUB_TOKEN.isNotBlank()
 
-    init {
-        restoreDiskCache()
-    }
+    // The disk cache is decoded off the main thread: this is built during Home's first frame,
+    // and the snapshot is tens of kB of JSON. Calls that need it wait for it.
+    private val restored = CoroutineScope(SupervisorJob() + Dispatchers.IO).async { restoreDiskCache() }
 
     override fun invalidateCache() {
         cached = null
@@ -94,6 +96,7 @@ class GitHubRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getDashboard(forceRefresh: Boolean): Result<GitHubSnapshot> = fetchMutex.withLock {
+        restored.await()
         val token = resolveToken()
         if (token.isBlank()) {
             return@withLock Result.failure(GitHubNeedsAuthException())
@@ -118,13 +121,15 @@ class GitHubRepositoryImpl @Inject constructor(
         }
 
         return@withLock try {
-            withContext(Dispatchers.IO) { fetchDashboard(token) }
-                .also { snapshot ->
+            withContext(Dispatchers.IO) {
+                // Encoded and written on IO too; it ran on the caller's (main) thread.
+                fetchDashboard(token).also { snapshot ->
                     cached = snapshot
                     lastFetchTime = System.currentTimeMillis()
                     cachedUserKey = cacheKey
                     persistDiskCache(snapshot, cacheKey)
                 }
+            }
                 .let { Result.success(it) }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
