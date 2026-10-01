@@ -153,9 +153,11 @@ fun AIScreen(
     hermesViewModel: HermesViewModel = hiltViewModel(),
 ) {
     val haptics = rememberHaptics()
+    // The pane you left the tab on, across restarts, unless a link asks for one.
     var selectedTab by rememberSaveable(initialTab) {
-        mutableStateOf(initialTab ?: ChatBot.MACROS.id)
+        mutableStateOf(initialTab ?: hermesViewModel.lastAiTab()?.takeIf { id -> ChatBot.entries.any { it.id == id } } ?: ChatBot.MACROS.id)
     }
+    LaunchedEffect(selectedTab) { hermesViewModel.rememberAiTab(selectedTab) }
     val hermesChosen by hermesViewModel.usesHermes.collectAsState()
     // A hand-off Hermes could not take goes to Sysop, and Sysop is then what is on screen.
     var sysopForHandoff by rememberSaveable { mutableStateOf(false) }
