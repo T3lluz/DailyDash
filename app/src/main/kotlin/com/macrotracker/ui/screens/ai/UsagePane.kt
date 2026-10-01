@@ -1,5 +1,10 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.components.horizontalEdgeFade
+import com.macrotracker.ui.theme.MacroMotion
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -157,8 +162,9 @@ fun UsagePane(
     ) {
         item(key = "tabs") {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                val tabsScroll = rememberScrollState()
                 Row(
-                    Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                    Modifier.weight(1f).horizontalEdgeFade(tabsScroll).horizontalScroll(tabsScroll),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     UsageTab.entries.forEach { t ->
@@ -188,18 +194,20 @@ fun UsagePane(
         }
         when (tab) {
             UsageTab.OVERVIEW -> {
-                item(key = "limits") { LimitsCard(u) }
+                item(key = "limits") {
+                    LimitsCard(
+                        u = u,
+                        exact = state.claudeExact,
+                        connected = state.claudeConnected,
+                        note = state.claudeNote,
+                        extra = state.claudeExtra,
+                        openRouter = state.openRouter,
+                    )
+                }
                 item(key = "pods") { Pods(u) }
                 item(key = "chart") { DaysChart(u) }
                 item(key = "mix") { MixCard(u) }
                 if (u.insights.isNotEmpty()) item(key = "ins") { InsightsCard(u.insights) }
-                item(key = "read") {
-                    Text(
-                        "Read ${usageAgo(u.scannedMs.takeIf { it > 0 } ?: u.atMs)} from Claude Code's logs, OpenCode's database and Hermes' own calls. " +
-                            "Cost is what the tokens would cost on the API.",
-                        fontSize = 11.sp, color = TextTertiary, modifier = Modifier.padding(horizontal = 4.dp),
-                    )
-                }
             }
             UsageTab.MODELS -> item(key = "models") {
                 Section("Models", AppIcons.Sparkles, "30 days · ${u.models.count { it.totals.tokens > 0 }}") {
@@ -219,7 +227,7 @@ fun UsagePane(
             }
             UsageTab.AGENTS -> {
                 item(key = "agents") {
-                    Section("Who", AppIcons.Bot, "the harness that spent it") {
+                    Section("Agents", AppIcons.Bot, null) {
                         val max = u.agents.maxOfOrNull { it.totals.tokens } ?: 1
                         u.agents.forEachIndexed { i, a ->
                             if (i > 0) Hairline()
@@ -233,7 +241,7 @@ fun UsagePane(
                     }
                 }
                 item(key = "projects") {
-                    Section("Where", AppIcons.Grid, "the project the work happened in") {
+                    Section("Projects", AppIcons.Grid, null) {
                         val max = u.projects.maxOfOrNull { it.totals.tokens } ?: 1
                         u.projects.forEachIndexed { i, p ->
                             if (i > 0) Hairline()
@@ -246,9 +254,9 @@ fun UsagePane(
                 }
             }
             UsageTab.CHATS -> item(key = "chats") {
-                Section("Hermes chats", AppIcons.Chat, "tokens, value and context") {
+                Section("Hermes chats", AppIcons.Chat, null) {
                     if (u.chats.isEmpty()) {
-                        Text("No chat has a reading yet. Every answer from now on carries its tokens.", fontSize = 13.sp, color = TextSecondary)
+                        Text("No readings yet.", fontSize = 13.sp, color = TextSecondary)
                     }
                     u.chats.forEachIndexed { i, c ->
                         if (i > 0) Hairline()
@@ -281,7 +289,7 @@ fun UsagePane(
             UsageTab.SCHEDULE -> {
                 item(key = "asks") {
                     val jobs = state.schedule?.jobs.orEmpty()
-                    Section("Your scheduled asks", AppIcons.CalendarPlus, null, action = {
+                    Section("Scheduled asks", AppIcons.CalendarPlus, null, action = {
                         Text(
                             "New", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Primary,
                             modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable {
@@ -293,8 +301,7 @@ fun UsagePane(
                     }) {
                         if (jobs.isEmpty()) {
                             Text(
-                                "Nothing yet. A scheduled ask is a prompt Hermes gets on a clock, in its own chat: " +
-                                    "\"check the backups every Monday\", \"summarise my mail at 17:00\".",
+                                "No scheduled asks.",
                                 fontSize = 13.sp, color = TextSecondary,
                             )
                         }
@@ -425,10 +432,21 @@ private fun UsageRow(color: Color, title: String, sub: String, share: Float, val
     }
 }
 
-/** What is left of the plans: Claude's windows, then Cursor's month. */
+/**
+ * What is left of the plans, provider by provider: Claude's windows (exact from Anthropic when
+ * this phone is signed in to Claude, else the server's estimate), Cursor's month, and the
+ * OpenRouter key's spend.
+ */
 @Composable
-private fun LimitsCard(u: UsageSnapshot) {
-    Section("Limits", AppIcons.Clock, "what is left of your plans") {
+private fun LimitsCard(
+    u: UsageSnapshot,
+    exact: Boolean,
+    connected: Boolean,
+    note: String?,
+    extra: com.macrotracker.data.usage.ExtraUsage?,
+    openRouter: com.macrotracker.data.usage.OpenRouterKeyUsage?,
+) {
+    Section("Limits", AppIcons.Clock, null) {
         ProviderHead("Claude", u.claudePlan)
         if (u.limits.isEmpty()) {
             Text("No reading yet.", fontSize = 13.sp, color = TextSecondary)
@@ -437,23 +455,83 @@ private fun LimitsCard(u: UsageSnapshot) {
             if (i > 0) Spacer(Modifier.height(12.dp))
             LimitMeter(w)
         }
-        Text(
-            "Measured when Hermes or T3 Code runs Claude; in between, estimated from what Claude has cost here " +
-                "against the last readings. Use on claude.ai or other devices counts too, and is not in the estimate.",
-            fontSize = 11.5.sp, color = TextTertiary, lineHeight = 16.sp, modifier = Modifier.padding(top = 12.dp),
-        )
+        extra?.let { e ->
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text("Extra usage", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                Text("  this month", fontSize = 12.sp, color = TextTertiary)
+                Spacer(Modifier.weight(1f))
+                Text(
+                    formatUsd(e.used) + (e.limit?.let { " of ${formatUsd(it)}" } ?: ""),
+                    fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary,
+                )
+            }
+        }
+        // Only when it matters: no exact reading, so this is the server's guess.
+        if (!exact) {
+            Text(
+                if (connected && note != null) "Estimate · Anthropic didn't answer" else "Estimate",
+                fontSize = 11.5.sp, color = TextTertiary, modifier = Modifier.padding(top = 10.dp),
+            )
+        }
         u.cursor?.let { cu ->
             Spacer(Modifier.height(12.dp))
             Hairline()
             Spacer(Modifier.height(12.dp))
             CursorBlock(cu, compact = false)
         }
+        openRouter?.let { r ->
+            Spacer(Modifier.height(12.dp))
+            Hairline()
+            Spacer(Modifier.height(12.dp))
+            OpenRouterBlock(r)
+        }
+    }
+}
+
+/** The OpenRouter key's spend, from OpenRouter: today, the week, the month, and its cap when it has one. */
+@Composable
+private fun OpenRouterBlock(r: com.macrotracker.data.usage.OpenRouterKeyUsage) {
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ProviderHead("OpenRouter", if (r.freeTier) "Free" else r.label.takeIf { it.isNotBlank() && it.length <= 18 }.orEmpty())
+            Spacer(Modifier.weight(1f))
+            Text(
+                formatUsd(r.monthly ?: r.total) + if (r.monthly != null) " this month" else " in all",
+                fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, modifier = Modifier.padding(bottom = 8.dp),
+            )
+        }
+        val limit = r.limit
+        if (limit != null && limit > 0) {
+            val used = (r.total / limit).coerceIn(0.0, 1.0)
+            Box(
+                Modifier.padding(bottom = 6.dp).fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)).background(Color.White.copy(alpha = 0.07f)),
+            ) {
+                Box(Modifier.fillMaxWidth(used.toFloat().coerceAtLeast(0.015f)).height(8.dp).clip(RoundedCornerShape(4.dp))
+                    .background(if (used >= 0.9) Warning else Primary))
+            }
+            Text("${formatUsd(r.total)} of the key's ${formatUsd(limit)} limit" + (r.remaining?.let { " · ${formatUsd(it)} left" } ?: ""),
+                fontSize = 11.5.sp, color = TextTertiary)
+        }
+        Text(
+            listOfNotNull(
+                r.daily?.let { "today ${formatUsd(it)}" },
+                r.weekly?.let { "week ${formatUsd(it)}" },
+                "all time ${formatUsd(r.total)}",
+            ).joinToString(" · "),
+            fontSize = 11.5.sp, color = TextTertiary,
+        )
     }
 }
 
 @Composable
 internal fun ProviderHead(name: String, plan: String) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
+        val brand = ModelBrands.brandOfProvider(name)
+        if (brand.isNotBlank()) {
+            ModelLogo(brand, 22.dp)
+            Spacer(Modifier.width(8.dp))
+        }
         Text(name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
         if (plan.isNotBlank()) {
             Spacer(Modifier.width(8.dp))
@@ -485,6 +563,7 @@ internal fun LimitMeter(w: LimitWindow, compact: Boolean = false) {
     val how = when {
         w.idle -> ""
         w.status == "rejected" -> "limit reached"
+        w.source == "anthropic" -> if (w.status == "rejected") "limit reached" else ""
         !w.estimated && w.readAt != null -> "measured ${usageAgo(w.readAt.toEpochMilli())}" +
             (if (w.source.isNotBlank() && w.source != "estimate") " by ${w.source}" else "") + ", plus use since"
         w.estimated && w.limit != null -> "estimate · ${formatUsd(w.spent)} of about ${formatUsd(w.limit)} this ${if (w.id == "five_hour") "session" else "week"}"
@@ -589,7 +668,7 @@ private fun DaysChart(u: UsageSnapshot) {
     // Worth, not tokens: a token read from cache costs a tenth of a fresh one and would drown the rest.
     val max = (days.maxOfOrNull { it.cost } ?: 0.0).coerceAtLeast(0.01)
     var picked by remember(days) { mutableIntStateOf(days.lastIndex) }
-    Section("30 days", AppIcons.ChartColumn, "a day's work at API prices") {
+    Section("30 days", AppIcons.ChartColumn, "at API prices") {
         val day = days.getOrNull(picked)
         day?.let { d ->
             Row(verticalAlignment = Alignment.Bottom) {
@@ -863,97 +942,170 @@ internal fun HermesModelName(id: String): String? {
 }
 
 /**
- * The usage ring in Hermes' composer, the way Claude's own app shows it: a ring that fills
- * with how much of the Claude session is gone, and a tap for the rest in a small panel:
- * the session and the week, Cursor's month when this chat runs on Cursor, and how full
- * this chat's own context is.
+ * The ring beside send, for the brain this chat is on. On Claude it is the five-hour session
+ * (exact from Anthropic when this phone is signed in to Claude, else the server's estimate);
+ * on Cursor, OpenCode or Hermes' own endpoint, which have no session window to show, it is
+ * how full this chat's context is. A tap opens the whole picture in a sheet like the model
+ * picker's: this chat, then the plan it runs on, then the way to all usage.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ComposerUsageRing(
-    usage: UsageSnapshot?,
-    onCursor: Boolean,
+    usage: com.macrotracker.ui.viewmodel.UsageUiState,
+    model: com.macrotracker.data.hermes.HermesModelOption?,
     chat: com.macrotracker.data.hermes.HermesThreadSummary?,
     onOpenUsage: () -> Unit,
 ) {
-    val session = usage?.limits?.firstOrNull { it.id == "five_hour" } ?: return
-    val used = ((session.usedPercent ?: 0.0) / 100).toFloat().coerceIn(0f, 1f)
-    val tone = when { used >= 1f -> Error; used >= 0.8f -> Warning; else -> Primary }
+    val source = com.macrotracker.data.hermes.HermesCatalog.sourceOf(model)
+        .ifBlank { chat?.model?.substringBefore(':', "").orEmpty() }
+    val onClaude = source == "claude"
+    val session = usage.usage?.limits?.firstOrNull { it.id == "five_hour" }
+    val contextFill = chat?.contextFraction
+    val fill: Float = when {
+        onClaude && session != null -> ((session.usedPercent ?: 0.0) / 100).toFloat()
+        else -> contextFill ?: 0f
+    }.coerceIn(0f, 1f)
+    val tone = when {
+        onClaude -> when { fill >= 1f -> Error; fill >= 0.8f -> Warning; else -> Primary }
+        else -> when { fill >= 0.85f -> Error; fill >= 0.6f -> Warning; else -> ServerBrandRing }
+    }
+    val said = when {
+        onClaude && session != null -> if (session.idle) "Claude session not started" else "Claude session ${Math.round(fill * 100)}% used"
+        contextFill != null -> "This chat fills ${Math.round(fill * 100)}% of its context"
+        else -> "Usage"
+    }
+    // Nothing to say yet (no chat, not on Claude): no ring, so it never reads as empty-but-wrong.
+    if (!(onClaude && session != null) && chat == null) return
     var open by remember { mutableStateOf(false) }
     val haptics = rememberHaptics()
-    Box {
-        Box(
-            Modifier
-                .size(34.dp)
-                .clip(CircleShape)
-                .clickable { haptics.tick(); open = true }
-                .semantics {
-                    contentDescription = if (session.idle) "Claude session not started" else "Claude session ${Math.round(used * 100)}% used"
+    val shown = animateFloatAsState(fill, MacroMotion.chartRevealTween(500), label = "usageRing")
+    Box(
+        Modifier
+            .size(34.dp)
+            .clip(CircleShape)
+            .clickable { haptics.tick(); open = true }
+            .semantics { contentDescription = said }
+            .drawBehind {
+                val w = 2.5.dp.toPx()
+                val d = 18.dp.toPx()
+                val tl = Offset((size.width - d) / 2 + w / 2, (size.height - d) / 2 + w / 2)
+                val sz = Size(d - w, d - w)
+                drawArc(Color.White.copy(alpha = 0.14f), 0f, 360f, false, topLeft = tl, size = sz, style = Stroke(w))
+                val f = shown.value
+                if (f > 0f) drawArc(tone, -90f, 360f * f.coerceAtLeast(0.03f), false, topLeft = tl, size = sz, style = Stroke(w, cap = StrokeCap.Round))
+            },
+    )
+    if (open) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(onDismissRequest = { open = false }, sheetState = sheetState, containerColor = com.macrotracker.ui.theme.Surface) {
+            UsageSheetBody(
+                usage = usage,
+                source = source,
+                modelName = model?.familyLabel?.ifBlank { model.label },
+                chat = chat,
+                onOpenUsage = { open = false; onOpenUsage() },
+            )
+        }
+    }
+}
+
+/** The ring's colour off Claude: the chat's own context, in Hermes' colour. */
+private val ServerBrandRing = com.macrotracker.ui.theme.ServerBrand
+
+@Composable
+private fun UsageSheetBody(
+    usage: com.macrotracker.ui.viewmodel.UsageUiState,
+    source: String,
+    modelName: String?,
+    chat: com.macrotracker.data.hermes.HermesThreadSummary?,
+    onOpenUsage: () -> Unit,
+) {
+    val u = usage.usage
+    val providerName = when (source) {
+        "claude" -> "Claude"
+        "cursor" -> "Cursor"
+        "opencode" -> "OpenCode"
+        else -> "Hermes"
+    }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(bottom = 12.dp),
+    ) {
+        SheetTitle("Usage", modelName)
+        Column(Modifier.padding(horizontal = 20.dp)) {
+            // This chat first: it is what the ring shows off Claude, and it matters on any brain.
+            chat?.let { c ->
+                val f = c.contextFraction
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text("This chat", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                    Spacer(Modifier.weight(1f))
+                    Text(f?.let { "${(it * 100).toInt()}% of context" } ?: "no reading yet", fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold, color = TextPrimary)
                 }
-                .drawBehind {
-                    val w = 2.5.dp.toPx()
-                    val d = 18.dp.toPx()
-                    val tl = Offset((size.width - d) / 2 + w / 2, (size.height - d) / 2 + w / 2)
-                    val sz = Size(d - w, d - w)
-                    drawArc(Color.White.copy(alpha = 0.14f), 0f, 360f, false, topLeft = tl, size = sz, style = Stroke(w))
-                    if (used > 0f) drawArc(tone, -90f, 360f * used, false, topLeft = tl, size = sz, style = Stroke(w, cap = StrokeCap.Round))
-                },
-        )
-        if (open) {
-            androidx.compose.ui.window.Popup(
-                alignment = Alignment.BottomEnd,
-                offset = androidx.compose.ui.unit.IntOffset(0, -120),
-                onDismissRequest = { open = false },
-                properties = androidx.compose.ui.window.PopupProperties(focusable = true),
-            ) {
-                Column(
-                    Modifier
-                        .width(300.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xFF181818))
-                        .border(1.dp, Border, RoundedCornerShape(16.dp))
-                        .padding(14.dp),
-                ) {
-                    ProviderHead("Claude", usage.claudePlan)
-                    usage.limits.forEachIndexed { i, w ->
-                        if (i > 0) Spacer(Modifier.height(10.dp))
-                        LimitMeter(w, compact = true)
+                if (f != null) {
+                    val ct = when { f >= 0.85f -> Error; f >= 0.6f -> Warning; else -> com.macrotracker.ui.theme.ServerBrand }
+                    Box(Modifier.padding(vertical = 7.dp).fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp))
+                        .background(Color.White.copy(alpha = 0.07f))) {
+                        Box(Modifier.fillMaxWidth(f.coerceAtLeast(0.015f)).height(8.dp).clip(RoundedCornerShape(4.dp)).background(ct))
                     }
-                    if (onCursor) usage.cursor?.let {
-                        Spacer(Modifier.height(12.dp)); Hairline(); Spacer(Modifier.height(10.dp))
-                        CursorBlock(it, compact = true)
-                    }
-                    chat?.let { c ->
-                        Spacer(Modifier.height(12.dp)); Hairline(); Spacer(Modifier.height(10.dp))
-                        val f = c.contextFraction
-                        Row(verticalAlignment = Alignment.Bottom) {
-                            Text("This chat", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-                            Spacer(Modifier.weight(1f))
-                            Text(f?.let { "${(it * 100).toInt()}% of context" } ?: "no reading yet", fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold, color = TextPrimary)
-                        }
-                        if (f != null) {
-                            val ct = when { f >= 0.85f -> Error; f >= 0.6f -> Warning; else -> Primary }
-                            Box(Modifier.padding(vertical = 5.dp).fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp))
-                                .background(Color.White.copy(alpha = 0.07f))) {
-                                Box(Modifier.fillMaxWidth(f.coerceAtLeast(0.015f)).height(6.dp).clip(RoundedCornerShape(3.dp)).background(ct))
-                            }
-                            Text("about ${formatTokens(c.context.toLong())} of ${formatTokens(c.window.toLong())} · Hermes compresses it when it fills",
-                                fontSize = 11.5.sp, color = TextTertiary)
-                        }
-                        if (c.tokens > 0) {
-                            Text("${formatTokens(c.tokens)} tokens used" + (if (c.cost > 0) " · ${formatUsd(c.cost)} at API prices" else ""),
-                                fontSize = 11.5.sp, color = TextTertiary)
-                        }
-                    }
-                    Text(
-                        "All usage", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Primary,
-                        modifier = Modifier.padding(top = 12.dp).clip(RoundedCornerShape(6.dp))
-                            .clickable { open = false; onOpenUsage() }.padding(vertical = 2.dp),
-                    )
+                    Text("${formatTokens(c.context.toLong())} of ${formatTokens(c.window.toLong())}", fontSize = 11.5.sp, color = TextTertiary)
+                }
+                if (c.tokens > 0) {
+                    Text("${formatTokens(c.tokens)} tokens used" + (if (c.cost > 0) " · ${formatUsd(c.cost)} at API prices" else ""),
+                        fontSize = 11.5.sp, color = TextTertiary)
+                }
+                Spacer(Modifier.height(14.dp)); Hairline(); Spacer(Modifier.height(14.dp))
+            }
+            when {
+                u == null -> Text(
+                    if (usage.loading) "Reading usage…" else (usage.error ?: "Usage comes from your dashboard server."),
+                    fontSize = 13.sp, color = TextSecondary,
+                )
+                source == "cursor" && u.cursor != null -> {
+                    CursorBlock(u.cursor, compact = true)
+                    ClaudeAfter(u, usage)
+                }
+                source == "claude" -> ClaudeBlock(u, usage, compact = false)
+                else -> {
+                    ClaudeAfter(u, usage)
                 }
             }
         }
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 12.dp, vertical = 10.dp)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .clickable(onClick = onOpenUsage)
+                .padding(horizontal = 8.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(AppIcons.ChartColumn, null, tint = Primary, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("All usage", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Primary, modifier = Modifier.weight(1f))
+            Icon(AppIcons.ChevronRight, null, tint = Primary, modifier = Modifier.size(16.dp))
+        }
     }
+}
+
+@Composable
+private fun ClaudeBlock(u: UsageSnapshot, usage: com.macrotracker.ui.viewmodel.UsageUiState, compact: Boolean) {
+    ProviderHead("Claude", u.claudePlan)
+    u.limits.forEachIndexed { i, w ->
+        if (i > 0) Spacer(Modifier.height(10.dp))
+        LimitMeter(w, compact = compact)
+    }
+}
+
+/** Claude's windows after the plan this chat is on, smaller: they're shared with every other brain's work. */
+@Composable
+private fun ClaudeAfter(u: UsageSnapshot, usage: com.macrotracker.ui.viewmodel.UsageUiState) {
+    if (u.limits.isEmpty()) return
+    Spacer(Modifier.height(14.dp)); Hairline(); Spacer(Modifier.height(14.dp))
+    ClaudeBlock(u, usage, compact = true)
 }
 
 /** A usage day's date for display; a row the bridge sent without one shows as it came, not a crash. */

@@ -9,6 +9,12 @@ import com.macrotracker.data.dashboard.UsageSnapshot
 import com.macrotracker.data.hermes.HermesActivityTracker
 import com.macrotracker.data.hermes.HermesLiveFeed
 import com.macrotracker.data.local.SettingsRepository
+import com.macrotracker.data.dashboard.LimitWindow
+import com.macrotracker.data.usage.ClaudeLimits
+import com.macrotracker.data.usage.ExtraUsage
+import com.macrotracker.data.usage.OpenRouterKeyUsage
+import com.macrotracker.data.usage.ProviderLimitsRepository
+import com.macrotracker.data.usage.ProviderReading
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
@@ -27,6 +33,13 @@ data class UsageUiState(
     val schedule: ScheduleSnapshot? = null,
     val loading: Boolean = false,
     val error: String? = null,
+    /** Claude's windows came from Anthropic itself, not the server's estimate. */
+    val claudeExact: Boolean = false,
+    /** Why Claude's exact reading failed, when it did; null when it worked or isn't connected. */
+    val claudeNote: String? = null,
+    val claudeConnected: Boolean = false,
+    val claudeExtra: ExtraUsage? = null,
+    val openRouter: OpenRouterKeyUsage? = null,
 )
 
 /**
@@ -42,6 +55,7 @@ class UsageViewModel @Inject constructor(
     private val settings: SettingsRepository,
     private val liveFeed: HermesLiveFeed,
     private val tracker: HermesActivityTracker,
+    private val providers: ProviderLimitsRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(UsageUiState(repository.cachedUsage(), repository.cachedSchedule()))
@@ -63,14 +77,26 @@ class UsageViewModel @Inject constructor(
         job?.cancel()
         job = viewModelScope.launch {
             _state.value = _state.value.copy(loading = true)
+            // What the providers say themselves, beside what the server counted.
+            val claude = runCatching { providers.claude(fresh) }.getOrElse { ProviderReading.Failed(it.message ?: "Claude didn't answer") }
+            val router = runCatching { providers.openRouter(fresh) }.getOrNull()
+            val exact = (claude as? ProviderReading.Read)?.value
+            fun withProviders(base: UsageUiState) = base.copy(
+                usage = base.usage?.let { u -> if (exact != null && exact.windows.isNotEmpty()) u.copy(limits = exact.toLimitWindows()) else u },
+                claudeExact = exact != null && exact.windows.isNotEmpty(),
+                claudeNote = (claude as? ProviderReading.Failed)?.message,
+                claudeConnected = claude !is ProviderReading.NotConnected,
+                claudeExtra = exact?.extra,
+                openRouter = (router as? ProviderReading.Read)?.value,
+            )
             try {
                 val u = repository.usage(fresh)
                 val s = runCatching { repository.schedule() }.getOrNull()
-                _state.value = UsageUiState(u, s ?: _state.value.schedule, loading = false)
+                _state.value = withProviders(UsageUiState(u, s ?: _state.value.schedule, loading = false))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.value = _state.value.copy(loading = false, error = DashboardRepository.describe(e, host()))
+                _state.value = withProviders(_state.value.copy(loading = false, error = DashboardRepository.describe(e, host())))
             }
         }
     }
@@ -104,4 +130,21 @@ class UsageViewModel @Inject constructor(
     }
 
     private fun host() = settings.dashboardServerUrl.value.substringAfter("://").substringBefore('/')
+
+    /** Anthropic's own windows in the shape the meters draw. A session nobody has started reads 0 with no reset. */
+    private fun ClaudeLimits.toLimitWindows(): List<LimitWindow> = windows.map { w ->
+        LimitWindow(
+            id = w.id,
+            label = w.label,
+            minutes = w.minutes,
+            usedPercent = w.usedPercent,
+            resetsAt = w.resetsAt,
+            readAt = readAt,
+            source = "anthropic",
+            resetSince = false,
+            estimated = false,
+            idle = w.id == "five_hour" && w.usedPercent <= 0.0 && w.resetsAt == null,
+            status = if (w.usedPercent >= 100.0) "rejected" else "",
+        )
+    }
 }
