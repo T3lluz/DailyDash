@@ -494,10 +494,32 @@ Briefly tell the user:
 | t3lluz dashboard | OkHttp (`UpcomingRepository`, `DashboardLinkRepository`, `HermesClient`) | Tailnet-only static JSON (`_stats.json`, `_history.json`, `_f1.json`, tiles in `index.html`) and the bridge under `/_api/ai/*` for Hermes |
 | GitHub Releases | OkHttp (`AppUpdateRepository`) | In-app APK updates + changelog |
 
+### Background work, lifecycle and shared helpers (2.0)
+Nothing polls or ticks unseen. A loop in a composable (a refresh every N minutes, a clock) runs in
+`LaunchedWhileResumed(keys) { … }` (ui/util/Motion.kt), which cancels it when the screen or the app goes to
+the background and starts it again on return; a hold that must be released (server polling) keys a
+`DisposableEffect` on `rememberIsResumed()`. View-model loops check `ProcessLifecycleOwner` STARTED.
+`rememberToday()` is a date that turns at midnight. Food totals follow `MacroRepository.changes` (fires on
+every log, delete and goal change) instead of throttled reloads. Health Connect reloads on return to the tab
+only after `HealthViewModel.RESUME_RELOAD_MS`; pull to refresh forces it.
+
+Shared helpers to use rather than re-write: `notifyIfAllowed` / `canPostNotifications` (data/Notifications.kt)
+for every notification; `findActivity()`, `openUrl(url)` (never a bare `startActivity(ACTION_VIEW)`) and
+`requestOrOpenSettings(permission) { launch }` (opens app settings once Android stops prompting) in
+ui/util/Activity.kt; `preparePhoto(...)` (ui/util/Images.kt) for any photo an AI reads: scaled, upright,
+off the main thread; `toDecimalOrNull()` (util/Numbers.kt) for typed numbers ("2,5" and "2.5");
+`readAtMost(limit)` (util/Streams.kt) for picked files. UI: `WidgetStateSwitch(state, contentKey = { it::class })`
+fades between a card's kinds of state; `FoodLogForm` / `FoodLogList` are the one food entry form and list;
+`ServiceButton` is a hub's Connect / Add channels button (the caller gives the haptic); `HeroListSkeleton`
+is an opened media hub's first load; `WidgetPromptCard`'s action is a `PillButton`. Repositories restore their
+disk caches off the main thread (`restored = scope.async { restoreDiskCache() }`, awaited by the calls that
+need it). The baseline profile ships as `.dm` files the updater installs beside the APK; an install that fails
+with one is retried at once without it.
+
 ### Compose Strong Skipping
 Strong skipping is the Compose compiler default on Kotlin 2.x, so there is no flag in `app/build.gradle.kts`. Composables with unstable parameters will skip recomposition automatically — avoid fighting this with `@Stable`/`@Immutable` unless you observe real correctness issues.
 
-**Per-frame values stay out of composition.** Anything that changes every frame (a fade, a pulse, a chevron's turn, a press scale) is kept as a `State` and read inside `graphicsLayer { }`, a `Canvas`/`drawBehind` block or a layout lambda, never as a plain value in the composable body: `MacroCard`'s entrance fade, `LivePulseDot`, `TypingDots` and the expand chevrons do this. `MacroCard` also stops reading `LocalTickersPaused` once its entrance has run, so scroll starts and stops don't recompose every card. The draggable Home/Health lists give each card its own `contentType` (its id), so a slot is only reused for the same card.
+**Per-frame values stay out of composition.** Anything that changes every frame (a fade, a pulse, a chevron's turn, a press scale, a chart's reveal) is kept as a `State` and read inside `graphicsLayer { }`, a `Canvas`/`drawBehind` block or a layout lambda, never as a plain value in the composable body: `MacroCard`'s entrance fade, `LivePulseDot`, `TypingDots`, the expand chevrons, the island's pulse, server dials and the Health bar charts (scaleY from the bottom) do this. A list row gets only what it reads, not a whole screen state: a streamed token makes a new state, and every row that took it re-ran. `MacroCard` also stops reading `LocalTickersPaused` once its entrance has run, so scroll starts and stops don't recompose every card. The draggable Home/Health lists give each card its own `contentType` (its id), so a slot is only reused for the same card.
 
 ## Important Files to Read First
 - `di/AppModule.kt` — understand what is injected and how
