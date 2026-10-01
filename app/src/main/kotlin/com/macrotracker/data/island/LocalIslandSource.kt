@@ -117,6 +117,7 @@ class LocalIslandSource @Inject constructor(
             tone = "accent",
             icon = "radio",
             title = if (more > 0) "${top.userName} +$more live" else "${top.userName} is live",
+            short = top.userName,
             sub = top.gameName,
             end = viewers(top.viewerCount),
             href = top.channelUrl,
@@ -136,6 +137,7 @@ class LocalIslandSource @Inject constructor(
             tone = "quiet",
             icon = "play",
             title = if (fresh.size == 1) fresh.first().channelTitle.ifBlank { "New video" } else "${fresh.size} new videos",
+            short = if (fresh.size == 1) fresh.first().channelTitle.ifBlank { "New video" } else "${fresh.size} videos",
             sub = if (fresh.size == 1) fresh.first().title else channels.take(2).joinToString(", "),
             route = "home",
             color = YOUTUBE_RED,
@@ -151,6 +153,7 @@ class LocalIslandSource @Inject constructor(
             tone = "soon",
             icon = "code",
             title = if (reviews == 1) "A review waits" else "$reviews reviews wait",
+            short = if (reviews == 1) "1 review" else "$reviews reviews",
             sub = snap.pullRequests.firstOrNull()?.title.orEmpty(),
             end = "Review",
             href = "https://github.com/pulls/review-requested",
@@ -183,6 +186,7 @@ class LocalIslandSource @Inject constructor(
         tone = "quiet",
         icon = "moon",
         title = "${minutes / 60}h ${"%02d".format(minutes % 60)}m sleep",
+        short = "${minutes / 60}h ${"%02d".format(minutes % 60)}m",
         sub = "last night",
         route = "health",
     )
@@ -194,6 +198,8 @@ class LocalIslandSource @Inject constructor(
             tone = if (left <= 0) "accent" else "quiet",
             icon = "footprints",
             title = if (left <= 0) "Step goal reached" else "${grouped(left)} steps to go",
+            // Steps taken beside the ring that fills to the goal, as a watch shows them.
+            short = if (steps < 10_000) grouped(steps) else thousands(steps),
             sub = "${grouped(steps)} today",
             route = "health",
             ring = (steps * 100f / STEP_GOAL).coerceIn(0f, 100f),
@@ -206,7 +212,7 @@ class LocalIslandSource @Inject constructor(
         if (summary.totalCalories <= 0) {
             val yesterday = runCatching { macros.getDailySummary(today.minusDays(1).toString()) }.getOrNull()
             if (yesterday == null || yesterday.totalCalories <= 0) return null
-            return item(kind = "food", tone = "quiet", icon = "restaurant", title = "Nothing logged yet", sub = "today", end = "Log", route = "health")
+            return item(kind = "food", tone = "quiet", icon = "restaurant", title = "Nothing logged yet", short = "Log food", sub = "today", end = "Log", route = "health")
         }
         val kcalLeft = summary.calorieGoal - summary.totalCalories
         val proteinLeft = (summary.proteinGoal - summary.totalProtein).coerceAtLeast(0)
@@ -215,6 +221,7 @@ class LocalIslandSource @Inject constructor(
             tone = "quiet",
             icon = "restaurant",
             title = if (kcalLeft >= 0) "${grouped(kcalLeft.toLong())} kcal left" else "${grouped((-kcalLeft).toLong())} kcal over",
+            short = if (kcalLeft >= 0) "$kcalLeft kcal" else "+${-kcalLeft} kcal",
             sub = if (proteinLeft > 0) "$proteinLeft g protein to go" else "protein done",
             route = "health",
             ring = (summary.totalCalories * 100f / summary.calorieGoal.coerceAtLeast(1)).coerceIn(0f, 100f),
@@ -241,6 +248,7 @@ class LocalIslandSource @Inject constructor(
                 else -> "cloud"
             },
             title = "$temp° ${desc.replaceFirstChar { it.uppercase() }}".trim(),
+            short = "$temp° ${skyWord(symbol)}".trim(),
             sub = if (hi != null && lo != null) "$hi° / $lo°" else "",
             route = "home",
         )
@@ -251,6 +259,8 @@ class LocalIslandSource @Inject constructor(
         tone: String,
         icon: String,
         title: String,
+        /** The island's label for it, written to fit three across (IslandShortener's rules). */
+        short: String = "",
         sub: String = "",
         end: String = "",
         href: String? = null,
@@ -264,7 +274,7 @@ class LocalIslandSource @Inject constructor(
         title = title,
         sub = sub,
         end = end,
-        short = title.take(12),
+        short = short,
         href = href,
         join = null,
         color = color,
@@ -274,6 +284,23 @@ class LocalIslandSource @Inject constructor(
     )
 
     private fun grouped(n: Long) = String.format(Locale.US, "%,d", n)
+
+    /** 6,800 → "6.8k", 950 → "950": room for a word beside it on the island. */
+    private fun thousands(n: Long): String =
+        if (n >= 1_000) String.format(Locale.US, "%.1fk", n / 1_000.0).replace(".0k", "k") else n.toString()
+
+    /** One word for the sky, from met.no's symbol code. */
+    private fun skyWord(symbol: String): String = when {
+        symbol.contains("thunder") -> "Storm"
+        symbol.contains("snow") -> "Snow"
+        symbol.contains("sleet") -> "Sleet"
+        symbol.contains("rain") -> "Rain"
+        symbol.contains("fog") -> "Fog"
+        symbol.contains("clearsky") -> "Clear"
+        symbol.contains("fair") || symbol.contains("partlycloudy") -> "Fair"
+        symbol.contains("cloudy") -> "Cloudy"
+        else -> ""
+    }
 
     private fun viewers(count: Int): String = when {
         count >= 1_000_000 -> String.format(Locale.US, "%.1fM", count / 1_000_000.0)

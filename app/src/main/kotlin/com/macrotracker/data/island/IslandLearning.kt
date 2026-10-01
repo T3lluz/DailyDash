@@ -40,8 +40,12 @@ class IslandLearning @Inject constructor(
     @Synchronized
     fun affinity(kind: String, at: LocalDateTime = LocalDateTime.now()): Float {
         decay(at.toLocalDate())
-        val c = counts[kind]?.get(DayPart.of(at.hour)) ?: return PRIOR_TAPS / PRIOR_SHOWS
-        return (c[TAPPED] + PRIOR_TAPS) / (c[SHOWN] + PRIOR_SHOWS)
+        val part = DayPart.of(at.hour)
+        // Before you have taught it anything, the hour says what suits it (the weather in the
+        // morning, steps in the evening); your own taps take over as they add up.
+        val prior = PRIOR_TAPS * IslandRanking.hourFit(kind, part)
+        val c = counts[kind]?.get(part) ?: return prior / PRIOR_SHOWS
+        return (c[TAPPED] + prior) / (c[SHOWN] + PRIOR_SHOWS)
     }
 
     /** Counts each kind once per part of the day it was on the island, however long it stayed. */

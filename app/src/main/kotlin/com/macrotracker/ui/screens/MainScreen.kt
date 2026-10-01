@@ -350,7 +350,7 @@ private fun MainScreenScaffold(
         // The web's island, hanging from the status bar over the tab screens.
         val islandVm: IslandViewModel = hiltViewModel()
         val islandItems by islandVm.items.collectAsState()
-        val islandShortTitles by islandVm.shortTitles.collectAsState()
+        val islandLabels by islandVm.labels.collectAsState()
         LaunchedEffect(updateVersion) { islandVm.setUpdateAvailable(updateVersion) }
         // The tab you are on teaches the island a little about what matters at this hour.
         LaunchedEffect(currentRoute) {
@@ -377,7 +377,7 @@ private fun MainScreenScaffold(
         }
         TopIsland(
             items = islandItems,
-            shortTitles = islandShortTitles,
+            labels = islandLabels,
             hermes = activity,
             onHermes = onActivityClick,
             visible = islandVisible,
