@@ -1,6 +1,5 @@
 package com.macrotracker.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -16,7 +15,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -25,7 +23,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -49,13 +46,11 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.Surface
@@ -176,7 +171,8 @@ fun LiveTag(color: Color, modifier: Modifier = Modifier) {
 /**
  * The channel filter the YouTube and Twitch hubs share, collapsed and open: one round
  * picture per channel. Tapping one keeps its ring and fades the rest back; tapping it
- * again, or the [caption] under the row, shows every channel. Fires its own haptics.
+ * again shows every channel. The ring says which one is picked, so nothing is written
+ * under the row. Fires its own haptics.
  */
 @Composable
 fun ChannelAvatarRow(
@@ -185,9 +181,7 @@ fun ChannelAvatarRow(
     onSelect: (String?) -> Unit,
     selectedRing: Color,
     markColor: Color,
-    accent: Color,
     modifier: Modifier = Modifier,
-    caption: String? = null,
     leading: (@Composable () -> Unit)? = null,
 ) {
     val haptics = rememberHaptics()
@@ -212,10 +206,6 @@ fun ChannelAvatarRow(
         }
         placed = true
     }
-
-    // The caption keeps its last words while it folds away.
-    val lastCaption = remember { CaptionMemory() }
-    if (caption != null) lastCaption.text = caption
 
     Column(modifier = modifier.fillMaxWidth()) {
         LazyRow(
@@ -258,26 +248,7 @@ fun ChannelAvatarRow(
                 )
             }
         }
-        AnimatedVisibility(
-            visible = caption != null,
-            enter = MacroMotion.expandEnter,
-            exit = MacroMotion.expandExit,
-        ) {
-            FilterCaption(
-                text = caption ?: lastCaption.text,
-                accent = accent,
-                onClear = {
-                    haptics.tick()
-                    onSelect(null)
-                },
-            )
-        }
     }
-}
-
-/** Plain holder, not snapshot state: writing it while composing must not schedule another pass. */
-private class CaptionMemory {
-    var text: String = ""
 }
 
 @Composable
@@ -369,33 +340,5 @@ private fun ChannelChip(
             )
             ChannelMark.None -> Unit
         }
-    }
-}
-
-@Composable
-private fun FilterCaption(text: String, accent: Color, onClear: () -> Unit) {
-    val shape = RoundedCornerShape(999.dp)
-    Row(
-        modifier = Modifier
-            .padding(top = 8.dp)
-            .clip(shape)
-            .background(accent.copy(alpha = 0.12f))
-            .border(0.5.dp, accent.copy(alpha = 0.3f), shape)
-            .clickable(onClickLabel = "Show every channel", onClick = onClear)
-            .heightIn(min = 28.dp)
-            .padding(start = 11.dp, end = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
-    ) {
-        Text(
-            text,
-            fontSize = 11.sp,
-            color = accent,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false),
-        )
-        Icon(AppIcons.Close, contentDescription = null, tint = accent, modifier = Modifier.size(12.dp))
     }
 }

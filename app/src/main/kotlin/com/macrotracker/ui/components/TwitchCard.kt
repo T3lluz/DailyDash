@@ -450,8 +450,6 @@ private fun TwitchChannelFilter(
             onSelect = onChannelSelected,
             selectedRing = TwLive,
             markColor = TwLive,
-            accent = TwPurple,
-            caption = channels.firstOrNull { it.id == selectedChannelId }?.let { "Only ${it.name}" },
             modifier = Modifier.padding(bottom = bottomGap),
         )
     }
