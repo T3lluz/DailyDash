@@ -1,5 +1,6 @@
 package com.macrotracker.data.server
 
+import java.util.Locale
 import kotlin.math.roundToInt
 
 /**
@@ -331,7 +332,7 @@ object ServerAdvisories {
 
     private fun plural(count: Int, word: String) = if (count == 1) word else "${word}s"
 
-    private fun trim(value: Float) = String.format("%.2f", value)
+    private fun trim(value: Float) = String.format(Locale.US, "%.2f", value)
 }
 
 /** Kilobytes to a short human string — 1024-based, the way `df` and `free` mean it. */
@@ -346,7 +347,7 @@ fun formatKb(kb: Long): String {
     return if (value >= 100 || unitIndex == 0) {
         "${value.roundToInt()} ${units[unitIndex]}"
     } else {
-        String.format("%.1f %s", value, units[unitIndex])
+        String.format(Locale.US, "%.1f %s", value, units[unitIndex])
     }
 }
 
@@ -362,7 +363,7 @@ fun formatRate(bytesPerSec: Long): String {
     return if (value >= 100 || unitIndex == 0) {
         "${value.roundToInt()} ${units[unitIndex]}"
     } else {
-        String.format("%.1f %s", value, units[unitIndex])
+        String.format(Locale.US, "%.1f %s", value, units[unitIndex])
     }
 }
 
