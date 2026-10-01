@@ -1,6 +1,9 @@
 package com.macrotracker.data.upcoming
 
 import android.content.Context
+import kotlinx.coroutines.async
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.CoroutineScope
 import android.util.Log
 import androidx.core.content.edit
 import com.macrotracker.data.local.SettingsRepository
@@ -93,14 +96,15 @@ class UpcomingRepository @Inject constructor(
     @Volatile private var racesJson: String = "{}"
     @Volatile private var f1FetchedMs: Long = 0L
 
-    init {
-        restoreDiskCache()
-    }
+    // The disk cache is decoded off the main thread: this is built during Home's first frame,
+    // and the snapshot is tens of kB of JSON. Calls that need it wait for it.
+    private val restored = CoroutineScope(SupervisorJob() + Dispatchers.IO).async { restoreDiskCache() }
 
     /** The last good feed for the configured server, if there is one. */
     fun getCached(): UpcomingFeed? = cached?.takeIf { cachedBase == baseUrl() }
 
     suspend fun getFeed(forceRefresh: Boolean = false): Result<UpcomingFeed> = withContext(Dispatchers.IO) {
+        restored.await()
         mutex.withLock {
             val base = baseUrl()
             if (base.isBlank()) return@withLock Result.failure(IOException("Set your dashboard server in Settings → Connections"))

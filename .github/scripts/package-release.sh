@@ -181,7 +181,9 @@ build_release_notes() {
   dedupe_bullets
 
   {
-    echo "<!-- dailydash-version: ${VERSION_NAME} vc${VERSION_CODE} -->"
+    # Numbers only: 1.x clients match this comment against digits and dots, and show it as
+    # a bullet otherwise. The full name (a beta's) is in the tag.
+    echo "<!-- dailydash-version: ${VERSION_NAME%%-*} vc${VERSION_CODE} -->"
     echo "## What's new"
     if [ "${#bullets[@]}" -gt 0 ]; then
       printf '%s\n' "${bullets[@]}"
@@ -211,13 +213,33 @@ if [ ! -f "$APK_SRC" ]; then
   exit 1
 fi
 
-APK_NAME="DailyDash-${VERSION_NAME}-vc${VERSION_CODE}.apk"
+# A pre-release (2.0.0-beta.1.0) names its APK by the numbers alone: 1.x clients only
+# recognise digits and dots there, and read the full name from the tag instead.
+FILE_VERSION="${VERSION_NAME%%-*}"
+APK_NAME="DailyDash-${FILE_VERSION}-vc${VERSION_CODE}.apk"
 cp "$APK_SRC" "$APK_NAME"
+
+# The Baseline Profile as dex metadata, one per ART profile format (0: Android 12+,
+# profile version 015; 1: Android 9-11, version 010). The in-app updater installs the matching one beside the APK so ART
+# compiles the app at install instead of running it cold until the overnight dexopt.
+DM_FILES=()
+for n in 0 1; do
+  dm_src="app/build/outputs/apk/release/baselineProfiles/${n}/app-release.dm"
+  if [ -f "$dm_src" ]; then
+    dm_name="DailyDash-${FILE_VERSION}-vc${VERSION_CODE}-p${n}.dm"
+    cp "$dm_src" "$dm_name"
+    DM_FILES+=("$dm_name")
+  fi
+done
 
 {
   echo "tag=${TAG_NAME}"
   echo "name=${RELEASE_NAME}"
   echo "apk=${APK_NAME}"
+  echo "files<<EOF"
+  echo "$APK_NAME"
+  for dm in "${DM_FILES[@]+"${DM_FILES[@]}"}"; do echo "$dm"; done
+  echo "EOF"
   echo "version_name=${VERSION_NAME}"
   echo "version_code=${VERSION_CODE}"
   echo "notes<<EOF"

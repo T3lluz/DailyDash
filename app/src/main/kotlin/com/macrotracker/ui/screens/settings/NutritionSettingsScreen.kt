@@ -1,6 +1,7 @@
 package com.macrotracker.ui.screens.settings
 
 import androidx.compose.foundation.background
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -40,20 +42,21 @@ import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
-import com.macrotracker.ui.viewmodel.StatsViewModel
+import com.macrotracker.ui.viewmodel.GoalsViewModel
 import com.macrotracker.ui.theme.AppIcons
 
 @Composable
 fun NutritionSettingsScreen(
     onNavigateBack: () -> Unit,
-    statsViewModel: StatsViewModel = hiltViewModel(),
+    goalsViewModel: GoalsViewModel = hiltViewModel(),
 ) {
-    val calGoal by statsViewModel.calGoal.collectAsState()
-    val protGoal by statsViewModel.protGoal.collectAsState()
+    val context = LocalContext.current
+    val calGoal by goalsViewModel.calGoal.collectAsState()
+    val protGoal by goalsViewModel.protGoal.collectAsState()
     var goalsSaved by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        statsViewModel.loadData()
+        goalsViewModel.loadData()
     }
 
     Column(
@@ -96,7 +99,7 @@ fun NutritionSettingsScreen(
                         value = calGoal,
                         onValueChange = {
                             goalsSaved = false
-                            statsViewModel.setCalGoal(it)
+                            goalsViewModel.setCalGoal(it)
                         },
                         placeholder = "2000",
                         keyboardType = KeyboardType.Number,
@@ -113,7 +116,7 @@ fun NutritionSettingsScreen(
                         value = protGoal,
                         onValueChange = {
                             goalsSaved = false
-                            statsViewModel.setProtGoal(it)
+                            goalsViewModel.setProtGoal(it)
                         },
                         placeholder = "150",
                         keyboardType = KeyboardType.Number,
@@ -124,8 +127,11 @@ fun NutritionSettingsScreen(
             MacroButton(
                 text = if (goalsSaved) "Goals saved" else "Save goals",
                 onClick = {
-                    statsViewModel.saveGoals()
-                    goalsSaved = true
+                    if (goalsViewModel.saveGoals()) {
+                        goalsSaved = true
+                    } else {
+                        Toast.makeText(context, "Enter a number above 0 for both goals", Toast.LENGTH_SHORT).show()
+                    }
                 },
                 modifier = Modifier
                     .fillMaxWidth()

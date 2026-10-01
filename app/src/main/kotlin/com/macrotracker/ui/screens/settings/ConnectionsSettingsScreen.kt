@@ -56,19 +56,14 @@ import com.macrotracker.ui.theme.ServerBrand
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.rememberHaptics
-import com.macrotracker.ui.viewmodel.ServerViewModel
 import com.macrotracker.ui.viewmodel.SettingsViewModel
 import com.macrotracker.ui.theme.AppIcons
 
 @Composable
 fun ConnectionsSettingsScreen(
     onNavigateBack: () -> Unit,
-    onNavigateToServers: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
-    serverViewModel: ServerViewModel = hiltViewModel(),
 ) {
-    val serverProfiles by serverViewModel.profiles.collectAsState()
-    val serverRuntimes by serverViewModel.runtimes.collectAsState()
     val healthConnectAvailable by viewModel.healthConnectConnected.collectAsState()
     val weatherConnected by viewModel.weatherConnected.collectAsState()
     val calendarConnected by viewModel.calendarConnected.collectAsState()
@@ -351,28 +346,6 @@ fun ConnectionsSettingsScreen(
             PhoneHubSettingsCard()
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
-
-        MacroCard(delayMs = 140) {
-            val online = serverRuntimes.values.count { it.isOnline }
-            SettingsNavRow(
-                icon = AppIcons.Server,
-                tint = ServerBrand,
-                title = "Servers",
-                summary = if (serverProfiles.isEmpty()) {
-                    "Monitor your own machines over SSH: live stats, alerts, updates"
-                } else {
-                    "${serverProfiles.size} configured"
-                },
-                status = if (serverProfiles.isEmpty()) null else "$online online",
-                statusTone = if (serverProfiles.isNotEmpty() && online == serverProfiles.size) {
-                    SettingsStatusTone.GOOD
-                } else {
-                    SettingsStatusTone.PLAIN
-                },
-                onClick = onNavigateToServers,
-            )
-        }
     }
 }
 

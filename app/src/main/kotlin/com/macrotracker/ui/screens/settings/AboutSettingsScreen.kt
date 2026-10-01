@@ -1,6 +1,7 @@
 package com.macrotracker.ui.screens.settings
 
-import androidx.activity.ComponentActivity
+import com.macrotracker.ui.util.findActivity
+import com.macrotracker.data.update.prettyVersion
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -20,15 +21,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,6 +48,7 @@ import com.macrotracker.ui.components.ButtonVariant
 import com.macrotracker.ui.components.CardHeader
 import com.macrotracker.ui.components.ContentSkeleton
 import com.macrotracker.ui.components.MacroButton
+import com.macrotracker.ui.components.UpdateProgressBar
 import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.components.MarkdownText
 import com.macrotracker.ui.theme.Background
@@ -67,7 +68,7 @@ fun AboutSettingsScreen(
     onNavigateBack: () -> Unit,
     onReplayIntro: () -> Unit = {},
 ) {
-    val activity = LocalContext.current as ComponentActivity
+    val activity = LocalContext.current.findActivity()
     val appUpdateViewModel: AppUpdateViewModel = hiltViewModel(viewModelStoreOwner = activity)
     val updateState by appUpdateViewModel.state.collectAsState()
     val releaseNotes by appUpdateViewModel.releaseNotes.collectAsState()
@@ -113,15 +114,15 @@ fun AboutSettingsScreen(
                 is AppUpdateUiState.Checking -> "Checking for updates…" to TextSecondary
                 is AppUpdateUiState.UpToDate -> "You're on the latest build." to Success
                 is AppUpdateUiState.Available ->
-                    "Update available: ${s.info.versionName} (build ${s.info.versionCode})" to Primary
+                    "Update available: ${prettyVersion(s.info.versionName)} (build ${s.info.versionCode})" to Primary
                 is AppUpdateUiState.NeedsPermission ->
-                    "${s.info.versionName} is ready. Android needs to allow installs from DailyDash first." to Primary
+                    "${prettyVersion(s.info.versionName)} is ready. Android needs to allow installs from DailyDash first." to Primary
                 is AppUpdateUiState.Downloading ->
-                    "Downloading ${s.info.versionName}…${s.progress?.let { " ${(it * 100).toInt()}%" } ?: ""}" to TextSecondary
+                    "Downloading ${prettyVersion(s.info.versionName)}…${s.progress?.let { " ${(it * 100).toInt()}%" } ?: ""}" to TextSecondary
                 is AppUpdateUiState.Installing ->
-                    (if (s.awaitingConfirmation) "Tap Install in Android's prompt" else "Installing ${s.info.versionName}…") to TextSecondary
+                    (if (s.awaitingConfirmation) "Tap Install in Android's prompt" else "Installing ${prettyVersion(s.info.versionName)}…") to TextSecondary
                 is AppUpdateUiState.ReadyToInstall ->
-                    (s.note ?: "${s.info.versionName} is downloaded and ready to install") to Success
+                    (s.note ?: "${prettyVersion(s.info.versionName)} is downloaded and ready to install") to Success
                 is AppUpdateUiState.Error -> s.message to Error
             }
             Text(
@@ -131,19 +132,9 @@ fun AboutSettingsScreen(
                 modifier = Modifier.padding(bottom = 8.dp),
             )
             when (val s = updateState) {
-                is AppUpdateUiState.Downloading -> LinearProgressIndicator(
-                    progress = { s.progress ?: 0f },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 10.dp),
-                    color = Primary,
-                )
-                is AppUpdateUiState.Installing -> LinearProgressIndicator(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 10.dp),
-                    color = Primary,
-                )
+                // The same bar as the update sheet; an unknown size sweeps instead of sitting at zero.
+                is AppUpdateUiState.Downloading -> UpdateProgressBar(s.progress, Modifier.padding(bottom = 10.dp))
+                is AppUpdateUiState.Installing -> UpdateProgressBar(null, Modifier.padding(bottom = 10.dp))
                 else -> Unit
             }
 
@@ -153,7 +144,7 @@ fun AboutSettingsScreen(
                         is AppUpdateUiState.Downloading, is AppUpdateUiState.Installing -> "Show progress"
                         is AppUpdateUiState.ReadyToInstall -> "Install update"
                         is AppUpdateUiState.Error -> "Try again"
-                        else -> "Update to ${s.info?.versionName.orEmpty()}"
+                        else -> "Update to ${prettyVersion(s.info?.versionName.orEmpty())}"
                     },
                     onClick = {
                         when (val s = updateState) {
@@ -306,7 +297,7 @@ private fun ReleaseNotesDropdown(
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = release.versionName,
+                        text = prettyVersion(release.versionName),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (release.isNewerThanInstalled) Primary else TextPrimary,

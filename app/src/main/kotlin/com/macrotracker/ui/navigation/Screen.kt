@@ -42,7 +42,6 @@ object SettingsRoutes {
 
 // Other pushed sub-screens
 object SubScreenRoutes {
-    const val STATS = "stats"
     const val WIDGETS = "widgets"
     const val CAMERA_SCAN = "camera_scan"
 

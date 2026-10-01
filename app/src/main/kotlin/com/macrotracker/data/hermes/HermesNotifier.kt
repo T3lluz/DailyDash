@@ -1,6 +1,7 @@
 package com.macrotracker.data.hermes
 
-import android.Manifest
+import com.macrotracker.data.notifyIfAllowed
+import com.macrotracker.data.canPostNotifications
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationChannelGroup
@@ -8,12 +9,10 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.RemoteInput
-import androidx.core.content.ContextCompat
 import com.macrotracker.MainActivity
 import com.macrotracker.R
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -62,10 +61,7 @@ class HermesNotifier @Inject constructor(
         )
     }
 
-    fun hasPermission(): Boolean =
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
-            PackageManager.PERMISSION_GRANTED
+    fun hasPermission(): Boolean = context.canPostNotifications()
 
     /** The ongoing notification for the turns in progress, newest first. */
     fun working(turns: List<HermesTurnActivity>): Notification {
@@ -153,7 +149,7 @@ class HermesNotifier @Inject constructor(
                     .build(),
             )
         }
-        runCatching { manager.notify(finishedId(turn.threadId), builder.build()) }
+        manager.notifyIfAllowed(context, finishedId(turn.threadId), builder.build())
     }
 
     fun cancelFinished(threadId: String) {

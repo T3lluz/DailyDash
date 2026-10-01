@@ -9,14 +9,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.compositionLocalOf
 
-/** When true, periodic UI tickers (countdowns, relative timestamps) pause updates. */
-val LocalTickersPaused = staticCompositionLocalOf { false }
+/**
+ * When true, periodic UI tickers (countdowns, relative timestamps) pause updates.
+ * Not a static local: it flips at the start and end of every scroll, and a static one
+ * recomposes everything under the provider each time instead of only its readers.
+ */
+val LocalTickersPaused = compositionLocalOf { false }
 
 private val HOME_WIDGET_ITEM_KEYS = setOf(
-    "F1", "GITHUB", "SERVERS", "UPCOMING", "YOUTUBE", "TWITCH", "WEATHER", "CALENDAR", "BODY_STATS", "PROGRESS",
-    "QUICK_ADD", "BRIEFING", "MAIL",
+    "F1", "GITHUB", "SERVERS", "UPCOMING", "YOUTUBE", "TWITCH", "WEATHER", "CALENDAR", "BODY_STATS", "FOOD",
+    "BRIEFING", "MAIL",
 )
 
 /** Tab slide duration in [MacroMotion] — used to defer work until navigation finishes. */

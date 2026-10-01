@@ -64,7 +64,6 @@ class GitHubAuthClient @Inject constructor(
         private const val KEY_EXPIRES_AT = "github_expires_at_ms"
 
         const val SCOPES = "repo read:user notifications"
-        const val REDIRECT_URI = "https://localhost/github/oauth"
 
         private const val DEVICE_URL = "https://github.com/login/device/code"
         private const val TOKEN_URL = "https://github.com/login/oauth/access_token"
@@ -98,7 +97,7 @@ class GitHubAuthClient @Inject constructor(
     suspend fun authorizeInteractively(): GitHubAuthOutcome {
         if (!isConfigured()) {
             return GitHubAuthOutcome.Failed(
-                "GitHub Client ID missing — add GITHUB_CLIENT_ID to local.properties",
+                "GitHub isn't set up in this build (no client ID)",
             )
         }
         return authMutex.withLock {
@@ -419,7 +418,8 @@ class GitHubAuthClient @Inject constructor(
             Log.w(TAG, "Custom Tabs unavailable — falling back to ACTION_VIEW", e)
             val fallback = Intent(Intent.ACTION_VIEW, url.toUri())
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(fallback)
+            // No browser at all: say so through the sign-in state instead of crashing.
+            runCatching { context.startActivity(fallback) }.onFailure { Log.w(TAG, "No app can open the sign-in page", it) }
         }
     }
 

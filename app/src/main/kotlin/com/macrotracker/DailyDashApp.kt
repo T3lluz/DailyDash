@@ -1,6 +1,7 @@
 package com.macrotracker
 
 import android.app.Application
+import kotlinx.coroutines.delay
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
@@ -54,7 +55,9 @@ class DailyDashApp : Application(), ImageLoaderFactory {
                 WidgetRefreshWorker.enqueuePeriodicRefresh(this@DailyDashApp)
                 // Periodic worker covers freshness; skip an immediate full refresh on every cold start.
             }
-            // Give the launcher's widget picker a real render of every widget (Android 15+).
+            // Give the launcher's widget picker a real render of every widget (Android 15+),
+            // once the app's own first screens are drawn: it renders every widget kind.
+            delay(PREVIEW_DELAY_MS)
             DashWidgets.publishAllPreviews(this@DailyDashApp)
         }
     }
@@ -94,3 +97,5 @@ class DailyDashApp : Application(), ImageLoaderFactory {
             .build()
     }
 }
+
+private const val PREVIEW_DELAY_MS = 20_000L

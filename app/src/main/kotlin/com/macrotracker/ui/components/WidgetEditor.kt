@@ -38,13 +38,18 @@ fun parseWidgetConfig(configStr: String, defaultOrder: List<Triple<String, Strin
     if (configStr.isBlank()) {
         return defaultOrder.map { WidgetConfig(it.first, it.second, true, it.third) }
     }
-    val parts = configStr.split(",").mapNotNull { part ->
+    // A card merged into another in an update takes over its place, and stays shown
+    // if either of the old ones was.
+    fun current(id: String): String =
+        MergedWidgetIds[id]?.takeIf { new -> defaultOrder.none { it.first == id } && defaultOrder.any { it.first == new } } ?: id
+    val saved = configStr.split(",").mapNotNull { part ->
         val p = part.split(":")
-        if (p.size == 2) p[0] to p[1].toBoolean() else null
-    }.toMap()
+        if (p.size == 2) current(p[0]) to p[1].toBoolean() else null
+    }
+    val parts = saved.groupBy({ it.first }, { it.second }).mapValues { (_, shown) -> shown.any { it } }
 
     val configs = mutableListOf<WidgetConfig>()
-    val configStrList = configStr.split(",").map { it.split(":")[0] }
+    val configStrList = saved.map { it.first }.distinct()
 
     // First add saved ones in their order
     for (id in configStrList) {
@@ -65,6 +70,18 @@ fun parseWidgetConfig(configStr: String, defaultOrder: List<Triple<String, Strin
     }
     return configs
 }
+
+/**
+ * Cards merged into one: Today's progress and Quick add became Home's Food; Food today,
+ * Log food and Food log became Health's.
+ */
+private val MergedWidgetIds = mapOf(
+    "PROGRESS" to "FOOD",
+    "QUICK_ADD" to "FOOD",
+    "SUMMARY" to "FOOD",
+    "ADD_ENTRY" to "FOOD",
+    "RECENT_LOGS" to "FOOD",
+)
 
 fun encodeWidgetConfig(configs: List<WidgetConfig>): String {
     return configs.joinToString(",") { "${it.id}:${it.isVisible}" }

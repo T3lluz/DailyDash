@@ -14,6 +14,8 @@ interface TwitchRepository {
     suspend fun getLiveStreamsForTrackedChannels(forceRefresh: Boolean = false): Result<List<TwitchStream>>
     suspend fun searchChannels(query: String): Result<List<TwitchChannel>>
     fun getTrackedChannels(): List<TwitchChannel>
+    /** The live streams last fetched, without going to the network; null before the first. */
+    fun getCachedLiveStreams(): List<TwitchStream>?
     fun addTrackedChannel(channel: TwitchChannel)
     fun addTrackedChannels(channels: List<TwitchChannel>): Int
     fun removeTrackedChannel(userId: String)
@@ -26,7 +28,6 @@ interface TwitchRepository {
     suspend fun importFollows(accessToken: String, userId: String): Result<FollowImportResult>
     fun isTwitchConnected(): Boolean
     fun twitchAccountLabel(): String?
-    fun twitchUserId(): String?
     suspend fun helixAccessToken(): String?
     val lastFetchTimeMs: Long
 }
@@ -60,6 +61,8 @@ class TwitchRepositoryImpl @Inject constructor(
         cachedStreams = null
         lastFetchTime = 0
     }
+
+    override fun getCachedLiveStreams(): List<TwitchStream>? = cachedStreams
 
     override fun getTrackedChannels(): List<TwitchChannel> {
         val ids = prefs.getStringSet(KEY_TRACKED, emptySet()) ?: emptySet()
@@ -125,7 +128,6 @@ class TwitchRepositoryImpl @Inject constructor(
 
     override fun twitchAccountLabel(): String? = authClient.connectedDisplayName()
 
-    override fun twitchUserId(): String? = authClient.connectedUserId()
 
     override suspend fun helixAccessToken(): String? {
         authClient.validAccessToken()?.let { return it }
@@ -148,8 +150,9 @@ class TwitchRepositoryImpl @Inject constructor(
     override suspend fun getLiveStreamsForTrackedChannels(forceRefresh: Boolean): Result<List<TwitchStream>> =
         withContext(Dispatchers.IO) {
             val now = System.currentTimeMillis()
-            if (!forceRefresh && cachedStreams != null && (now - lastFetchTime) < CACHE_DURATION_MS) {
-                return@withContext Result.success(cachedStreams!!)
+            val cached = cachedStreams // read once: an invalidate on another thread can't null it mid-check
+            if (!forceRefresh && cached != null && (now - lastFetchTime) < CACHE_DURATION_MS) {
+                return@withContext Result.success(cached)
             }
 
             val tracked = getTrackedChannels()
@@ -159,8 +162,7 @@ class TwitchRepositoryImpl @Inject constructor(
                 ?: return@withContext Result.failure(
                     Exception(
                         if (!authClient.isConfigured()) {
-                            "Twitch Client ID/Secret missing — add TWITCH_CLIENT_ID and " +
-                                "TWITCH_CLIENT_SECRET to local.properties"
+                            "Twitch isn't set up in this build (no client ID and secret)"
                         } else if (!authClient.isConnected()) {
                             "Connect Twitch to load live streams"
                         } else {
@@ -169,7 +171,16 @@ class TwitchRepositoryImpl @Inject constructor(
                     ),
                 )
 
-            helixApi.getStreams(token, tracked.map { it.userId })
+            var result = helixApi.getStreams(token, tracked.map { it.userId })
+            // A 401 on a token that looked valid (revoked, or expired early): refresh the
+            // user's once, else fall back to the app's, instead of failing every poll and
+            // leaving the card on stale "live" streams.
+            if ((result.exceptionOrNull() as? TwitchHttpException)?.code == 401) {
+                authClient.forgetAppToken()
+                val retry = authClient.refreshAccessToken() ?: authClient.appAccessToken()
+                if (retry != null && retry != token) result = helixApi.getStreams(retry, tracked.map { it.userId })
+            }
+            result
                 .map { streams ->
                     val thumbs = tracked.associate { it.userId to it.profileImageUrl }
                     val enriched = streams.map { s ->
@@ -187,8 +198,7 @@ class TwitchRepositoryImpl @Inject constructor(
             ?: return Result.failure(
                 Exception(
                     if (!authClient.isConfigured()) {
-                        "Twitch Client ID/Secret missing — add TWITCH_CLIENT_ID and " +
-                            "TWITCH_CLIENT_SECRET to local.properties"
+                        "Twitch isn't set up in this build (no client ID and secret)"
                     } else {
                         "Connect Twitch to search channels"
                     },

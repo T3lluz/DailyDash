@@ -1,6 +1,7 @@
 package com.macrotracker.ui.screens
 
-import androidx.activity.ComponentActivity
+import com.macrotracker.ui.util.findActivity
+import com.macrotracker.data.update.prettyVersion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,9 +20,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,7 +48,6 @@ import com.macrotracker.ui.screens.settings.SettingsStatusTone
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.HealthConnectBrand
-import com.macrotracker.ui.theme.HealthSteps
 import com.macrotracker.ui.theme.NutritionCalories
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.ServerBrand
@@ -57,7 +58,7 @@ import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.AppUpdateViewModel
 import com.macrotracker.ui.viewmodel.ServerViewModel
 import com.macrotracker.ui.viewmodel.SettingsViewModel
-import com.macrotracker.ui.viewmodel.StatsViewModel
+import com.macrotracker.ui.viewmodel.GoalsViewModel
 
 /** The AI row's tint: the same lilac the widgets' AI line uses. */
 private val AiTint = Color(0xFFB4A7F5)
@@ -73,14 +74,13 @@ fun SettingsScreen(
     onNavigateToAi: () -> Unit = {},
     onNavigateToNutrition: () -> Unit = {},
     onNavigateToAbout: () -> Unit = {},
-    onNavigateToStats: () -> Unit = {},
     onNavigateToWidgets: () -> Unit = {},
     onNavigateToServers: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
-    statsViewModel: StatsViewModel = hiltViewModel(),
+    goalsViewModel: GoalsViewModel = hiltViewModel(),
     serverViewModel: ServerViewModel = hiltViewModel(),
 ) {
-    val activity = LocalContext.current as ComponentActivity
+    val activity = LocalContext.current.findActivity()
     val updateViewModel: AppUpdateViewModel = hiltViewModel(viewModelStoreOwner = activity)
     val updateState by updateViewModel.state.collectAsState()
 
@@ -90,15 +90,15 @@ fun SettingsScreen(
     val aiProvider by viewModel.aiProvider.collectAsState()
     val aiReady by viewModel.aiReady.collectAsState()
     val widgetsPlaced by viewModel.widgetsPlaced.collectAsState()
-    val calGoal by statsViewModel.calGoal.collectAsState()
-    val protGoal by statsViewModel.protGoal.collectAsState()
+    val calGoal by goalsViewModel.calGoal.collectAsState()
+    val protGoal by goalsViewModel.protGoal.collectAsState()
     val servers by serverViewModel.profiles.collectAsState()
     val runtimes by serverViewModel.runtimes.collectAsState()
 
     // Coming back from Android's permission screens or a widget drop changes what's true.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         viewModel.refreshConnectionStatus()
-        statsViewModel.loadData()
+        goalsViewModel.loadData()
     }
 
     val connectedCount = listOf(healthConnected, weatherConnected, calendarConnected).count { it }
@@ -172,14 +172,6 @@ fun SettingsScreen(
                 status = calGoal.takeIf { it.isNotBlank() }?.let { "$it kcal · ${protGoal}g" },
                 onClick = onNavigateToNutrition,
             )
-            SettingsRowDivider()
-            SettingsNavRow(
-                icon = AppIcons.ChartBar,
-                tint = HealthSteps,
-                title = "Stats",
-                summary = "The last 7 days of calories and protein",
-                onClick = onNavigateToStats,
-            )
         }
 
         SettingsGroup(title = "Home screen", delayMs = 100) {
@@ -215,7 +207,7 @@ fun SettingsScreen(
 @Composable
 private fun UpdateBanner(state: AppUpdateUiState, onClick: () -> Unit) {
     val haptics = rememberHaptics()
-    val version = state.info?.versionName
+    val version = state.info?.versionName?.let(::prettyVersion)
     Row(
         modifier = Modifier
             .fillMaxWidth()

@@ -63,7 +63,9 @@ fun MacroCard(
     var hasAnimated by rememberSaveable { mutableStateOf(false) }
 
     // Starts fully shown once the card has faded in, so coming back never fades it again.
-    val alpha = remember { Animatable(if (hasAnimated) 1f else 0f) }
+    // A card with no entrance delay starts shown: at 0 it was blank for a frame, which a
+    // state swap (loading → loaded) showed as a flicker.
+    val alpha = remember { Animatable(if (hasAnimated || delayMs <= 0L) 1f else 0f) }
     // Only the entrance cares whether a list is scrolling. Once it has run, not reading
     // the local keeps every card from recomposing each time a scroll starts or stops.
     val scrollIdle = hasAnimated || !LocalTickersPaused.current

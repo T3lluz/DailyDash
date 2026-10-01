@@ -1,6 +1,7 @@
 package com.macrotracker.ui.components
 
 import android.content.ContentUris
+import com.macrotracker.ui.util.LaunchedWhileResumed
 import android.content.Context
 import android.content.Intent
 import android.provider.CalendarContract
@@ -192,11 +193,11 @@ internal fun CalendarContent(
 
 /** Ticks once a minute, so "in 12 min" and the progress of a running meeting stay true. */
 @Composable
-private fun rememberMinuteClock() = remember { mutableLongStateOf(System.currentTimeMillis()) }.also { clock ->
-    LaunchedEffect(Unit) {
+internal fun rememberMinuteClock() = remember { mutableLongStateOf(System.currentTimeMillis()) }.also { clock ->
+    LaunchedWhileResumed {
         while (true) {
-            delay(60_000L - System.currentTimeMillis() % 60_000L)
             clock.longValue = System.currentTimeMillis()
+            delay(60_000L - System.currentTimeMillis() % 60_000L)
         }
     }
 }

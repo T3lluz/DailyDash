@@ -560,7 +560,7 @@ fun SleepDetailChart(
 
         SleepStagesHypnogram(
             segments = chartStages,
-            reveal = reveal.value,
+            reveal = { reveal.value },
             haptics = haptics,
         )
     }
@@ -649,7 +649,7 @@ fun SleepNightHypnogram(
         reveal.snapTo(0f)
         reveal.animateTo(1f, MacroMotion.chartRevealTween(700))
     }
-    SleepStagesHypnogram(segments = segments, reveal = reveal.value, haptics = haptics)
+    SleepStagesHypnogram(segments = segments, reveal = { reveal.value }, haptics = haptics)
 }
 
 /**
@@ -696,7 +696,9 @@ private fun mergeSleepStages(stages: List<SleepSessionRecord.Stage>): List<Sleep
 @Composable
 private fun SleepStagesHypnogram(
     segments: List<SleepSegment>,
-    reveal: Float,
+    // Read inside the draw block: as a plain Float, the Sleep card recomposed every frame
+    // of the reveal.
+    reveal: () -> Float,
     haptics: HapticHelper,
 ) {
     var touchX by remember { mutableStateOf<Float?>(null) }
@@ -803,7 +805,7 @@ private fun SleepStagesHypnogram(
                     // Thicker bars — Apple Health presence
                     val barInset = laneH * 0.22f
                     val barH = laneH - barInset * 2
-                    val progress = reveal.coerceIn(0f, 1f)
+                    val progress = reveal().coerceIn(0f, 1f)
 
                     fun xOf(epochMs: Long): Float =
                         padX + ((epochMs - minTime).toFloat() / timeRange) * graphW * progress

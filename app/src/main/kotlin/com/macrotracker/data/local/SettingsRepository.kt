@@ -234,6 +234,14 @@ class SettingsRepository @Inject constructor(
     }
 
     /** Empty [fullName] means All repos. Persist `owner/name` when focusing one repo. */
+    /** Health's picks that should outlast a restart: the week's first day and Food trends' view. */
+    fun healthWeekStart(): Int = prefs.getInt(KEY_HEALTH_WEEK_START, 1)
+    fun saveHealthWeekStart(isoDay: Int) = prefs.edit { putInt(KEY_HEALTH_WEEK_START, isoDay) }
+    fun foodTrendsRange(): Int = prefs.getInt(KEY_FOOD_TRENDS_RANGE, 7)
+    fun saveFoodTrendsRange(days: Int) = prefs.edit { putInt(KEY_FOOD_TRENDS_RANGE, days) }
+    fun foodTrendsMetric(): String = prefs.getString(KEY_FOOD_TRENDS_METRIC, "calories") ?: "calories"
+    fun saveFoodTrendsMetric(metric: String) = prefs.edit { putString(KEY_FOOD_TRENDS_METRIC, metric) }
+
     fun saveGithubFocusRepo(fullName: String) {
         val trimmed = fullName.trim()
         prefs.edit { putString(KEY_GITHUB_FOCUS_REPO, trimmed) }
@@ -352,7 +360,7 @@ class SettingsRepository @Inject constructor(
 
     private fun loadHealthWidgetOrder(): String {
         val default =
-            "DAILY_HEALTH:true,BODY_STATS:true,SLEEP:true,ACTIVITIES:true,VITALS:true,HISTORY:true,SUMMARY:true,ADD_ENTRY:true,WEEK_AT_A_GLANCE:true,RECENT_LOGS:true"
+            "DAILY_HEALTH:true,BODY_STATS:true,SLEEP:true,ACTIVITIES:true,VITALS:true,HISTORY:true,FOOD:true,WEEK_AT_A_GLANCE:true"
         val raw = prefs.getString("health_widget_order", default) ?: default
         val migrated = migrateHealthWidgetOrder(raw)
         if (migrated != raw) {
@@ -375,6 +383,9 @@ class SettingsRepository @Inject constructor(
         const val KEY_WIND_UNIT = "wind_unit"
         const val KEY_GITHUB_TOKEN = "github_token"
         const val KEY_GITHUB_FOCUS_REPO = "github_focus_repo"
+        const val KEY_HEALTH_WEEK_START = "health_week_start"
+        const val KEY_FOOD_TRENDS_RANGE = "food_trends_range"
+        const val KEY_FOOD_TRENDS_METRIC = "food_trends_metric"
         const val KEY_DASHBOARD_SERVER_URL = "dashboard_server_url"
         const val KEY_TECH_SUPPORT_BRAIN = "tech_support_brain"
         const val KEY_HERMES_LAST_REACHABLE = "hermes_last_reachable"
@@ -388,7 +399,7 @@ class SettingsRepository @Inject constructor(
 
         const val DEFAULT_DASHBOARD_SERVER_URL = "https://t3lluz.com"
 
-        const val DEFAULT_HOME_WIDGET_ORDER = "WEATHER:true,CALENDAR:true,BRIEFING:true,MAIL:true,UPCOMING:true,BODY_STATS:true,PROGRESS:true,QUICK_ADD:true,F1:true,GITHUB:true,SERVERS:true,YOUTUBE:true,TWITCH:true"
+        const val DEFAULT_HOME_WIDGET_ORDER = "WEATHER:true,CALENDAR:true,BRIEFING:true,MAIL:true,UPCOMING:true,BODY_STATS:true,FOOD:true,F1:true,GITHUB:true,SERVERS:true,YOUTUBE:true,TWITCH:true"
 
         /**
          * Existing installs get the Servers card appended, and Coming up placed right

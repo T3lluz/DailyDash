@@ -1,7 +1,15 @@
 package com.macrotracker.ui.screens
 
-import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import android.content.pm.PackageManager
+import android.Manifest
+import com.macrotracker.ui.theme.NutritionProtein
+import com.macrotracker.ui.theme.NutritionCalories
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,37 +20,40 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import com.macrotracker.ui.components.WidgetExpandSection
+import com.macrotracker.ui.components.WidgetExpandFooter
+import com.macrotracker.ui.components.PillButton
+import com.macrotracker.ui.components.FoodLogForm
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.macrotracker.ui.components.BriefCard
-import com.macrotracker.ui.components.ButtonVariant
 import com.macrotracker.ui.components.CalendarCard
 import com.macrotracker.ui.components.CardHeader
 import com.macrotracker.ui.components.F1Card
 import com.macrotracker.ui.components.GitHubCard
-import com.macrotracker.ui.components.MacroButton
+import com.macrotracker.ui.components.HubErrorState
 import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.components.MailCard
 import com.macrotracker.ui.components.MacroProgressBar
-import com.macrotracker.ui.components.MacroTextField
 import com.macrotracker.ui.components.WeatherCard
 import com.macrotracker.ui.components.ServerCard
 import com.macrotracker.ui.components.WidgetConfig
 import com.macrotracker.ui.components.WidgetPlaceholder
 import com.macrotracker.ui.components.WidgetPlaceholderCard
 import com.macrotracker.ui.components.WidgetPromptCard
+import com.macrotracker.ui.components.WidgetStateSwitch
 import com.macrotracker.ui.components.TwitchCard
 import com.macrotracker.ui.components.UpcomingCard
 import com.macrotracker.ui.components.YoutubeCard
@@ -86,7 +97,7 @@ fun HomeWidgetItem(
         "MAIL" -> MailCard(isVisible = isVisible, onOpenHermes = onOpenHermes)
         "SERVERS" -> ServerCard(isVisible = isVisible, onOpenServers = onNavigateToServers, onOpenConsole = onOpenConsole)
         "YOUTUBE" -> YoutubeCard()
-        "TWITCH" -> TwitchCard()
+        "TWITCH" -> TwitchCard(isVisible = isVisible)
         "WEATHER" -> HomeWeatherWidget(
             viewModel = viewModel,
             onRequestPermission = onRequestLocationPermission,
@@ -98,8 +109,7 @@ fun HomeWidgetItem(
             isVisible = isVisible,
         )
         "BODY_STATS" -> HomeBodyStatsWidget(viewModel, isVisible = isVisible, onOpenHealth = onNavigateToHealth)
-        "PROGRESS" -> HomeProgressWidget(viewModel = viewModel)
-        "QUICK_ADD" -> HomeQuickAddWidget(
+        "FOOD" -> HomeFoodWidget(
             viewModel = viewModel,
             onNavigateToHealth = onNavigateToHealth,
             quickFood = quickFood,
@@ -153,186 +163,75 @@ private fun HomeCalendarWidget(
     isVisible: Boolean,
 ) {
     val calendarState by viewModel.calendarState.collectAsState()
+    val context = LocalContext.current
     CalendarCard(
         state = calendarState,
         onRequestPermission = onRequestPermission,
         isVisible = isVisible,
+        onRetry = {
+            viewModel.loadCalendar(
+                ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED,
+            )
+        },
     )
 }
 
 @Composable
 private fun HomeBodyStatsWidget(viewModel: HomeViewModel, isVisible: Boolean, onOpenHealth: () -> Unit) {
     if (!isVisible) {
-        WidgetPlaceholderCard(title = "Body Stats", icon = AppIcons.HeartPulse, accent = HealthHeartRate)
+        WidgetPlaceholderCard(title = "Body stats", icon = AppIcons.HeartPulse, accent = HealthHeartRate)
         return
     }
     val healthState by viewModel.healthState.collectAsState()
-    when (val hs = healthState) {
-        is HomeHealthState.Success -> {
-            HealthGlanceCard(
-                stats = hs.stats,
-                hourlySteps = hs.hourlySteps,
-                usualHourlySteps = hs.usualHourlySteps,
-                heartRate = hs.heartRate,
-                hourlyMoveKcal = hs.hourlyMoveKcal,
-                sleepSessions = hs.sleepSessions,
-                sleepScore = hs.sleepScore,
-                lastUpdatedAt = hs.lastUpdatedAt,
-                onOpen = onOpenHealth,
-            )
-        }
-        is HomeHealthState.Loading -> {
-            WidgetPlaceholderCard(title = "Body Stats", icon = AppIcons.HeartPulse, accent = HealthHeartRate)
-        }
-        HomeHealthState.Unavailable -> {
-            // An empty state with a way out: the Health tab has the Connect prompt.
-            WidgetPromptCard(
-                title = "Body Stats",
-                message = "Connect Health Connect in Settings or Health to see steps, heart rate, and sleep here.",
-                actionLabel = "Open Health",
-                actionIcon = AppIcons.HeartPulse,
-                accent = HealthHeartRate,
-                onAction = onOpenHealth,
-            )
+    // Fades from the placeholder into the card, and only when the kind of state changes.
+    WidgetStateSwitch(targetState = healthState, contentKey = { it::class }, label = "bodyStats") { hs ->
+        when (hs) {
+            is HomeHealthState.Success -> {
+                HealthGlanceCard(
+                    stats = hs.stats,
+                    hourlySteps = hs.hourlySteps,
+                    usualHourlySteps = hs.usualHourlySteps,
+                    heartRate = hs.heartRate,
+                    hourlyMoveKcal = hs.hourlyMoveKcal,
+                    sleepSessions = hs.sleepSessions,
+                    sleepScore = hs.sleepScore,
+                    lastUpdatedAt = hs.lastUpdatedAt,
+                    onOpen = onOpenHealth,
+                )
+            }
+            is HomeHealthState.Loading -> {
+                WidgetPlaceholderCard(title = "Body stats", icon = AppIcons.HeartPulse, accent = HealthHeartRate)
+            }
+            HomeHealthState.Error -> MacroCard {
+                CardHeader(title = "Body stats", icon = AppIcons.HeartPulse, accent = HealthHeartRate)
+                Spacer(Modifier.height(12.dp))
+                HubErrorState(
+                    message = "Health Connect didn't answer.",
+                    accent = HealthHeartRate,
+                    onRetry = { viewModel.loadHealthConnect() },
+                )
+            }
+            HomeHealthState.Unavailable -> {
+                // An empty state with a way out: the Health tab has the Connect prompt.
+                WidgetPromptCard(
+                    title = "Body stats",
+                    message = "Connect Health Connect in Settings or Health to see steps, heart rate, and sleep here.",
+                    actionLabel = "Open Health",
+                    actionIcon = AppIcons.HeartPulse,
+                    accent = HealthHeartRate,
+                    onAction = onOpenHealth,
+                )
+            }
         }
     }
 }
 
+/**
+ * Today's food in one card: what you've eaten against your goals, and a form that
+ * unfolds under it to log more. Health's Food today is the same pair, with the log.
+ */
 @Composable
-private fun HomeProgressWidget(
-    viewModel: HomeViewModel,
-) {
-    val summary by viewModel.summary.collectAsState()
-    val logs by viewModel.logs.collectAsState()
-    val logsLastUpdatedAt by viewModel.logsLastUpdatedAt.collectAsState()
-    // Rendering nothing until the summary loads left a zero-height slot and
-    // shoved every widget below it down the moment the query returned.
-    val s = summary ?: run {
-        WidgetPlaceholderCard(
-            title = "Today's progress",
-            icon = AppIcons.ChartPie,
-            accent = Primary,
-            minHeight = WidgetPlaceholder.CompactMinHeight,
-            lines = 2,
-        )
-        return
-    }
-
-    MacroCard {
-        CardHeader(
-            title = "Today's progress",
-            icon = AppIcons.ChartPie,
-            accent = Primary,
-            modifier = Modifier.padding(bottom = 12.dp),
-        ) {
-            LastUpdatedText(lastUpdatedAt = logsLastUpdatedAt)
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .background(Background, RoundedCornerShape(10.dp))
-                    .padding(12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Icon(
-                    AppIcons.Flame,
-                    contentDescription = null,
-                    tint = if (s.totalCalories > s.calorieGoal) Error else Primary,
-                    modifier = Modifier.size(24.dp),
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    "${s.totalCalories}",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
-                )
-                Text(
-                    "/ ${s.calorieGoal} kcal",
-                    fontSize = 12.sp,
-                    color = TextSecondary,
-                )
-            }
-
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .background(Background, RoundedCornerShape(10.dp))
-                    .padding(12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Icon(
-                    AppIcons.Dumbbell,
-                    contentDescription = null,
-                    tint = Secondary,
-                    modifier = Modifier.size(24.dp),
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    "${s.totalProtein}g",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
-                )
-                Text(
-                    "/ ${s.proteinGoal}g protein",
-                    fontSize = 12.sp,
-                    color = TextSecondary,
-                )
-            }
-
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .background(Background, RoundedCornerShape(10.dp))
-                    .padding(12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Icon(
-                    AppIcons.Restaurant,
-                    contentDescription = null,
-                    tint = Primary,
-                    modifier = Modifier.size(24.dp),
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    "${logs.size}",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
-                )
-                Text(
-                    "meals",
-                    fontSize = 12.sp,
-                    color = TextSecondary,
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        val calProgress = if (s.calorieGoal > 0) s.totalCalories.toFloat() / s.calorieGoal else 0f
-        val protProgress = if (s.proteinGoal > 0) s.totalProtein.toFloat() / s.proteinGoal else 0f
-        MacroProgressBar(
-            progress = calProgress,
-            label = "Calories",
-            color = if (calProgress > 1f) Error else Primary,
-        )
-        MacroProgressBar(
-            progress = protProgress,
-            label = "Protein",
-            color = Secondary,
-        )
-    }
-}
-
-@Composable
-private fun HomeQuickAddWidget(
+private fun HomeFoodWidget(
     viewModel: HomeViewModel,
     onNavigateToHealth: () -> Unit,
     quickFood: String,
@@ -342,99 +241,105 @@ private fun HomeQuickAddWidget(
     quickProtein: String,
     onQuickProteinChange: (String) -> Unit,
 ) {
-    val context = LocalContext.current
+    val summary by viewModel.summary.collectAsState()
+    val logs by viewModel.logs.collectAsState()
+    val logsLastUpdatedAt by viewModel.logsLastUpdatedAt.collectAsState()
+    // Rendering nothing until the summary loads left a zero-height slot and
+    // shoved every widget below it down the moment the query returned.
+    val s = summary ?: run {
+        WidgetPlaceholderCard(
+            title = "Food",
+            icon = AppIcons.Restaurant,
+            accent = Primary,
+            minHeight = WidgetPlaceholder.CompactMinHeight,
+            lines = 2,
+        )
+        return
+    }
+    // Half-typed entries keep the form open when you come back to it.
+    var logging by rememberSaveable {
+        mutableStateOf(quickFood.isNotEmpty() || quickCalories.isNotEmpty() || quickProtein.isNotEmpty())
+    }
 
     MacroCard {
         CardHeader(
-            title = "Quick add",
-            icon = AppIcons.Add,
+            title = "Food",
+            icon = AppIcons.Restaurant,
             accent = Primary,
             modifier = Modifier.padding(bottom = 12.dp),
-        )
-
-        MacroTextField(
-            value = quickFood,
-            onValueChange = onQuickFoodChange,
-            placeholder = "Food name (optional)",
-            trailingIcon = {
-                if (quickFood.isNotEmpty()) {
-                    IconButton(onClick = { onQuickFoodChange("") }) {
-                        Icon(
-                            imageVector = AppIcons.Close,
-                            contentDescription = "Clear",
-                        )
-                    }
-                }
-            },
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            MacroTextField(
-                value = quickCalories,
-                onValueChange = onQuickCaloriesChange,
-                placeholder = "Calories",
-                modifier = Modifier.weight(1f),
-                keyboardType = KeyboardType.Number,
-                trailingIcon = {
-                    if (quickCalories.isNotEmpty()) {
-                        IconButton(onClick = { onQuickCaloriesChange("") }) {
-                            Icon(
-                                imageVector = AppIcons.Close,
-                                contentDescription = "Clear",
-                            )
-                        }
-                    }
-                },
-            )
-            MacroTextField(
-                value = quickProtein,
-                onValueChange = onQuickProteinChange,
-                placeholder = "Protein (g)",
-                modifier = Modifier.weight(1f),
-                keyboardType = KeyboardType.Number,
-                trailingIcon = {
-                    if (quickProtein.isNotEmpty()) {
-                        IconButton(onClick = { onQuickProteinChange("") }) {
-                            Icon(
-                                imageVector = AppIcons.Close,
-                                contentDescription = "Clear",
-                            )
-                        }
-                    }
-                },
-            )
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            MacroButton(
-                text = "Add",
-                onClick = {
-                    val cal = quickCalories.toIntOrNull() ?: 0
-                    val prot = quickProtein.toIntOrNull() ?: 0
-                    if (cal > 0 || prot > 0) {
-                        viewModel.addLog(quickFood, cal, prot)
-                        onQuickFoodChange("")
-                        onQuickCaloriesChange("")
-                        onQuickProteinChange("")
-                        Toast.makeText(context, "✅ Entry added!", Toast.LENGTH_SHORT).show()
-                    } else {
-                        Toast.makeText(context, "Enter calories or protein first", Toast.LENGTH_SHORT).show()
-                    }
-                },
-                modifier = Modifier.weight(1f),
-            )
-            MacroButton(
-                text = "View all logs",
+            LastUpdatedText(lastUpdatedAt = logsLastUpdatedAt)
+            PillButton(
+                icon = AppIcons.List,
+                label = "All logs",
                 onClick = onNavigateToHealth,
-                modifier = Modifier.weight(1f),
-                variant = ButtonVariant.SECONDARY,
+                modifier = Modifier.padding(start = 8.dp),
             )
         }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            FoodStat(
+                icon = AppIcons.Flame,
+                tint = if (s.totalCalories > s.calorieGoal) Error else NutritionCalories,
+                value = "${s.totalCalories}",
+                label = "/ ${s.calorieGoal} kcal",
+            )
+            FoodStat(AppIcons.Dumbbell, NutritionProtein, "${s.totalProtein}g", "/ ${s.proteinGoal}g protein")
+            FoodStat(AppIcons.Restaurant, NutritionCalories, "${logs.size}", if (logs.size == 1) "meal" else "meals")
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        val calProgress = if (s.calorieGoal > 0) s.totalCalories.toFloat() / s.calorieGoal else 0f
+        val protProgress = if (s.proteinGoal > 0) s.totalProtein.toFloat() / s.proteinGoal else 0f
+        MacroProgressBar(
+            progress = calProgress,
+            label = "Calories",
+            color = if (calProgress > 1f) Error else NutritionCalories,
+        )
+        MacroProgressBar(
+            progress = protProgress,
+            label = "Protein",
+            color = NutritionProtein,
+        )
+
+        WidgetExpandSection(visible = logging) {
+            FoodLogForm(
+                name = quickFood,
+                onNameChange = onQuickFoodChange,
+                calories = quickCalories,
+                onCaloriesChange = onQuickCaloriesChange,
+                protein = quickProtein,
+                onProteinChange = onQuickProteinChange,
+                onAdd = { name, cal, prot -> viewModel.addLog(name, cal, prot) },
+                modifier = Modifier.padding(top = 12.dp),
+            )
+        }
+        WidgetExpandFooter(
+            expanded = logging,
+            onToggle = { logging = !logging },
+            accentColor = Primary,
+            expandLabel = "Log food",
+            collapseLabel = "Done",
+        )
+    }
+}
+
+@Composable
+private fun RowScope.FoodStat(icon: ImageVector, tint: Color, value: String, label: String) {
+    Column(
+        modifier = Modifier
+            .weight(1f)
+            .background(Background, RoundedCornerShape(10.dp))
+            .padding(12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(value, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+        Text(label, fontSize = 12.sp, color = TextSecondary)
     }
 }

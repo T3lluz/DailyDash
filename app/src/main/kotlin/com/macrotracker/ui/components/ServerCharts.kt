@@ -95,11 +95,10 @@ fun ServerDial(
     valueSize: TextUnit = 15.sp,
 ) {
     val target = (percent ?: 0f).coerceIn(0f, 100f)
-    val animated = if (LocalTickersPaused.current) {
-        target
-    } else {
-        animateFloatAsState(target, MacroMotion.fadeTween(600), label = "dial_$label").value
-    }
+    // The State is read in the Canvas, so a poll's sweep redraws the dial each frame
+    // instead of recomposing every dial on the card for the length of the animation.
+    val paused = LocalTickersPaused.current
+    val sweep = animateFloatAsState(target, MacroMotion.fadeTween(600), label = "dial_$label")
     val color = dialColor(accent, percent, warnAt, hotAt)
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(modifier = Modifier.size(size), contentAlignment = Alignment.Center) {
@@ -118,6 +117,7 @@ fun ServerDial(
                     size = arcSize,
                     style = Stroke(stroke, cap = StrokeCap.Round),
                 )
+                val animated = if (paused) target else sweep.value
                 if (percent != null && animated > 0.2f) {
                     drawArc(
                         color = color,

@@ -1,6 +1,7 @@
 package com.macrotracker.data.server
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -94,11 +95,10 @@ class ServerMonitorRepositoryImpl @Inject constructor(
         // and restart polling when servers are added, edited or removed.
         scope.launch {
             store.profiles.collect { list ->
-                _runtimes.value = list.associate { profile ->
-                    profile.id to (
-                        _runtimes.value[profile.id]?.copy(profile = profile)
-                            ?: ServerRuntime(profile = profile)
-                        )
+                _runtimes.update { current ->
+                    list.associate { profile ->
+                        profile.id to (current[profile.id]?.copy(profile = profile) ?: ServerRuntime(profile = profile))
+                    }
                 }
                 syncJobs()
             }
@@ -155,11 +155,13 @@ class ServerMonitorRepositoryImpl @Inject constructor(
         }
         toCancel.forEach { it.cancel() }
         if (!shouldRun) {
-            _runtimes.value = _runtimes.value.mapValues { (_, runtime) ->
-                if (runtime.connection is ServerConnectionState.Connecting) {
-                    runtime.copy(connection = ServerConnectionState.Idle)
-                } else {
-                    runtime
+            _runtimes.update { map ->
+                map.mapValues { (_, runtime) ->
+                    if (runtime.connection is ServerConnectionState.Connecting) {
+                        runtime.copy(connection = ServerConnectionState.Idle)
+                    } else {
+                        runtime
+                    }
                 }
             }
         }
@@ -334,10 +336,14 @@ class ServerMonitorRepositoryImpl @Inject constructor(
         return (base * multiplier).coerceAtMost(MAX_BACKOFF_MS)
     }
 
+    /**
+     * Atomic: each server polls on its own IO coroutine, and a plain read-modify-write let one
+     * server's update overwrite another's made a moment before.
+     */
     private fun updateRuntime(serverId: String, transform: (ServerRuntime) -> ServerRuntime): ServerRuntime? {
         var result: ServerRuntime? = null
-        _runtimes.value = _runtimes.value.mapValues { (id, runtime) ->
-            if (id == serverId) transform(runtime).also { result = it } else runtime
+        _runtimes.update { map ->
+            map.mapValues { (id, runtime) -> if (id == serverId) transform(runtime).also { result = it } else runtime }
         }
         return result
     }

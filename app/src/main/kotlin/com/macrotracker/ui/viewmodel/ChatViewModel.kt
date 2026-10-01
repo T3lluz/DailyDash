@@ -1,6 +1,8 @@
 package com.macrotracker.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.NonCancellable
 import androidx.lifecycle.viewModelScope
 import com.macrotracker.data.chat.AiChatClient
 import com.macrotracker.data.chat.BotPrompts
@@ -221,15 +223,23 @@ class ChatViewModel @Inject constructor(
             } finally {
                 val text = builder.toString().trim()
                 val error = failure
-                when {
-                    // A partial reply is still worth keeping — the user pressed Stop,
-                    // or the stream died halfway; either way the words are real.
-                    error != null && text.isNotEmpty() -> persist(bot, threadId, text)
-                    error != null -> persistError(bot, threadId, error)
-                    text.isNotEmpty() -> persist(bot, threadId, text)
+                // Stop cancels this coroutine, and a cancelled one can't write to Room: the
+                // save threw at once, the partial reply was lost and its bubble stayed on
+                // screen. The save runs to the end, then the bubble goes.
+                withContext(NonCancellable) {
+                    try {
+                        when {
+                            // A partial reply is still worth keeping — the user pressed Stop,
+                            // or the stream died halfway; either way the words are real.
+                            error != null && text.isNotEmpty() -> persist(bot, threadId, text)
+                            error != null -> persistError(bot, threadId, error)
+                            text.isNotEmpty() -> persist(bot, threadId, text)
+                        }
+                    } finally {
+                        flowState.update { it.copy(loading = false, streaming = null) }
+                    }
                 }
-                flowState.update { it.copy(loading = false, streaming = null) }
-                streamJobs.remove(bot)
+                if (streamJobs[bot] === coroutineContext[Job]) streamJobs.remove(bot)
             }
         }
     }

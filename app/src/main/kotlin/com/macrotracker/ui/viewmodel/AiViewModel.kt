@@ -166,8 +166,12 @@ class AiViewModel @Inject constructor(
                         )
                 }
             } finally {
-                _loading.value = false
-                estimateJob = null
+                // Only the newest estimate clears the spinner: a replaced one finishing late
+                // (its blocking call can't be interrupted) cleared it under the new one.
+                if (estimateJob === coroutineContext[Job]) {
+                    _loading.value = false
+                    estimateJob = null
+                }
             }
         }
     }

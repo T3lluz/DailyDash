@@ -1,6 +1,13 @@
 package com.macrotracker.ui.screens
 
 import com.macrotracker.ui.theme.NutritionProtein
+import java.util.Locale
+import com.macrotracker.util.toDecimalOrNull
+import com.macrotracker.ui.util.preparePhoto
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 import com.macrotracker.ui.theme.NutritionCalories
 import android.Manifest
 import android.content.pm.PackageManager
@@ -130,6 +137,7 @@ fun CameraScanScreen(
     }
     var capturedBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var capturedBase64 by remember { mutableStateOf<String?>(null) }
+    val photoScope = rememberCoroutineScope()
     var cameraError by remember { mutableStateOf<String?>(null) }
     var didAutoOpenGallery by rememberSaveable { mutableStateOf(false) }
 
@@ -141,19 +149,17 @@ fun CameraScanScreen(
         ActivityResultContracts.GetContent(),
     ) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        try {
-            context.contentResolver.openInputStream(uri)?.use { stream ->
-                val bitmap = BitmapFactory.decodeStream(stream)
-                if (bitmap != null) {
-                    capturedBitmap = bitmap
-                    capturedBase64 = bitmapToBase64(bitmap)
-                    viewModel.setPhase(ScanPhase.PREVIEW)
-                } else {
-                    Toast.makeText(context, "Couldn't read that image.", Toast.LENGTH_SHORT).show()
-                }
+        // Scaled and turned upright off the main thread; a full-size decode could run out
+        // of memory or be too big to draw.
+        photoScope.launch {
+            val photo = withContext(Dispatchers.Default) { preparePhoto(context, uri) }
+            if (photo != null) {
+                capturedBitmap = photo.bitmap
+                capturedBase64 = photo.base64
+                viewModel.setPhase(ScanPhase.PREVIEW)
+            } else {
+                Toast.makeText(context, "Couldn't read that image.", Toast.LENGTH_SHORT).show()
             }
-        } catch (e: Exception) {
-            Toast.makeText(context, e.message ?: "Couldn't open gallery image.", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -399,6 +405,7 @@ private fun CameraPhase(
     val imageCapture = remember { ImageCapture.Builder().setJpegQuality(45).build() }
     val previewView = remember { PreviewView(context) }
     val haptics = rememberHaptics()
+    val captureScope = rememberCoroutineScope()
     var camera by remember { mutableStateOf<Camera?>(null) }
     var torchEnabled by rememberSaveable { mutableStateOf(false) }
     val hasFlash = camera?.cameraInfo?.hasFlashUnit() == true
@@ -427,6 +434,9 @@ private fun CameraPhase(
             try {
                 camera?.cameraControl?.enableTorch(false)
             } catch (_: Exception) { }
+            // Leaving the viewfinder (to the preview or the result) releases the camera, which
+            // otherwise stayed bound, hot and draining, until the whole screen closed.
+            runCatching { ProcessCameraProvider.getInstance(context).get().unbindAll() }
         }
     }
 
@@ -562,14 +572,16 @@ private fun CameraPhase(
                                         val buffer = image.planes[0].buffer
                                         val bytes = ByteArray(buffer.remaining())
                                         buffer.get(bytes)
-                                        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                                        val rotation = image.imageInfo.rotationDegrees
                                         image.close()
-                                        if (bitmap == null) {
-                                            onCaptureError("Couldn't process that photo. Try again.")
-                                            return
+                                        captureScope.launch {
+                                            val photo = withContext(Dispatchers.Default) { preparePhoto(bytes, rotation) }
+                                            if (photo == null) {
+                                                onCaptureError("Couldn't process that photo. Try again.")
+                                            } else {
+                                                onPhotoCaptured(photo.bitmap, photo.base64)
+                                            }
                                         }
-                                        val base64 = bitmapToBase64(bitmap)
-                                        onPhotoCaptured(bitmap, base64)
                                     }
 
                                     override fun onError(exception: ImageCaptureException) {
@@ -820,7 +832,7 @@ private fun ResultPhase(
                         modifier = Modifier
                             .clickable {
                                 haptics.tick()
-                                val v = amountEaten.toDoubleOrNull() ?: 1.0
+                                val v = amountEaten.toDecimalOrNull() ?: 1.0
                                 val step = if (unitEaten in listOf("g", "ml")) 10.0 else 0.5
                                 viewModel.setAmountEaten(formatDoubleOrInt(maxOf(0.0, v - step)))
                             }
@@ -851,7 +863,7 @@ private fun ResultPhase(
                         modifier = Modifier
                             .clickable {
                                 haptics.tick()
-                                val v = amountEaten.toDoubleOrNull() ?: 1.0
+                                val v = amountEaten.toDecimalOrNull() ?: 1.0
                                 val step = if (unitEaten in listOf("g", "ml")) 10.0 else 0.5
                                 viewModel.setAmountEaten(formatDoubleOrInt(v + step))
                             }
@@ -912,7 +924,7 @@ private fun ResultPhase(
                         .clickable { showLabelEdit = !showLabelEdit },
                 )
 
-                if (showLabelEdit || foodNameOverride.isBlank() || (caloriesOverride.toDoubleOrNull() ?: 0.0) <= 0) {
+                if (showLabelEdit || foodNameOverride.isBlank() || (caloriesOverride.toDecimalOrNull() ?: 0.0) <= 0) {
                     FollowUpField("Product name", "Enter product name", foodNameOverride, { viewModel.setFoodNameOverride(it) })
                     FollowUpField("Calories per serving", "e.g. 180", caloriesOverride, { viewModel.setCaloriesOverride(it) }, KeyboardType.Decimal)
                     FollowUpField("Protein per serving (g)", "e.g. 12", proteinOverride, { viewModel.setProteinOverride(it) }, KeyboardType.Decimal)
@@ -985,7 +997,7 @@ private fun ResultPhase(
                             }
                         }
                         Text(
-                            "(${summary.caloriesPerServing} kcal × ${"%.2f".format(summary.multiplier)} factor)",
+                            "(${summary.caloriesPerServing} kcal × ${String.format(Locale.US, "%.2f", summary.multiplier)} factor)",
                             fontSize = 12.sp, color = TextSecondary, fontStyle = FontStyle.Italic,
                             modifier = Modifier.padding(top = 12.dp),
                         )
@@ -1010,6 +1022,9 @@ private fun ResultPhase(
 
                 if (missingRequired.isNotEmpty()) {
                     Toast.makeText(context, "Please fill: ${missingRequired.joinToString(", ")}", Toast.LENGTH_SHORT).show()
+                } else if (summary.multiplier <= 0.0) {
+                    // An amount of 0 (or one that didn't read) would log 0 kcal.
+                    Toast.makeText(context, "Enter how much you had", Toast.LENGTH_SHORT).show()
                 } else {
                     onLog(summary)
                 }
@@ -1081,12 +1096,5 @@ private fun FollowUpField(
 }
 
 private fun formatDoubleOrInt(v: Double): String {
-    return if (v == v.toLong().toDouble()) v.toLong().toString() else "%.1f".format(v)
-}
-
-private fun bitmapToBase64(bitmap: Bitmap): String {
-    val stream = ByteArrayOutputStream()
-    bitmap.compress(Bitmap.CompressFormat.JPEG, 45, stream)
-    val bytes = stream.toByteArray()
-    return Base64.encodeToString(bytes, Base64.NO_WRAP)
+    return if (v == v.toLong().toDouble()) v.toLong().toString() else String.format(Locale.US, "%.1f", v)
 }

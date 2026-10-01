@@ -1,6 +1,9 @@
 package com.macrotracker.ui.viewmodel
 
 import android.content.Context
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ProcessLifecycleOwner
+import com.macrotracker.data.update.prettyVersion
 import android.content.Intent
 import android.util.Log
 import androidx.lifecycle.ViewModel
@@ -98,7 +101,7 @@ class AppUpdateViewModel @Inject constructor(
         }
     }
 
-    val currentVersionName: String get() = repository.currentVersionName()
+    val currentVersionName: String get() = prettyVersion(repository.currentVersionName())
     val currentVersionCode: Int get() = repository.currentVersionCode()
 
     private var checkJob: Job? = null
@@ -124,7 +127,10 @@ class AppUpdateViewModel @Inject constructor(
         listenJob = viewModelScope.launch {
             while (isActive) {
                 delay(AppUpdateRepository.FOREGROUND_POLL_INTERVAL_MS)
-                checkForUpdate(showDialogIfAvailable = true, forceNetwork = true, quiet = true)
+                // In the background the daily worker covers it; this is for the app in front.
+                if (ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                    checkForUpdate(showDialogIfAvailable = true, forceNetwork = true, quiet = true)
+                }
             }
         }
     }

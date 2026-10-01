@@ -137,12 +137,11 @@ private val LocationAccent = Primary
 
 // Stable discriminant so AnimatedContent only transitions between loading/success/error —
 // not on every internal field change within a Success state.
-private enum class WeatherStateKey { LOADING, SUCCESS, PERMISSION, APPROXIMATE, ERROR }
+private enum class WeatherStateKey { LOADING, SUCCESS, PERMISSION, ERROR }
 private fun WeatherUiState.toKey() = when (this) {
     is WeatherUiState.Loading           -> WeatherStateKey.LOADING
     is WeatherUiState.Success           -> WeatherStateKey.SUCCESS
     is WeatherUiState.PermissionRequired -> WeatherStateKey.PERMISSION
-    is WeatherUiState.ApproximateLocation -> WeatherStateKey.APPROXIMATE
     is WeatherUiState.Error             -> WeatherStateKey.ERROR
 }
 
@@ -346,13 +345,16 @@ fun WeatherCard(
                                     onCollapse = { expanded = false },
                                 )
                             }
-                            if (!expanded) {
-                                WidgetExpandFooter(
-                                    expanded = false,
-                                    onToggle = { expanded = true },
-                                    accentColor = TextPrimary,
-                                    expandLabel = "Forecast",
-                                )
+                            // Folds away as the forecast opens, instead of vanishing.
+                            WidgetExpandSection(visible = !expanded) {
+                                Column {
+                                    WidgetExpandFooter(
+                                        expanded = false,
+                                        onToggle = { expanded = true },
+                                        accentColor = TextPrimary,
+                                        expandLabel = "Forecast",
+                                    )
+                                }
                             }
                         }
                     }
@@ -368,17 +370,6 @@ fun WeatherCard(
                     actionIcon = AppIcons.MapPin,
                     accent = LocationAccent,
                     onAction = onRequestPermission,
-                )
-            }
-
-            WeatherStateKey.APPROXIMATE -> {
-                WidgetPromptCard(
-                    title = "Weather",
-                    message = "Using approximate location — enable precise location for accurate weather",
-                    actionLabel = "Precise",
-                    actionIcon = AppIcons.MapPin,
-                    accent = LocationAccent,
-                    onAction = onRequestPreciseLocation,
                 )
             }
 

@@ -101,6 +101,7 @@ fun ConsoleScreen(
                 }
             },
         )
+        val webViewReady = remember { runCatching { WebView.getCurrentWebViewPackage() != null }.getOrDefault(false) }
         if (base.isBlank()) {
             Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                 Text("The console runs on your dashboard server.", color = TextSecondary, fontSize = 14.sp)
@@ -108,6 +109,11 @@ fun ConsoleScreen(
         } else if (rendererGone) {
             Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                 Text("The console stopped. Reconnect to open it again.", color = TextSecondary, fontSize = 14.sp)
+            }
+        } else if (!webViewReady) {
+            // Making a WebView throws while Android's WebView is disabled or mid-update.
+            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                Text("Android's WebView isn't available right now. Try again after it updates.", color = TextSecondary, fontSize = 14.sp)
             }
         } else {
             key(generation) {

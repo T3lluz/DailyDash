@@ -1,6 +1,8 @@
 package com.macrotracker.data.github
 
 import android.content.Context
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.CoroutineScope
 import android.util.Log
 import androidx.core.content.edit
 import com.macrotracker.BuildConfig
@@ -77,9 +79,9 @@ class GitHubRepositoryImpl @Inject constructor(
             settings.githubToken.value.isNotBlank() ||
             BuildConfig.GITHUB_TOKEN.isNotBlank()
 
-    init {
-        restoreDiskCache()
-    }
+    // The disk cache is decoded off the main thread: this is built during Home's first frame,
+    // and the snapshot is tens of kB of JSON. Calls that need it wait for it.
+    private val restored = CoroutineScope(SupervisorJob() + Dispatchers.IO).async { restoreDiskCache() }
 
     override fun invalidateCache() {
         cached = null
@@ -94,6 +96,7 @@ class GitHubRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getDashboard(forceRefresh: Boolean): Result<GitHubSnapshot> = fetchMutex.withLock {
+        restored.await()
         val token = resolveToken()
         if (token.isBlank()) {
             return@withLock Result.failure(GitHubNeedsAuthException())
@@ -106,25 +109,30 @@ class GitHubRepositoryImpl @Inject constructor(
             lastFetchTime = 0L
         }
 
+        val snapshot = cached // read once: a clear outside the lock can't null it mid-check
         val cacheValid = !forceRefresh &&
-            cached != null &&
+            snapshot != null &&
             cachedUserKey == cacheKey &&
             lastFetchTime > 0L &&
             (now - lastFetchTime) < CACHE_DURATION_MS
 
-        if (cacheValid) {
-            return@withLock Result.success(cached!!)
+        if (cacheValid && snapshot != null) {
+            return@withLock Result.success(snapshot)
         }
 
         return@withLock try {
-            withContext(Dispatchers.IO) { fetchDashboard(token) }
-                .also { snapshot ->
+            withContext(Dispatchers.IO) {
+                // Encoded and written on IO too; it ran on the caller's (main) thread.
+                fetchDashboard(token).also { snapshot ->
                     cached = snapshot
                     lastFetchTime = System.currentTimeMillis()
                     cachedUserKey = cacheKey
                     persistDiskCache(snapshot, cacheKey)
                 }
+            }
                 .let { Result.success(it) }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "GitHub dashboard fetch failed: ${e.message}", e)
             val fallback = cached?.takeIf { cachedUserKey == cacheKey }
@@ -204,16 +212,19 @@ class GitHubRepositoryImpl @Inject constructor(
             eventsResp?.limit,
         ).maxOrNull()
 
+        // A section whose call failed (a rate-limited search, a hiccup) keeps the last good
+        // snapshot's, rather than reading as "0 issues" until the next refresh.
+        val prev = cached?.takeIf { it.user.login == login }
         GitHubSnapshot(
             user = user,
-            issues = issuePage?.items.orEmpty().filter { !it.isPullRequest },
-            pullRequests = pulls.values.toList(),
-            activity = eventsResp?.let { parseEvents(it.body) }.orEmpty(),
-            repos = reposResp?.let { parseRepos(it.body) }.orEmpty().sortedByRecent(),
+            issues = issuePage?.items?.filter { !it.isPullRequest } ?: prev?.issues.orEmpty(),
+            pullRequests = if (prPage != null || reviewPage != null) pulls.values.toList() else prev?.pullRequests.orEmpty(),
+            activity = eventsResp?.let { parseEvents(it.body) } ?: prev?.activity.orEmpty(),
+            repos = reposResp?.let { parseRepos(it.body) }?.sortedByRecent() ?: prev?.repos.orEmpty(),
             notifications = notifications,
-            issueTotal = issuePage?.totalCount ?: 0,
-            pullTotal = prPage?.totalCount ?: 0,
-            reviewRequestedCount = reviewPage?.totalCount ?: reviewKeys.size,
+            issueTotal = issuePage?.totalCount ?: prev?.issueTotal ?: 0,
+            pullTotal = prPage?.totalCount ?: prev?.pullTotal ?: 0,
+            reviewRequestedCount = reviewPage?.totalCount ?: prev?.reviewRequestedCount ?: reviewKeys.size,
             unreadNotificationCount = notifications.count { it.unread },
             notificationsNeedReconnect = notifNeedReconnect,
             rateLimitRemaining = remaining,

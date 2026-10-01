@@ -1,6 +1,7 @@
 package com.macrotracker.ui.viewmodel
 
 import android.content.Context
+import com.macrotracker.util.readAtMost
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.lifecycle.ViewModel
@@ -250,9 +251,10 @@ class HermesViewModel @Inject constructor(
     }
 
     /** Status and the thread list; opens the newest thread the first time. */
-    fun refresh() {
+    /** [quiet] re-checks without showing "checking", for the background retry while Hermes is down. */
+    fun refresh(quiet: Boolean = false) {
         viewModelScope.launch {
-            _state.update { it.copy(reach = if (it.reach == HermesReach.READY) it.reach else HermesReach.CHECKING) }
+            if (!quiet) _state.update { it.copy(reach = if (it.reach == HermesReach.READY) it.reach else HermesReach.CHECKING) }
             try {
                 val status = client.status()
                 val threads = client.threads().filter { it.kind != "duty" }
@@ -325,7 +327,12 @@ class HermesViewModel @Inject constructor(
             launch {
                 while (true) {
                     delay(SLOW_POLL_MS)
-                    if (_state.value.reach == HermesReach.READY) refreshThreads()
+                    // Down stays down only until Hermes answers again; no Retry tap needed.
+                    when (_state.value.reach) {
+                        HermesReach.READY -> refreshThreads()
+                        HermesReach.DOWN -> refresh(quiet = true)
+                        else -> Unit
+                    }
                 }
             }
             // Whatever happened while the pane was away: a turn may have started or ended.
@@ -333,6 +340,8 @@ class HermesViewModel @Inject constructor(
             feed.events.collect { event ->
                 when (event.optString("ch")) {
                     "hello" -> {
+                        // The feed is back, so the server is too: re-check if Hermes looked down.
+                        if (_state.value.reach == HermesReach.DOWN) refresh(quiet = true)
                         refreshThreads()
                         _state.value.threadId?.let(::reloadOpenThread)
                     }
@@ -608,9 +617,9 @@ class HermesViewModel @Inject constructor(
                     val name = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
                         if (c.moveToFirst()) c.getString(0) else null
                     } ?: uri.lastPathSegment ?: "file"
-                    val bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
-                        ?: throw HermesException("Could not read that file")
-                    if (bytes.size > MAX_UPLOAD_BYTES) throw HermesException("That file is over 8 MB")
+                    val stream = resolver.openInputStream(uri) ?: throw HermesException("Could not read that file")
+                    val bytes = stream.use { it.readAtMost(MAX_UPLOAD_BYTES) }
+                        ?: throw HermesException("That file is over 8 MB")
                     Triple(name, mime, bytes)
                 }
                 val attachment = client.upload(name, mime, bytes)
@@ -777,8 +786,10 @@ class HermesViewModel @Inject constructor(
         var doneError: String? = null
         var stopped = false
         while (!finished && attempts < MAX_REJOINS) {
+            var heard = false
             try {
                 stream.collect { event ->
+                    heard = true
                     if (event is HermesEvent.Done) {
                         finished = true
                         doneError = event.error
@@ -796,12 +807,17 @@ class HermesViewModel @Inject constructor(
                 failure = reachMessage(e)
             }
             if (finished) break
-            attempts++
+            // Rejoins count only while nothing comes through: a long turn on a patchy line
+            // used to give up after six drops in total, then announce it done mid-turn.
+            if (heard) attempts = 0 else attempts++
             val stillBusy = runCatching { client.thread(threadId).summary.busy }.getOrDefault(false)
             if (!stillBusy) break
             failure = null
             delay(REJOIN_DELAY_MS)
             stream = client.watch(threadId)
+        }
+        if (!finished && failure == null && attempts >= MAX_REJOINS) {
+            failure = "Lost the live view of this turn. It carries on on the server; reopen the chat to see it."
         }
         val error = if (!finished) failure else doneError
         if (!finished && failure != null) {

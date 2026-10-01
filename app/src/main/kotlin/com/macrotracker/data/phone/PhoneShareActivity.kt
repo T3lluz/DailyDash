@@ -14,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.macrotracker.util.readAtMost
 import org.json.JSONObject
 
 /**
@@ -25,29 +26,32 @@ class PhoneShareActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val entry = EntryPointAccessors.fromApplication(applicationContext, PhoneHubEntryPoint::class.java)
-        val body = runCatching { read(intent) }.getOrElse {
-            toast(it.message ?: "Could not read that")
-            finish()
-            return
-        }
-        if (body == null) {
-            toast("Nothing to send")
-            finish()
-            return
-        }
-        toast("Sending to the desk…")
         val app = applicationContext
-        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
-            val msg = runCatching { entry.phoneHubClient().share(body) }.fold(
+        val shared = intent
+        // The file is read off the main thread (it can be up to 8 MB), while this invisible
+        // activity is still open and so still holds the sender's permission to read it.
+        CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).launch {
+            val body = withContext(Dispatchers.IO) { runCatching { read(shared) } }.getOrElse {
+                toast(it.message ?: "Could not read that")
+                finish()
+                return@launch
+            }
+            if (body == null) {
+                toast("Nothing to send")
+                finish()
+                return@launch
+            }
+            toast("Sending to the desk…")
+            finish()
+            val msg = withContext(Dispatchers.IO) { runCatching { entry.phoneHubClient().share(body) } }.fold(
                 onSuccess = { "Sent to the desk" },
                 onFailure = { e ->
                     if (e is PhoneHubException && e.code == 403) "The dashboard has not accepted this phone yet"
                     else "Could not reach the dashboard: ${e.message}"
                 },
             )
-            withContext(Dispatchers.Main) { Toast.makeText(app, msg, Toast.LENGTH_SHORT).show() }
+            Toast.makeText(app, msg, Toast.LENGTH_SHORT).show()
         }
-        finish()
     }
 
     private fun toast(text: String) = Toast.makeText(applicationContext, text, Toast.LENGTH_SHORT).show()
@@ -68,8 +72,8 @@ class PhoneShareActivity : Activity() {
             val name = contentResolver.query(stream, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
                 if (c.moveToFirst()) c.getString(0) else null
             } ?: stream.lastPathSegment ?: "file"
-            val bytes = contentResolver.openInputStream(stream)?.use { it.readBytes() } ?: throw IllegalStateException("Could not read that file")
-            if (bytes.size > MAX_BYTES) throw IllegalStateException("That file is over 8 MB")
+            val input = contentResolver.openInputStream(stream) ?: throw IllegalStateException("Could not read that file")
+            val bytes = input.use { it.readAtMost(MAX_BYTES) } ?: throw IllegalStateException("That file is over 8 MB")
             body.put("file", JSONObject().put("name", name).put("mime", mime).put("data", Base64.encodeToString(bytes, Base64.NO_WRAP)))
             body.put("title", subject.ifBlank { name })
             if (text.isNotBlank()) body.put("text", text)

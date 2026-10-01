@@ -137,6 +137,7 @@ fun UsagePane(
     var tab by rememberSaveable { mutableStateOf(UsageTab.OVERVIEW) }
     var note by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<ScheduledAsk?>(null) }
+    var confirmDelete by remember { mutableStateOf<ScheduledAsk?>(null) }
     val haptics = rememberHaptics()
 
     LaunchedEffect(Unit) {
@@ -302,7 +303,7 @@ fun UsagePane(
                             AskRow(
                                 j,
                                 onRun = { viewModel.runNow(j) }, onToggle = { viewModel.toggle(j) },
-                                onEdit = { editing = j }, onDelete = { viewModel.delete(j) },
+                                onEdit = { editing = j }, onDelete = { confirmDelete = j },
                                 onChat = j.thread?.let { id -> { viewModel.openChat(id); onOpenChat() } },
                             )
                         }
@@ -334,6 +335,20 @@ fun UsagePane(
                 }
             }
         }
+    }
+
+    // A scheduled ask can hold a long prompt and a clock; one stray tap shouldn't lose it.
+    confirmDelete?.let { ask ->
+        ConfirmThreadDialog(
+            title = "Delete this scheduled ask?",
+            body = "Hermes stops getting \"${ask.title}\" on its clock.",
+            action = "Delete",
+            onDismiss = { confirmDelete = null },
+            onConfirm = {
+                confirmDelete = null
+                viewModel.delete(ask)
+            },
+        )
     }
 
     editing?.let { ask ->
@@ -579,7 +594,7 @@ private fun DaysChart(u: UsageSnapshot) {
         day?.let { d ->
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(
-                    LocalDate.parse(d.date).format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH)),
+                    dayLabel(d.date, "EEE d MMM"),
                     fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary,
                 )
                 Spacer(Modifier.width(8.dp))
@@ -618,7 +633,7 @@ private fun DaysChart(u: UsageSnapshot) {
             }
         }
         Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
-            Text(LocalDate.parse(days.first().date).format(DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)), fontSize = 11.sp, color = TextTertiary)
+            Text(dayLabel(days.first().date, "d MMM"), fontSize = 11.sp, color = TextTertiary)
             Spacer(Modifier.weight(1f))
             Text("busiest ${formatUsd(max)}", fontSize = 11.sp, color = TextTertiary)
             Spacer(Modifier.weight(1f))
@@ -940,3 +955,7 @@ internal fun ComposerUsageRing(
         }
     }
 }
+
+/** A usage day's date for display; a row the bridge sent without one shows as it came, not a crash. */
+private fun dayLabel(date: String, pattern: String): String =
+    runCatching { LocalDate.parse(date).format(DateTimeFormatter.ofPattern(pattern, Locale.ENGLISH)) }.getOrDefault(date)

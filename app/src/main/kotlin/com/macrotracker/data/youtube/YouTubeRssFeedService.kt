@@ -3,6 +3,7 @@ package com.macrotracker.data.youtube
 import android.util.Log
 import android.util.Xml
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
@@ -55,18 +56,21 @@ class YouTubeRssFeedService @Inject constructor(
 
     // ── Video feed via RSS ────────────────────────────────────────────────────
 
-    suspend fun getLatestVideos(channelId: String): List<YoutubeVideo> = withContext(Dispatchers.IO) {
+    /** A channel's latest uploads; null when the feed could not be fetched (offline, an error), not "no videos". */
+    suspend fun getLatestVideos(channelId: String): List<YoutubeVideo>? = withContext(Dispatchers.IO) {
         try {
             val url = "$RSS_BASE$channelId"
             val request = Request.Builder().url(url).build()
             val body = okHttpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@withContext emptyList()
-                response.body?.string() ?: return@withContext emptyList()
+                if (!response.isSuccessful) return@withContext null
+                response.body?.string() ?: return@withContext null
             }
             parseRssFeed(channelId, body)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Failed to fetch RSS for channel $channelId", e)
-            emptyList()
+            null
         }
     }
 
@@ -126,7 +130,7 @@ class YouTubeRssFeedService @Inject constructor(
                                         title = ttl,
                                         channelTitle = channelTitle ?: "",
                                         channelId = channelId,
-                                        publishedAt = pub,
+                                        publishedAt = normalizeInstant(pub),
                                         // hqdefault matches YouTube's own card density better than mq.
                                         thumbnailUrl = "https://i.ytimg.com/vi/$vid/hqdefault.jpg",
                                         viewCount = viewCount,
@@ -481,3 +485,11 @@ class YouTubeRssFeedService @Inject constructor(
         return best
     }
 }
+
+/**
+ * The feed writes "2024-05-01T12:00:00+00:00". Instant.parse only takes an offset from
+ * Android 14 on, so on older phones every date failed to read (no NEW marks, no "today").
+ * Stored as "…Z", which every reader and a plain string sort understand.
+ */
+internal fun normalizeInstant(raw: String): String =
+    runCatching { java.time.OffsetDateTime.parse(raw).toInstant().toString() }.getOrDefault(raw)

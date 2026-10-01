@@ -1,89 +1,94 @@
 package com.macrotracker.ui.components
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.macrotracker.data.local.MacroLogEntity
+import com.macrotracker.data.local.UNNAMED_FOOD
+import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Border
-import com.macrotracker.ui.theme.Error
-import com.macrotracker.ui.theme.Surface
+import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
+import com.macrotracker.ui.theme.TextTertiary
 import com.macrotracker.ui.util.rememberHaptics
-import com.macrotracker.ui.theme.AppIcons
+
+/**
+ * A day's food entries as rows split by hairlines, the way Health draws its lists: no box
+ * per entry inside the card. Each row's delete is a quiet ✕ at its end.
+ */
+@Composable
+fun FoodLogList(
+    logs: List<MacroLogEntity>,
+    onDelete: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxWidth().animateContentSize(MacroMotion.slideTween())) {
+        logs.forEachIndexed { i, log ->
+            key(log.id) {
+                if (i > 0) HorizontalDivider(color = Border, thickness = 0.5.dp)
+                MacroLogItem(log = log, onDelete = onDelete)
+            }
+        }
+    }
+}
 
 @Composable
 fun MacroLogItem(
     log: MacroLogEntity,
     onDelete: (String) -> Unit,
-    index: Int = 0,
 ) {
     val haptics = rememberHaptics()
-
-    Card(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 5.dp),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Surface),
-        border = BorderStroke(1.dp, Border),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = log.foodName.ifBlank { UNNAMED_FOOD },
+                color = TextPrimary,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = "${log.calories} kcal · ${log.protein}g protein",
+                color = TextSecondary,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+        IconButton(
+            onClick = {
+                haptics.reject()
+                onDelete(log.id)
+            },
+            modifier = Modifier.size(36.dp),
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = log.foodName.ifBlank { "Meal" },
-                    color = TextPrimary,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    text = "${log.calories} kcal • ${log.protein}g protein",
-                    color = TextSecondary,
-                    fontSize = 14.sp,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-            IconButton(
-                onClick = {
-                    haptics.reject()
-                    onDelete(log.id)
-                },
-                modifier = Modifier.size(36.dp),
-                colors = IconButtonDefaults.iconButtonColors(
-                    contentColor = Error,
-                    containerColor = Error.copy(alpha = 0.12f),
-                ),
-            ) {
-                Icon(
-                    imageVector = AppIcons.Close,
-                    contentDescription = "Delete",
-                    modifier = Modifier.size(18.dp),
-                )
-            }
+            Icon(
+                imageVector = AppIcons.Close,
+                contentDescription = "Delete ${log.foodName.ifBlank { UNNAMED_FOOD }}",
+                tint = TextTertiary,
+                modifier = Modifier.size(16.dp),
+            )
         }
     }
 }

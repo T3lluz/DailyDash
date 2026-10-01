@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 11 and older. Left out of a backup: what only works on this phone. The server
+  passwords are encrypted with a key in this phone's Keystore, which a backup never carries,
+  so a restored copy could not be read ("No password saved"). The phone hub's pairing and the
+  widget and update state belong to this install, not to a new phone.
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" path="server_settings.xml" />
+    <exclude domain="sharedpref" path="phone_hub.xml" />
+    <exclude domain="sharedpref" path="app_update_prefs.xml" />
+    <exclude domain="sharedpref" path="daily_dash_widget_instances.xml" />
+</full-backup-content>

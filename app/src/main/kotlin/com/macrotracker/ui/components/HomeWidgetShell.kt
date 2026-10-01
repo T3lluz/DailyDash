@@ -2,6 +2,8 @@ package com.macrotracker.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.core.updateTransition
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -102,18 +104,20 @@ fun rememberWidgetCrossAxisScrollLock(): NestedScrollConnection {
  */
 
 /** Crossfades between widget states (loading, success, error) without positional movement. */
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun <T> WidgetStateSwitch(
     targetState: T,
     modifier: Modifier = Modifier,
     label: String = "widgetState",
+    /** What counts as a new state: pass `{ it::class }` to fade between kinds, not on every refresh. */
+    contentKey: (T) -> Any? = { it },
     content: @Composable (T) -> Unit,
 ) {
-    Crossfade(
-        targetState = targetState,
+    updateTransition(targetState, label = label).Crossfade(
         modifier = modifier,
         animationSpec = MacroMotion.fadeTween(),
-        label = label,
+        contentKey = contentKey,
         content = content,
     )
 }
@@ -456,18 +460,8 @@ fun WidgetPromptCard(
             }
             if (onAction != null) {
                 Spacer(modifier = Modifier.width(12.dp))
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(accent.copy(alpha = 0.1f))
-                        .clickable(onClick = onAction)
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(actionIcon, contentDescription = null, tint = accent, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(actionLabel, color = accent, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1)
-                }
+                // The app's pill, with its haptic and button role, like every other card action.
+                PillButton(icon = actionIcon, label = actionLabel, onClick = onAction, accent = accent)
             }
         }
     }

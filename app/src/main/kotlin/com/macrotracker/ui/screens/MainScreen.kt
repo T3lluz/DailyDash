@@ -1,7 +1,7 @@
 package com.macrotracker.ui.screens
 
 import android.app.Activity
-import androidx.activity.ComponentActivity
+import com.macrotracker.ui.util.findActivity
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -12,15 +12,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -35,8 +35,8 @@ import com.macrotracker.BuildConfig
 import com.macrotracker.data.remote.AiProvider
 import com.macrotracker.data.server.ServerIntentRequest
 import com.macrotracker.data.update.AppUpdateNotifier
-import com.macrotracker.data.update.AppUpdateUiState
 import com.macrotracker.data.update.UpdateInstallActivity
+import com.macrotracker.data.update.info
 import com.macrotracker.data.update.updateAvailable
 import com.macrotracker.ui.components.AppUpdateSheet
 import com.macrotracker.ui.components.LocalIslandClearance
@@ -77,7 +77,7 @@ fun MainScreen(
     openRequest: StateFlow<String?>? = null,
     onOpenRequestHandled: () -> Unit = {},
 ) {
-    val activity = LocalContext.current as ComponentActivity
+    val activity = LocalContext.current.findActivity()
     val appUpdateViewModel: AppUpdateViewModel = hiltViewModel(viewModelStoreOwner = activity)
     val onboardingCompleted by onboardingViewModel.onboardingCompleted.collectAsState()
     val splashShown by onboardingViewModel.splashShown.collectAsState()
@@ -89,8 +89,9 @@ fun MainScreen(
     val openRouterApiKey by settingsViewModel.openRouterApiKey.collectAsState()
     val anthropicApiKey by settingsViewModel.anthropicApiKey.collectAsState()
     val claudeConnected by settingsViewModel.claudeConnected.collectAsState()
+    val hermesReachable by settingsViewModel.hermesLastReachable.collectAsState()
     // Align with AiCredentialResolver: Claude subscription, then Settings key, then BuildConfig.
-    val hasAiApiKey = when (aiProvider) {
+    val hasProviderKey = when (aiProvider) {
         AiProvider.GEMINI ->
             geminiApiKey.isNotBlank() || BuildConfig.GEMINI_API_KEY.isNotBlank()
         AiProvider.OPENAI ->
@@ -102,6 +103,9 @@ fun MainScreen(
                 anthropicApiKey.isNotBlank() ||
                 BuildConfig.ANTHROPIC_API_KEY.isNotBlank()
     }
+    // Hermes runs on the dashboard server with its own model, so someone who uses only him
+    // (no key on the phone) keeps the AI tab, its navbar activity and the island's chats.
+    val hasAiApiKey = hasProviderKey || hermesReachable
 
     val updateState by appUpdateViewModel.state.collectAsState()
     val showUpdateDialog by appUpdateViewModel.showDialog.collectAsState()
@@ -258,6 +262,8 @@ fun MainScreen(
             // Without the AI tab there is nowhere for the tab to lead.
             activity = hermesActivity.takeIf { hasAiApiKey },
             onActivityClick = onHermesActivityClick,
+            updateVersion = updateState.info?.versionName?.takeIf { updateAvailable },
+            onOpenUpdate = { appUpdateViewModel.openDialog() },
         )
 
         if (!splashShown) {
@@ -301,6 +307,8 @@ private fun MainScreenScaffold(
     onSettingsUpdateBadgeClick: () -> Unit,
     activity: NavActivity?,
     onActivityClick: (NavActivity) -> Unit,
+    updateVersion: String?,
+    onOpenUpdate: () -> Unit,
 ) {
     val navHostModifier = remember { Modifier.statusBarsPadding() }
 
@@ -343,6 +351,16 @@ private fun MainScreenScaffold(
         val islandVm: IslandViewModel = hiltViewModel()
         val islandItems by islandVm.items.collectAsState()
         val islandShortTitles by islandVm.shortTitles.collectAsState()
+        LaunchedEffect(updateVersion) { islandVm.setUpdateAvailable(updateVersion) }
+        // The tab you are on teaches the island a little about what matters at this hour.
+        LaunchedEffect(currentRoute) {
+            when (currentRoute) {
+                Screen.Home.route -> islandVm.visited("home")
+                Screen.Health.route -> islandVm.visited("health")
+                Screen.AI.route -> islandVm.visited("ai")
+                SettingsRoutes.SERVER_DASHBOARD -> islandVm.visited("servers")
+            }
+        }
         val uriHandler = LocalUriHandler.current
         val islandVisible = currentRoute == Screen.Home.route || currentRoute == Screen.Health.route ||
             currentRoute == Screen.Settings.route
@@ -364,13 +382,18 @@ private fun MainScreenScaffold(
             onHermes = onActivityClick,
             visible = islandVisible,
             hazeState = hazeState,
+            onHide = { item -> islandVm.hide(item) },
             onItem = { item ->
+                islandVm.tapped(item)
                 val link = item.join ?: item.href
                 when {
                     item.kind == "need" && item.thread != null -> {
                         islandVm.openThread(item.thread)
                         navController.navigateToTab(Screen.AI.route)
                     }
+                    item.route == "update" -> onOpenUpdate()
+                    item.route == "servers" -> navController.navigate(SettingsRoutes.SERVER_DASHBOARD) { launchSingleTop = true }
+                    item.route == "health" -> navController.navigateToTab(Screen.Health.route)
                     link != null -> runCatching { uriHandler.openUri(link) }
                     item.isBrief -> {
                         islandVm.briefSeen()

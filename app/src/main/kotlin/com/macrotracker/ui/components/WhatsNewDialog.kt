@@ -1,6 +1,7 @@
 package com.macrotracker.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
+import com.macrotracker.data.update.prettyVersion
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -66,13 +67,13 @@ fun WhatsNewDialog(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = "You're up to date",
+                            text = "What's new",
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
                             color = TextPrimary,
                         )
                         Text(
-                            text = "DailyDash ${info.versionName} · build ${info.versionCode}",
+                            text = "DailyDash ${prettyVersion(info.versionName)} · build ${info.versionCode}",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Primary,

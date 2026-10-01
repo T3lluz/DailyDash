@@ -18,14 +18,8 @@ object LivePulseSpec {
     /** Inside a filter chip or next to a label. */
     val SizeChip: Dp = 7.dp
 
-    /** Badge overlaid on an avatar or thumbnail. */
-    val SizeBadge: Dp = 9.dp
-
     /** Twitch's on-air dot in a chip, a tab or the LIVE pill. */
     val SizeTwitch: Dp = 12.dp
-
-    /** Twitch's on-air badge on an avatar. */
-    val SizeTwitchBadge: Dp = 13.dp
 
     /** How far the halo expands past the core, as a multiple of the core radius. */
     const val HALO_SCALE = 2.4f

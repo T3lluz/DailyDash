@@ -99,7 +99,10 @@ object HermesCatalog {
         }
             .filter { it.group != "OpenCode" || !isDupOpenCode(it.key, hasClaude, hasCursor) }
             .sortedWith(
+                // Groups outside GROUP_ORDER share a rank; by name next, so each group's
+                // models stay together under one heading.
                 compareBy<Family> { groupRank(it.group) }
+                    .thenBy { it.group }
                     .thenBy { !it.current }
                     .thenBy { famRank(it.label) }
                     .thenBy(NaturalOrder) { it.label },

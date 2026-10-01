@@ -88,7 +88,7 @@ class TwitchViewModel @Inject constructor(
 
     private var debounceJob: Job? = null
     private var authJob: Job? = null
-    private var autoRefreshJob: Job? = null
+    private var loadJob: Job? = null
 
     init {
         loadTrackedChannels()
@@ -117,12 +117,19 @@ class TwitchViewModel @Inject constructor(
         val tracked = twitchRepository.getTrackedChannels()
         _trackedChannels.value = tracked
         if (tracked.isEmpty()) {
+            loadJob?.cancel()
             _twitchState.value = TwitchUiState.NoChannels
             return
         }
+        // One load at a time: a forced one replaces the running one, any other joins it.
+        if (loadJob?.isActive == true) {
+            if (!forceRefresh) return
+            loadJob?.cancel()
+        }
         val current = _twitchState.value
-        viewModelScope.launch {
-            if (current !is TwitchUiState.Success || forceRefresh) {
+        loadJob = viewModelScope.launch {
+            // A refresh keeps the streams on screen; only a first load shows the skeleton.
+            if (current !is TwitchUiState.Success) {
                 _twitchState.value = TwitchUiState.Loading
             }
             twitchRepository.getLiveStreamsForTrackedChannels(forceRefresh = forceRefresh)
@@ -144,21 +151,12 @@ class TwitchViewModel @Inject constructor(
         }
     }
 
-    fun startLiveAutoRefresh() {
-        if (autoRefreshJob?.isActive == true) return
-        autoRefreshJob = viewModelScope.launch {
-            while (true) {
-                delay(LIVE_AUTO_REFRESH_MS)
-                if (_trackedChannels.value.isNotEmpty()) {
-                    loadLiveStreams(forceRefresh = true)
-                }
-            }
+    /** Re-checks who is live every [LIVE_AUTO_REFRESH_MS]; the card runs it only while Home is in front. */
+    suspend fun followLive() {
+        while (true) {
+            delay(LIVE_AUTO_REFRESH_MS)
+            if (_trackedChannels.value.isNotEmpty()) loadLiveStreams(forceRefresh = true)
         }
-    }
-
-    fun stopLiveAutoRefresh() {
-        autoRefreshJob?.cancel()
-        autoRefreshJob = null
     }
 
     fun searchChannels(query: String) {
@@ -167,6 +165,8 @@ class TwitchViewModel @Inject constructor(
             return
         }
         debounceJob?.cancel()
+        // A pending suggestion lookup is cancelled with it; its spinner must go too.
+        _suggestionsLoading.value = false
         viewModelScope.launch {
             _channelSearchState.value = TwitchChannelSearchState.Loading
             _searchSuggestions.value = emptyList()
@@ -181,6 +181,8 @@ class TwitchViewModel @Inject constructor(
 
     fun onSearchQueryChanged(query: String) {
         debounceJob?.cancel()
+        // Clearing the box clears the last search's results, as YouTube's does.
+        if (query.isBlank()) _channelSearchState.value = TwitchChannelSearchState.Idle
         if (query.length < 2) {
             _searchSuggestions.value = emptyList()
             _suggestionsLoading.value = false
@@ -272,8 +274,7 @@ class TwitchViewModel @Inject constructor(
         if (_authState.value.isBusy) return
         if (!authClient.isConfigured()) {
             setAuthError(
-                "Twitch Client ID/Secret missing — add TWITCH_CLIENT_ID and " +
-                    "TWITCH_CLIENT_SECRET to local.properties",
+                "Twitch isn't set up in this build (no client ID and secret)",
             )
             return
         }
@@ -383,10 +384,5 @@ class TwitchViewModel @Inject constructor(
             isAwaitingBrowser = false,
             deviceLogin = null,
         )
-    }
-
-    override fun onCleared() {
-        stopLiveAutoRefresh()
-        super.onCleared()
     }
 }

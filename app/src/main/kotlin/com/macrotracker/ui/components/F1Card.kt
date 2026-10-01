@@ -1,6 +1,7 @@
 package com.macrotracker.ui.components
 
 import androidx.compose.animation.*
+import com.macrotracker.ui.util.LaunchedWhileResumed
 import androidx.compose.animation.core.*
 import androidx.core.graphics.toColorInt
 import androidx.compose.foundation.Image
@@ -486,27 +487,33 @@ fun F1Card(
                     ContentSkeleton(lines = 3, accent = Hairline, surface = RowSurface)
                 }
                 is F1UiState.Error -> {
-                    if (!expanded) {
-                        Spacer(Modifier.height(12.dp))
-                        F1Error(onRefresh)
+                    WidgetExpandSection(visible = !expanded) {
+                        Column {
+                            Spacer(Modifier.height(12.dp))
+                            F1Error(onRefresh)
+                        }
                     }
                 }
                 is F1UiState.Success -> {
-                    // Collapsed glance only — expanded hub starts fresh at the tabs
-                    if (!expanded) {
-                        Spacer(Modifier.height(12.dp))
-                        F1CollapsedWidget(state.f1Data)
+                    // The glance folds away while the hub unfolds, so the card eases between heights.
+                    WidgetExpandSection(visible = !expanded) {
+                        Column {
+                            Spacer(Modifier.height(12.dp))
+                            F1CollapsedWidget(state.f1Data)
+                        }
                     }
                 }
             }
 
-            if (!expanded) {
-                WidgetExpandFooter(
-                    expanded = false,
-                    onToggle = { expanded = true },
-                    accentColor = F1Red,
-                    expandLabel = "Open hub",
-                )
+            WidgetExpandSection(visible = !expanded) {
+                Column {
+                    WidgetExpandFooter(
+                        expanded = false,
+                        onToggle = { expanded = true },
+                        accentColor = F1Red,
+                        expandLabel = "Open hub",
+                    )
+                }
             }
 
             WidgetExpandSection(visible = expanded && isVisible) {
@@ -1123,8 +1130,9 @@ private fun LiveCountdown(
     val tickersPaused = LocalTickersPaused.current
     var secondsLeft by remember(dateStr, timeStr) { mutableLongStateOf(secondsUntilRace(dateStr, timeStr)) }
 
-    LaunchedEffect(dateStr, timeStr, tickersPaused) {
-        if (tickersPaused) return@LaunchedEffect
+    LaunchedWhileResumed(dateStr, timeStr, tickersPaused) {
+        if (tickersPaused) return@LaunchedWhileResumed
+        secondsLeft = secondsUntilRace(dateStr, timeStr)
         while (secondsLeft > 0) {
             delay(1000L)
             secondsLeft = secondsUntilRace(dateStr, timeStr)
@@ -2205,11 +2213,17 @@ private fun QualiRow(result: QualiResult, bestTime: String?, accentColor: Color)
 }
 
 // ── Last race results ─────────────────────────────────────────────────────────
+
+/** Lapped cars ("+1 Lap", "Lapped") finish without a time; only the rest are DNF. */
+private val LappedStatus = Regex("""^\+\d+ Laps?$|^Lapped$""", RegexOption.IGNORE_CASE)
+
+private fun RaceResult.classifiedFinish(): Boolean =
+    time != null || status == null || status == "Finished" || LappedStatus.matches(status)
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun LastRaceResultsList(results: List<RaceResult>, raceName: String?) {
     if (results.isEmpty()) { EmptyF1State("No race results available."); return }
-    val dnfCount = results.count { it.status != null && it.time == null && it.status != "Finished" }
+    val dnfCount = results.count { !it.classifiedFinish() }
     val fl = results.firstOrNull { it.fastestLap }
     val biggestGain = results.filter { (it.positionsGained ?: 0) > 0 }.maxByOrNull { it.positionsGained ?: 0 }
     val podium = results.filter { it.position in 1..3 }.sortedBy { it.position }

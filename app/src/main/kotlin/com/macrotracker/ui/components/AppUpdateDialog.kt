@@ -1,6 +1,7 @@
 package com.macrotracker.ui.components
 
 import androidx.compose.animation.AnimatedContent
+import com.macrotracker.data.update.prettyVersion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -107,7 +108,7 @@ fun AppUpdateSheet(
             Spacer(Modifier.height(2.dp))
             Text(
                 buildString {
-                    append("DailyDash ${info.versionName}")
+                    append("DailyDash ${prettyVersion(info.versionName)}")
                     formatApkSize(info.apkBytes)?.let { append(" · $it") }
                     append(" · you have $currentVersionName")
                 },
@@ -280,24 +281,27 @@ private fun title(state: AppUpdateUiState): String = when (state) {
     else -> "Update available"
 }
 
+/** An update's download or install: filling when the size is known, sweeping when not. */
+@Composable
+fun UpdateProgressBar(progress: Float?, modifier: Modifier = Modifier) {
+    val bar = modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp))
+    if (progress != null) {
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = bar,
+            color = Primary,
+            trackColor = Border,
+            drawStopIndicator = {},
+        )
+    } else {
+        LinearProgressIndicator(modifier = bar, color = Primary, trackColor = Border)
+    }
+}
+
 @Composable
 private fun ProgressLine(progress: Float?, label: String, trailing: String? = null) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        if (progress != null) {
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
-                color = Primary,
-                trackColor = Border,
-                drawStopIndicator = {},
-            )
-        } else {
-            LinearProgressIndicator(
-                modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
-                color = Primary,
-                trackColor = Border,
-            )
-        }
+        UpdateProgressBar(progress)
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(label, fontSize = 12.sp, color = TextSecondary, modifier = Modifier.weight(1f))

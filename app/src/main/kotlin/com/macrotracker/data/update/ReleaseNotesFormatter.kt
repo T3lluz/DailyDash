@@ -15,7 +15,7 @@ object ReleaseNotesFormatter {
         pattern = """(?i)^(chore:\s*bump version.*|.*\[skip ci\].*|merge (pull request|branch).*|bumped? version.*|update version.*)$""",
     )
     private val metaComment = Regex(
-        pattern = """(?i)^<!--\s*dailydash-version:\s*([0-9]+(?:\.[0-9]+)*)\s+vc(\d+)\s*-->$""",
+        pattern = """(?i)^<!--\s*dailydash-version:\s*([0-9]+(?:\.[0-9]+)*(?:-[0-9A-Za-z.]+)?)\s+vc(\d+)\s*-->$""",
     )
     private val fullChangelogLine = Regex(
         pattern = """(?i)^\**full changelog\**:?\s*(https://\S+)\s*$""",

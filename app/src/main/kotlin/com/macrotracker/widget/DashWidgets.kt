@@ -147,8 +147,11 @@ object DashWidgets {
                 AppWidgetProviderInfo.WIDGET_CATEGORY_HOME_SCREEN,
                 spec.renderPreview(app),
             )
-            if (accepted) prefs.edit().putLong(key, now).apply()
+            if (!accepted) Log.d(TAG, "preview ${spec.key} not taken (Android rate-limits these)")
         }.onFailure { Log.w(TAG, "preview ${spec.key} not published: ${it.message}") }
+        // Stamped whether or not Android took it: a refused one used to render all the
+        // widgets again on every cold start, and Android limits these calls anyway.
+        prefs.edit().putLong(key, now).apply()
     }
 
     suspend fun publishAllPreviews(context: Context) {

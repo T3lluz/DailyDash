@@ -78,6 +78,7 @@ fun HealthTrendsSection(
     isActiveCaloriesEnabled: Boolean,
     onDateSelected: (LocalDate) -> Unit,
     onMetricSelected: (HealthMetric) -> Unit,
+    metricsReady: Boolean = true,
     onWeekStartDaySelected: (DayOfWeek) -> Unit,
     onPreviousWeek: () -> Unit,
     onNextWeek: () -> Unit,
@@ -97,8 +98,10 @@ fun HealthTrendsSection(
         if (isRespRateEnabled && weekHas(HealthMetric.RESPIRATORY_RATE)) add(HealthMetric.RESPIRATORY_RATE)
     }
 
-    LaunchedEffect(availableMetrics, selectedMetric) {
-        if (availableMetrics.isNotEmpty() && selectedMetric !in availableMetrics) {
+    // Only once the metrics have loaded: before that every one reads as off, and the saved
+    // pick was replaced by whatever happened to be first.
+    LaunchedEffect(availableMetrics, selectedMetric, metricsReady) {
+        if (metricsReady && availableMetrics.isNotEmpty() && selectedMetric !in availableMetrics) {
             onMetricSelected(availableMetrics.first())
         }
     }

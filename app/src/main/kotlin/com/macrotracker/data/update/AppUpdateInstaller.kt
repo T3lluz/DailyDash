@@ -144,6 +144,8 @@ class AppUpdateInstaller @Inject constructor(
             throw e
         } catch (e: Exception) {
             Log.e(TAG, "Install launch failed", e)
+            // Straight away without the profile, if there was one; otherwise offer the button.
+            if (repository.dropDexMetadata(file)) return install(info, file)
             _phase.value = Phase.Ready(info, file.absolutePath, "Android would not take the update: ${e.message ?: "unknown error"}")
             return
         }
@@ -183,7 +185,15 @@ class AppUpdateInstaller @Inject constructor(
             is UpdateInstallEvents.Event.Failed -> {
                 watchdog?.cancel()
                 confirmIntent = null
-                _phase.value = Phase.Ready(current.info, current.apkPath, event.message)
+                val apk = File(current.apkPath)
+                // A refused profile fails the whole install, so go again at once without it.
+                // Without a profile to drop, the failure is real: offer the button.
+                if (repository.dropDexMetadata(apk)) {
+                    Log.w(TAG, "Install failed with the profile; retrying without it: ${event.message}")
+                    scope.launch { install(current.info, apk) }
+                } else {
+                    _phase.value = Phase.Ready(current.info, current.apkPath, event.message)
+                }
             }
         }
     }

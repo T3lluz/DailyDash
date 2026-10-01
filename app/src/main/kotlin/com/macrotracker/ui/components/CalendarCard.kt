@@ -55,6 +55,7 @@ fun CalendarCard(
     onRequestPermission: () -> Unit,
     modifier: Modifier = Modifier,
     isVisible: Boolean = true,
+    onRetry: (() -> Unit)? = null,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     val haptics = rememberHaptics()
@@ -93,7 +94,9 @@ fun CalendarCard(
                 val upcomingEvents = successState.upcomingEvents
                 // A recurring event's instances share one id, so an instance is its id and its start.
                 // Ones that have ended drop off; the card is about what is still ahead.
-                val allVisibleEvents = remember(events, upcomingEvents) {
+                // Re-filtered each minute, so a meeting that ends drops off while Home is open.
+                val minute by rememberMinuteClock()
+                val allVisibleEvents = remember(events, upcomingEvents, minute / 60_000L) {
                     val now = java.time.LocalDateTime.now()
                     (events + upcomingEvents)
                         .distinctBy { it.id to it.beginMillis }
@@ -142,10 +145,10 @@ fun CalendarCard(
             else -> WidgetPromptCard(
                 title = "Calendar",
                 message = "Calendar is off or could not be read. Check Settings → Connections.",
-                actionLabel = "",
-                actionIcon = AppIcons.CalendarDays,
+                actionLabel = "Try again",
+                actionIcon = AppIcons.Refresh,
                 accent = CalendarAccent,
-                onAction = null,
+                onAction = onRetry,
             )
         }
     }

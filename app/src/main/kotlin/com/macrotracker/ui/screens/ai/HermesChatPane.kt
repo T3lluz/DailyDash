@@ -1,6 +1,7 @@
 package com.macrotracker.ui.screens.ai
 
 import android.Manifest
+import com.macrotracker.ui.util.LaunchedWhileResumed
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
@@ -142,11 +143,10 @@ fun HermesChatPane(
     usageViewModel: com.macrotracker.ui.viewmodel.UsageViewModel = androidx.hilt.navigation.compose.hiltViewModel(),
 ) {
     val usageState by usageViewModel.state.collectAsState()
-    LaunchedEffect(usageViewModel) {
-        usageViewModel.load()
+    LaunchedWhileResumed(usageViewModel) {
         while (true) {
-            kotlinx.coroutines.delay(3 * 60_000L)
             usageViewModel.load()
+            kotlinx.coroutines.delay(3 * 60_000L)
         }
     }
     val state by viewModel.state.collectAsState()
@@ -179,15 +179,15 @@ fun HermesChatPane(
     }
     FollowChatOnKeyboard(listState) { forceFollow || nearBottom }
 
-    // The bridge's change feed, while the pane is on screen: a chat started on the desk
-    // shows up in the chat list as it happens.
-    DisposableEffect(viewModel) {
-        viewModel.startLive()
+    // The bridge's change feed, while the pane is on screen and the app in front: a chat
+    // started on the desk shows up in the chat list as it happens. On return it catches up.
+    val resumed = rememberIsResumed()
+    DisposableEffect(viewModel, resumed) {
+        if (resumed) viewModel.startLive()
         onDispose { viewModel.stopLive() }
     }
 
     // While this chat is on screen its turns end without a notification or a navbar "Done".
-    val resumed = rememberIsResumed()
     DisposableEffect(viewModel, resumed, state.threadId) {
         viewModel.setViewing(resumed)
         onDispose { viewModel.setViewing(false) }
@@ -304,7 +304,10 @@ fun HermesChatPane(
                         items(state.items, key = { it.key }) { item ->
                             HermesItemView(
                                 item = item,
-                                state = state,
+                                // Only what the cards read, not the whole state: with the state,
+                                // every streamed token re-ran every row on screen.
+                                busy = state.busy,
+                                running = state.running,
                                 onDecide = { card, i, run ->
                                     haptics.click()
                                     forceFollow = true
@@ -391,7 +394,7 @@ fun HermesChatPane(
                         },
                     )
                     Spacer(Modifier.height(4.dp))
-                } else if (state.items.isEmpty() && !state.busy && state.reach == HermesReach.READY) {
+                } else if (state.items.isEmpty() && !state.busy && !state.loadingThread && state.reach == HermesReach.READY) {
                     ChatStarters(HermesStarters) { send(it) }
                 }
                 HermesComposer(
@@ -399,7 +402,8 @@ fun HermesChatPane(
                     onValueChange = { draft = it },
                     onSend = { send(draft) },
                     onStop = { viewModel.stop() },
-                    enabled = state.reach == HermesReach.READY,
+                    // Not while a chat is opening: its transcript replaced the message just sent.
+                    enabled = state.reach == HermesReach.READY && !state.loadingThread,
                     busy = state.busy,
                     hint = when {
                         state.busy -> "Type to queue the next message…"
@@ -597,7 +601,8 @@ private fun HermesUnreachable(
 @Composable
 private fun HermesItemView(
     item: HermesItem,
-    state: HermesUiState,
+    busy: Boolean,
+    running: Set<String>,
     onDecide: (HermesItem.Ask, Int, Boolean) -> Unit,
     onAnswer: (HermesItem.Clarify, String) -> Unit,
 ) {
@@ -606,8 +611,8 @@ private fun HermesItemView(
         is HermesItem.Output -> OutputNote(item.text)
         is HermesItem.Assistant -> AssistantTurn(item)
         is HermesItem.Exec -> TerminalCard(item)
-        is HermesItem.Ask -> ApprovalCard(item, state, onDecide)
-        is HermesItem.Clarify -> QuestionCard(item, enabled = !state.busy, onAnswer = onAnswer)
+        is HermesItem.Ask -> ApprovalCard(item, busy, running, onDecide)
+        is HermesItem.Clarify -> QuestionCard(item, enabled = !busy, onAnswer = onAnswer)
         is HermesItem.Web -> WebRow(item)
         is HermesItem.Error -> BotBubble(identity = HermesIdentity, text = item.text, isError = true)
     }
@@ -905,7 +910,8 @@ private fun MonoBlock(text: String, maxLines: Int) {
 @Composable
 private fun ApprovalCard(
     card: HermesItem.Ask,
-    state: HermesUiState,
+    busy: Boolean,
+    running: Set<String>,
     onDecide: (HermesItem.Ask, Int, Boolean) -> Unit,
 ) {
     val grave = card.cmds.any { it.risk == "grave" }
@@ -931,8 +937,8 @@ private fun ApprovalCard(
             Spacer(Modifier.height(10.dp))
             ApprovalRow(
                 cmd = cmd,
-                running = "${card.id}:$i" in state.running,
-                enabled = !state.busy,
+                running = "${card.id}:$i" in running,
+                enabled = !busy,
                 onRun = { onDecide(card, i, true) },
                 onSkip = { onDecide(card, i, false) },
             )

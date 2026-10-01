@@ -219,19 +219,24 @@ class HealthConnectRepository @Inject constructor(
 
     }
 
-    private val client: HealthConnectClient? by lazy {
-        try {
+    @Volatile
+    private var connected: HealthConnectClient? = null
+
+    /**
+     * Only a client is kept: "not available" is asked again next time, so installing or
+     * updating Health Connect while the app runs takes effect without a restart.
+     */
+    private val client: HealthConnectClient?
+        get() = connected ?: try {
             if (HealthConnectClient.getSdkStatus(context) == HealthConnectClient.SDK_AVAILABLE) {
-                HealthConnectClient.getOrCreate(context)
+                HealthConnectClient.getOrCreate(context).also { connected = it }
             } else {
-                Log.w(TAG, "Health Connect SDK not available")
                 null
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get HealthConnectClient: ${e.message}")
             null
         }
-    }
 
     fun isAvailable(): Boolean = client != null
 
@@ -351,8 +356,10 @@ class HealthConnectRepository @Inject constructor(
             grantedCache = CacheEntry(System.currentTimeMillis(), granted)
             granted
         } catch (e: Exception) {
+            // A passing IPC error is not a revoke: keep the last answer rather than flip a
+            // connected person to the Connect prompt.
             Log.e(TAG, "Error reading granted permissions: ${e.message}")
-            emptySet()
+            cached?.value?.let { @Suppress("UNCHECKED_CAST") (it as Set<String>) } ?: emptySet()
         }
     }
 
@@ -900,13 +907,7 @@ class HealthConnectRepository @Inject constructor(
         }
 
         try {
-            val spo2Records = hc.readRecords(
-                ReadRecordsRequest(
-                    recordType = OxygenSaturationRecord::class,
-                    timeRangeFilter = TimeRangeFilter.between(start, end),
-                    ascendingOrder = true,
-                ),
-            ).records
+            val spo2Records = hc.readAll<OxygenSaturationRecord>(TimeRangeFilter.between(start, end))
             spo2Records
                 .groupBy { it.time.atZone(zone).toLocalDate() }
                 .forEach { (date, records) ->
@@ -921,13 +922,7 @@ class HealthConnectRepository @Inject constructor(
         }
 
         try {
-            val respRecords = hc.readRecords(
-                ReadRecordsRequest(
-                    recordType = RespiratoryRateRecord::class,
-                    timeRangeFilter = TimeRangeFilter.between(start, end),
-                    ascendingOrder = true,
-                ),
-            ).records
+            val respRecords = hc.readAll<RespiratoryRateRecord>(TimeRangeFilter.between(start, end))
             respRecords
                 .groupBy { it.time.atZone(zone).toLocalDate() }
                 .forEach { (date, records) ->
@@ -949,13 +944,8 @@ class HealthConnectRepository @Inject constructor(
         val endOfDay = date.plusDays(1).atStartOfDay(zone).toInstant()
 
         try {
-            val response = hc.readRecords(
-                ReadRecordsRequest(
-                    recordType = HeartRateRecord::class,
-                    timeRangeFilter = TimeRangeFilter.between(startOfDay, endOfDay),
-                ),
-            )
-            response.records.flatMap { it.samples }.sortedBy { it.time }
+            hc.readAll<HeartRateRecord>(TimeRangeFilter.between(startOfDay, endOfDay))
+                .flatMap { it.samples }.sortedBy { it.time }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to read intraday HR", e)
             emptyList()
@@ -1651,4 +1641,26 @@ class HealthConnectRepository @Inject constructor(
                 emptyMap()
             }
         }
+}
+
+/**
+ * Every record in [range], across pages. One read returns at most 1000 records, oldest first,
+ * so a watch that writes a reading a minute filled the page with the oldest days and the
+ * newest (today) were missing. Capped at [maxPages] so a runaway source can't stall a load.
+ */
+private suspend inline fun <reified T : Record> HealthConnectClient.readAll(
+    range: TimeRangeFilter,
+    maxPages: Int = 20,
+): List<T> {
+    val out = mutableListOf<T>()
+    var token: String? = null
+    var pages = 0
+    do {
+        val response = readRecords(
+            ReadRecordsRequest(recordType = T::class, timeRangeFilter = range, ascendingOrder = true, pageToken = token),
+        )
+        out += response.records
+        token = response.pageToken
+    } while (token != null && ++pages < maxPages)
+    return out
 }

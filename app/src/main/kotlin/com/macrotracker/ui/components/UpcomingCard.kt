@@ -1,6 +1,7 @@
 package com.macrotracker.ui.components
 
 import android.text.format.DateFormat
+import com.macrotracker.ui.util.LaunchedWhileResumed
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -168,17 +169,18 @@ fun UpcomingCard(
     val state by viewModel.state.collectAsState()
     val calendars by viewModel.calendars.collectAsState()
 
-    LaunchedEffect(isVisible) {
-        if (!isVisible) return@LaunchedEffect
-        viewModel.load()
+    LaunchedWhileResumed(isVisible) {
+        if (!isVisible) return@LaunchedWhileResumed
         // The server rewrites the file every 30 s; a schedule only needs the odd look.
         while (true) {
-            delay(5 * 60 * 1000L)
             viewModel.load()
+            delay(5 * 60 * 1000L)
         }
     }
 
-    when (val s = state) {
+    val stateKey: (UpcomingUiState) -> Any = { if (it is UpcomingUiState.Idle) UpcomingUiState.Loading::class else it::class }
+    WidgetStateSwitch(targetState = state, contentKey = stateKey, label = "upcoming") { s ->
+    when (s) {
         is UpcomingUiState.Success -> UpcomingContent(
             feed = s.feed,
             calendars = calendars,
@@ -200,6 +202,7 @@ fun UpcomingCard(
             lines = 0,
             tiles = 3,
         )
+    }
     }
 }
 

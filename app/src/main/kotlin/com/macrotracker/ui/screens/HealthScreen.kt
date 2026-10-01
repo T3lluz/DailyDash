@@ -1,18 +1,18 @@
 package com.macrotracker.ui.screens
 
 import android.content.ActivityNotFoundException
+import com.macrotracker.ui.theme.NutritionProtein
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import com.macrotracker.ui.theme.MacroMotion
+import com.macrotracker.ui.components.FoodLogList
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
@@ -27,10 +27,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -47,11 +43,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.health.connect.client.PermissionController
@@ -79,11 +72,9 @@ import com.macrotracker.data.local.MacroLogEntity
 import com.macrotracker.ui.components.ContentSkeleton
 import com.macrotracker.ui.components.HealthConnectCard
 import com.macrotracker.ui.components.LoadingRow
-import com.macrotracker.ui.components.MacroButton
-import com.macrotracker.ui.components.MacroLogItem
 import com.macrotracker.ui.components.WidgetScrollBox
 import com.macrotracker.ui.components.MacroProgressBar
-import com.macrotracker.ui.components.MacroTextField
+import com.macrotracker.ui.components.FoodLogForm
 import com.macrotracker.ui.components.PillButton
 import com.macrotracker.ui.components.RipplePullToRefreshBox
 import com.macrotracker.ui.components.rippleAnchor
@@ -101,13 +92,13 @@ import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.NutritionCalories
 import com.macrotracker.ui.theme.HealthNutritionTone
 import com.macrotracker.ui.theme.Primary
-import com.macrotracker.ui.theme.Secondary
 import com.macrotracker.ui.theme.Success
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.HapticHelper
 import com.macrotracker.ui.util.LocalTickersPaused
 import com.macrotracker.ui.util.rememberHaptics
+import com.macrotracker.ui.util.rememberToday
 import com.macrotracker.ui.viewmodel.DashboardViewModel
 import com.macrotracker.ui.viewmodel.HealthConnectUiState
 import com.macrotracker.ui.viewmodel.HealthViewModel
@@ -124,9 +115,6 @@ import com.macrotracker.ui.theme.AppIcons
 @Composable
 fun HealthScreen(
     onNavigateToCameraScan: () -> Unit,
-    scannedFoodName: String? = null,
-    scannedCalories: Int? = null,
-    scannedProtein: Int? = null,
     healthViewModel: HealthViewModel = hiltViewModel(),
     dashboardViewModel: DashboardViewModel = hiltViewModel(),
 ) {
@@ -189,10 +177,8 @@ fun HealthScreen(
             Triple("ACTIVITIES", "Activities", AppIcons.Activity),
             Triple("VITALS", "Body & Vitals", AppIcons.Scale),
             Triple("HISTORY", "Trends", AppIcons.ChartLine),
-            Triple("SUMMARY", "Food today", AppIcons.Rows),
-            Triple("ADD_ENTRY", "Log food", AppIcons.Add),
+            Triple("FOOD", "Food today", AppIcons.Restaurant),
             Triple("WEEK_AT_A_GLANCE", "Food trends", AppIcons.ChartBar),
-            Triple("RECENT_LOGS", "Food log", AppIcons.List),
         )
     }
     val parsedConfigs = remember(healthWidgetOrder) {
@@ -209,6 +195,7 @@ fun HealthScreen(
     val floorsClimbedState by dashboardViewModel.floorsClimbedState.collectAsState()
     val activeCaloriesState by dashboardViewModel.activeCaloriesState.collectAsState()
     val missingPermissions by dashboardViewModel.missingPermissions.collectAsState()
+    val metricsLoaded by dashboardViewModel.loaded.collectAsState()
 
     // Health Connect permission launcher
     val hcPermissionLauncher = rememberLauncherForActivityResult(
@@ -217,6 +204,19 @@ fun HealthScreen(
         val anyGranted = granted.any { it in healthViewModel.healthConnectPermissions }
         healthViewModel.loadHealthConnect(permissionsGranted = anyGranted)
         dashboardViewModel.loadData(forceRefresh = true)
+    }
+
+    // Every "Allow" on the tab goes through here. Without Health Connect on the phone
+    // (Android 8-13 before it is installed) the permission screen does not exist, and
+    // launching it crashed; the Play Store page to install it opens instead.
+    val requestHealthAccess: () -> Unit = remember(hcPermissionLauncher) {
+        {
+            try {
+                hcPermissionLauncher.launch(healthViewModel.healthConnectPermissions)
+            } catch (_: ActivityNotFoundException) {
+                openHealthConnectInstall(context)
+            }
+        }
     }
 
     // First visit to this tab happens while the Activity is already resumed, so
@@ -237,14 +237,16 @@ fun HealthScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // Handle scanned food data
-    LaunchedEffect(scannedFoodName, scannedCalories, scannedProtein) {
-        if (scannedFoodName != null) foodName = scannedFoodName
-        if (scannedCalories != null) calories = scannedCalories.toString()
-        if (scannedProtein != null) protein = scannedProtein.toString()
+    // Today as a state that turns at midnight, so a tab left open moves to the new day.
+    val today = rememberToday()
+    var shownDay by remember { mutableStateOf(today) }
+    LaunchedEffect(today) {
+        if (today != shownDay) {
+            shownDay = today
+            healthViewModel.rollToToday(today)
+        }
     }
-
-    val todayFormatted = remember { LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE, MMM d")) }
+    val todayFormatted = remember(today) { today.format(DateTimeFormatter.ofPattern("EEEE, MMM d")) }
 
     val visibleConfigs = remember(parsedConfigs) {
         parsedConfigs.filter { it.isVisible }
@@ -265,20 +267,13 @@ fun HealthScreen(
     // Readiness comes from what the Sleep and Body & Vitals reads already
     // returned, so it costs no other Health Connect round trip.
     val vitals = (vitalsState as? VitalsUiState.Success)?.vitals
-    val today = LocalDate.now()
     val todaySessionScore = remember(todaySleepSessions) { computeSleepNightScore(todaySleepSessions)?.score }
     val lastNightScore = sleepNights.lastOrNull()?.takeIf { it.date == today }?.score?.score ?: todaySessionScore
     val readiness = remember(vitals, lastNightScore) {
         vitals?.let { readinessFrom(it, lastNightScore) }
     }
     // Rolling seven days for the Today's readings sparklines, whatever week Trends shows.
-    val lastSevenDays = remember(healthHistory, previousWeekHistory, weeksBack) {
-        if (weeksBack != 0) {
-            emptyList()
-        } else {
-            (previousWeekHistory + healthHistory).filter { !it.date.isAfter(today) }.takeLast(7)
-        }
-    }
+    val lastSevenDays by healthViewModel.recentDays.collectAsState()
 
     CompositionLocalProvider(LocalTickersPaused provides tickersPaused) {
     RipplePullToRefreshBox(
@@ -321,20 +316,20 @@ fun HealthScreen(
                 is HealthConnectUiState.PermissionRequired -> {
                     HealthConnectCard(
                         onRequestPermission = {
-                            hcPermissionLauncher.launch(healthViewModel.healthConnectPermissions)
+                            requestHealthAccess()
                         }
                     )
                 }
                 is HealthConnectUiState.NotAvailable -> {
                     HealthConnectCard(
-                        title = "Health Connect Unavailable",
+                        title = "Health Connect isn't available",
                         message = "Health Connect isn’t available on this device. Macro tracking still works.",
                         onRequestPermission = null,
                     )
                 }
                 is HealthConnectUiState.Error -> {
                     HealthConnectCard(
-                        title = "Health Connect Error",
+                        title = "Health Connect didn't answer",
                         message = hc.message,
                         actionLabel = "Retry",
                         onRequestPermission = { healthViewModel.loadHealthConnect() },
@@ -403,7 +398,7 @@ fun HealthScreen(
                             loaded = sleepLoaded,
                             haptics = haptics,
                             onRequestPermission = {
-                                hcPermissionLauncher.launch(healthViewModel.healthConnectPermissions)
+                                requestHealthAccess()
                             },
                         )
                     }
@@ -412,7 +407,7 @@ fun HealthScreen(
                             state = vitalsState,
                             haptics = haptics,
                             onRequestPermission = {
-                                hcPermissionLauncher.launch(healthViewModel.healthConnectPermissions)
+                                requestHealthAccess()
                             },
                             birthYear = birthYear,
                             onSetBirthYear = healthViewModel::setBirthYear,
@@ -423,7 +418,7 @@ fun HealthScreen(
                             state = activitiesState,
                             haptics = haptics,
                             onRequestPermission = {
-                                hcPermissionLauncher.launch(healthViewModel.healthConnectPermissions)
+                                requestHealthAccess()
                             },
                             onRetry = { healthViewModel.retryHealthConnect() },
                             onExpandActivity = { healthViewModel.onActivityExpanded(it) },
@@ -449,12 +444,13 @@ fun HealthScreen(
                             )
                         }
                         TodaysReadingsSection(
+                            loading = !metricsLoaded,
                             entries = metricEntries,
                             history = lastSevenDays,
                             notShared = missingPermissions.map { it.label },
                             onAllow = {
                                 haptics.tick()
-                                hcPermissionLauncher.launch(healthViewModel.healthConnectPermissions)
+                                requestHealthAccess()
                             },
                         )
                     }
@@ -466,10 +462,21 @@ fun HealthScreen(
                             HealthSection {
                                 HealthHeader(title = "Trends", icon = AppIcons.ChartLine, accent = Primary)
                                 Spacer(modifier = Modifier.height(14.dp))
-                                ContentSkeleton(lines = 4, accent = Border)
+                                // A skeleton only while a read is out; without Health Connect it
+                                // stayed a skeleton for good.
+                                if (healthConnectState is HealthConnectUiState.Loading || healthConnectState is HealthConnectUiState.Success) {
+                                    ContentSkeleton(lines = 4, accent = Border)
+                                } else {
+                                    Text(
+                                        "Your weeks of steps, heart rate and sleep show here once Health Connect shares them.",
+                                        fontSize = 13.sp,
+                                        color = TextSecondary,
+                                    )
+                                }
                             }
                         } else {
                             HealthTrendsSection(
+                                metricsReady = metricsLoaded,
                                 healthHistory = healthHistory,
                                 previousWeek = previousWeekHistory,
                                 selectedDate = selectedDate,
@@ -498,108 +505,12 @@ fun HealthScreen(
                             )
                         }
                     }
-                    "SUMMARY" -> {
-                        val s = summary
-                        if (s == null) {
-                            HealthSection {
-                                HealthHeader(title = "Food today", icon = AppIcons.Rows, accent = HealthNutritionTone)
-                                Spacer(modifier = Modifier.height(14.dp))
-                                ContentSkeleton(lines = 2, accent = Border)
-                            }
-                        } else {
-                            val hcStats = (healthConnectState as? HealthConnectUiState.Success)?.stats
-                            HealthSection(delayMs = 100) {
-                                HealthHeader(
-                                    title = "Food today",
-                                    icon = AppIcons.Rows,
-                                    accent = HealthNutritionTone,
-                                    modifier = Modifier.padding(bottom = 16.dp),
-                                )
-                                val calProgress = if (s.calorieGoal > 0) s.totalCalories.toFloat() / s.calorieGoal else 0f
-                                val protProgress = if (s.proteinGoal > 0) s.totalProtein.toFloat() / s.proteinGoal else 0f
-                                MacroProgressBar(
-                                    progress = calProgress,
-                                    label = "${s.totalCalories} / ${s.calorieGoal} kcal",
-                                    color = if (calProgress > 1f) Error else Primary,
-                                )
-                                MacroProgressBar(
-                                    progress = protProgress,
-                                    label = "${s.totalProtein} / ${s.proteinGoal} g protein",
-                                    color = Secondary,
-                                )
-
-                                val calRemaining = (s.calorieGoal - s.totalCalories).coerceAtLeast(0)
-                                val proteinRemaining = (s.proteinGoal - s.totalProtein).coerceAtLeast(0)
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    HealthStatTile(
-                                        label = "Left today",
-                                        value = "$calRemaining kcal",
-                                        sub = "${proteinRemaining}g protein",
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    // Total burn counts what the body spends at rest too;
-                                    // active alone is the fallback for sources without it.
-                                    val totalBurn = hcStats?.totalCaloriesBurned?.takeIf { it > 0 }?.roundToInt()
-                                    val activeBurn = hcStats?.activeCaloriesBurned?.takeIf { it > 0 }?.roundToInt()
-                                    if (hcStats != null && (totalBurn != null || activeBurn != null || hcStats.steps > 0)) {
-                                        HealthStatTile(
-                                            label = "Burned",
-                                            value = when {
-                                                totalBurn != null -> "$totalBurn kcal"
-                                                activeBurn != null -> "$activeBurn active"
-                                                else -> String.format(Locale.US, "%,d steps", hcStats.steps)
-                                            },
-                                            sub = buildList {
-                                                if (totalBurn != null && activeBurn != null) add("$activeBurn active")
-                                                if (hcStats.steps > 0 && (totalBurn != null || activeBurn != null)) {
-                                                    add(String.format(Locale.US, "%,d steps", hcStats.steps))
-                                                }
-                                            }.joinToString(" · ").ifBlank { null },
-                                            modifier = Modifier.weight(1f),
-                                        )
-                                    }
-                                }
-
-                                // Energy balance: intake vs what's been burned so far today.
-                                val burnedOut = hcStats?.totalCaloriesBurned?.takeIf { it > 0 }
-                                    ?: hcStats?.activeCaloriesBurned?.takeIf { it > 0 }
-                                if (burnedOut != null && s.totalCalories > 0) {
-                                    val net = s.totalCalories - burnedOut.roundToInt()
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    ) {
-                                        HealthStatTile(
-                                            label = "Energy balance",
-                                            value = when {
-                                                net > 0 -> "+$net kcal"
-                                                net < 0 -> "$net kcal"
-                                                else -> "Even"
-                                            },
-                                            sub = if (net > 0) "surplus so far" else "deficit so far",
-                                            modifier = Modifier.weight(1f),
-                                        )
-                                        HealthStatTile(
-                                            label = "In / Out",
-                                            value = "${s.totalCalories} / ${burnedOut.roundToInt()}",
-                                            sub = "kcal",
-                                            modifier = Modifier.weight(1f),
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    "ADD_ENTRY" -> {
-                        HealthSection(delayMs = 150) {
+                    "FOOD" -> {
+                        // What you've eaten against your goals, and the form to log more, in one section.
+                        HealthSection(delayMs = 100) {
                             HealthHeader(
-                                title = "Log food",
-                                icon = AppIcons.Add,
+                                title = "Food today",
+                                icon = AppIcons.Restaurant,
                                 accent = HealthNutritionTone,
                                 modifier = Modifier.padding(bottom = 16.dp),
                             ) {
@@ -611,81 +522,73 @@ fun HealthScreen(
                                     modifier = Modifier.padding(start = 8.dp),
                                 )
                             }
+                            val s = summary
+                            if (s == null) {
+                                ContentSkeleton(lines = 2, accent = Border)
+                            } else {
+                                val hcStats = (healthConnectState as? HealthConnectUiState.Success)?.stats
+                                val calProgress = if (s.calorieGoal > 0) s.totalCalories.toFloat() / s.calorieGoal else 0f
+                                val protProgress = if (s.proteinGoal > 0) s.totalProtein.toFloat() / s.proteinGoal else 0f
+                                MacroProgressBar(
+                                    progress = calProgress,
+                                    label = "${s.totalCalories} / ${s.calorieGoal} kcal",
+                                    color = if (calProgress > 1f) Error else NutritionCalories,
+                                )
+                                MacroProgressBar(
+                                    progress = protProgress,
+                                    label = "${s.totalProtein} / ${s.proteinGoal} g protein",
+                                    color = NutritionProtein,
+                                )
 
-                            MacroTextField(
-                                value = foodName,
-                                onValueChange = { foodName = it },
-                                placeholder = "Food Name (optional)",
-                                trailingIcon = {
-                                    if (foodName.isNotEmpty()) {
-                                        IconButton(onClick = { foodName = "" }) {
-                                            Icon(
-                                                imageVector = AppIcons.Close,
-                                                contentDescription = "Clear",
-                                            )
-                                        }
+                                val calRemaining = (s.calorieGoal - s.totalCalories).coerceAtLeast(0)
+                                val proteinRemaining = (s.proteinGoal - s.totalProtein).coerceAtLeast(0)
+                                Spacer(modifier = Modifier.height(12.dp))
+                                // What's left, and the day's balance against what has been burned:
+                                // one line each, where Burned and In / Out used to say it twice.
+                                val burnedOut = hcStats?.totalCaloriesBurned?.takeIf { it > 0 }
+                                    ?: hcStats?.activeCaloriesBurned?.takeIf { it > 0 }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    HealthStatTile(
+                                        label = "Left today",
+                                        value = "$calRemaining kcal",
+                                        sub = "${proteinRemaining}g protein",
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    if (burnedOut != null && s.totalCalories > 0) {
+                                        val out = burnedOut.roundToInt()
+                                        val net = s.totalCalories - out
+                                        HealthStatTile(
+                                            label = "Energy balance",
+                                            value = when {
+                                                net > 0 -> "+$net kcal"
+                                                net < 0 -> "$net kcal"
+                                                else -> "Even"
+                                            },
+                                            sub = "${s.totalCalories} in · $out out",
+                                            modifier = Modifier.weight(1f),
+                                        )
                                     }
-                                },
-                            )
+                                }
 
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                MacroTextField(
-                                    value = calories,
-                                    onValueChange = { calories = it },
-                                    placeholder = "Calories",
-                                    modifier = Modifier.weight(1f),
-                                    keyboardType = KeyboardType.Number,
-                                    trailingIcon = {
-                                        if (calories.isNotEmpty()) {
-                                            IconButton(onClick = { calories = "" }) {
-                                                Icon(
-                                                    imageVector = AppIcons.Close,
-                                                    contentDescription = "Clear",
-                                                )
-                                            }
-                                        }
-                                    },
-                                )
-                                MacroTextField(
-                                    value = protein,
-                                    onValueChange = { protein = it },
-                                    placeholder = "Protein (g)",
-                                    modifier = Modifier.weight(1f),
-                                    keyboardType = KeyboardType.Number,
-                                    trailingIcon = {
-                                        if (protein.isNotEmpty()) {
-                                            IconButton(onClick = { protein = "" }) {
-                                                Icon(
-                                                    imageVector = AppIcons.Close,
-                                                    contentDescription = "Clear",
-                                                )
-                                            }
-                                        }
-                                    },
-                                )
+                                // Today's entries, newest first; the old Food log card showed them again.
+                                if (logs.isNotEmpty()) {
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text("Logged today", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary)
+                                    FoodLogList(logs = logs, onDelete = { healthViewModel.deleteLog(it) })
+                                }
                             }
-
-                            MacroButton(
-                                text = "Add Log",
-                                onClick = {
-                                    val cal = calories.toIntOrNull() ?: 0
-                                    val prot = protein.toIntOrNull() ?: 0
-                                    if (cal > 0 || prot > 0) {
-                                        haptics.confirm()
-                                        healthViewModel.addLog(foodName, cal, prot)
-                                        foodName = ""
-                                        calories = ""
-                                        protein = ""
-                                        Toast.makeText(context, "Entry added", Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        haptics.reject()
-                                        Toast.makeText(context, "Enter calories or protein first", Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                                modifier = Modifier.padding(top = 8.dp),
+                            FoodLogForm(
+                                name = foodName,
+                                onNameChange = { foodName = it },
+                                calories = calories,
+                                onCaloriesChange = { calories = it },
+                                protein = protein,
+                                onProteinChange = { protein = it },
+                                onAdd = { name, cal, prot -> healthViewModel.addLog(name, cal, prot) },
+                                modifier = Modifier.padding(top = 16.dp),
                             )
                         }
                     }
@@ -704,37 +607,6 @@ fun HealthScreen(
                             onDateSelected = { healthViewModel.selectMacroDate(it) },
                             onDeleteLog = { healthViewModel.deleteLog(it) },
                         )
-                    }
-                    "RECENT_LOGS" -> {
-                        HealthSection(delayMs = 250) {
-                            HealthHeader(
-                                title = "Food log",
-                                icon = AppIcons.List,
-                                accent = HealthNutritionTone,
-                                modifier = Modifier.padding(bottom = 8.dp),
-                            )
-
-                            if (logs.isEmpty()) {
-                                Text(
-                                    "No logs yet today.",
-                                    color = TextSecondary,
-                                    fontStyle = FontStyle.Italic,
-                                    modifier = Modifier
-                                        .padding(top = 12.dp)
-                                        .fillMaxWidth(),
-                                )
-                            } else {
-                                val reversedLogs = remember(logs) { logs.asReversed().take(20) }
-                                WidgetScrollBox {
-                                    reversedLogs.forEach { log ->
-                                        MacroLogItem(
-                                            log = log,
-                                            onDelete = { healthViewModel.deleteLog(it) },
-                                        )
-                                    }
-                                }
-                            }
-                        }
                     }
                 }
             }
@@ -763,9 +635,10 @@ private fun MacroTrendsSection(
     onDeleteLog: (String) -> Unit,
 ) {
     val dateFormat = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd") }
-    val dates = remember(rangeDays) {
+    val today = LocalDate.now()
+    val dates = remember(rangeDays, today) {
         (0 until rangeDays).map { i ->
-            LocalDate.now().minusDays((rangeDays - 1 - i).toLong()).format(dateFormat)
+            today.minusDays((rangeDays - 1 - i).toLong()).format(dateFormat)
         }
     }
     val metricValues = dates.map { date ->
@@ -773,7 +646,7 @@ private fun MacroTrendsSection(
         if (metric == "calories") day?.totalCalories ?: 0 else day?.totalProtein ?: 0
     }
     val selectedMacro = macroHistory.find { it.date == selectedDate }
-    val barColor = if (metric == "calories") NutritionCalories else Primary
+    val barColor = if (metric == "calories") NutritionCalories else NutritionProtein
     val selectedIndex = dates.indexOf(selectedDate).coerceAtLeast(0)
     val labels = dates.map { date ->
         try {
@@ -812,7 +685,7 @@ private fun MacroTrendsSection(
                     HealthChip(
                         label = label,
                         selected = metric == key,
-                        color = if (key == "calories") NutritionCalories else Primary,
+                        color = if (key == "calories") NutritionCalories else NutritionProtein,
                         icon = if (key == "calories") AppIcons.Flame else AppIcons.Dumbbell,
                         onClick = {
                             haptics.tick()
@@ -870,7 +743,13 @@ private fun MacroTrendsSection(
             }
         }
 
-        // The picked day's food reads as the second half of the same section, not a card of its own.
+        // A picked past day's food reads as the second half of the same section. Today's is
+        // already listed in Food today, so it is not repeated here.
+        AnimatedVisibility(
+            visible = selectedDate != today.format(dateFormat),
+            enter = MacroMotion.expandEnter,
+            exit = MacroMotion.expandExit,
+        ) {
         Column(modifier = Modifier.fillMaxWidth().padding(bottom = 22.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 10.dp)) {
                 Icon(AppIcons.CalendarDays, contentDescription = null, tint = HealthNutritionTone, modifier = Modifier.size(18.dp))
@@ -893,7 +772,7 @@ private fun MacroTrendsSection(
             }
 
             Text(
-                "Food Logs",
+                "Food logged",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary,
@@ -901,21 +780,16 @@ private fun MacroTrendsSection(
             )
             if (selectedLogs.isEmpty()) {
                 Text(
-                    "No food logs for this day.",
+                    "No food logged that day.",
                     color = TextSecondary,
-                    fontStyle = FontStyle.Italic,
                     fontSize = 13.sp,
                 )
             } else {
                 WidgetScrollBox {
-                    selectedLogs.forEach { log ->
-                        MacroLogItem(
-                            log = log,
-                            onDelete = onDeleteLog,
-                        )
-                    }
+                    FoodLogList(logs = selectedLogs, onDelete = onDeleteLog)
                 }
             }
+        }
         }
     }
 }
@@ -925,6 +799,17 @@ private fun MacroTrendsSection(
  * that resyncs the AppOp behind health reads once it has drifted from the
  * runtime grant — the app cannot set an AppOp itself.
  */
+private fun openHealthConnectInstall(context: Context) {
+    val id = "com.google.android.apps.healthdata"
+    for (uri in listOf("market://details?id=$id", "https://play.google.com/store/apps/details?id=$id")) {
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uri)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            return
+        } catch (_: ActivityNotFoundException) {
+        }
+    }
+}
+
 private fun openHealthConnectSettings(context: Context) {
     val candidates = listOf(
         Intent("android.health.connect.action.MANAGE_HEALTH_PERMISSIONS")

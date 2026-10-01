@@ -1,6 +1,9 @@
 package com.macrotracker.data.f1
 
 import android.content.Context
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.CoroutineScope
 import android.util.Log
 import androidx.core.content.edit
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -57,11 +60,12 @@ class F1RepositoryImpl @Inject constructor(
     override val lastFetchTimeMs: Long get() = lastFetchTime
     override fun getCachedF1Data(): F1Standings? = cachedStandings
 
-    init {
-        restoreDiskCache()
-    }
+    // The disk cache is decoded off the main thread: this is built during Home's first frame,
+    // and the snapshot is tens of kB of JSON. Calls that need it wait for it.
+    private val restored = CoroutineScope(SupervisorJob() + Dispatchers.IO).async { restoreDiskCache() }
 
     override suspend fun getOverallF1Data(forceRefresh: Boolean): Result<F1Standings> = fetchMutex.withLock {
+        restored.await()
         val now = System.currentTimeMillis()
         val currentYear = Year.now().value
 

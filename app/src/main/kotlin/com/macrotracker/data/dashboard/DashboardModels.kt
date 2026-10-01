@@ -15,7 +15,11 @@ import java.time.Instant
 
 /** One thing on the island, as island.py (and the web's today.js) words it. */
 data class IslandItem(
-    /** `need`, `wx`, `cal`, `f1`, `brief`, `mail`, `rain`, `race`. */
+    /**
+     * From the server: `need`, `wx`, `cal`, `f1`, `brief`, `mail`, `rain`, `race`. Made on the
+     * phone (see LocalIslandSource): `srv`, `live`, `yt`, `gh`, `show`, `sleep`, `steps`,
+     * `food`, `now`, `update`.
+     */
     val kind: String,
     /** `needs`, `live`, `soon`, `warn`, `error`, `accent`, `info`, `quiet`, or blank. */
     val tone: String,
@@ -36,6 +40,11 @@ data class IslandItem(
     /** The Hermes chat a `need` item is about. */
     val thread: String?,
     val ambient: Boolean = false,
+    /**
+     * Where a tap goes in the app, for items the phone makes itself (`health`, `servers`,
+     * `update`, …); the server's items lead with [href], [join] or their kind instead.
+     */
+    val route: String? = null,
 ) {
     val isBrief: Boolean get() = kind == "brief"
 }

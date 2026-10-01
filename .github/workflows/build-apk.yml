@@ -130,7 +130,8 @@ jobs:
           tag_name: ${{ steps.package.outputs.tag }}
           name: ${{ steps.package.outputs.name }}
           body: ${{ steps.package.outputs.notes }}
-          files: ${{ steps.package.outputs.apk }}
+          # The APK plus its Baseline Profile .dm files (see package-release.sh).
+          files: ${{ steps.package.outputs.files }}
           # Notes are composed in package-release.sh (precise bullets + working links).
           generate_release_notes: false
           target_commitish: ${{ steps.version.outputs.commit_sha || github.sha }}

@@ -1,35 +1,10 @@
 package com.macrotracker.ui.screens.health
 
-import com.macrotracker.data.health.DailyHealthStats
 import com.macrotracker.data.local.DailySummary
-import java.time.LocalDate
 
 /** Default daily step target used for progress / streak calculations. */
 const val DEFAULT_STEP_GOAL = 10_000L
 const val DEFAULT_SLEEP_GOAL_MINUTES = 8 * 60L
-
-/** Week averages the Daily Health card compares today against. */
-data class WeekHealthInsights(
-    val avgSteps: Long,
-    val stepStreak: Int,
-    val avgSleepMinutes: Long,
-    val avgRestingHeartRate: Long,
-)
-
-fun computeWeekInsights(
-    current: List<DailyHealthStats>,
-    stepGoal: Long = DEFAULT_STEP_GOAL,
-): WeekHealthInsights {
-    val stepDays = current.filter { it.stats.steps > 0 }
-    val sleepDays = current.filter { it.stats.sleepMinutes > 0 }
-    val rhrDays = current.filter { it.stats.restingHeartRate > 0 }
-    return WeekHealthInsights(
-        avgSteps = if (stepDays.isEmpty()) 0L else stepDays.sumOf { it.stats.steps } / stepDays.size,
-        stepStreak = computeTrailingStepStreak(current, stepGoal),
-        avgSleepMinutes = if (sleepDays.isEmpty()) 0L else sleepDays.sumOf { it.stats.sleepMinutes } / sleepDays.size,
-        avgRestingHeartRate = if (rhrDays.isEmpty()) 0L else rhrDays.sumOf { it.stats.restingHeartRate } / rhrDays.size,
-    )
-}
 
 data class MacroRangeInsights(
     val avgCalories: Double,
@@ -101,16 +76,3 @@ fun computeHeartRateDayStats(samples: List<Long>): HeartRateDayStats? {
     )
 }
 
-private fun computeTrailingStepStreak(days: List<DailyHealthStats>, goal: Long): Int {
-    val today = LocalDate.now()
-    var streak = 0
-    var cursor = today
-    val byDate = days.associateBy { it.date }
-    while (true) {
-        val day = byDate[cursor] ?: break
-        if (day.stats.steps < goal) break
-        streak++
-        cursor = cursor.minusDays(1)
-    }
-    return streak
-}

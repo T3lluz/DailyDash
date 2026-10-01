@@ -1,14 +1,14 @@
 package com.macrotracker.ui.components
 
 import android.content.Context
+import com.macrotracker.ui.util.LaunchedWhileResumed
 import android.content.Intent
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,13 +25,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -50,6 +47,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,12 +57,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -144,7 +142,7 @@ private fun formatLiveFor(startedAt: String): String {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TwitchCard(viewModel: TwitchViewModel = hiltViewModel()) {
+fun TwitchCard(isVisible: Boolean = true, viewModel: TwitchViewModel = hiltViewModel()) {
     val haptics = rememberHaptics()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -163,24 +161,22 @@ fun TwitchCard(viewModel: TwitchViewModel = hiltViewModel()) {
     var showSettings by remember { mutableStateOf(false) }
     var settingsStartTab by remember { mutableIntStateOf(0) }
     var expanded by rememberSaveable { mutableStateOf(false) }
-    var selectedChannelId by rememberSaveable { mutableStateOf<String?>(null) }
+    var pickedChannelId by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedTabName by rememberSaveable { mutableStateOf(TwHubTab.LIVE.name) }
-    LaunchedEffect(twitchState) {
-        val live = (twitchState as? TwitchUiState.Success)?.streams ?: return@LaunchedEffect
-        if (selectedChannelId != null && live.none { it.userId == selectedChannelId }) {
-            selectedChannelId = null
-        }
-    }
+    // Worked out in the same frame: once the picked channel goes offline the filter reads as
+    // none at once, instead of showing "Nobody live" for a frame until an effect cleared it.
+    val liveNow = (twitchState as? TwitchUiState.Success)?.streams
+    val selectedChannelId = pickedChannelId?.takeIf { id -> liveNow == null || liveNow.any { it.userId == id } }
     val selectedTab = TwHubTab.entries.find { it.name == selectedTabName } ?: TwHubTab.LIVE
 
     LaunchedEffect(Unit) {
         if (twitchState is TwitchUiState.Idle) {
             viewModel.loadLiveStreams()
         }
-        viewModel.startLiveAutoRefresh()
     }
-    DisposableEffect(Unit) {
-        onDispose { viewModel.stopLiveAutoRefresh() }
+    // Live checks only while the card is on screen and the app is in front.
+    LaunchedWhileResumed(isVisible) {
+        if (isVisible) viewModel.followLive()
     }
 
     MacroCard(borderColor = TwPurple.copy(alpha = 0.22f)) {
@@ -231,28 +227,31 @@ fun TwitchCard(viewModel: TwitchViewModel = hiltViewModel()) {
                 },
             )
 
-            if (!expanded) {
-                Spacer(modifier = Modifier.height(12.dp))
-                TwitchCollapsedGlance(
-                    twitchState = twitchState,
-                    streams = successStreams,
-                    watching = trackedChannels,
-                    selectedChannelId = selectedChannelId,
-                    onChannelSelected = { selectedChannelId = it },
-                    onOpenManage = {
-                        expanded = true
-                        selectedTabName = TwHubTab.CHANNELS.name
-                        haptics.toggleOn()
-                    },
-                    onRetry = { viewModel.loadLiveStreams(forceRefresh = true) },
-                    haptics = haptics,
-                )
-                WidgetExpandFooter(
-                    expanded = false,
-                    onToggle = { expanded = true },
-                    accentColor = TwPurple,
-                    expandLabel = "Live board",
-                )
+            // The glance folds away while the hub unfolds, so the card eases between the two heights.
+            WidgetExpandSection(visible = !expanded) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    TwitchCollapsedGlance(
+                        twitchState = twitchState,
+                        streams = successStreams,
+                        watching = trackedChannels,
+                        selectedChannelId = selectedChannelId,
+                        onChannelSelected = { pickedChannelId = it },
+                        onOpenManage = {
+                            expanded = true
+                            selectedTabName = TwHubTab.CHANNELS.name
+                            haptics.toggleOn()
+                        },
+                        onRetry = { viewModel.loadLiveStreams(forceRefresh = true) },
+                        haptics = haptics,
+                    )
+                    WidgetExpandFooter(
+                        expanded = false,
+                        onToggle = { expanded = true },
+                        accentColor = TwPurple,
+                        expandLabel = "Live board",
+                    )
+                }
             }
 
             WidgetExpandSection(visible = expanded) {
@@ -283,81 +282,59 @@ fun TwitchCard(viewModel: TwitchViewModel = hiltViewModel()) {
                     HorizontalDivider(color = TwHairline, thickness = 0.5.dp)
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    val stateKey = when (twitchState) {
-                        is TwitchUiState.Loading, TwitchUiState.Idle -> -1
-                        is TwitchUiState.Error -> -2
-                        is TwitchUiState.NoChannels -> -3
-                        is TwitchUiState.Success -> selectedTab.ordinal
-                    }
-                    WidgetStateSwitch(targetState = stateKey, label = "twHubBody") { key ->
-                        when {
-                            key == -1 -> {
-                                ContentSkeleton(
-                                    tiles = 3,
-                                    tileHeight = 130.dp,
-                                    lines = 0,
-                                    accent = TwHairline,
-                                    surface = TwSurface,
-                                    tileShape = TwSharp,
-                                )
-                            }
-                            key == -2 -> {
-                                HubErrorState(
-                                    message = (twitchState as? TwitchUiState.Error)?.message
-                                        ?: "Couldn't load Twitch streams",
-                                    accent = TwPurple,
-                                    onRetry = { viewModel.loadLiveStreams(forceRefresh = true) },
-                                )
-                            }
-                            key == -3 -> {
-                                NoTwitchChannelsPrompt(
-                                    authState = authState,
-                                    onOpenSettings = {
-                                        haptics.tick()
-                                        settingsStartTab = 1
-                                        showSettings = true
-                                    },
-                                    onConnectTwitch = {
-                                        haptics.click()
-                                        viewModel.connectTwitch()
-                                    },
-                                    onCancelLogin = { viewModel.cancelBrowserLogin() },
-                                    onOpenActivation = { viewModel.openTwitchActivation() },
-                                )
-                            }
-                            selectedTab == TwHubTab.LIVE && twitchState is TwitchUiState.Success -> {
-                                LiveStreamFeed(
-                                    streams = successStreams,
-                                    trackedChannels = trackedChannels,
-                                    selectedChannelId = selectedChannelId,
-                                    onChannelSelected = { selectedChannelId = it },
-                                    haptics = haptics,
-                                )
-                            }
-                            selectedTab == TwHubTab.CHANNELS -> {
-                                TwitchChannelsHub(
-                                    viewModel = viewModel,
-                                    trackedChannels = trackedChannels,
-                                    liveUserIds = successStreams.map { it.userId }.toSet(),
-                                    authState = authState,
-                                    onOpenSearch = {
-                                        haptics.tick()
-                                        settingsStartTab = 1
-                                        showSettings = true
-                                    },
-                                    onConnectTwitch = {
-                                        haptics.click()
-                                        viewModel.connectTwitch()
-                                    },
-                                    onSyncFollows = {
-                                        haptics.click()
-                                        viewModel.syncFollows()
-                                    },
-                                    onCancelLogin = { viewModel.cancelBrowserLogin() },
-                                    haptics = haptics,
-                                )
-                            }
-                            else -> Unit
+                    AnimatedContent(
+                        targetState = selectedTab,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clipToBounds(),
+                        transitionSpec = {
+                            MacroMotion.inCardTabSwitch(toRight = targetState.ordinal > initialState.ordinal)
+                        },
+                        label = "twHubTab",
+                    ) { tab ->
+                        // Must use `tab` from this lambda, not the outer selectedTab.
+                        when (tab) {
+                            TwHubTab.LIVE -> TwitchLiveBody(
+                                twitchState = twitchState,
+                                streams = successStreams,
+                                authState = authState,
+                                selectedChannelId = selectedChannelId,
+                                onChannelSelected = { pickedChannelId = it },
+                                onRetry = { viewModel.loadLiveStreams(forceRefresh = true) },
+                                onOpenSearch = {
+                                    haptics.tick()
+                                    settingsStartTab = 1
+                                    showSettings = true
+                                },
+                                onConnectTwitch = {
+                                    haptics.click()
+                                    viewModel.connectTwitch()
+                                },
+                                onCancelLogin = { viewModel.cancelBrowserLogin() },
+                                onOpenActivation = { viewModel.openTwitchActivation() },
+                                haptics = haptics,
+                            )
+                            TwHubTab.CHANNELS -> TwitchChannelsHub(
+                                viewModel = viewModel,
+                                trackedChannels = trackedChannels,
+                                liveUserIds = successStreams.map { it.userId }.toSet(),
+                                authState = authState,
+                                onOpenSearch = {
+                                    haptics.tick()
+                                    settingsStartTab = 1
+                                    showSettings = true
+                                },
+                                onConnectTwitch = {
+                                    haptics.click()
+                                    viewModel.connectTwitch()
+                                },
+                                onSyncFollows = {
+                                    haptics.click()
+                                    viewModel.syncFollows()
+                                },
+                                onCancelLogin = { viewModel.cancelBrowserLogin() },
+                                haptics = haptics,
+                            )
                         }
                     }
 
@@ -389,6 +366,95 @@ fun TwitchCard(viewModel: TwitchViewModel = hiltViewModel()) {
         }
     }
 
+}
+
+/** The Live tab: loading, a failed load, nobody watched yet, or the board itself. */
+@Composable
+private fun TwitchLiveBody(
+    twitchState: TwitchUiState,
+    streams: List<TwitchStream>,
+    authState: TwitchAuthUiState,
+    selectedChannelId: String?,
+    onChannelSelected: (String?) -> Unit,
+    onRetry: () -> Unit,
+    onOpenSearch: () -> Unit,
+    onConnectTwitch: () -> Unit,
+    onCancelLogin: () -> Unit,
+    onOpenActivation: () -> Unit,
+    haptics: HapticHelper,
+) {
+    val phase = when (twitchState) {
+        is TwitchUiState.Loading, TwitchUiState.Idle -> 0
+        is TwitchUiState.Error -> 1
+        is TwitchUiState.NoChannels -> 2
+        is TwitchUiState.Success -> 3
+    }
+    AnimatedContent(
+        targetState = phase,
+        transitionSpec = { MacroMotion.hubBodySwap },
+        label = "twLiveBody",
+    ) { shown ->
+        when (shown) {
+            0 -> HeroListSkeleton(accent = TwHairline, surface = TwSurface, shape = TwSharp)
+            1 -> HubErrorState(
+                message = (twitchState as? TwitchUiState.Error)?.message ?: "Couldn't load Twitch streams",
+                accent = TwPurple,
+                onRetry = onRetry,
+            )
+            2 -> NoTwitchChannelsPrompt(
+                authState = authState,
+                onOpenSettings = onOpenSearch,
+                onConnectTwitch = onConnectTwitch,
+                onCancelLogin = onCancelLogin,
+                onOpenActivation = onOpenActivation,
+            )
+            else -> LiveStreamFeed(
+                streams = streams,
+                selectedChannelId = selectedChannelId,
+                onChannelSelected = onChannelSelected,
+                haptics = haptics,
+            )
+        }
+    }
+}
+
+/**
+ * Who is on air, as Twitch shows them: each channel's picture in a scarlet ring with a LIVE
+ * tag. Tap one to keep only their stream; the same row sits on the glance and the board.
+ */
+@Composable
+private fun TwitchChannelFilter(
+    streams: List<TwitchStream>,
+    selectedChannelId: String?,
+    onChannelSelected: (String?) -> Unit,
+    bottomGap: Dp,
+) {
+    val channels = remember(streams) {
+        streams.distinctBy { it.userId }.map { stream ->
+            ChannelAvatar(
+                id = stream.userId,
+                name = stream.userName,
+                imageUrl = stream.profileImageUrl,
+                mark = ChannelMark.Live,
+            )
+        }
+    }
+    AnimatedVisibility(
+        visible = channels.size > 1,
+        enter = MacroMotion.expandEnter,
+        exit = MacroMotion.expandExit,
+    ) {
+        ChannelAvatarRow(
+            channels = channels,
+            selectedId = selectedChannelId,
+            onSelect = onChannelSelected,
+            selectedRing = TwLive,
+            markColor = TwLive,
+            accent = TwPurple,
+            caption = channels.firstOrNull { it.id == selectedChannelId }?.let { "Only ${it.name}" },
+            modifier = Modifier.padding(bottom = bottomGap),
+        )
+    }
 }
 
 /**
@@ -518,51 +584,31 @@ private fun CompactLiveFeed(
     haptics: HapticHelper,
 ) {
     val context = LocalContext.current
-    val filtered = remember(streams, selectedChannelId) {
-        if (selectedChannelId == null) streams else streams.filter { it.userId == selectedChannelId }
-    }
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        if (streams.size > 1) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                LiveFilterChip(
-                    label = "All",
-                    selected = selectedChannelId == null,
-                    onClick = {
-                        haptics.tick()
-                        onChannelSelected(null)
-                    },
-                )
-                // Every chip here is a channel that is on air, so every one gets the dot,
-                // the same as on the live board.
-                streams.distinctBy { it.userId }.forEach { stream ->
-                    LiveFilterChip(
-                        label = stream.userName,
-                        selected = selectedChannelId == stream.userId,
-                        live = true,
-                        onClick = {
-                            haptics.tick()
-                            onChannelSelected(
-                                if (selectedChannelId == stream.userId) null else stream.userId,
-                            )
-                        },
-                    )
-                }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        TwitchChannelFilter(
+            streams = streams,
+            selectedChannelId = selectedChannelId,
+            onChannelSelected = onChannelSelected,
+            bottomGap = 10.dp,
+        )
+        AnimatedContent(
+            targetState = selectedChannelId,
+            transitionSpec = { MacroMotion.hubBodySwap },
+            label = "twGlanceFilter",
+        ) { channelId ->
+            val shown = remember(streams, channelId) {
+                if (channelId == null) streams else streams.filter { it.userId == channelId }
             }
-        }
-        MediaCarousel(
-            items = filtered,
-            resetKey = selectedChannelId,
-            onOpen = { stream ->
-                haptics.click()
-                openUrl(context, stream.channelUrl)
-            },
-        ) { stream, look ->
-            LiveCarouselItem(stream = stream, look = look)
+            MediaCarousel(
+                items = shown,
+                resetKey = channelId,
+                onOpen = { stream ->
+                    haptics.click()
+                    openUrl(context, stream.channelUrl)
+                },
+            ) { stream, look ->
+                LiveCarouselItem(stream = stream, look = look)
+            }
         }
     }
 }
@@ -613,7 +659,7 @@ private fun LiveCarouselItem(stream: TwitchStream, look: MediaItemLook) {
             look = look,
             url = stream.profileImageUrl,
             fallback = stream.userName,
-            ring = TwPurple,
+            ring = TwLive,
             modifier = Modifier.align(Alignment.CenterStart),
         )
         Row(
@@ -654,7 +700,7 @@ private fun LiveCarouselItem(stream: TwitchStream, look: MediaItemLook) {
                     modifier = Modifier
                         .size(28.dp)
                         .clip(CircleShape)
-                        .border(1.dp, TwPurple.copy(alpha = 0.7f), CircleShape),
+                        .border(1.5.dp, TwLive, CircleShape),
                 )
             }
             Column(modifier = Modifier.weight(1f)) {
@@ -680,95 +726,76 @@ private fun LiveCarouselItem(stream: TwitchStream, look: MediaItemLook) {
 @Composable
 private fun LiveStreamFeed(
     streams: List<TwitchStream>,
-    trackedChannels: List<TwitchChannel>,
     selectedChannelId: String?,
     onChannelSelected: (String?) -> Unit,
     haptics: HapticHelper,
 ) {
     val context = LocalContext.current
-    val filtered = remember(streams, selectedChannelId) {
-        if (selectedChannelId == null) streams else streams.filter { it.userId == selectedChannelId }
-    }
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (trackedChannels.isNotEmpty()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                LiveFilterChip(
-                    label = "All live",
-                    selected = selectedChannelId == null,
-                    onClick = {
-                        haptics.tick()
-                        onChannelSelected(null)
-                    },
-                )
-                trackedChannels.forEach { ch ->
-                    val live = streams.any { it.userId == ch.userId }
-                    if (!live && selectedChannelId != ch.userId) return@forEach
-                    LiveFilterChip(
-                        label = ch.displayName,
-                        selected = selectedChannelId == ch.userId,
-                        live = live,
-                        onClick = {
-                            haptics.tick()
-                            onChannelSelected(
-                                if (selectedChannelId == ch.userId) null else ch.userId,
-                            )
-                        },
+    Column(modifier = Modifier.fillMaxWidth()) {
+        TwitchChannelFilter(
+            streams = streams,
+            selectedChannelId = selectedChannelId,
+            onChannelSelected = onChannelSelected,
+            bottomGap = 12.dp,
+        )
+        AnimatedContent(
+            targetState = selectedChannelId,
+            transitionSpec = { MacroMotion.hubBodySwap },
+            label = "twBoardFilter",
+        ) { channelId ->
+            val shown = remember(streams, channelId) {
+                if (channelId == null) streams else streams.filter { it.userId == channelId }
+            }
+            val hero = shown.firstOrNull()
+            if (hero == null) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Icon(AppIcons.Radio, null, tint = TextSecondary, modifier = Modifier.size(28.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Nobody live right now",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary,
+                    )
+                    Text(
+                        "The board checks again every minute",
+                        fontSize = 12.sp,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(top = 4.dp),
                     )
                 }
-            }
-        }
-
-        if (filtered.isEmpty()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Icon(AppIcons.Radio, null, tint = TextSecondary, modifier = Modifier.size(28.dp))
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    "Nobody live right now",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = TextPrimary,
-                )
-                Text(
-                    "Watching list stays ready — this board refreshes every minute",
-                    fontSize = 12.sp,
-                    color = TextSecondary,
-                    modifier = Modifier.padding(top = 4.dp, start = 16.dp, end = 16.dp),
-                )
-            }
-        } else {
-            filtered.firstOrNull()?.let { hero ->
-                HeroLiveCard(
-                    stream = hero,
-                    onClick = {
-                        haptics.click()
-                        openUrl(context, hero.channelUrl)
-                    },
-                )
-            }
-            val rest = filtered.drop(1)
-            if (rest.isNotEmpty()) {
-                WidgetScrollBox(
-                    maxHeight = 360.dp,
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    rest.forEach { stream ->
-                        LiveStreamRow(
-                            stream = stream,
-                            onClick = {
-                                haptics.click()
-                                openUrl(context, stream.channelUrl)
-                            },
-                        )
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    HeroLiveCard(
+                        stream = hero,
+                        onClick = {
+                            haptics.click()
+                            openUrl(context, hero.channelUrl)
+                        },
+                    )
+                    val rest = shown.drop(1)
+                    if (rest.isNotEmpty()) {
+                        WidgetScrollBox(
+                            maxHeight = 360.dp,
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            rest.forEach { stream ->
+                                key(stream.userId) {
+                                    LiveStreamRow(
+                                        stream = stream,
+                                        onClick = {
+                                            haptics.click()
+                                            openUrl(context, stream.channelUrl)
+                                        },
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -825,16 +852,12 @@ private fun HeroLiveCard(stream: TwitchStream, onClick: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (stream.profileImageUrl.isNotBlank()) {
-                AsyncImage(
-                    model = stream.profileImageUrl,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .border(1.5.dp, TwPurple.copy(alpha = 0.5f), CircleShape),
-                )
-            }
+            RingedAvatar(
+                url = stream.profileImageUrl,
+                name = stream.userName,
+                ringColor = { TwLive },
+                size = 38.dp,
+            )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     stream.userName,
@@ -962,43 +985,6 @@ private fun LiveBadge(
 }
 
 @Composable
-private fun LiveFilterChip(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    live: Boolean = false,
-) {
-    val bg by animateColorAsState(
-        if (selected) TwPurple else TwSurface,
-        MacroMotion.colorTween(140),
-        label = "twChipBg",
-    )
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(bg)
-            .border(
-                1.dp,
-                if (selected) TwPurple else TwHairline,
-                RoundedCornerShape(20.dp),
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
-    ) {
-        if (live) LivePulseDot(color = TwLive, size = LivePulseSpec.SizeTwitch, style = LivePulseStyle.Rings)
-        Text(
-            label,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = if (selected) Color.White else TextSecondary,
-            maxLines = 1,
-        )
-    }
-}
-
-@Composable
 private fun TwitchChannelsHub(
     viewModel: TwitchViewModel,
     trackedChannels: List<TwitchChannel>,
@@ -1064,25 +1050,12 @@ private fun TwitchChannelsHub(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        Box {
-                            TwAvatar(channel, size = 36.dp)
-                            if (isLive) {
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.BottomEnd)
-                                        .size(17.dp)
-                                        .clip(CircleShape)
-                                        .background(TwSurface),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    LivePulseDot(
-                                        color = TwLive,
-                                        size = LivePulseSpec.SizeTwitchBadge,
-                                        style = LivePulseStyle.Rings,
-                                    )
-                                }
-                            }
-                        }
+                        TwChannelFace(
+                            url = channel.profileImageUrl,
+                            name = channel.displayName,
+                            live = isLive,
+                            size = 34.dp,
+                        )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 channel.displayName,
@@ -1093,10 +1066,10 @@ private fun TwitchChannelsHub(
                                 overflow = TextOverflow.Ellipsis,
                             )
                             Text(
-                                if (isLive) "LIVE now" else "Offline",
+                                if (isLive) "Live now" else "Offline",
                                 fontSize = 11.sp,
                                 color = if (isLive) TwLive else TextSecondary,
-                                fontWeight = if (isLive) FontWeight.Bold else FontWeight.Normal,
+                                fontWeight = if (isLive) FontWeight.SemiBold else FontWeight.Normal,
                             )
                         }
                         IconButton(
@@ -1164,38 +1137,20 @@ private fun NoTwitchChannelsPrompt(
                     onCancelLogin = onCancelLogin,
                 )
             } else {
-                Button(
+                ServiceButton(
+                    label = "Connect Twitch",
+                    icon = AppIcons.Account,
+                    accent = TwPurple,
                     onClick = onConnectTwitch,
-                    enabled = !authState.isBusy,
-                    colors = ButtonDefaults.buttonColors(containerColor = TwPurple),
-                    shape = RoundedCornerShape(10.dp),
-                ) {
-                    if (authState.isBusy) {
-                        LoadingSpinner(color = Color.White, size = LoadingSpec.SizeInline)
-                    } else {
-                        Icon(AppIcons.Account, null, modifier = Modifier.size(16.dp))
-                    }
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        if (authState.isBusy) "Connecting…" else "Connect Twitch",
-                        fontSize = 13.sp,
-                    )
-                }
+                    busy = authState.isBusy,
+                )
                 Spacer(modifier = Modifier.height(8.dp))
                 TextButton(onClick = onOpenSettings) {
                     Text("Search channels", color = TextSecondary, fontSize = 13.sp)
                 }
             }
         } else {
-            Button(
-                onClick = onOpenSettings,
-                colors = ButtonDefaults.buttonColors(containerColor = TwPurple),
-                shape = RoundedCornerShape(10.dp),
-            ) {
-                Icon(AppIcons.Add, null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Add Channels", fontSize = 13.sp)
-            }
+            ServiceButton(label = "Add channels", icon = AppIcons.Add, accent = TwPurple, onClick = onOpenSettings)
         }
         authState.statusMessage?.let { msg ->
             Spacer(modifier = Modifier.height(10.dp))
@@ -1282,7 +1237,7 @@ private fun TwitchAccountCard(
                         authState.isConnected ->
                             "Follows ready to sync"
                         !authState.isConfigured ->
-                            "Add TWITCH_CLIENT_ID + SECRET in local.properties"
+                            "Twitch isn't set up in this build"
                         authState.isAwaitingBrowser ->
                             "Approve DailyDash on twitch.tv/activate"
                         else ->
@@ -1405,6 +1360,14 @@ private fun TwitchSettingsSheet(
 
     var activeTab by remember { mutableIntStateOf(initialTab.coerceIn(0, 1)) }
     var searchQuery by remember { mutableStateOf("") }
+    val trackedIds = remember(trackedChannels) { trackedChannels.map { it.userId }.toSet() }
+    // Leaving the search tab clears it, as YouTube's sheet does.
+    LaunchedEffect(activeTab) {
+        if (activeTab != 1) {
+            searchQuery = ""
+            viewModel.clearChannelSearch()
+        }
+    }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(horizontal = 20.dp).padding(top = 12.dp)) {
@@ -1472,6 +1435,12 @@ private fun TwitchSettingsSheet(
                     ) {
                         items(trackedChannels, key = { it.userId }) { channel ->
                             SwipeToDismissBox(
+                                // A removed channel fades and the rest close the gap, instead of popping.
+                                modifier = Modifier.animateItem(
+                                    fadeInSpec = MacroMotion.fadeTween(),
+                                    placementSpec = MacroMotion.navTabSpring(),
+                                    fadeOutSpec = MacroMotion.fadeTween(150),
+                                ),
                                 state = rememberSwipeToDismissBoxState(),
                                 onDismiss = { value ->
                                     if (value == SwipeToDismissBoxValue.EndToStart) {
@@ -1610,7 +1579,14 @@ private fun TwitchSettingsSheet(
                                 modifier = Modifier.padding(vertical = 12.dp),
                             )
                         }
-                        is TwitchChannelSearchState.Success -> {
+                        is TwitchChannelSearchState.Success -> if (state.channels.isEmpty()) {
+                            Text(
+                                "No channels found.",
+                                fontSize = 13.sp,
+                                color = TextSecondary,
+                                modifier = Modifier.padding(vertical = 12.dp),
+                            )
+                        } else {
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1621,7 +1597,9 @@ private fun TwitchSettingsSheet(
                                 items(state.channels, key = { it.userId }) { channel ->
                                     ChannelSearchRow(
                                         channel = channel,
-                                        recentlyAdded = channel.userId in recentlyAdded,
+                                        // From the live list, not the search's snapshot: the row
+                                        // went back to "Add" a moment after adding.
+                                        recentlyAdded = channel.userId in recentlyAdded || channel.userId in trackedIds,
                                         onAdd = {
                                             haptics.confirm()
                                             viewModel.addChannel(channel)
@@ -1653,19 +1631,13 @@ private fun ChannelSearchRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Box {
-            TwAvatar(channel, size = 40.dp)
-            if (channel.isLive) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .size(10.dp)
-                        .clip(CircleShape)
-                        .background(TwLive)
-                        .border(1.5.dp, TwSurface, CircleShape),
-                )
-            }
-        }
+        TwChannelFace(
+            url = channel.profileImageUrl,
+            name = channel.displayName,
+            live = channel.isLive,
+            size = 36.dp,
+            dimOffline = false,
+        )
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 channel.displayName,
@@ -1708,6 +1680,19 @@ private fun ChannelSearchRow(
             )
         }
     }
+}
+
+/** A channel's picture as Twitch lists follows: ringed in scarlet while live, dimmed while offline. */
+@Composable
+private fun TwChannelFace(url: String, name: String, live: Boolean, size: Dp, dimOffline: Boolean = true) {
+    RingedAvatar(
+        url = url,
+        name = name,
+        ringColor = { if (live) TwLive else Color.Transparent },
+        size = size,
+        contentDescription = null,
+        modifier = Modifier.graphicsLayer { alpha = if (live || !dimOffline) 1f else 0.6f },
+    )
 }
 
 @Composable

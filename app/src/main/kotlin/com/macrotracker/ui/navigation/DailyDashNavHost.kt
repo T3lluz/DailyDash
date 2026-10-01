@@ -16,7 +16,6 @@ import com.macrotracker.ui.screens.HealthScreen
 import com.macrotracker.ui.screens.HomeScreen
 import com.macrotracker.ui.screens.ServerScreen
 import com.macrotracker.ui.screens.SettingsScreen
-import com.macrotracker.ui.screens.StatsScreen
 import com.macrotracker.ui.screens.WidgetsScreen
 import com.macrotracker.ui.screens.onboarding.PermissionsScreen
 import com.macrotracker.ui.screens.onboarding.TutorialScreen
@@ -36,9 +35,14 @@ private val TabOrder = listOf(
     Screen.Settings.route,
 )
 
+// Every pushed screen slides like one: the console, Usage and the intro's pages used the
+// tabs' cross-fade on the way in and a slide on the way out.
 private val SubScreens = setOf(
-    SubScreenRoutes.STATS,
     SubScreenRoutes.WIDGETS,
+    SubScreenRoutes.USAGE,
+    SubScreenRoutes.CONSOLE,
+    OnboardingRoutes.PERMISSIONS,
+    OnboardingRoutes.TUTORIAL,
     SubScreenRoutes.CAMERA_SCAN,
     SettingsRoutes.CONNECTIONS,
     SettingsRoutes.AI,
@@ -157,7 +161,6 @@ fun DailyDashNavHost(
                 onNavigateToAi = { navController.navigateToSubScreen(SettingsRoutes.AI) },
                 onNavigateToNutrition = { navController.navigateToSubScreen(SettingsRoutes.NUTRITION) },
                 onNavigateToAbout = { navController.navigateToSubScreen(SettingsRoutes.ABOUT) },
-                onNavigateToStats = { navController.navigateToSubScreen(SubScreenRoutes.STATS) },
                 onNavigateToWidgets = { navController.navigateToSubScreen(SubScreenRoutes.WIDGETS) },
                 onNavigateToServers = { navController.navigateToSubScreen(SettingsRoutes.SERVERS) },
             )
@@ -167,7 +170,6 @@ fun DailyDashNavHost(
         subScreen(SettingsRoutes.CONNECTIONS) { entry ->
             ConnectionsSettingsScreen(
                 onNavigateBack = { navController.popSubScreen(entry) },
-                onNavigateToServers = { navController.navigateToSubScreen(SettingsRoutes.SERVERS) },
             )
         }
 
@@ -226,10 +228,6 @@ fun DailyDashNavHost(
 
         subScreen(SubScreenRoutes.CONSOLE) { entry ->
             ConsoleScreen(onNavigateBack = { navController.popSubScreen(entry) })
-        }
-
-        subScreen(SubScreenRoutes.STATS) { entry ->
-            StatsScreen(onNavigateBack = { navController.popSubScreen(entry) })
         }
 
         subScreen(SubScreenRoutes.WIDGETS) { entry ->

@@ -109,7 +109,7 @@ internal fun ServicesWallCard(link: DashboardLink, onAskAi: (() -> Unit)?) {
                                 modifier = Modifier.weight(1f).fillMaxHeight(),
                             ) {
                                 haptics.tick()
-                                context.startActivity(Intent(Intent.ACTION_VIEW, service.href.toUri()))
+                                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, service.href.toUri())) }
                             }
                         }
                         // Keep the last row's tiles the same width as the rest.

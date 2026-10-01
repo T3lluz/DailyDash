@@ -1,6 +1,7 @@
 package com.macrotracker.data.hermes
 
 import android.app.Service
+import com.macrotracker.data.notifyIfAllowed
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
@@ -94,10 +95,11 @@ class HermesTurnService : Service() {
                     finishUp()
                     return@collect
                 }
-                runCatching {
-                    NotificationManagerCompat.from(this@HermesTurnService)
-                        .notify(HermesNotifier.WORKING_NOTIFICATION_ID, notifier.working(turns.values.toList()))
-                }
+                NotificationManagerCompat.from(this@HermesTurnService).notifyIfAllowed(
+                    this@HermesTurnService,
+                    HermesNotifier.WORKING_NOTIFICATION_ID,
+                    notifier.working(turns.values.toList()),
+                )
             }
         }
     }

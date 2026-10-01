@@ -11,7 +11,7 @@ fun HealthConnectCard(
     modifier: Modifier = Modifier,
     title: String = "Health Connect",
     message: String = "Connect to Health Connect to sync your health data.",
-    actionLabel: String = "Connect",
+    actionLabel: String = "Allow access",
 ) {
     WidgetPromptCard(
         title = title,

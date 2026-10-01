@@ -1,6 +1,7 @@
 package com.macrotracker.ui.components
 
 import android.app.Activity
+import com.macrotracker.ui.util.openUrl
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
@@ -16,17 +17,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -34,7 +31,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -43,8 +39,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -63,19 +57,20 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -85,7 +80,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.CachePolicy
@@ -120,8 +114,6 @@ private val YtDark     = Color(0xFF0F0F0F)
 private val YtSurface  = Surface
 private val YtCardBg   = SurfaceChrome
 private val YtHairline = Border
-
-private enum class YtLayout { LIST, GRID }
 
 private enum class YtHubTab(val label: String, val icon: ImageVector) {
     FEED("Feed", AppIcons.TvPlay),
@@ -162,13 +154,11 @@ fun YoutubeCard(viewModel: YouTubeViewModel = hiltViewModel()) {
     var showSettings by remember { mutableStateOf(false) }
     var settingsStartTab by remember { mutableIntStateOf(0) }
     var expanded by rememberSaveable { mutableStateOf(false) }
-    var selectedChannelId by rememberSaveable { mutableStateOf<String?>(null) }
+    var pickedChannelId by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedTabName by rememberSaveable { mutableStateOf(YtHubTab.FEED.name) }
-    LaunchedEffect(trackedChannels) {
-        if (selectedChannelId != null && trackedChannels.none { it.channelId == selectedChannelId }) {
-            selectedChannelId = null
-        }
-    }
+    // Worked out in the same frame: a pick of a channel no longer watched reads as no pick at
+    // once, instead of dimming every picture for a frame until an effect cleared it.
+    val selectedChannelId = pickedChannelId?.takeIf { id -> trackedChannels.any { it.channelId == id } }
     val selectedTab = YtHubTab.entries.find { it.name == selectedTabName } ?: YtHubTab.FEED
 
     val consentLauncher = rememberLauncherForActivityResult(
@@ -244,36 +234,38 @@ fun YoutubeCard(viewModel: YouTubeViewModel = hiltViewModel()) {
                             icon = AppIcons.ExternalLink,
                             contentDescription = "Open YouTube",
                             onClick = {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, "https://www.youtube.com".toUri()))
+                                context.openUrl("https://www.youtube.com")
                             },
                         )
                     }
                 },
             )
 
-            // Collapsed glance only — expanded hub starts fresh at the tabs
-            if (!expanded) {
-                Spacer(Modifier.height(12.dp))
-                YoutubeCollapsedGlance(
-                    youtubeState = youtubeState,
-                    videos = successVideos,
-                    trackedChannels = trackedChannels,
-                    selectedChannelId = selectedChannelId,
-                    onChannelSelected = { selectedChannelId = it },
-                    onOpenManage = {
-                        expanded = true
-                        selectedTabName = YtHubTab.CHANNELS.name
-                        haptics.toggleOn()
-                    },
-                    onRetry = { viewModel.loadLatestVideos(forceRefresh = true) },
-                    haptics = haptics,
-                )
-                WidgetExpandFooter(
-                    expanded = false,
-                    onToggle = { expanded = true },
-                    accentColor = YtRed,
-                    expandLabel = "Full feed",
-                )
+            // The glance folds away while the hub unfolds, so the card eases between the two heights.
+            WidgetExpandSection(visible = !expanded) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Spacer(Modifier.height(12.dp))
+                    YoutubeCollapsedGlance(
+                        youtubeState = youtubeState,
+                        videos = successVideos,
+                        trackedChannels = trackedChannels,
+                        selectedChannelId = selectedChannelId,
+                        onChannelSelected = { pickedChannelId = it },
+                        onOpenManage = {
+                            expanded = true
+                            selectedTabName = YtHubTab.CHANNELS.name
+                            haptics.toggleOn()
+                        },
+                        onRetry = { viewModel.loadLatestVideos(forceRefresh = true) },
+                        haptics = haptics,
+                    )
+                    WidgetExpandFooter(
+                        expanded = false,
+                        onToggle = { expanded = true },
+                        accentColor = YtRed,
+                        expandLabel = "Full feed",
+                    )
+                }
             }
 
             WidgetExpandSection(visible = expanded) {
@@ -306,73 +298,50 @@ fun YoutubeCard(viewModel: YouTubeViewModel = hiltViewModel()) {
                     HorizontalDivider(color = YtHairline, thickness = 0.5.dp)
                     Spacer(Modifier.height(14.dp))
 
-                    val stateKey = when (youtubeState) {
-                        is YouTubeUiState.Loading, YouTubeUiState.Idle -> -1
-                        is YouTubeUiState.Error -> -2
-                        is YouTubeUiState.NoChannels -> -3
-                        is YouTubeUiState.Success -> selectedTab.ordinal
-                    }
-                    WidgetStateSwitch(
-                        targetState = stateKey,
-                        label = "ytHubBody",
-                    ) { key ->
-                        when {
-                            key == -1 || youtubeState is YouTubeUiState.Loading -> {
-                                ContentSkeleton(
-                                    tiles = 3,
-                                    tileAspect = 16f / 9f,
-                                    lines = 0,
-                                    accent = YtHairline,
-                                    surface = YtCardBg,
-                                )
-                            }
-                            key == -2 || youtubeState is YouTubeUiState.Error -> {
-                                val msg = (youtubeState as? YouTubeUiState.Error)?.message
-                                    ?: "Something went wrong"
-                                HubErrorState(
-                                    message = msg,
-                                    accent = YtRed,
-                                    onRetry = { viewModel.loadLatestVideos(forceRefresh = true) },
-                                )
-                            }
-                            key == -3 || youtubeState is YouTubeUiState.NoChannels -> {
-                                NoChannelsPrompt(
+                    AnimatedContent(
+                        targetState = selectedTab,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clipToBounds(),
+                        transitionSpec = {
+                            MacroMotion.inCardTabSwitch(toRight = targetState.ordinal > initialState.ordinal)
+                        },
+                        label = "ytHubTab",
+                    ) { tab ->
+                        // Must use `tab` from this lambda, not the outer selectedTab.
+                        when (tab) {
+                            YtHubTab.FEED -> YoutubeFeedBody(
+                                youtubeState = youtubeState,
+                                videos = successVideos,
+                                trackedChannels = trackedChannels,
+                                googleState = googleState,
+                                selectedChannelId = selectedChannelId,
+                                onChannelSelected = { pickedChannelId = it },
+                                onRetry = { viewModel.loadLatestVideos(forceRefresh = true) },
+                                onOpenSearch = {
+                                    haptics.click()
+                                    settingsStartTab = 1
+                                    showSettings = true
+                                },
+                                onConnectGoogle = {
+                                    activity?.let { haptics.click(); viewModel.connectGoogle(it) }
+                                },
+                                haptics = haptics,
+                            )
+                            YtHubTab.CHANNELS -> if (activity != null) {
+                                YoutubeChannelsHub(
+                                    viewModel = viewModel,
+                                    trackedChannels = trackedChannels,
                                     googleState = googleState,
-                                    onOpenSettings = {
-                                        haptics.click()
+                                    activity = activity,
+                                    onOpenSearch = {
+                                        haptics.tick()
                                         settingsStartTab = 1
                                         showSettings = true
                                     },
-                                    onConnectGoogle = {
-                                        activity?.let { haptics.click(); viewModel.connectGoogle(it) }
-                                    },
+                                    haptics = haptics,
                                 )
                             }
-                            selectedTab == YtHubTab.FEED && youtubeState is YouTubeUiState.Success -> {
-                                VideoFeed(
-                                    videos = successVideos,
-                                    trackedChannels = trackedChannels,
-                                    selectedChannelId = selectedChannelId,
-                                    onChannelSelected = { selectedChannelId = it },
-                                )
-                            }
-                            selectedTab == YtHubTab.CHANNELS -> {
-                                if (activity != null) {
-                                    YoutubeChannelsHub(
-                                        viewModel = viewModel,
-                                        trackedChannels = trackedChannels,
-                                        googleState = googleState,
-                                        activity = activity,
-                                        onOpenSearch = {
-                                            haptics.tick()
-                                            settingsStartTab = 1
-                                            showSettings = true
-                                        },
-                                        haptics = haptics,
-                                    )
-                                }
-                            }
-                            else -> Unit
                         }
                     }
 
@@ -583,6 +552,161 @@ private fun YoutubeChannelsHub(
     }
 }
 
+// ── Feed tab body ─────────────────────────────────────────────────────────────
+
+/** The Feed tab: loading, a failed load, nothing tracked yet, or the feed itself. */
+@Composable
+private fun YoutubeFeedBody(
+    youtubeState: YouTubeUiState,
+    videos: List<YoutubeVideo>,
+    trackedChannels: List<YoutubeChannel>,
+    googleState: YouTubeGoogleUiState,
+    selectedChannelId: String?,
+    onChannelSelected: (String?) -> Unit,
+    onRetry: () -> Unit,
+    onOpenSearch: () -> Unit,
+    onConnectGoogle: () -> Unit,
+    haptics: HapticHelper,
+) {
+    val phase = when (youtubeState) {
+        is YouTubeUiState.Loading, YouTubeUiState.Idle -> 0
+        is YouTubeUiState.Error -> 1
+        is YouTubeUiState.NoChannels -> 2
+        is YouTubeUiState.Success -> 3
+    }
+    AnimatedContent(
+        targetState = phase,
+        transitionSpec = { MacroMotion.hubBodySwap },
+        label = "ytFeedBody",
+    ) { shown ->
+        when (shown) {
+            0 -> HeroListSkeleton(accent = YtHairline, surface = YtCardBg)
+            1 -> HubErrorState(
+                message = (youtubeState as? YouTubeUiState.Error)?.message ?: "Couldn't load YouTube videos",
+                accent = YtRed,
+                onRetry = onRetry,
+            )
+            2 -> NoChannelsPrompt(
+                googleState = googleState,
+                onOpenSettings = onOpenSearch,
+                onConnectGoogle = onConnectGoogle,
+            )
+            else -> VideoFeed(
+                videos = videos,
+                trackedChannels = trackedChannels,
+                selectedChannelId = selectedChannelId,
+                onChannelSelected = onChannelSelected,
+                haptics = haptics,
+            )
+        }
+    }
+}
+
+// ── Channel filter (collapsed and open) ───────────────────────────────────────
+
+private fun publishedAt(video: YoutubeVideo): Instant? = runCatching { Instant.parse(video.publishedAt) }.getOrNull()
+
+private fun newCutoff(): Instant = Instant.now().minus(24, ChronoUnit.HOURS)
+
+private fun openVideo(context: Context, video: YoutubeVideo) {
+    runCatching {
+        context.openUrl("https://www.youtube.com/watch?v=${video.videoId}")
+    }
+}
+
+/**
+ * The channels being watched, ordered the way YouTube's subscriptions bar orders them: whoever
+ * posted last comes first, with a dot on anyone who posted today. The same row sits on the
+ * glance and the open feed.
+ */
+@Composable
+private fun YoutubeChannelFilter(
+    videos: List<YoutubeVideo>,
+    trackedChannels: List<YoutubeChannel>,
+    selectedChannelId: String?,
+    onChannelSelected: (String?) -> Unit,
+    bottomGap: Dp,
+) {
+    val channels = remember(videos, trackedChannels) {
+        val cutoff = newCutoff()
+        val latest = HashMap<String, Instant>()
+        videos.forEach { video ->
+            val at = publishedAt(video) ?: return@forEach
+            val seen = latest[video.channelId]
+            if (seen == null || at.isAfter(seen)) latest[video.channelId] = at
+        }
+        trackedChannels
+            .sortedByDescending { latest[it.channelId] ?: Instant.EPOCH }
+            .map { channel ->
+                ChannelAvatar(
+                    id = channel.channelId,
+                    name = channel.title,
+                    imageUrl = channel.thumbnailUrl.ifBlank { null },
+                    mark = if (latest[channel.channelId]?.isAfter(cutoff) == true) ChannelMark.New else ChannelMark.None,
+                )
+            }
+    }
+    if (channels.isEmpty()) return
+    val newToday = remember(videos) {
+        val cutoff = newCutoff()
+        videos.count { publishedAt(it)?.isAfter(cutoff) == true }
+    }
+    val fromSelected = remember(videos, selectedChannelId) {
+        videos.count { it.channelId == selectedChannelId }
+    }
+    ChannelAvatarRow(
+        channels = channels,
+        selectedId = selectedChannelId,
+        onSelect = onChannelSelected,
+        selectedRing = YtRed,
+        markColor = YtRed,
+        accent = YtRed,
+        caption = channels.firstOrNull { it.id == selectedChannelId }?.let {
+            "$fromSelected video${if (fromSelected != 1) "s" else ""} from ${it.name}"
+        },
+        leading = if (newToday > 0 && selectedChannelId == null) {
+            { NewTodayChip(newToday) }
+        } else {
+            null
+        },
+        modifier = Modifier.padding(bottom = bottomGap),
+    )
+}
+
+@Composable
+private fun NewTodayChip(count: Int) {
+    val shape = RoundedCornerShape(999.dp)
+    Row(
+        modifier = Modifier
+            .clip(shape)
+            .background(YtRed.copy(alpha = 0.14f))
+            .border(0.5.dp, YtRed.copy(alpha = 0.35f), shape)
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        Box(modifier = Modifier.size(5.dp).clip(CircleShape).background(YtRed))
+        Text("$count new", fontSize = 10.sp, color = YtRed, fontWeight = FontWeight.Bold)
+    }
+}
+
+/** A quiet line where videos would be. */
+@Composable
+private fun FeedNote(text: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(YtCardBg.copy(alpha = 0.72f))
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(AppIcons.TvPlay, null, tint = YtRed.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
+        Text(text, color = TextSecondary, fontSize = 13.sp)
+    }
+}
+
 // ── Compact video feed (collapsed widget) ─────────────────────────────────────
 
 @Composable
@@ -594,149 +718,39 @@ private fun CompactVideoFeed(
     haptics: HapticHelper,
 ) {
     val context = LocalContext.current
-
-    val displayedVideos = remember(videos, selectedChannelId) {
-        if (selectedChannelId != null) videos.filter { it.channelId == selectedChannelId } else videos
+    if (videos.isEmpty()) {
+        FeedNote("No videos yet")
+        return
     }
-    val newTodayCount = remember(videos) {
-        val cutoff = Instant.now().minus(24, ChronoUnit.HOURS)
-        videos.count { v -> runCatching { Instant.parse(v.publishedAt).isAfter(cutoff) }.getOrDefault(false) }
-    }
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        if (videos.isEmpty()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(YtCardBg.copy(alpha = 0.72f))
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(
-                    AppIcons.TvPlay,
-                    null,
-                    tint = YtRed.copy(alpha = 0.6f),
-                    modifier = Modifier.size(18.dp),
+    Column(modifier = Modifier.fillMaxWidth()) {
+        YoutubeChannelFilter(
+            videos = videos,
+            trackedChannels = trackedChannels,
+            selectedChannelId = selectedChannelId,
+            onChannelSelected = onChannelSelected,
+            bottomGap = 10.dp,
+        )
+        AnimatedContent(
+            targetState = selectedChannelId,
+            transitionSpec = { MacroMotion.hubBodySwap },
+            label = "ytGlanceFilter",
+        ) { channelId ->
+            val shown = remember(videos, channelId) {
+                if (channelId == null) videos else videos.filter { it.channelId == channelId }
+            }
+            if (shown.isEmpty()) {
+                FeedNote("No videos from this channel yet")
+            } else {
+                CompactVideoStrip(
+                    videos = shown,
+                    channels = trackedChannels,
+                    resetKey = channelId,
+                    onVideoClick = { video ->
+                        haptics.click()
+                        openVideo(context, video)
+                    },
                 )
-                Text("No videos yet", color = TextSecondary, fontSize = 13.sp)
             }
-            return@Column
-        }
-
-        if (trackedChannels.isNotEmpty() || newTodayCount > 0) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (newTodayCount > 0 && selectedChannelId == null) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(999.dp))
-                            .background(YtRed.copy(alpha = 0.14f))
-                            .border(0.5.dp, YtRed.copy(alpha = 0.35f), RoundedCornerShape(999.dp))
-                            .padding(horizontal = 10.dp, vertical = 5.dp),
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp),
-                        ) {
-                            Box(modifier = Modifier.size(5.dp).clip(CircleShape).background(YtRed))
-                            Text(
-                                "$newTodayCount new",
-                                fontSize = 10.sp,
-                                color = YtRed,
-                                fontWeight = FontWeight.Bold,
-                            )
-                        }
-                    }
-                }
-                trackedChannels.forEach { channel ->
-                    key(channel.channelId) {
-                        CompactChannelAvatar(
-                            channel = channel,
-                            isSelected = selectedChannelId == channel.channelId,
-                            onClick = {
-                                haptics.tick()
-                                onChannelSelected(
-                                    if (selectedChannelId == channel.channelId) null else channel.channelId,
-                                )
-                            },
-                        )
-                    }
-                }
-            }
-            if (selectedChannelId != null) {
-                val channelName = remember(selectedChannelId, trackedChannels) {
-                    trackedChannels.find { it.channelId == selectedChannelId }?.title ?: ""
-                }
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(YtRed.copy(alpha = 0.12f))
-                        .border(0.5.dp, YtRed.copy(alpha = 0.3f), RoundedCornerShape(999.dp))
-                        .clickable {
-                            haptics.tick()
-                            onChannelSelected(null)
-                        }
-                        .padding(start = 10.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Text(
-                        "${displayedVideos.size} from $channelName",
-                        fontSize = 11.sp,
-                        color = YtRed,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    Icon(AppIcons.Close, contentDescription = "Show every channel", tint = YtRed, modifier = Modifier.size(12.dp))
-                }
-            }
-        }
-
-        if (displayedVideos.isEmpty()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(YtCardBg.copy(alpha = 0.72f))
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(
-                    AppIcons.TvPlay,
-                    null,
-                    tint = YtRed.copy(alpha = 0.6f),
-                    modifier = Modifier.size(18.dp),
-                )
-                Text("No videos from this channel yet", color = TextSecondary, fontSize = 13.sp)
-            }
-        } else {
-            CompactVideoStrip(
-                videos = displayedVideos,
-                channels = trackedChannels,
-                resetKey = selectedChannelId,
-                onVideoClick = { video ->
-                    haptics.tick()
-                    context.startActivity(
-                        Intent(
-                            Intent.ACTION_VIEW,
-                            "https://www.youtube.com/watch?v=${video.videoId}".toUri(),
-                        ),
-                    )
-                },
-            )
         }
     }
 }
@@ -770,11 +784,7 @@ private fun VideoCarouselItem(video: YoutubeVideo, look: MediaItemLook, avatarUr
         widthPx = with(density) { 320.dp.roundToPx() },
         heightPx = with(density) { 180.dp.roundToPx() },
     )
-    val isNew = remember(video.publishedAt) {
-        runCatching {
-            Instant.parse(video.publishedAt).isAfter(Instant.now().minus(24, ChronoUnit.HOURS))
-        }.getOrDefault(false)
-    }
+    val isNew = remember(video.publishedAt) { publishedAt(video)?.isAfter(newCutoff()) == true }
     val shadow = remember {
         androidx.compose.ui.graphics.Shadow(color = Color.Black.copy(alpha = 0.8f), blurRadius = 6f)
     }
@@ -827,18 +837,6 @@ private fun VideoCarouselItem(video: YoutubeVideo, look: MediaItemLook, avatarUr
                 Text("NEW", fontSize = 9.sp, color = Color.White, fontWeight = FontWeight.Bold)
             }
         }
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(8.dp)
-                .graphicsLayer { alpha = look.textAlpha() }
-                .size(26.dp)
-                .clip(CircleShape)
-                .background(Color.Black.copy(alpha = 0.55f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(AppIcons.Play, null, tint = Color.White, modifier = Modifier.size(14.dp))
-        }
         // Whose video it is, as on YouTube itself: the channel's picture beside the words.
         Row(
             modifier = Modifier
@@ -890,77 +888,10 @@ private fun VideoCarouselItem(video: YoutubeVideo, look: MediaItemLook, avatarUr
     }
 }
 
-// ── Compact channel avatar (collapsed filter strip) ───────────────────────────
+// ── Open feed: the newest video on top, the rest in a scroll box under it ──────
 
-@Composable
-private fun CompactChannelAvatar(
-    channel: YoutubeChannel,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-) {
-    val density = LocalDensity.current
-    val avatarSizePx = with(density) { 68.dp.roundToPx() }
-    val avatarRequest = rememberYoutubeThumbnailRequest(
-        url = channel.thumbnailUrl,
-        widthPx = avatarSizePx,
-        heightPx = avatarSizePx,
-    )
-    val borderColor = if (isSelected) YtRed else Border
-    val borderWidth = if (isSelected) 2.5.dp else 1.5.dp
-
-    Box(
-        modifier = Modifier
-            .clip(CircleShape)
-            .clickable(onClick = onClick),
-    ) {
-        if (channel.thumbnailUrl.isNotBlank()) {
-            AsyncImage(
-                model = avatarRequest,
-                contentDescription = channel.title,
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .border(borderWidth, borderColor, CircleShape),
-                contentScale = ContentScale.Crop,
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .border(borderWidth, borderColor, CircleShape)
-                    .background(Border.copy(alpha = 0.5f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    channel.title.take(1).uppercase(),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextSecondary,
-                )
-            }
-        }
-        // Selected check overlay
-        if (isSelected) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(YtRed.copy(alpha = 0.3f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(AppIcons.Check, null, tint = Color.White, modifier = Modifier.size(14.dp))
-            }
-        }
-    }
-}
-
-// ── Expanded video feed (new rich layout) ────────────────────────────────────
-
-private const val YT_INITIAL_PAGE = 4
-private const val YT_PAGE_SIZE    = 5
-/** Grid captions also reserve a second meta line (channel + views/time). */
-private val YT_GRID_CAPTION_MIN_HEIGHT = 82.dp
+private const val YT_FIRST_PAGE = 10
+private const val YT_PAGE_SIZE = 10
 
 @Composable
 private fun rememberYoutubeThumbnailRequest(
@@ -986,276 +917,64 @@ private fun VideoFeed(
     trackedChannels: List<YoutubeChannel>,
     selectedChannelId: String?,
     onChannelSelected: (String?) -> Unit,
+    haptics: HapticHelper,
 ) {
     val context = LocalContext.current
-    val haptics = rememberHaptics()
+    val avatars = remember(trackedChannels) { trackedChannels.associate { it.channelId to it.thumbnailUrl } }
 
-    var layout by rememberSaveable { mutableStateOf(YtLayout.LIST) }
-    var groupByChannel by rememberSaveable { mutableStateOf(false) }
-    var visibleCount by rememberSaveable { mutableIntStateOf(YT_INITIAL_PAGE) }
-
-    // Reset pagination whenever filter, layout, or grouping changes
-    LaunchedEffect(selectedChannelId, layout, groupByChannel) { visibleCount = YT_INITIAL_PAGE }
-
-    // Derive filtered list — only recomputed when inputs change, not every frame
-    val displayedVideos = remember(videos, selectedChannelId) {
-        if (selectedChannelId != null) videos.filter { it.channelId == selectedChannelId } else videos
-    }
-    val feedVideos = displayedVideos
-    // "New" video count per channel — computed once, used by channel pills for badges
-    val channelNewCountMap = remember(videos) {
-        val cutoff = Instant.now().minus(24, ChronoUnit.HOURS)
-        videos.groupBy { it.channelId }.mapValues { (_, vids) ->
-            vids.count { v -> runCatching { Instant.parse(v.publishedAt).isAfter(cutoff) }.getOrDefault(false) }
-        }
-    }
-
-    Column {
-        // ── Channel filter pills ──
-        if (trackedChannels.isNotEmpty()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(bottom = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                trackedChannels.forEach { channel ->
-                    key(channel.channelId) {
-                        ChannelPill(
-                            channel = channel,
-                            isSelected = selectedChannelId == channel.channelId,
-                            newCount = channelNewCountMap[channel.channelId] ?: 0,
-                            onClick = {
-                                haptics.tick()
-                                onChannelSelected(
-                                    if (selectedChannelId == channel.channelId) null else channel.channelId,
-                                )
-                                groupByChannel = false
-                            },
-                        )
-                    }
-                }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        YoutubeChannelFilter(
+            videos = videos,
+            trackedChannels = trackedChannels,
+            selectedChannelId = selectedChannelId,
+            onChannelSelected = onChannelSelected,
+            bottomGap = 12.dp,
+        )
+        AnimatedContent(
+            targetState = selectedChannelId,
+            transitionSpec = { MacroMotion.hubBodySwap },
+            label = "ytFeedFilter",
+        ) { channelId ->
+            val shown = remember(videos, channelId) {
+                if (channelId == null) videos else videos.filter { it.channelId == channelId }
             }
-        }
-
-        // ── Controls bar ─────────────────────────────────────────────────
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            // Video count
-            Text(
-                "${displayedVideos.size} video${if (displayedVideos.size != 1) "s" else ""}",
-                fontSize = 11.sp,
-                color = TextTertiary,
-                modifier = Modifier.weight(1f),
-            )
-            // "By channel" grouping toggle — only when all channels are visible and more than one exist
-            if (selectedChannelId == null && trackedChannels.size > 1) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (groupByChannel) YtRed.copy(alpha = 0.12f) else Color.Transparent)
-                        .border(
-                            0.5.dp,
-                            if (groupByChannel) YtRed.copy(alpha = 0.35f) else Border.copy(alpha = 0.35f),
-                            RoundedCornerShape(8.dp),
-                        )
-                        .clickable { haptics.tick(); groupByChannel = !groupByChannel }
-                        .height(32.dp)
-                        .padding(horizontal = 10.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        "By channel",
-                        fontSize = 11.sp,
-                        color = if (groupByChannel) YtRed else TextSecondary,
-                        fontWeight = if (groupByChannel) FontWeight.SemiBold else FontWeight.Normal,
+            // Each filter pages on its own and starts from its first page.
+            var visibleCount by remember { mutableIntStateOf(YT_FIRST_PAGE) }
+            val hero = shown.firstOrNull()
+            if (hero == null) {
+                FeedNote(if (channelId == null) "No videos yet" else "No videos from this channel yet")
+            } else {
+                val rest = shown.drop(1)
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    HeroVideoCard(
+                        video = hero,
+                        avatarUrl = avatars[hero.channelId],
+                        onClick = {
+                            haptics.click()
+                            openVideo(context, hero)
+                        },
                     )
-                }
-            }
-            // List / Grid layout toggle
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Border.copy(alpha = 0.25f)),
-            ) {
-                listOf(
-                    YtLayout.LIST to AppIcons.List,
-                    YtLayout.GRID to AppIcons.Grid,
-                ).forEach { (mode, icon) ->
-                    val selected = layout == mode
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (selected) Surface else Color.Transparent)
-                            .clickable { haptics.tick(); layout = mode }
-                            .size(width = 36.dp, height = 32.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            icon,
-                            contentDescription = if (mode == YtLayout.LIST) "List view" else "Grid view",
-                            tint = if (selected) YtRed else TextTertiary,
-                            modifier = Modifier.size(16.dp),
-                        )
-                    }
-                }
-            }
-        }
-
-        // ── Content ───────────────────────────────────────────────────────
-        if (feedVideos.isEmpty()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(YtRed.copy(alpha = 0.06f))
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(AppIcons.TvPlay, null, tint = YtRed.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
-                Text("No videos from this channel yet", color = TextSecondary, fontSize = 13.sp)
-            }
-        } else {
-            val doGrouping = groupByChannel && selectedChannelId == null && trackedChannels.size > 1
-            when {
-                doGrouping -> {
-                    val allGroups = remember(feedVideos, trackedChannels) {
-                        trackedChannels.mapNotNull { ch ->
-                            val vids = feedVideos.filter { it.channelId == ch.channelId }
-                            if (vids.isNotEmpty()) ch to vids else null
-                        }
-                    }
-                    val paginatedGroups = remember(allGroups, visibleCount) {
-                        var remaining = visibleCount
-                        allGroups.mapNotNull { (ch, vids) ->
-                            if (remaining <= 0) null
-                            else { val take = vids.take(remaining); remaining -= take.size; ch to take }
-                        }
-                    }
-                    val totalGrouped = remember(allGroups) { allGroups.sumOf { it.second.size } }
-                    val shownGrouped = remember(paginatedGroups) { paginatedGroups.sumOf { it.second.size } }
-
-                    WidgetScrollBox(
-                        maxHeight = 380.dp,
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        paginatedGroups.forEach { (channel, channelVideos) ->
-                            key(channel.channelId) {
-                                ChannelSectionHeader(channel = channel, videoCount = channelVideos.size)
-                                if (layout == YtLayout.GRID) {
-                                    VideoGrid(
-                                        videos = channelVideos,
-                                        onVideoClick = { video ->
-                                            haptics.tick()
-                                            context.startActivity(
-                                                Intent(Intent.ACTION_VIEW, "https://www.youtube.com/watch?v=${video.videoId}".toUri())
-                                            )
+                    if (rest.isNotEmpty()) {
+                        WidgetScrollBox(maxHeight = 360.dp) {
+                            rest.take(visibleCount).forEach { video ->
+                                key(video.videoId) {
+                                    VideoCard(
+                                        video = video,
+                                        onClick = {
+                                            haptics.click()
+                                            openVideo(context, video)
                                         },
                                     )
-                                } else {
-                                    channelVideos.forEachIndexed { idx, video ->
-                                        key(video.videoId) {
-                                            VideoCard(
-                                                video = video,
-                                                onClick = {
-                                                    haptics.tick()
-                                                    context.startActivity(
-                                                        Intent(Intent.ACTION_VIEW, "https://www.youtube.com/watch?v=${video.videoId}".toUri())
-                                                    )
-                                                },
-                                            )
-                                            if (idx < channelVideos.size - 1) {
-                                                HorizontalDivider(color = Border.copy(alpha = 0.18f))
-                                            }
-                                        }
-                                    }
                                 }
-                                Spacer(Modifier.height(6.dp))
                             }
-                        }
-                        if (shownGrouped < totalGrouped) {
-                            ShowMoreButton(
-                                remaining = totalGrouped - shownGrouped,
-                                onClick = { haptics.tick(); visibleCount += YT_PAGE_SIZE },
-                            )
-                        }
-                    }
-                }
-                layout == YtLayout.GRID -> {
-                    val paged   = feedVideos.take(visibleCount)
-                    val hasMore = feedVideos.size > visibleCount
-                    WidgetScrollBox(
-                        maxHeight = 380.dp,
-                    ) {
-                        VideoGrid(
-                            videos = paged,
-                            onVideoClick = { video ->
-                                haptics.tick()
-                                context.startActivity(
-                                    Intent(Intent.ACTION_VIEW, "https://www.youtube.com/watch?v=${video.videoId}".toUri())
+                            if (rest.size > visibleCount) {
+                                ShowMoreButton(
+                                    remaining = rest.size - visibleCount,
+                                    onClick = {
+                                        haptics.tick()
+                                        visibleCount += YT_PAGE_SIZE
+                                    },
                                 )
-                            },
-                        )
-                        if (hasMore) {
-                            ShowMoreButton(
-                                remaining = feedVideos.size - visibleCount,
-                                onClick = { haptics.tick(); visibleCount += YT_PAGE_SIZE },
-                            )
-                        }
-                    }
-                }
-                else -> {
-                    val heroVideo  = feedVideos.first()
-                    val restQuota  = (visibleCount - 1).coerceAtLeast(0)
-                    val restVideos = feedVideos.drop(1).take(restQuota)
-                    val hasMore    = feedVideos.size > 1 + restQuota
-
-                    Column {
-                        key(heroVideo.videoId) {
-                            HeroVideoCard(
-                                video = heroVideo,
-                                onClick = {
-                                    haptics.tick()
-                                    context.startActivity(
-                                        Intent(Intent.ACTION_VIEW, "https://www.youtube.com/watch?v=${heroVideo.videoId}".toUri())
-                                    )
-                                },
-                            )
-                        }
-                        if (restVideos.isNotEmpty() || hasMore) {
-                            Spacer(Modifier.height(10.dp))
-                            WidgetScrollBox(
-                                maxHeight = 360.dp,
-                            ) {
-                                restVideos.forEachIndexed { idx, video ->
-                                    key(video.videoId) {
-                                        VideoCard(
-                                            video = video,
-                                            onClick = {
-                                                haptics.tick()
-                                                context.startActivity(
-                                                    Intent(Intent.ACTION_VIEW, "https://www.youtube.com/watch?v=${video.videoId}".toUri())
-                                                )
-                                            },
-                                        )
-                                        if (idx < restVideos.size - 1) {
-                                            HorizontalDivider(color = Border.copy(alpha = 0.18f))
-                                        }
-                                    }
-                                }
-                                if (hasMore) {
-                                    ShowMoreButton(
-                                        remaining = feedVideos.size - 1 - restQuota,
-                                        onClick = { haptics.tick(); visibleCount += YT_PAGE_SIZE },
-                                    )
-                                }
                             }
                         }
                     }
@@ -1272,7 +991,7 @@ private fun ShowMoreButton(remaining: Int, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 10.dp),
+            .padding(top = 8.dp, bottom = 4.dp),
         contentAlignment = Alignment.Center,
     ) {
         Row(
@@ -1281,13 +1000,14 @@ private fun ShowMoreButton(remaining: Int, onClick: () -> Unit) {
                 .background(YtRed.copy(alpha = 0.08f))
                 .border(0.5.dp, YtRed.copy(alpha = 0.22f), RoundedCornerShape(10.dp))
                 .clickable(onClick = onClick)
-                .padding(horizontal = 20.dp, vertical = 9.dp),
+                .heightIn(min = 36.dp)
+                .padding(horizontal = 20.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Icon(
                 AppIcons.ChevronDown,
-                contentDescription = "Show more",
+                contentDescription = null,
                 tint = YtRed.copy(alpha = 0.8f),
                 modifier = Modifier.size(16.dp),
             )
@@ -1308,28 +1028,24 @@ private fun ShowMoreButton(remaining: Int, onClick: () -> Unit) {
     }
 }
 
+/** A video in the scroll box, laid out like YouTube's own list: thumbnail, then title, channel and age. */
 @Composable
 private fun VideoCard(video: YoutubeVideo, onClick: () -> Unit) {
-    val isNew = remember(video.publishedAt) {
-        runCatching {
-            Instant.parse(video.publishedAt).isAfter(Instant.now().minus(24, ChronoUnit.HOURS))
-        }.getOrDefault(false)
-    }
+    val isNew = remember(video.publishedAt) { publishedAt(video)?.isAfter(newCutoff()) == true }
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
+            .padding(top = 6.dp, bottom = 6.dp, end = 8.dp),
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        // Thumbnail with play overlay — YouTube list density
         Box(
             modifier = Modifier
                 .width(148.dp)
                 .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(8.dp))
                 .background(YtDark),
         ) {
             val listThumb = rememberYoutubeThumbnailRequest(video.thumbnailUrl, 444, 250)
@@ -1339,21 +1055,6 @@ private fun VideoCard(video: YoutubeVideo, onClick: () -> Unit) {
                 modifier = Modifier.matchParentSize(),
                 contentScale = ContentScale.Crop,
             )
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.4f)))),
-            )
-            Box(
-                modifier = Modifier
-                    .size(28.dp)
-                    .align(Alignment.Center)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.55f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(AppIcons.Play, null, tint = Color.White, modifier = Modifier.size(18.dp))
-            }
             if (isNew) {
                 Box(
                     modifier = Modifier
@@ -1402,380 +1103,97 @@ private fun VideoCard(video: YoutubeVideo, onClick: () -> Unit) {
     }
 }
 
-// ── Hero video card (featured newest video in expanded list mode) ─────────────
+// ── Hero video card (the newest video, on top of the open feed) ───────────────
 
+/**
+ * The newest video, laid out as the Twitch board's hero and YouTube's home feed both do it:
+ * the thumbnail full width, then the channel's picture beside the title and what it is.
+ */
 @Composable
-private fun HeroVideoCard(video: YoutubeVideo, onClick: () -> Unit) {
-    Box(
+private fun HeroVideoCard(video: YoutubeVideo, avatarUrl: String?, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(12.dp)
+    val isNew = remember(video.publishedAt) { publishedAt(video)?.isAfter(newCutoff()) == true }
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick)
-            .background(YtDark),
-    ) {
-        // Full-width thumbnail
-        val heroThumb = rememberYoutubeThumbnailRequest(video.thumbnailUrl, 720, 405)
-        AsyncImage(
-            model = heroThumb,
-            contentDescription = video.title,
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(14.dp)),
-            contentScale = ContentScale.Crop,
-        )
-        // Scrim — transparent at top, dark at bottom
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .background(
-                    Brush.verticalGradient(
-                        colorStops = arrayOf(
-                            0f to Color.Transparent,
-                            0.42f to Color.Transparent,
-                            1f to Color.Black.copy(alpha = 0.88f),
-                        ),
-                    ),
-                ),
-        )
-        // "LATEST" badge — top-left
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(10.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(YtRed)
-                .padding(horizontal = 8.dp, vertical = 3.dp),
-        ) {
-            Text(
-                "LATEST",
-                fontSize = 9.sp,
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 0.8.sp,
-            )
-        }
-        // Centered play button
-        Box(
-            modifier = Modifier
-                .size(52.dp)
-                .align(Alignment.Center)
-                .clip(CircleShape)
-                .background(Color.Black.copy(alpha = 0.55f))
-                .border(1.5.dp, Color.White.copy(alpha = 0.32f), CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(AppIcons.Play, null, tint = Color.White, modifier = Modifier.size(30.dp))
-        }
-        // Title + YouTube-style meta pinned to bottom
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Text(
-                video.title,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                lineHeight = 20.sp,
-            )
-            Text(
-                videoMetaLine(video, includeChannel = true),
-                fontSize = 11.sp,
-                color = Color.White.copy(alpha = 0.78f),
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
-}
-
-// ── Video grid layout ─────────────────────────────────────────────────────────
-
-@Composable
-private fun VideoGrid(
-    videos: List<YoutubeVideo>,
-    onVideoClick: (YoutubeVideo) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        videos.chunked(2).forEach { rowVideos ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(IntrinsicSize.Max),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                rowVideos.forEach { video ->
-                    key(video.videoId) {
-                        VideoGridItem(
-                            video = video,
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight(),
-                            onClick = { onVideoClick(video) },
-                        )
-                    }
-                }
-                if (rowVideos.size == 1) Spacer(Modifier.weight(1f))
-            }
-        }
-    }
-}
-
-@Composable
-private fun VideoGridItem(
-    video: YoutubeVideo,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-) {
-    val density = LocalDensity.current
-    val thumbWidthPx = with(density) { 220.dp.roundToPx() }
-    val thumbHeightPx = with(density) { 124.dp.roundToPx() }
-    val thumbRequest = rememberYoutubeThumbnailRequest(video.thumbnailUrl, thumbWidthPx, thumbHeightPx)
-    val isNew = remember(video.publishedAt) {
-        runCatching {
-            Instant.parse(video.publishedAt).isAfter(Instant.now().minus(24, ChronoUnit.HOURS))
-        }.getOrDefault(false)
-    }
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(YtCardBg.copy(alpha = 0.88f))
-            .border(0.5.dp, YtHairline.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
+            .clip(shape)
+            .background(YtCardBg)
+            .border(1.dp, YtRed.copy(alpha = 0.18f), shape)
             .clickable(onClick = onClick),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-                .background(YtDark),
-        ) {
+        Box {
+            val heroThumb = rememberYoutubeThumbnailRequest(video.thumbnailUrl, 720, 405)
             AsyncImage(
-                model = thumbRequest,
+                model = heroThumb,
                 contentDescription = video.title,
-                modifier = Modifier.matchParentSize(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .background(YtDark),
                 contentScale = ContentScale.Crop,
             )
-            Box(
+            Text(
+                if (isNew) "NEW" else "LATEST",
+                fontSize = 10.sp,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.6.sp,
                 modifier = Modifier
-                    .matchParentSize()
-                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.28f)))),
+                    .align(Alignment.TopStart)
+                    .padding(10.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(YtRed)
+                    .padding(horizontal = 7.dp, vertical = 3.dp),
             )
+        }
+        Row(
+            modifier = Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
             Box(
                 modifier = Modifier
-                    .size(28.dp)
-                    .align(Alignment.Center)
+                    .size(36.dp)
                     .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.55f)),
+                    .background(Border),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(AppIcons.Play, null, tint = Color.White, modifier = Modifier.size(16.dp))
-            }
-            if (isNew) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(6.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(YtRed)
-                        .padding(horizontal = 5.dp, vertical = 2.dp),
-                ) {
-                    Text("NEW", fontSize = 8.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                Text(
+                    video.channelTitle.trim().take(1).uppercase(),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextSecondary,
+                )
+                if (!avatarUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = rememberYoutubeThumbnailRequest(avatarUrl, 108, 108),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
                 }
             }
-        }
-        // YouTube-style details: title → channel → views · time (no fixed height clipping).
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = YT_GRID_CAPTION_MIN_HEIGHT)
-                .wrapContentHeight(Alignment.Top)
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Text(
-                video.title,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = TextPrimary,
-                minLines = 2,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                lineHeight = 16.sp,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            if (video.channelTitle.isNotBlank()) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
                 Text(
-                    video.channelTitle,
-                    fontSize = 10.sp,
+                    video.title,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextPrimary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 20.sp,
+                )
+                Text(
+                    videoMetaLine(video, includeChannel = true),
+                    fontSize = 12.sp,
                     color = TextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth(),
                 )
             }
-            Text(
-                videoMetaLine(video, includeChannel = false),
-                fontSize = 10.sp,
-                color = TextSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-    }
-}
-
-// ── Channel section header (used in grouped-by-channel mode) ─────────────────
-
-@Composable
-private fun ChannelSectionHeader(channel: YoutubeChannel, videoCount: Int) {
-    val context = LocalContext.current
-    val haptics = rememberHaptics()
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 4.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        if (channel.thumbnailUrl.isNotBlank()) {
-            val avatarReq = rememberYoutubeThumbnailRequest(channel.thumbnailUrl, 66, 66)
-            AsyncImage(
-                model = avatarReq,
-                contentDescription = channel.title,
-                modifier = Modifier
-                    .size(22.dp)
-                    .clip(CircleShape)
-                    .border(1.dp, YtRed.copy(alpha = 0.4f), CircleShape),
-                contentScale = ContentScale.Crop,
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .size(22.dp)
-                    .clip(CircleShape)
-                    .background(YtRed.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    channel.title.take(1).uppercase(),
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = YtRed,
-                )
-            }
-        }
-        Text(
-            channel.title,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = TextPrimary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .background(YtRed.copy(alpha = 0.1f))
-                .padding(horizontal = 6.dp, vertical = 2.dp),
-        ) {
-            Text("$videoCount", fontSize = 9.sp, color = YtRed, fontWeight = FontWeight.Bold)
-        }
-        // Open channel on YouTube
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(CircleShape)
-                .clickable {
-                    haptics.tick()
-                    context.startActivity(
-                        Intent(Intent.ACTION_VIEW,
-                            "https://www.youtube.com/channel/${channel.channelId}".toUri())
-                    )
-                },
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                AppIcons.ExternalLink,
-                contentDescription = "Open channel",
-                tint = TextTertiary,
-                modifier = Modifier.size(13.dp),
-            )
-        }
-        HorizontalDivider(modifier = Modifier.weight(1.5f), color = Border.copy(alpha = 0.3f))
-    }
-}
-
-// ── Channel pill ──────────────────────────────────────────────────────────────
-
-@Composable
-private fun ChannelPill(
-    channel: YoutubeChannel,
-    isSelected: Boolean = false,
-    newCount: Int = 0,
-    onClick: () -> Unit = {},
-) {
-    val bgColor by animateColorAsState(
-        targetValue = if (isSelected) YtRed.copy(alpha = 0.15f) else Surface,
-        animationSpec = MacroMotion.colorTween(200), label = "pill_bg",
-    )
-    val borderColor by animateColorAsState(
-        targetValue = if (isSelected) YtRed.copy(alpha = 0.6f) else Border.copy(alpha = 0.4f),
-        animationSpec = MacroMotion.colorTween(200), label = "pill_border",
-    )
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(bgColor)
-            .border(1.dp, borderColor, RoundedCornerShape(20.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 5.dp),
-    ) {
-        if (channel.thumbnailUrl.isNotBlank()) {
-            val chipAvatar = rememberYoutubeThumbnailRequest(channel.thumbnailUrl, 54, 54)
-            AsyncImage(
-                model = chipAvatar,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp).clip(CircleShape),
-                contentScale = ContentScale.Crop,
-            )
-            Spacer(Modifier.width(5.dp))
-        }
-        Text(
-            channel.title,
-            fontSize = 11.sp,
-            color = if (isSelected) YtRed else TextSecondary,
-            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-            maxLines = 1,
-        )
-        // "New" count badge — only when not selected and there are recent videos
-        if (!isSelected && newCount > 0) {
-            Spacer(Modifier.width(4.dp))
-            Box(
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .background(YtRed)
-                    .padding(horizontal = 4.dp, vertical = 1.dp),
-            ) {
-                Text(
-                    "$newCount",
-                    fontSize = 8.sp,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
-        }
-        if (isSelected) {
-            Spacer(Modifier.width(4.dp))
-            Icon(AppIcons.Close, null, tint = YtRed.copy(alpha = 0.7f), modifier = Modifier.size(10.dp))
         }
     }
 }
@@ -1824,37 +1242,19 @@ private fun NoChannelsPrompt(
             )
         }
         if (!googleState.isConnected) {
-            Button(
+            ServiceButton(
+                label = "Connect Google",
+                icon = AppIcons.Account,
+                accent = YtRed,
                 onClick = onConnectGoogle,
-                enabled = !googleState.isBusy,
-                colors = ButtonDefaults.buttonColors(containerColor = YtRed),
-                shape = RoundedCornerShape(10.dp),
-            ) {
-                if (googleState.isBusy) {
-                    LoadingSpinner(color = Color.White, size = LoadingSpec.SizeInline)
-                } else {
-                    Icon(AppIcons.Account, null, modifier = Modifier.size(16.dp))
-                }
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    if (googleState.isBusy) "Connecting…" else "Connect Google",
-                    fontSize = 13.sp,
-                )
-            }
+                busy = googleState.isBusy,
+            )
             Spacer(modifier = Modifier.height(8.dp))
             TextButton(onClick = onOpenSettings) {
                 Text("Search channels", color = TextSecondary, fontSize = 13.sp)
             }
         } else {
-            Button(
-                onClick = onOpenSettings,
-                colors = ButtonDefaults.buttonColors(containerColor = YtRed),
-                shape = RoundedCornerShape(10.dp),
-            ) {
-                Icon(AppIcons.Add, null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Add Channels", fontSize = 13.sp)
-            }
+            ServiceButton(label = "Add channels", icon = AppIcons.Add, accent = YtRed, onClick = onOpenSettings)
         }
         googleState.statusMessage?.let { msg ->
             Spacer(modifier = Modifier.height(10.dp))
@@ -2130,6 +1530,12 @@ private fun WatchingTab(
     ) {
         items(trackedChannels, key = { it.channelId }) { channel ->
             SwipeToDismissBox(
+                // A removed channel fades and the rest close the gap, instead of popping.
+                modifier = Modifier.animateItem(
+                    fadeInSpec = MacroMotion.fadeTween(),
+                    placementSpec = MacroMotion.navTabSpring(),
+                    fadeOutSpec = MacroMotion.fadeTween(150),
+                ),
                 state = rememberSwipeToDismissBoxState(),
                 enableDismissFromStartToEnd = false,
                 onDismiss = { value ->
@@ -2178,6 +1584,10 @@ private fun SearchTab(
 ) {
     val suggestions        by viewModel.searchSuggestions.collectAsState()
     val suggestionsLoading by viewModel.suggestionsLoading.collectAsState()
+    // Read from the live list, so removing a channel from the results updates its row
+    // (a plain lookup in composition did not, so only adding showed).
+    val trackedList by viewModel.trackedChannels.collectAsState()
+    val trackedIds = remember(trackedList) { trackedList.map { it.channelId }.toSet() }
 
     // Show the suggestions dropdown whenever the user is actively typing (query ≥ 2 chars)
     // and we have results or are loading — regardless of whether a full search was done before.
@@ -2248,7 +1658,7 @@ private fun SearchTab(
                     }
                 } else {
                     suggestions.forEachIndexed { idx, channel ->
-                        val tracked = viewModel.isChannelTracked(channel.channelId)
+                        val tracked = channel.channelId in trackedIds
                         val justAdded = recentlyAdded.contains(channel.channelId)
                         SuggestionRow(
                             channel = channel,
@@ -2309,42 +1719,46 @@ private fun SearchTab(
         Spacer(Modifier.height(10.dp))
 
         // ── Full search results ───────────────────────────────────────────
-        when (val s = channelSearchState) {
-            is ChannelSearchState.Loading -> Box(Modifier.fillMaxWidth().height(60.dp), Alignment.Center) {
-                LoadingSpinner(color = YtRed)
-            }
-            is ChannelSearchState.Success -> {
-                if (s.channels.isEmpty()) {
-                    Text("No channels found.", fontSize = 13.sp, color = TextSecondary)
-                } else {
-                    Text(
-                        "${s.channels.size} channel${if (s.channels.size != 1) "s" else ""} found",
-                        fontSize = 11.sp,
-                        color = TextTertiary,
-                        modifier = Modifier.padding(bottom = 6.dp),
-                    )
-                    s.channels.forEach { channel ->
-                        val tracked = viewModel.isChannelTracked(channel.channelId)
-                        ChannelListRow(
-                            channel = channel.copy(isTracked = tracked),
-                            isTracked = tracked,
-                            justAdded = recentlyAdded.contains(channel.channelId),
-                            onToggle = {
-                                if (tracked) { haptics.reject(); viewModel.removeChannel(channel.channelId) }
-                                else { haptics.confirm(); viewModel.addChannel(channel) }
-                            },
-                        )
+        WidgetStateSwitch(targetState = channelSearchState, contentKey = { it::class }, label = "channelSearch") { s ->
+            Column {
+                when (s) {
+                    is ChannelSearchState.Loading -> Box(Modifier.fillMaxWidth().height(60.dp), Alignment.Center) {
+                        LoadingSpinner(color = YtRed)
                     }
-                }
-            }
-            is ChannelSearchState.Error -> Text("⚠ ${s.message}", fontSize = 13.sp, color = Error)
-            ChannelSearchState.Idle -> {
-                if (!showSuggestions) {
-                    Text(
-                        "Type a channel name to search",
-                        fontSize = 12.sp,
-                        color = TextSecondary,
-                    )
+                    is ChannelSearchState.Success -> {
+                        if (s.channels.isEmpty()) {
+                            Text("No channels found.", fontSize = 13.sp, color = TextSecondary)
+                        } else {
+                            Text(
+                                "${s.channels.size} channel${if (s.channels.size != 1) "s" else ""} found",
+                                fontSize = 11.sp,
+                                color = TextTertiary,
+                                modifier = Modifier.padding(bottom = 6.dp),
+                            )
+                            s.channels.forEach { channel ->
+                                val tracked = channel.channelId in trackedIds
+                                ChannelListRow(
+                                    channel = channel.copy(isTracked = tracked),
+                                    isTracked = tracked,
+                                    justAdded = recentlyAdded.contains(channel.channelId),
+                                    onToggle = {
+                                        if (tracked) { haptics.reject(); viewModel.removeChannel(channel.channelId) }
+                                        else { haptics.confirm(); viewModel.addChannel(channel) }
+                                    },
+                                )
+                            }
+                        }
+                    }
+                    is ChannelSearchState.Error -> Text("⚠ ${s.message}", fontSize = 13.sp, color = Error)
+                    ChannelSearchState.Idle -> {
+                        if (!showSuggestions) {
+                            Text(
+                                "Type a channel name to search",
+                                fontSize = 12.sp,
+                                color = TextSecondary,
+                            )
+                        }
+                    }
                 }
             }
         }
