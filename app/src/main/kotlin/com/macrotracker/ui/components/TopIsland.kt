@@ -46,6 +46,7 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -75,7 +76,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.macrotracker.data.dashboard.IslandItem
 import com.macrotracker.data.island.IslandRanking
-import com.macrotracker.data.dashboard.islandShortTitle
+import com.macrotracker.data.dashboard.compactIslandEnd
+import com.macrotracker.data.dashboard.islandLabel
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.MacroMotion
@@ -93,12 +95,12 @@ import kotlinx.coroutines.delay
 /*
  * The island, on the phone: the web's line under its clock (today.js), hanging from the
  * status bar in the navbar's chrome (dotted glass, darker rim, the web's shadow).
- * Everything that matters right now on one line, most pressing first: what waits on you
- * in Hermes, a weather warning, what is on the calendar now or next, an F1 session, the
- * morning briefing, mail from a person; then rain within three hours and today's race.
- * Nothing takes turns and nothing scrolls: when the line holds more than fits, its items
- * fold (IslandFit.kt) until it does, the detail first, then each title to a word or two
- * (the AI's short title, IslandShortener), then the countdowns, then down to their icons.
+ * The three things that matter most right now on one line (IslandRanking: what waits on
+ * you in Hermes, what is on or about to start, then what suits this hour), and a "+N" for
+ * the rest, which opens them as a list under the line. Nothing scrolls: when three don't
+ * fit, they fold (IslandFit.kt), the detail first, then each title to its label (a word or
+ * two the AI writes to fit three across, IslandShortener), then the countdowns, and only
+ * then are the longest labels cut short.
  *
  * While Hermes works the island grows a second line under the first for him (the web puts
  * him first on its one line; a phone has no room for both side by side): the scanner,
@@ -112,17 +114,22 @@ private val HermesLineHeight = 38.dp
 private val IslandTop = 6.dp
 
 /** Room between the island's edge and what it holds, clear of the curve and the outline. */
-private val LinePad = 7.dp
+private val LinePad = 4.dp
 private val EntryHeight = 34.dp
 private val EntryGap = 2.dp
-private val EntryStart = 4.dp
-private val EntryEnd = 10.dp
-private val PartGap = 7.dp
-private val MarkSize = 26.dp
-private val RingSize = 15.dp
+private val EntryStart = 3.dp
+private val EntryEnd = 6.dp
+private val PartGap = 5.dp
+private val MarkSize = 22.dp
+private val MarkIcon = 12.dp
+private val RingSize = 13.dp
 private val TitleMax = 190.dp
 private val TitleMaxRest = 150.dp
 private val SubMax = 140.dp
+
+/** A label is never cut shorter than this to keep three on the line; one item goes behind "+N" instead. */
+private val MinLabel = 34.dp
+private val MoreRowHeight = 46.dp
 
 @Composable
 fun TopIsland(
@@ -134,8 +141,8 @@ fun TopIsland(
     hazeState: HazeState?,
     onItem: (IslandItem) -> Unit,
     modifier: Modifier = Modifier,
-    /** Short titles by full title, for items folded to fit (IslandViewModel.shortTitles). */
-    shortTitles: Map<String, String> = emptyMap(),
+    /** The AI's labels by full title, so three items fit across (IslandViewModel.labels). */
+    labels: Map<String, String> = emptyMap(),
     /** A long press on an item: hidden for the rest of the day. */
     onHide: (IslandItem) -> Unit = {},
 ) {
@@ -147,6 +154,9 @@ fun TopIsland(
     if (shown.isNotEmpty()) held.items = shown
     if (hermes != null) held.hermes = hermes
     val frame = if (show) IslandFrame(shown, hermes) else held.frame
+    // The list behind "+N"; it folds away with the island and after a tap on one of its rows.
+    var expanded by remember { mutableStateOf(false) }
+    LaunchedEffect(show) { if (!show) expanded = false }
 
     BoxWithConstraints(
         modifier = modifier
@@ -178,7 +188,27 @@ fun TopIsland(
                     enter = expandVertically(MacroMotion.navTabSpring(), expandFrom = Alignment.Top) + fadeIn(MacroMotion.fadeTween()),
                     exit = shrinkVertically(MacroMotion.navTabSpring(), shrinkTowards = Alignment.Top) + fadeOut(MacroMotion.fadeTween(120)),
                 ) {
-                    ItemLine(frame.items.ifEmpty { held.items }, shortTitles, lineWidth, onItem, onHide)
+                    val line = rememberIslandLine(frame.items.ifEmpty { held.items }, labels, lineWidth)
+                    Column {
+                        ItemLine(
+                            line = line,
+                            expanded = expanded,
+                            onMore = { expanded = !expanded },
+                            onItem = onItem,
+                            onHide = onHide,
+                        )
+                        AnimatedVisibility(
+                            visible = expanded && line.fit.hidden > 0,
+                            enter = expandVertically(MacroMotion.navTabSpring(), expandFrom = Alignment.Top) + fadeIn(MacroMotion.fadeTween()),
+                            exit = shrinkVertically(MacroMotion.navTabSpring(), shrinkTowards = Alignment.Top) + fadeOut(MacroMotion.fadeTween(120)),
+                        ) {
+                            MoreList(
+                                items = line.items.drop(line.fit.shown),
+                                onItem = { expanded = false; onItem(it) },
+                                onHide = onHide,
+                            )
+                        }
+                    }
                 }
                 AnimatedVisibility(
                     visible = frame.hermes != null,
@@ -226,41 +256,73 @@ private class IslandHeld {
     var hermes: NavActivity? = null
 }
 
+/** The island's line worked out for one width: its items, their labels and how they fold. */
+@Immutable
+private class IslandLine(
+    val items: List<IslandItem>,
+    val labels: List<String>,
+    val ends: List<String>,
+    val fit: IslandFit,
+)
+
 @Composable
-private fun ItemLine(items: List<IslandItem>, shortTitles: Map<String, String>, width: Dp, onItem: (IslandItem) -> Unit, onHide: (IslandItem) -> Unit) {
-    val haptics = rememberHaptics()
+private fun rememberIslandLine(items: List<IslandItem>, labels: Map<String, String>, width: Dp): IslandLine {
     val styles = islandTextStyles()
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    val shorts = remember(items, shortTitles) { items.map { islandShortTitle(it, shortTitles) } }
-    val fit = remember(items, shorts, width, styles, density) {
-        with(density) {
+    return remember(items, labels, width, styles, density) {
+        val shown = items.map { islandLabel(it, labels) }
+        val ends = items.map { compactIslandEnd(it.end) }
+        val fit = with(density) {
             fun text(t: String, style: TextStyle, max: Dp = Dp.Infinity): Float =
                 if (t.isBlank()) 0f else minOf(measurer.measure(t, style, maxLines = 1, softWrap = false).size.width.toFloat(), max.toPx())
             fun part(w: Float): Float = if (w > 0f) PartGap.toPx() + w else 0f
             val ring = (RingSize + PartGap).toPx()
+            // Only the line's own items are measured: the rest go behind "+N" whatever their length.
             val widths = items.mapIndexed { i, item ->
+                if (i >= IslandRanking.MAX_SHOWN) return@mapIndexed IslandFoldWidths(0f, 0f, 0f, 0f, 0f)
                 val titleStyle = if (item.tone == "quiet") styles.quietTitle else styles.title
                 val title = part(text(item.title, titleStyle, if (i == 0) TitleMax else TitleMaxRest))
-                val short = part(text(shorts[i], titleStyle, TitleMaxRest))
+                val labelText = text(shown[i], titleStyle, TitleMaxRest)
                 val sub = part(text(item.sub, styles.sub, SubMax))
-                val end = part(text(item.end, styles.end))
+                val fullEnd = part(text(item.end, styles.end))
+                val end = part(text(ends[i], styles.end))
                 val rings = if (item.ring != null) ring else 0f
                 // A few pixels of slack, so rounding never ellipsizes a word that fits.
                 val base = (EntryStart + MarkSize + EntryEnd).toPx() + 4f
                 IslandFoldWidths(
-                    detail = base + title + sub + rings + end,
+                    detail = base + title + sub + rings + fullEnd,
                     title = base + title + rings + end,
-                    short = base + short + rings + end,
-                    shortBare = base + short + rings,
-                    icon = (EntryStart * 2 + MarkSize).toPx(),
+                    label = base + part(labelText) + rings + end,
+                    labelBare = base + part(labelText) + rings,
+                    labelText = labelText,
                 )
             }
-            fitIslandLine(widths, width.toPx(), EntryGap.toPx()) { hidden ->
-                (OverflowPad * 2).toPx() + text("+$hidden", styles.end) + 2f
-            }
+            fitIslandLine(
+                widths = widths,
+                available = width.toPx(),
+                gap = EntryGap.toPx(),
+                minLabel = MinLabel.toPx(),
+                maxShown = IslandRanking.MAX_SHOWN,
+            ) { hidden -> (OverflowPad * 2).toPx() + text("+$hidden", styles.end) + 2f }
         }
+        IslandLine(items, shown, ends, fit)
     }
+}
+
+@Composable
+private fun ItemLine(
+    line: IslandLine,
+    expanded: Boolean,
+    onMore: () -> Unit,
+    onItem: (IslandItem) -> Unit,
+    onHide: (IslandItem) -> Unit,
+) {
+    val haptics = rememberHaptics()
+    val styles = islandTextStyles()
+    val fit = line.fit
+    val density = LocalDensity.current
+    val cap = fit.labelCap?.let { with(density) { it.toDp() } }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -269,14 +331,16 @@ private fun ItemLine(items: List<IslandItem>, shortTitles: Map<String, String>, 
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(EntryGap, Alignment.CenterHorizontally),
     ) {
-        items.take(fit.shown).forEachIndexed { i, item ->
+        line.items.take(fit.shown).forEachIndexed { i, item ->
             // Keyed, so an entry keeps its state when the ranking moves it.
             key(IslandRanking.key(item)) {
                 IslandEntry(
                     item = item,
                     fold = fit.folds[i],
                     first = i == 0,
-                    short = shorts[i],
+                    label = line.labels[i],
+                    end = if (fit.folds[i] == IslandFold.DETAIL) item.end else line.ends[i],
+                    labelCap = cap,
                     styles = styles,
                     onClick = { haptics.tick(); onItem(item) },
                     onLongClick = { haptics.reject(); onHide(item) },
@@ -284,23 +348,87 @@ private fun ItemLine(items: List<IslandItem>, shortTitles: Map<String, String>, 
             }
         }
         if (fit.hidden > 0) {
-            val next = items[fit.shown]
+            val rest = line.items.drop(fit.shown)
             Box(
                 modifier = Modifier
                     .height(EntryHeight)
                     .clip(CircleShape)
-                    .clickable(role = Role.Button, onClickLabel = "Open ${next.title}") { haptics.tick(); onItem(next) }
+                    .background(if (expanded) Color.White.copy(alpha = 0.10f) else Color.Transparent)
+                    .clickable(role = Role.Button, onClickLabel = if (expanded) "Hide the rest" else "Show the rest") {
+                        haptics.tick()
+                        onMore()
+                    }
                     .padding(horizontal = OverflowPad)
-                    .semantics { contentDescription = "${fit.hidden} more: " + items.drop(fit.shown).joinToString(", ") { it.title } },
+                    .semantics { contentDescription = "${fit.hidden} more: " + rest.joinToString(", ") { it.title } },
                 contentAlignment = Alignment.Center,
             ) {
-                Text("+${fit.hidden}", style = styles.end, color = TextSecondary, maxLines = 1)
+                Text("+${fit.hidden}", style = styles.end, color = if (expanded) TextPrimary else TextSecondary, maxLines = 1)
             }
         }
     }
 }
 
-private val OverflowPad = 8.dp
+/** What waits behind "+N": a row each, with its whole title, detail and countdown. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun MoreList(items: List<IslandItem>, onItem: (IslandItem) -> Unit, onHide: (IslandItem) -> Unit) {
+    val haptics = rememberHaptics()
+    val styles = islandTextStyles()
+    Column(modifier = Modifier.fillMaxWidth().padding(start = LinePad, end = LinePad, bottom = 8.dp)) {
+        items.forEach { item ->
+            key(IslandRanking.key(item)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(MoreRowHeight)
+                        .clip(RoundedCornerShape(MoreRowHeight / 2))
+                        .combinedClickable(
+                            role = Role.Button,
+                            onLongClickLabel = "Hide for today",
+                            onLongClick = { haptics.reject(); onHide(item) },
+                            onClick = { haptics.tick(); onItem(item) },
+                        )
+                        .padding(start = EntryStart, end = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ToneMark(item, toneColor(item))
+                    Spacer(Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            item.title,
+                            style = if (item.tone == "quiet") styles.quietTitle else styles.title,
+                            color = titleColor(item),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (item.sub.isNotBlank()) {
+                            Text(item.sub, style = styles.sub, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                    item.ring?.let {
+                        Spacer(Modifier.width(8.dp))
+                        RingProgress(it)
+                    }
+                    if (item.end.isNotBlank()) {
+                        Spacer(Modifier.width(8.dp))
+                        Text(item.end, style = styles.end, color = endColor(item), maxLines = 1)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun titleColor(item: IslandItem): Color = when (item.tone) {
+    "needs" -> lerp(Warning, Color.White, 0.3f)
+    "quiet" -> Color(0xFFCFCFCF)
+    else -> TextPrimary
+}
+
+private fun endColor(item: IslandItem): Color =
+    if (item.tone == "soon" || item.tone == "needs") Warning else Color(0xFFD6D6D6)
+
+private val OverflowPad = 5.dp
 
 /** The island's text styles, measured by the fit and drawn by the entries alike. */
 @Immutable
@@ -311,8 +439,8 @@ private fun islandTextStyles(): IslandTextStyles {
     val base = LocalTextStyle.current
     return remember(base) {
         IslandTextStyles(
-            title = base.merge(TextStyle(fontSize = 12.5.sp, fontWeight = FontWeight.Bold)),
-            quietTitle = base.merge(TextStyle(fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)),
+            title = base.merge(TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold)),
+            quietTitle = base.merge(TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold)),
             sub = base.merge(TextStyle(fontSize = 12.sp)),
             end = base.merge(TextStyle(fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace)),
         )
@@ -325,13 +453,14 @@ private fun IslandEntry(
     item: IslandItem,
     fold: IslandFold,
     first: Boolean,
-    short: String,
+    label: String,
+    end: String,
+    labelCap: Dp?,
     styles: IslandTextStyles,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
     val tone = toneColor(item)
-    val icon = fold == IslandFold.ICON
     Row(
         modifier = Modifier
             .height(EntryHeight)
@@ -342,25 +471,20 @@ private fun IslandEntry(
                 onLongClick = onLongClick,
                 onClick = onClick,
             )
-            .padding(start = EntryStart, end = if (icon) EntryStart else EntryEnd)
+            .padding(start = EntryStart, end = EntryEnd)
             .semantics { contentDescription = listOf(item.title, item.sub, item.end).filter { it.isNotBlank() }.joinToString(", ") },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(PartGap),
     ) {
         ToneMark(item, tone)
-        if (icon) return@Row
-        val shortened = fold >= IslandFold.SHORT
+        val labelled = fold >= IslandFold.LABEL
         Text(
-            if (shortened) short else item.title,
+            if (labelled) label else item.title,
             style = if (item.tone == "quiet") styles.quietTitle else styles.title,
-            color = when (item.tone) {
-                "needs" -> lerp(Warning, Color.White, 0.3f)
-                "quiet" -> Color(0xFFCFCFCF)
-                else -> TextPrimary
-            },
+            color = titleColor(item),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.widthIn(max = if (first && !shortened) TitleMax else TitleMaxRest),
+            modifier = Modifier.widthIn(max = labelCap ?: if (first && !labelled) TitleMax else TitleMaxRest),
         )
         if (fold == IslandFold.DETAIL && item.sub.isNotBlank()) {
             Text(
@@ -373,13 +497,8 @@ private fun IslandEntry(
             )
         }
         item.ring?.let { RingProgress(it) }
-        if (fold <= IslandFold.SHORT && item.end.isNotBlank()) {
-            Text(
-                item.end,
-                style = styles.end,
-                color = if (item.tone == "soon" || item.tone == "needs") Warning else Color(0xFFD6D6D6),
-                maxLines = 1,
-            )
+        if (fold <= IslandFold.LABEL && end.isNotBlank()) {
+            Text(end, style = styles.end, color = endColor(item), maxLines = 1)
         }
     }
 }
@@ -412,7 +531,7 @@ private fun ToneMark(item: IslandItem, tone: Color) {
             islandIcon(item.icon),
             contentDescription = null,
             tint = lerp(tone, Color.White, 0.2f),
-            modifier = Modifier.size(14.dp),
+            modifier = Modifier.size(MarkIcon),
         )
     }
 }

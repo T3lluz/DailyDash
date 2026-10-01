@@ -2,7 +2,6 @@ package com.macrotracker.ui.viewmodel
 
 import android.util.Log
 import com.macrotracker.data.local.UNNAMED_FOOD
-import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -48,7 +47,12 @@ sealed class ActivitiesUiState {
     data object Unavailable : ActivitiesUiState()
     data object PermissionRequired : ActivitiesUiState()
     data object Loading : ActivitiesUiState()
-    data class Success(val activities: List<HealthActivity>, val isRefreshing: Boolean = false) : ActivitiesUiState()
+    data class Success(
+        val activities: List<HealthActivity>,
+        val isRefreshing: Boolean = false,
+        /** Nothing in this month or last: these are the latest workouts from further back. */
+        val olderOnly: Boolean = false,
+    ) : ActivitiesUiState()
     data class Error(val message: String) : ActivitiesUiState()
 }
 
@@ -138,12 +142,6 @@ class HealthViewModel @Inject constructor(
     private val _selectedDate = MutableStateFlow(LocalDate.now())
     val selectedDate: StateFlow<LocalDate> = _selectedDate
 
-    private val _intradayHeartRate = MutableStateFlow<List<HeartRateRecord.Sample>>(emptyList())
-    val intradayHeartRate: StateFlow<List<HeartRateRecord.Sample>> = _intradayHeartRate
-
-    private val _detailedSleep = MutableStateFlow<List<SleepSessionRecord>>(emptyList())
-    val detailedSleep: StateFlow<List<SleepSessionRecord>> = _detailedSleep
-
     /** Last night's sessions for the Daily Health hero (independent of trend detail panel). */
     private val _todaySleepSessions = MutableStateFlow<List<SleepSessionRecord>>(emptyList())
     val todaySleepSessions: StateFlow<List<SleepSessionRecord>> = _todaySleepSessions
@@ -198,12 +196,6 @@ class HealthViewModel @Inject constructor(
     private var macrosJob: Job? = null
     private var macroHistoryJob: Job? = null
     private var healthJob: Job? = null
-    private var detailJob: Job? = null
-
-    /** Which detail panel (if any) should load heavy intraday datasets. */
-    private var detailMetric: DetailMetric = DetailMetric.NONE
-
-    enum class DetailMetric { NONE, HEART_RATE, SLEEP }
 
     init {
         // Food logged on Home, the AI tab or a scan shows here at once.
@@ -375,39 +367,6 @@ class HealthViewModel @Inject constructor(
 
     fun selectDate(date: LocalDate) {
         _selectedDate.value = date
-        loadDetailedData(date, detailMetric)
-    }
-
-    fun setDetailMetric(metric: DetailMetric) {
-        if (detailMetric == metric) return
-        detailMetric = metric
-        if (metric == DetailMetric.NONE) {
-            _intradayHeartRate.value = emptyList()
-            _detailedSleep.value = emptyList()
-            return
-        }
-        loadDetailedData(_selectedDate.value, metric)
-    }
-
-    private fun loadDetailedData(date: LocalDate, metric: DetailMetric) {
-        if (metric == DetailMetric.NONE) return
-        detailJob?.cancel()
-        detailJob = viewModelScope.launch {
-            if (!healthConnectRepository.hasAnyPermissions()) return@launch
-            when (metric) {
-                DetailMetric.HEART_RATE -> {
-                    if (healthConnectRepository.hasPermission(HealthConnectRepository.HEART_RATE_PERMISSION)) {
-                        _intradayHeartRate.value = healthConnectRepository.readHeartRateIntraday(date)
-                    }
-                }
-                DetailMetric.SLEEP -> {
-                    if (healthConnectRepository.hasPermission(HealthConnectRepository.SLEEP_PERMISSION)) {
-                        _detailedSleep.value = healthConnectRepository.readSleepSessions(date)
-                    }
-                }
-                DetailMetric.NONE -> Unit
-            }
-        }
     }
 
     fun loadHealthConnect(
@@ -553,8 +512,6 @@ class HealthViewModel @Inject constructor(
                     }
                 }
             }
-            // Detail datasets only when the HR/Sleep panel is open.
-            loadDetailedData(_selectedDate.value, detailMetric)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -581,10 +538,16 @@ class HealthViewModel @Inject constructor(
             _activitiesState.value = current.copy(isRefreshing = true)
         }
         try {
-            val activities = healthConnectRepository.readRecentActivities()
-            val merged = activities
-            _activitiesState.value = ActivitiesUiState.Success(merged)
-            pickFeaturedActivity(merged)?.let { loadActivityHeartRate(it) }
+            val recent = healthConnectRepository.readRecentActivities()
+            // A quiet month: the latest workouts from further back, rather than an empty card.
+            val activities = recent.ifEmpty {
+                healthConnectRepository.readRecentActivities(
+                    days = HealthConnectRepository.ACTIVITY_FALLBACK_DAYS,
+                    limit = HealthConnectRepository.ACTIVITY_FALLBACK_LIMIT,
+                )
+            }
+            _activitiesState.value = ActivitiesUiState.Success(activities, olderOnly = recent.isEmpty() && activities.isNotEmpty())
+            pickFeaturedActivity(activities)?.let { loadActivityHeartRate(it) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

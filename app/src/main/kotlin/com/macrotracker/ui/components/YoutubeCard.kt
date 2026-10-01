@@ -651,19 +651,12 @@ private fun YoutubeChannelFilter(
         val cutoff = newCutoff()
         videos.count { publishedAt(it)?.isAfter(cutoff) == true }
     }
-    val fromSelected = remember(videos, selectedChannelId) {
-        videos.count { it.channelId == selectedChannelId }
-    }
     ChannelAvatarRow(
         channels = channels,
         selectedId = selectedChannelId,
         onSelect = onChannelSelected,
         selectedRing = YtRed,
         markColor = YtRed,
-        accent = YtRed,
-        caption = channels.firstOrNull { it.id == selectedChannelId }?.let {
-            "$fromSelected video${if (fromSelected != 1) "s" else ""} from ${it.name}"
-        },
         leading = if (newToday > 0 && selectedChannelId == null) {
             { NewTodayChip(newToday) }
         } else {

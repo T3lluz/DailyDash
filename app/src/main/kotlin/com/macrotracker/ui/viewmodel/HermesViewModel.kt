@@ -114,6 +114,9 @@ class HermesViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val seenPrefs = context.getSharedPreferences("hermes_seen", Context.MODE_PRIVATE)
+
+    /** The chat last open on this phone, which the pane opens on again (not just the newest). */
+    private val lastPrefs = context.getSharedPreferences("hermes_last", Context.MODE_PRIVATE)
     private val _state = MutableStateFlow(
         HermesUiState(
             modeId = settings.hermesPermission.value,
@@ -187,6 +190,11 @@ class HermesViewModel @Inject constructor(
     val turns: StateFlow<Map<String, HermesTurnActivity>> = activity.turns
 
     init {
+        viewModelScope.launch {
+            _state.map { it.threadId }.distinctUntilChanged().collect { id ->
+                if (id != null) lastPrefs.edit().putString(KEY_LAST_THREAD, id).apply()
+            }
+        }
         refresh()
         // A reply typed into a notification runs from the service; the chat on screen follows it too.
         viewModelScope.launch {
@@ -244,6 +252,11 @@ class HermesViewModel @Inject constructor(
         activity.setViewing(if (onScreen) _state.value.threadId else null)
     }
 
+    /** The AI tab's pane when it was last left (AIScreen opens on it). */
+    fun lastAiTab(): String? = settings.getAiLastTab()
+
+    fun rememberAiTab(id: String) = settings.setAiLastTab(id)
+
     /** The person picked a bot; that sticks until they pick the other. */
     fun setUsesHermes(useHermes: Boolean) {
         settings.setTechSupportBrain(if (useHermes) SettingsRepository.TECH_SUPPORT_HERMES else SettingsRepository.TECH_SUPPORT_PHONE)
@@ -269,7 +282,10 @@ class HermesViewModel @Inject constructor(
                     )
                 }
                 if (!threadChosen && _state.value.threadId == null && !_state.value.busy) {
-                    threads.firstOrNull { it.kind == "chat" }?.let { openThread(it.id, chosen = false) }
+                    // The chat you had open, while it still exists; else the newest.
+                    val last = lastPrefs.getString(KEY_LAST_THREAD, null)
+                    (threads.firstOrNull { it.id == last } ?: threads.firstOrNull { it.kind == "chat" })
+                        ?.let { openThread(it.id, chosen = false) }
                 }
                 if (_state.value.commands.isEmpty()) {
                     runCatching { client.commands() }.onSuccess { cmds -> _state.update { it.copy(commands = cmds) } }
@@ -1025,6 +1041,7 @@ class HermesViewModel @Inject constructor(
     }.trim()
 
     private companion object {
+        const val KEY_LAST_THREAD = "thread"
         const val MAX_REJOINS = 6
         const val REJOIN_DELAY_MS = 700L
         const val THINK_KEEP = 6_000

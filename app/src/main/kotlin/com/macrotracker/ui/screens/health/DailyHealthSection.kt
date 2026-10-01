@@ -22,6 +22,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.health.connect.client.records.SleepSessionRecord
+import com.macrotracker.data.health.DailyHealthStats
 import com.macrotracker.data.health.HealthStats
 import com.macrotracker.data.health.Readiness
 import com.macrotracker.data.health.stepPace
@@ -45,7 +46,8 @@ import kotlin.math.roundToInt
  * Today, the top of the Health tab. It opens with a sentence rather than a number, the
  * way Oura and Apple's highlights do ("Well recovered, ahead of your usual pace."), then
  * the three rings with their numbers in each ring's colour, and today's steps drawn against
- * a usual day. The day's other numbers are Today's readings, just below.
+ * a usual day, then the day's other activity numbers (distance, floors) beside their week.
+ * Heart and breathing live in Body & Vitals, the night in Sleep.
  */
 @Composable
 fun DailyHealthSection(
@@ -71,6 +73,13 @@ fun DailyHealthSection(
     /** A usual day's steps per hour, for the pace; empty until there are enough days. */
     usualHourlySteps: List<Double> = emptyList(),
     loading: Boolean = false,
+    /** Today's other activity numbers (distance, floors), listed under the rings. */
+    readings: List<HealthMetricEntry> = emptyList(),
+    /** The last seven days, for each reading's week. */
+    history: List<DailyHealthStats> = emptyList(),
+    /** Metrics Health Connect doesn't share with the app, by name. */
+    notShared: List<String> = emptyList(),
+    onAllow: () -> Unit = {},
     delayMs: Long = 0L,
 ) {
     val activity = remember(stats, stepsToday, activeCaloriesToday, distanceToday, floorsToday) {
@@ -164,6 +173,7 @@ fun DailyHealthSection(
             )
         }
 
+        TodayReadings(entries = readings, history = history, notShared = notShared, onAllow = onAllow)
     }
 }
 

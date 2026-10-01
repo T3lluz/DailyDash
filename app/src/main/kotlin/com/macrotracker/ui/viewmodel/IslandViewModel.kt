@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.macrotracker.data.dashboard.DashboardRepository
 import com.macrotracker.data.dashboard.IslandItem
 import com.macrotracker.data.dashboard.IslandShortener
+import com.macrotracker.data.dashboard.wantsAiLabel
 import com.macrotracker.data.hermes.HermesActivityTracker
 import com.macrotracker.data.hermes.HermesLiveFeed
 import com.macrotracker.data.island.IslandLearning
@@ -68,9 +69,9 @@ class IslandViewModel @Inject constructor(
     private val _items = MutableStateFlow(ranked())
     val items: StateFlow<List<IslandItem>> = _items
 
-    /** Short titles by full title, for when the line has to fold its items to fit. */
-    private val _shortTitles = MutableStateFlow(shortener.cached())
-    val shortTitles: StateFlow<Map<String, String>> = _shortTitles
+    /** The AI's labels by full title, so three items fit across the island's line. */
+    private val _labels = MutableStateFlow(shortener.cached())
+    val labels: StateFlow<Map<String, String>> = _labels
 
     private var job: Job? = null
     private var localJob: Job? = null
@@ -188,13 +189,12 @@ class IslandViewModel @Inject constructor(
     )
 
     private fun shorten(items: List<IslandItem>) {
-        // Only the server's titles go to the AI: the phone writes its own short ones, and
-        // theirs change with every number ("6,800 steps to go"), one AI call each.
-        val server = serverItems.toSet()
-        val asked = items.filter { it in server }
+        // Free-text titles only (events, chats, shows): items whose title is a live number
+        // ("6,800 steps to go") label themselves, or every change would be an AI call.
+        val asked = items.filter(::wantsAiLabel)
         if (asked.isEmpty() || shortJob?.isActive == true) return
         shortJob = viewModelScope.launch {
-            shortener.shorten(asked)?.let { _shortTitles.value = it }
+            shortener.shorten(asked)?.let { _labels.value = it }
         }
     }
 

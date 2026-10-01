@@ -296,6 +296,13 @@ class SettingsRepository @Inject constructor(
         _dashboardServerUrl.value = trimmed
     }
 
+    /** The AI tab's pane (Macros or Tech support / Hermes) when it was last left, to open on next time. */
+    fun getAiLastTab(): String? = prefs.getString(KEY_AI_LAST_TAB, null)
+
+    fun setAiLastTab(id: String) {
+        if (prefs.getString(KEY_AI_LAST_TAB, null) != id) prefs.edit { putString(KEY_AI_LAST_TAB, id) }
+    }
+
     fun setTechSupportBrain(brain: String) {
         prefs.edit { putString(KEY_TECH_SUPPORT_BRAIN, brain) }
         _techSupportBrain.value = brain
@@ -360,7 +367,7 @@ class SettingsRepository @Inject constructor(
 
     private fun loadHealthWidgetOrder(): String {
         val default =
-            "DAILY_HEALTH:true,BODY_STATS:true,SLEEP:true,ACTIVITIES:true,VITALS:true,HISTORY:true,FOOD:true,WEEK_AT_A_GLANCE:true"
+            "DAILY_HEALTH:true,SLEEP:true,ACTIVITIES:true,VITALS:true,FOOD:true"
         val raw = prefs.getString("health_widget_order", default) ?: default
         val migrated = migrateHealthWidgetOrder(raw)
         if (migrated != raw) {
@@ -388,6 +395,7 @@ class SettingsRepository @Inject constructor(
         const val KEY_FOOD_TRENDS_METRIC = "food_trends_metric"
         const val KEY_DASHBOARD_SERVER_URL = "dashboard_server_url"
         const val KEY_TECH_SUPPORT_BRAIN = "tech_support_brain"
+        const val KEY_AI_LAST_TAB = "ai_last_tab"
         const val KEY_HERMES_LAST_REACHABLE = "hermes_last_reachable"
         const val KEY_HERMES_PERMISSION = "hermes_permission"
         const val KEY_DASHBOARD_CALS = "dashboard_cals"

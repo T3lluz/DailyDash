@@ -110,23 +110,48 @@ private val ClimbTone = HealthNutritionTone
 private val WorkoutBadgeSize = 40.dp
 private val WorkoutTextInset = WorkoutBadgeSize + 12.dp
 
+/**
+ * Activity: the week of movement on top ([trends], ActivityTrends: steps, energy, distance
+ * or floors a day, paged back by week from the header), then the workouts under it.
+ * Trends and Activities were two cards that both drew the week; this is the one place for it.
+ */
 @Composable
-fun ActivitiesSection(
+fun ActivitySection(
     state: ActivitiesUiState,
     haptics: HapticHelper,
     onRequestPermission: () -> Unit,
     onExpandActivity: (HealthActivity) -> Unit,
     onRetry: () -> Unit = onRequestPermission,
+    /** Health Connect's own screens, where a source like Garmin Connect is checked. */
+    onOpenHealthConnect: () -> Unit = onRequestPermission,
+    /** Which week the chart shows ("This week · Sep 28 – Oct 4"). */
+    weekLabel: String,
+    weekControls: @Composable () -> Unit,
+    trends: @Composable () -> Unit,
     delayMs: Long = 40L,
 ) {
     HealthSection(delayMs = delayMs) {
         HealthHeader(
-            title = "Activities",
+            title = "Activity",
             icon = AppIcons.Activity,
             accent = HealthActivityTone,
-            subtitle = "Workouts this month and last",
+            subtitle = weekLabel,
             modifier = Modifier.padding(bottom = 14.dp),
+        ) {
+            weekControls()
+        }
+        trends()
+        Spacer(modifier = Modifier.height(18.dp))
+        Hairline()
+        HealthGroupLabel(
+            "Workouts",
+            trailing = when {
+                (state as? ActivitiesUiState.Success)?.olderOnly == true -> "None this month or last"
+                state is ActivitiesUiState.Success && state.activities.isNotEmpty() -> "This month and last"
+                else -> null
+            },
         )
+        Spacer(modifier = Modifier.height(8.dp))
 
         // Each state fades into the next, and a refresh of the same state doesn't flicker.
         WidgetStateSwitch(targetState = state, contentKey = { it::class }, label = "activities") { shown ->
@@ -163,17 +188,20 @@ fun ActivitiesSection(
                     }
                     is ActivitiesUiState.Success -> {
                         if (shown.activities.isEmpty()) {
+                            // Access is already granted here, so asking for it again did nothing:
+                            // what helps is checking the source in Health Connect.
                             StatusCopy(
-                                title = "No workouts this month or last",
-                                body = "Health Connect answered, but there were no exercise sessions in the window. Check that Garmin Connect (or Google Fit, Samsung Health, Strava…) is syncing workouts to Health Connect and that DailyDash is allowed to read Exercise.",
-                                actionLabel = "Allow access",
+                                title = "No workouts in the last six months",
+                                body = "DailyDash can read workouts, but Health Connect has none. Check that Garmin Connect (or Google Fit, Samsung Health, Strava…) shares Exercise with Health Connect.",
+                                actionLabel = "Open Health Connect",
                                 onAction = {
                                     haptics.tick()
-                                    onRequestPermission()
+                                    onOpenHealthConnect()
                                 },
                             )
                         } else {
-                            WeekSummary(activities = shown.activities)
+                            // The week's exercise only means something when the workouts are recent.
+                            if (!shown.olderOnly) WeekSummary(activities = shown.activities)
                             ActivitiesList(
                                 activities = shown.activities,
                                 haptics = haptics,
@@ -189,7 +217,7 @@ fun ActivitiesSection(
 
 // ── The week ──────────────────────────────────────────────────────────────
 
-/** The last seven days: exercise minutes against the WHO's 150, workouts, distance, a bar a day. */
+/** The last seven days of workouts: exercise minutes against the WHO's 150, workouts, distance. */
 @Composable
 private fun WeekSummary(activities: List<HealthActivity>) {
     val zone = remember { ZoneId.systemDefault() }
@@ -241,8 +269,7 @@ private fun WeekSummary(activities: List<HealthActivity>) {
             else -> Spacer(modifier = Modifier.weight(1f))
         }
     }
-    Spacer(modifier = Modifier.height(14.dp))
-    WeekBars(minutes = perDay, days = days, tone = TimeTone)
+    Spacer(modifier = Modifier.height(6.dp))
 }
 
 @Composable
@@ -257,55 +284,6 @@ private fun WeekReadout(label: String, value: String, unit: String?, tone: Color
             color = tone,
             unitColor = tone,
         )
-    }
-}
-
-/** A bar a day, today's in full colour, each over its weekday's letter. */
-@Composable
-private fun WeekBars(minutes: List<Long>, days: List<LocalDate>, tone: Color) {
-    val reduced = rememberReducedMotion()
-    val reveal = remember { Animatable(if (reduced) 1f else 0f) }
-    LaunchedEffect(Unit) {
-        if (reveal.value < 1f) reveal.animateTo(1f, MacroMotion.chartRevealTween(600))
-    }
-    Canvas(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp),
-    ) {
-        val slot = size.width / minutes.size
-        val barW = (slot * 0.46f).coerceAtMost(18.dp.toPx())
-        val stub = 3.dp.toPx()
-        // Half an hour fills most of the height, so one short walk isn't a wall.
-        val top = (minutes.maxOrNull() ?: 0L).coerceAtLeast(30L).toFloat()
-        minutes.forEachIndexed { i, m ->
-            val h = if (m <= 0L) stub else (size.height * (m / top) * reveal.value).coerceAtLeast(stub)
-            val today = i == minutes.lastIndex
-            drawRoundRect(
-                color = when {
-                    m <= 0L -> Border
-                    today -> tone
-                    else -> tone.copy(alpha = 0.5f)
-                },
-                topLeft = Offset(slot * i + (slot - barW) / 2f, size.height - h),
-                size = Size(barW, h),
-                cornerRadius = CornerRadius(barW / 2.6f),
-            )
-        }
-    }
-    Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
-        days.forEachIndexed { i, day ->
-            val today = i == days.lastIndex
-            Text(
-                day.dayOfWeek.getDisplayName(JavaTextStyle.NARROW, Locale.getDefault()),
-                fontSize = 12.sp,
-                color = if (today) TextPrimary else TextSecondary,
-                fontWeight = if (today) FontWeight.Bold else FontWeight.Medium,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                modifier = Modifier.weight(1f),
-            )
-        }
     }
 }
 

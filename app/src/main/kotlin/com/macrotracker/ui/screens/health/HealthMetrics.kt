@@ -78,17 +78,6 @@ fun HealthMetric.chipLabel(): String = when (this) {
     HealthMetric.FLOORS_CLIMBED -> "Floors"
 }
 
-/** Prefer smooth area charts for rate-like metrics; bars for cumulative totals. */
-fun HealthMetric.prefersAreaChart(): Boolean = when (this) {
-    HealthMetric.HEART_RATE,
-    HealthMetric.RESTING_HEART_RATE,
-    HealthMetric.OXYGEN_SATURATION,
-    HealthMetric.RESPIRATORY_RATE,
-    HealthMetric.SLEEP,
-    -> true
-    else -> false
-}
-
 fun formatMetricValue(metric: HealthMetric, value: Double, compact: Boolean = false): String {
     if (value <= 0) return "—"
     return when (metric) {

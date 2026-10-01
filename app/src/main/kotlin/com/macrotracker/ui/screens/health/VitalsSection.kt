@@ -218,12 +218,7 @@ fun VitalsSection(
                     )
                     else -> {
                         if (vitalTiles.isNotEmpty()) {
-                            VitalsOverview(
-                                tiles = overview,
-                                now = now,
-                                open = open,
-                                onPick = { toggle(it) },
-                            )
+                            VitalsOverview(tiles = overview, now = now)
                             vitalTiles.forEachIndexed { i, tile ->
                                 key(tile.kind) {
                                     if (i > 0) InsetHairline() else Hairline()
@@ -951,13 +946,15 @@ private fun standingWord(standing: VitalStanding): String = when (standing) {
     VitalStanding.BELOW -> "Below usual"
 }
 
-/** The sentence over the vitals and, with two or more, a column each. */
+/**
+ * The sentence over the vitals. It used to stand over a column chart of the same vitals the
+ * rows below list again, each with its usual range; the rows carry that range now ("Typical ·
+ * Usual 60 bpm") and open it as a band on their trend, so the chart went.
+ */
 @Composable
 private fun VitalsOverview(
     tiles: List<VitalTile>,
     now: Instant,
-    open: String?,
-    onPick: (VitalTile) -> Unit,
 ) {
     val headline = vitalsHeadline(tiles.mapNotNull { t -> t.standing(now)?.let { t.kind.label to it } })
     if (headline == null) {
@@ -978,94 +975,7 @@ private fun VitalsOverview(
         color = TextSecondary,
         modifier = Modifier.padding(top = 2.dp),
     )
-    if (tiles.size >= 2) {
-        Spacer(modifier = Modifier.height(16.dp))
-        VitalsRangeChart(tiles = tiles, now = now, open = open, onPick = onPick)
-    }
     Spacer(modifier = Modifier.height(12.dp))
-}
-
-/**
- * One column per vital: the usual range as a grey capsule in the middle, the latest reading
- * as a dot placed against it, and the vital's icon underneath. Tap a column to open it.
- */
-@Composable
-private fun VitalsRangeChart(
-    tiles: List<VitalTile>,
-    now: Instant,
-    open: String?,
-    onPick: (VitalTile) -> Unit,
-) {
-    val reduced = rememberReducedMotion()
-    val settle = remember { Animatable(if (reduced) 1f else 0f) }
-    LaunchedEffect(Unit) {
-        if (settle.value < 1f) settle.animateTo(1f, MacroMotion.chartRevealTween(700))
-    }
-    val currentPick by rememberUpdatedState(onPick)
-    val points = remember(tiles, now) {
-        tiles.map { t ->
-            val standing = t.standing(now) ?: VitalStanding.TYPICAL
-            val range = t.range ?: UsualRange(0.0, 1.0)
-            val latest = t.current ?: t.series.lastOrNull()?.value ?: range.mid
-            val span = (range.high - range.low).takeIf { it > 1e-9 } ?: 1.0
-            // 0 at the bottom of the range, 1 at the top.
-            Triple(t, ((latest - range.low) / span).toFloat(), standingColor(standing, t.better))
-        }
-    }
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Canvas(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(110.dp)
-                .pointerInput(tiles) {
-                    detectTapGestures { offset ->
-                        val i = (offset.x / (size.width.toFloat() / tiles.size)).toInt().coerceIn(tiles.indices)
-                        currentPick(tiles[i])
-                    }
-                },
-        ) {
-            val slot = size.width / points.size
-            val capW = 12.dp.toPx()
-            val r = 6.dp.toPx()
-            val bandTop = size.height * 0.3f
-            val bandBottom = size.height * 0.7f
-            points.forEachIndexed { i, (tile, at, color) ->
-                val cx = slot * (i + 0.5f)
-                drawRoundRect(
-                    TextPrimary.copy(alpha = 0.05f),
-                    topLeft = Offset(cx - capW / 2f, 0f),
-                    size = Size(capW, size.height),
-                    cornerRadius = CornerRadius(capW / 2f),
-                )
-                drawRoundRect(
-                    TextPrimary.copy(alpha = 0.18f),
-                    topLeft = Offset(cx - capW / 2f, bandTop),
-                    size = Size(capW, bandBottom - bandTop),
-                    cornerRadius = CornerRadius(capW / 2f),
-                )
-                val target = (bandBottom - at * (bandBottom - bandTop)).coerceIn(r + 2f, size.height - r - 2f)
-                // Dots settle from the middle of their range into place.
-                val y = size.height / 2f + (target - size.height / 2f) * settle.value
-                val c = Offset(cx, y)
-                if (tile.kind.name == open) drawCircle(color.copy(alpha = 0.28f), r * 2f, c)
-                drawCircle(Surface, r + 2.dp.toPx(), c)
-                drawCircle(color, r, c)
-            }
-        }
-        Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
-            points.forEach { (tile, _, color) ->
-                val typical = tile.standing(now) == VitalStanding.TYPICAL
-                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    Icon(
-                        tile.icon,
-                        contentDescription = tile.kind.label,
-                        tint = if (typical) TextSecondary else color,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-            }
-        }
-    }
 }
 
 /** A vital as a list row: icon and name, the number on the right, and where it sits under the name. */
