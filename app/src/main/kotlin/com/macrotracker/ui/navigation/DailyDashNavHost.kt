@@ -35,8 +35,14 @@ private val TabOrder = listOf(
     Screen.Settings.route,
 )
 
+// Every pushed screen slides like one: the console, Usage and the intro's pages used the
+// tabs' cross-fade on the way in and a slide on the way out.
 private val SubScreens = setOf(
     SubScreenRoutes.WIDGETS,
+    SubScreenRoutes.USAGE,
+    SubScreenRoutes.CONSOLE,
+    OnboardingRoutes.PERMISSIONS,
+    OnboardingRoutes.TUTORIAL,
     SubScreenRoutes.CAMERA_SCAN,
     SettingsRoutes.CONNECTIONS,
     SettingsRoutes.AI,
@@ -164,7 +170,6 @@ fun DailyDashNavHost(
         subScreen(SettingsRoutes.CONNECTIONS) { entry ->
             ConnectionsSettingsScreen(
                 onNavigateBack = { navController.popSubScreen(entry) },
-                onNavigateToServers = { navController.navigateToSubScreen(SettingsRoutes.SERVERS) },
             )
         }
 

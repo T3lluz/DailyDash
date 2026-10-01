@@ -67,7 +67,7 @@ fun WhatsNewDialog(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = "You're up to date",
+                            text = "What's new",
                             fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
                             color = TextPrimary,
