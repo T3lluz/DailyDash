@@ -137,6 +137,10 @@ class YouTubeViewModel @Inject constructor(
                         ?: Instant.now()
                     // Empty feed with tracked channels is still Success — not NoChannels.
                     _youtubeState.value = YouTubeUiState.Success(videos, lastUpdatedAt = fetchedAt)
+                    // Channels saved without a picture get one, a few per load.
+                    if (runCatching { youtubeRepository.backfillThumbnails() }.getOrDefault(false)) {
+                        _trackedChannels.value = youtubeRepository.getTrackedChannels()
+                    }
                 }
                 .onFailure { e ->
                     Log.e(TAG, "Failed to load YouTube videos", e)

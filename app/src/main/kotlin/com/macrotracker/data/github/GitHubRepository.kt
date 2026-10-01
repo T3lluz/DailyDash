@@ -126,6 +126,8 @@ class GitHubRepositoryImpl @Inject constructor(
                     persistDiskCache(snapshot, cacheKey)
                 }
                 .let { Result.success(it) }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "GitHub dashboard fetch failed: ${e.message}", e)
             val fallback = cached?.takeIf { cachedUserKey == cacheKey }
@@ -205,16 +207,19 @@ class GitHubRepositoryImpl @Inject constructor(
             eventsResp?.limit,
         ).maxOrNull()
 
+        // A section whose call failed (a rate-limited search, a hiccup) keeps the last good
+        // snapshot's, rather than reading as "0 issues" until the next refresh.
+        val prev = cached?.takeIf { it.user.login == login }
         GitHubSnapshot(
             user = user,
-            issues = issuePage?.items.orEmpty().filter { !it.isPullRequest },
-            pullRequests = pulls.values.toList(),
-            activity = eventsResp?.let { parseEvents(it.body) }.orEmpty(),
-            repos = reposResp?.let { parseRepos(it.body) }.orEmpty().sortedByRecent(),
+            issues = issuePage?.items?.filter { !it.isPullRequest } ?: prev?.issues.orEmpty(),
+            pullRequests = if (prPage != null || reviewPage != null) pulls.values.toList() else prev?.pullRequests.orEmpty(),
+            activity = eventsResp?.let { parseEvents(it.body) } ?: prev?.activity.orEmpty(),
+            repos = reposResp?.let { parseRepos(it.body) }?.sortedByRecent() ?: prev?.repos.orEmpty(),
             notifications = notifications,
-            issueTotal = issuePage?.totalCount ?: 0,
-            pullTotal = prPage?.totalCount ?: 0,
-            reviewRequestedCount = reviewPage?.totalCount ?: reviewKeys.size,
+            issueTotal = issuePage?.totalCount ?: prev?.issueTotal ?: 0,
+            pullTotal = prPage?.totalCount ?: prev?.pullTotal ?: 0,
+            reviewRequestedCount = reviewPage?.totalCount ?: prev?.reviewRequestedCount ?: reviewKeys.size,
             unreadNotificationCount = notifications.count { it.unread },
             notificationsNeedReconnect = notifNeedReconnect,
             rateLimitRemaining = remaining,

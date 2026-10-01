@@ -25,6 +25,9 @@ class GitHubViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "GitHubViewModel"
+
+        /** The repo list asks for this many; a shorter list is complete. */
+        private const val REPO_LIST_LIMIT = 50
     }
 
     private val _state = MutableStateFlow<GitHubUiState>(GitHubUiState.Idle)
@@ -49,6 +52,7 @@ class GitHubViewModel @Inject constructor(
     private var loadJob: Job? = null
     private var authJob: Job? = null
     private var focusJob: Job? = null
+    private var focusKey: String? = null
 
     init {
         viewModelScope.launch {
@@ -114,7 +118,11 @@ class GitHubViewModel @Inject constructor(
                         displayName = snapshot.user.name ?: snapshot.user.login,
                     )
                     val focus = _focusRepo.value
-                    if (focus.isNotBlank()) loadRepoFocus(focus, forceRefresh)
+                    // A focused repo that was renamed or deleted (gone from a list short enough
+                    // to be complete) filtered every tab to nothing; go back to all repos.
+                    val gone = focus.isNotBlank() && snapshot.repos.size < REPO_LIST_LIMIT &&
+                        snapshot.repos.none { it.fullName.equals(focus, ignoreCase = true) }
+                    if (gone) selectRepo("") else if (focus.isNotBlank()) loadRepoFocus(focus, forceRefresh)
                 }
                 .onFailure { error ->
                     Log.e(TAG, "Failed to load GitHub dashboard", error)
@@ -219,8 +227,11 @@ class GitHubViewModel @Inject constructor(
         val me = _authState.value.login
             ?: (_state.value as? GitHubUiState.Success)?.data?.user?.login
             ?: return
-        if (!forceRefresh && focusJob?.isActive == true) return
+        // A load for this repo already running is joined; one for another repo is replaced,
+        // or picking a repo mid-load showed the old one's result, or nothing.
+        if (!forceRefresh && focusJob?.isActive == true && focusKey.equals(key, ignoreCase = true)) return
         focusJob?.cancel()
+        focusKey = key
         focusJob = viewModelScope.launch {
             val current = _repoFocus.value
             if (current !is GitHubRepoFocusUiState.Ready ||
@@ -234,7 +245,8 @@ class GitHubViewModel @Inject constructor(
                 }
                 .onFailure { error ->
                     Log.e(TAG, "Failed to load GitHub repo $key", error)
-                    if (_repoFocus.value !is GitHubRepoFocusUiState.Ready) {
+                    val shown = _repoFocus.value as? GitHubRepoFocusUiState.Ready
+                    if (shown == null || !shown.focus.repo.fullName.equals(key, ignoreCase = true)) {
                         _repoFocus.value = GitHubRepoFocusUiState.Error(
                             error.message ?: "Couldn’t load $key",
                         )

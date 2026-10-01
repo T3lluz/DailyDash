@@ -1,6 +1,9 @@
 package com.macrotracker.data.youtube
 
 import android.content.Context
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.sync.Semaphore
 import android.util.Log
 import androidx.core.content.edit
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -25,10 +28,11 @@ interface YouTubeRepository {
     fun removeTrackedChannel(channelId: String)
     fun isChannelTracked(channelId: String): Boolean
     fun invalidateCache()
-    /** Fetches channel avatar thumbnails for the given channel IDs. Returns map of channelId → URL. */
-    suspend fun fetchChannelThumbnails(channelIds: List<String>): Map<String, String>
-    /** Fetches the avatar thumbnail URL for a single channel. */
-    suspend fun fetchChannelThumbnail(channelId: String): String
+    /**
+     * Fetches pictures for tracked channels saved without one (an import that had none), a
+     * few at a time. @return true when any changed, so the list can be re-read.
+     */
+    suspend fun backfillThumbnails(): Boolean
     /**
      * Imports the signed-in user's YouTube subscriptions into the watching list.
      * Merges with existing channels (does not remove anything).
@@ -58,6 +62,8 @@ class YouTubeRepositoryImpl @Inject constructor(
 
     companion object {
         private const val TAG = "YouTubeRepository"
+        private const val FEED_PARALLELISM = 8
+        private const val THUMB_BACKFILL_BATCH = 12
         private const val PREFS_NAME = "youtube_settings"
         private const val KEY_TRACKED_CHANNELS = "tracked_channel_ids"
         private const val KEY_CHANNEL_TITLE_PREFIX = "channel_title_"
@@ -168,13 +174,27 @@ class YouTubeRepositoryImpl @Inject constructor(
             if (trackedChannels.isEmpty()) return@withContext Result.success(emptyList())
 
             try {
+                // Eight feeds at a time: an imported list can be hundreds of channels.
+                val gate = Semaphore(FEED_PARALLELISM)
                 val jobs = trackedChannels.map { channel ->
-                    async { rssFeedService.getLatestVideos(channel.channelId) }
+                    async { gate.withPermit { channel.channelId to rssFeedService.getLatestVideos(channel.channelId) } }
                 }
-                val all = jobs.awaitAll().flatten().sortedByDescending { it.publishedAt }
+                val results = jobs.awaitAll()
+                val failed = results.filter { it.second == null }.map { it.first }.toSet()
+                // Offline, every feed fails: say so and keep what was shown, rather than cache
+                // an empty feed for ten minutes as if nobody had posted.
+                if (failed.size == results.size) {
+                    return@withContext Result.failure(java.io.IOException("Couldn't reach YouTube"))
+                }
+                // A channel whose feed failed keeps its videos from last time.
+                val kept = cached.orEmpty().filter { it.channelId in failed }
+                val all = (results.flatMap { it.second.orEmpty() } + kept).sortedByDescending { it.publishedAt }
                 cachedVideos = all
-                lastFetchTime = System.currentTimeMillis()
+                // A partly failed fetch is not cached as fresh, so the next load tries again.
+                lastFetchTime = if (failed.isEmpty()) System.currentTimeMillis() else 0L
                 Result.success(all)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to fetch YouTube videos via RSS", e)
                 Result.failure(e)
@@ -186,9 +206,14 @@ class YouTubeRepositoryImpl @Inject constructor(
             channels.map { it.copy(isTracked = isChannelTracked(it.channelId)) }
         }
 
-    override suspend fun fetchChannelThumbnails(channelIds: List<String>): Map<String, String> =
-        rssFeedService.fetchChannelThumbnails(channelIds)
-
-    override suspend fun fetchChannelThumbnail(channelId: String): String =
-        rssFeedService.fetchChannelThumbnail(channelId)
+    override suspend fun backfillThumbnails(): Boolean {
+        val missing = getTrackedChannels().filter { it.thumbnailUrl.isBlank() }.take(THUMB_BACKFILL_BATCH)
+        if (missing.isEmpty()) return false
+        val found = rssFeedService.fetchChannelThumbnails(missing.map { it.channelId }).filterValues { it.isNotBlank() }
+        if (found.isEmpty()) return false
+        prefs.edit {
+            found.forEach { (id, url) -> putString("$KEY_CHANNEL_THUMB_PREFIX$id", url) }
+        }
+        return true
+    }
 }
