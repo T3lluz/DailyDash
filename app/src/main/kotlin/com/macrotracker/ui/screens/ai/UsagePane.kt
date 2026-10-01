@@ -137,6 +137,7 @@ fun UsagePane(
     var tab by rememberSaveable { mutableStateOf(UsageTab.OVERVIEW) }
     var note by remember { mutableStateOf<String?>(null) }
     var editing by remember { mutableStateOf<ScheduledAsk?>(null) }
+    var confirmDelete by remember { mutableStateOf<ScheduledAsk?>(null) }
     val haptics = rememberHaptics()
 
     LaunchedEffect(Unit) {
@@ -302,7 +303,7 @@ fun UsagePane(
                             AskRow(
                                 j,
                                 onRun = { viewModel.runNow(j) }, onToggle = { viewModel.toggle(j) },
-                                onEdit = { editing = j }, onDelete = { viewModel.delete(j) },
+                                onEdit = { editing = j }, onDelete = { confirmDelete = j },
                                 onChat = j.thread?.let { id -> { viewModel.openChat(id); onOpenChat() } },
                             )
                         }
@@ -334,6 +335,20 @@ fun UsagePane(
                 }
             }
         }
+    }
+
+    // A scheduled ask can hold a long prompt and a clock; one stray tap shouldn't lose it.
+    confirmDelete?.let { ask ->
+        ConfirmThreadDialog(
+            title = "Delete this scheduled ask?",
+            body = "Hermes stops getting \"${ask.title}\" on its clock.",
+            action = "Delete",
+            onDismiss = { confirmDelete = null },
+            onConfirm = {
+                confirmDelete = null
+                viewModel.delete(ask)
+            },
+        )
     }
 
     editing?.let { ask ->

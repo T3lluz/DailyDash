@@ -42,6 +42,9 @@ class SettingsViewModel @Inject constructor(
     val anthropicApiKey: StateFlow<String> = settings.anthropicApiKey
     val anthropicModelId: StateFlow<String> = settings.anthropicModelId
     val claudeConnected: StateFlow<Boolean> = claudeAuth.isConnected
+
+    /** Hermes answered at least once: the AI tab has something to show without an AI key. */
+    val hermesLastReachable: StateFlow<Boolean> = settings.hermesLastReachable
     val claudeAccountEmail: StateFlow<String?> = claudeAuth.accountEmail
     val claudeSubscriptionLabel: StateFlow<String?> = claudeAuth.subscriptionLabel
     val claudeAwaitingCode: StateFlow<Boolean> = claudeAuth.isAwaitingCode

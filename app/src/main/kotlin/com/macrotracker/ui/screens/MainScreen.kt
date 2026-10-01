@@ -89,8 +89,9 @@ fun MainScreen(
     val openRouterApiKey by settingsViewModel.openRouterApiKey.collectAsState()
     val anthropicApiKey by settingsViewModel.anthropicApiKey.collectAsState()
     val claudeConnected by settingsViewModel.claudeConnected.collectAsState()
+    val hermesReachable by settingsViewModel.hermesLastReachable.collectAsState()
     // Align with AiCredentialResolver: Claude subscription, then Settings key, then BuildConfig.
-    val hasAiApiKey = when (aiProvider) {
+    val hasProviderKey = when (aiProvider) {
         AiProvider.GEMINI ->
             geminiApiKey.isNotBlank() || BuildConfig.GEMINI_API_KEY.isNotBlank()
         AiProvider.OPENAI ->
@@ -102,6 +103,9 @@ fun MainScreen(
                 anthropicApiKey.isNotBlank() ||
                 BuildConfig.ANTHROPIC_API_KEY.isNotBlank()
     }
+    // Hermes runs on the dashboard server with its own model, so someone who uses only him
+    // (no key on the phone) keeps the AI tab, its navbar activity and the island's chats.
+    val hasAiApiKey = hasProviderKey || hermesReachable
 
     val updateState by appUpdateViewModel.state.collectAsState()
     val showUpdateDialog by appUpdateViewModel.showDialog.collectAsState()

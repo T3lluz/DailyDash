@@ -85,6 +85,8 @@ class ServerNotifier @Inject constructor(
     fun hasPermission(): Boolean = context.canPostNotifications()
 
     /** Compares this poll's advisories against what is already on screen. */
+    // Servers are evaluated from their own IO coroutines; one at a time keeps [posted] whole.
+    @Synchronized
     fun evaluate(runtime: ServerRuntime, settings: ServerNotificationSettings) {
         if (!settings.enabled || !hasPermission()) return
         ensureChannels()
@@ -217,6 +219,7 @@ class ServerNotifier @Inject constructor(
     }
 
     /** Drops every alert notification for a server (used when it is deleted). */
+    @Synchronized
     fun clearFor(serverId: String) {
         posted.remove(serverId)?.forEach { key ->
             manager.cancel(notificationId(serverId, key))

@@ -391,7 +391,7 @@ fun HermesChatPane(
                         },
                     )
                     Spacer(Modifier.height(4.dp))
-                } else if (state.items.isEmpty() && !state.busy && state.reach == HermesReach.READY) {
+                } else if (state.items.isEmpty() && !state.busy && !state.loadingThread && state.reach == HermesReach.READY) {
                     ChatStarters(HermesStarters) { send(it) }
                 }
                 HermesComposer(
@@ -399,7 +399,8 @@ fun HermesChatPane(
                     onValueChange = { draft = it },
                     onSend = { send(draft) },
                     onStop = { viewModel.stop() },
-                    enabled = state.reach == HermesReach.READY,
+                    // Not while a chat is opening: its transcript replaced the message just sent.
+                    enabled = state.reach == HermesReach.READY && !state.loadingThread,
                     busy = state.busy,
                     hint = when {
                         state.busy -> "Type to queue the next message…"

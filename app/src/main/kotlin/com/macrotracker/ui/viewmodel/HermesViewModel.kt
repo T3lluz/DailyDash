@@ -786,8 +786,10 @@ class HermesViewModel @Inject constructor(
         var doneError: String? = null
         var stopped = false
         while (!finished && attempts < MAX_REJOINS) {
+            var heard = false
             try {
                 stream.collect { event ->
+                    heard = true
                     if (event is HermesEvent.Done) {
                         finished = true
                         doneError = event.error
@@ -805,12 +807,17 @@ class HermesViewModel @Inject constructor(
                 failure = reachMessage(e)
             }
             if (finished) break
-            attempts++
+            // Rejoins count only while nothing comes through: a long turn on a patchy line
+            // used to give up after six drops in total, then announce it done mid-turn.
+            if (heard) attempts = 0 else attempts++
             val stillBusy = runCatching { client.thread(threadId).summary.busy }.getOrDefault(false)
             if (!stillBusy) break
             failure = null
             delay(REJOIN_DELAY_MS)
             stream = client.watch(threadId)
+        }
+        if (!finished && failure == null && attempts >= MAX_REJOINS) {
+            failure = "Lost the live view of this turn. It carries on on the server; reopen the chat to see it."
         }
         val error = if (!finished) failure else doneError
         if (!finished && failure != null) {
