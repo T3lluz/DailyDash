@@ -96,6 +96,11 @@ class AppUpdateRepository @Inject constructor(
         .writeTimeout(2, TimeUnit.MINUTES)
         .build()
 
+    /** The profile is a few hundred kB: a stall there should not hold the update for minutes. */
+    private val dexMetadataClient by lazy {
+        downloadClient.newBuilder().readTimeout(20, TimeUnit.SECONDS).callTimeout(45, TimeUnit.SECONDS).build()
+    }
+
     private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     private val updatesDir: File
         get() = File(context.cacheDir, "app_updates").also { it.mkdirs() }
@@ -482,20 +487,25 @@ class AppUpdateRepository @Inject constructor(
                 .header("User-Agent", "DailyDash/${BuildConfig.VERSION_NAME}")
                 .get()
                 .build()
-            downloadClient.newCall(request).execute().use { response ->
+            dexMetadataClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return
                 val bytes = response.body?.bytes() ?: return
-                if (bytes.size in 64..DM_MAX_BYTES) dm.writeBytes(bytes)
+                // A .dm is a zip. Anything else (a captive portal's page, an error body) would
+                // fail the whole install as bad dex metadata, so it is not staged.
+                val isZip = bytes.size >= 4 && bytes[0] == 'P'.code.toByte() && bytes[1] == 'K'.code.toByte() &&
+                    bytes[2] == 3.toByte() && bytes[3] == 4.toByte()
+                if (isZip && bytes.size in 64..DM_MAX_BYTES) dm.writeBytes(bytes)
             }
         }.onFailure { dm.delete() }
     }
 
     private fun dexMetadataFor(apk: File) = File(apk.parentFile, apk.name.removeSuffix(".apk") + ".dm")
 
-    /** An install that failed goes again without the profile, in case Android refused that part. */
-    fun dropDexMetadata(apk: File) {
-        dexMetadataFor(apk).delete()
-    }
+    /**
+     * An install that failed goes again without the profile, in case Android refused that part.
+     * @return true when there was a profile to drop, so a retry without it is worth trying.
+     */
+    fun dropDexMetadata(apk: File): Boolean = dexMetadataFor(apk).let { it.isFile && it.delete() }
 
     // ── Background checks ──────────────────────────────────────────────────
 

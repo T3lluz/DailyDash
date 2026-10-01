@@ -181,7 +181,9 @@ build_release_notes() {
   dedupe_bullets
 
   {
-    echo "<!-- dailydash-version: ${VERSION_NAME} vc${VERSION_CODE} -->"
+    # Numbers only: 1.x clients match this comment against digits and dots, and show it as
+    # a bullet otherwise. The full name (a beta's) is in the tag.
+    echo "<!-- dailydash-version: ${VERSION_NAME%%-*} vc${VERSION_CODE} -->"
     echo "## What's new"
     if [ "${#bullets[@]}" -gt 0 ]; then
       printf '%s\n' "${bullets[@]}"
@@ -217,8 +219,8 @@ FILE_VERSION="${VERSION_NAME%%-*}"
 APK_NAME="DailyDash-${FILE_VERSION}-vc${VERSION_CODE}.apk"
 cp "$APK_SRC" "$APK_NAME"
 
-# The Baseline Profile as dex metadata, one per ART profile format (0: Android 9-11,
-# 1: Android 12+). The in-app updater installs the matching one beside the APK so ART
+# The Baseline Profile as dex metadata, one per ART profile format (0: Android 12+,
+# profile version 015; 1: Android 9-11, version 010). The in-app updater installs the matching one beside the APK so ART
 # compiles the app at install instead of running it cold until the overnight dexopt.
 DM_FILES=()
 for n in 0 1; do
