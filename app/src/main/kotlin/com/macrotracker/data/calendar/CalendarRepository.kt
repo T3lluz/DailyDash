@@ -220,7 +220,9 @@ class CalendarRepository @Inject constructor(
                 }
             }
         } catch (e: Exception) {
+            // Not cached: an empty list here would read as "nothing coming up" for five minutes.
             Log.e(TAG, "Failed to read calendar events: ${e.message}", e)
+            throw e
         } finally {
             cursor?.close()
         }

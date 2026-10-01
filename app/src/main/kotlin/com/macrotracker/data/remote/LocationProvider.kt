@@ -66,19 +66,12 @@ class LocationProvider @Inject constructor(
 
         val maxAge = if (forceRefresh) 0L else MAX_UPDATE_AGE_NORMAL_MS
 
-        // Try a fresh HIGH_ACCURACY (GPS) fix first
-        val precise = requestLocation(Priority.PRIORITY_HIGH_ACCURACY, maxAge)
-        if (precise != null) {
-            Log.d(TAG, "GPS fix (accuracy=${precise.accuracy}m, age=${now - precise.time}ms): ${precise.latitude}, ${precise.longitude}")
-            return cacheAndReturn(precise, now)
-        }
-
-        // GPS unavailable (indoors / no signal) — fall back to network-based fix
-        Log.d(TAG, "GPS fix unavailable, falling back to BALANCED_POWER_ACCURACY")
-        val fallback = requestLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, maxAge)
-        if (fallback != null) {
-            Log.d(TAG, "Network fix (accuracy=${fallback.accuracy}m): ${fallback.latitude}, ${fallback.longitude}")
-            return cacheAndReturn(fallback, now)
+        // Weather needs the town, not the street: a network fix comes in a second or two,
+        // where waiting on GPS indoors held the card (and pull to refresh) for up to 20 s.
+        val network = requestLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, maxAge)
+        if (network != null) {
+            Log.d(TAG, "Network fix (accuracy=${network.accuracy}m): ${network.latitude}, ${network.longitude}")
+            return cacheAndReturn(network, now)
         }
 
         // Last resort: Play Services last-known location (may be older, but better than failing refresh)

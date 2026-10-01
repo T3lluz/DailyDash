@@ -1,6 +1,7 @@
 package com.macrotracker.ui.viewmodel
 
 import android.Manifest
+import com.macrotracker.data.local.UNNAMED_FOOD
 import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Log
@@ -139,7 +140,10 @@ class HomeViewModel @Inject constructor(
     private val _logsLastUpdatedAt = MutableStateFlow<Instant?>(null)
     val logsLastUpdatedAt: StateFlow<Instant?> = _logsLastUpdatedAt
 
-    private val _weatherState = MutableStateFlow<WeatherUiState>(WeatherUiState.PermissionRequired)
+    // With location already allowed, start on Loading so the "Allow location" prompt never flashes.
+    private val _weatherState = MutableStateFlow(
+        if (hasLocationPermission()) WeatherUiState.Loading else WeatherUiState.PermissionRequired,
+    )
     val weatherState: StateFlow<WeatherUiState> = _weatherState
 
     private val _healthState = MutableStateFlow<HomeHealthState>(HomeHealthState.Loading)
@@ -162,6 +166,7 @@ class HomeViewModel @Inject constructor(
     private var refreshJob: Job? = null
     private var loadDataJob: Job? = null
     private var lastLoadDataMs = 0L
+    private var lastLoadedDay: String? = null
 
     /** Coalesced weather widget refresh (also refreshes the widget picker's preview). */
     private fun scheduleWidgetUpdate(immediate: Boolean = false) {
@@ -174,7 +179,16 @@ class HomeViewModel @Inject constructor(
 
     val homeWidgetOrder: StateFlow<String> = settingsRepository.homeWidgetOrder
 
+    private fun hasLocationPermission(): Boolean =
+        ContextCompat.checkSelfPermission(appContext, Manifest.permission.ACCESS_FINE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(appContext, Manifest.permission.ACCESS_COARSE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
+
     init {
+        // Food logged anywhere (Health, the AI tab, a label scan) shows on Home at once.
+        repository.changes.onEach { loadData(force = true) }.launchIn(viewModelScope)
+
         // drop(1) skips the initial replay emission — these only need to react
         // to user-driven *changes* in settings, not fire on every cold start.
         // refreshAll() called from the screen covers the initial load.
@@ -183,12 +197,7 @@ class HomeViewModel @Inject constructor(
         }.launchIn(viewModelScope)
 
         settingsRepository.weatherEnabled.drop(1).onEach { enabled ->
-            val hasPermission = ContextCompat.checkSelfPermission(
-                appContext, Manifest.permission.ACCESS_FINE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED ||
-            ContextCompat.checkSelfPermission(
-                appContext, Manifest.permission.ACCESS_COARSE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
+            val hasPermission = hasLocationPermission()
             if (enabled && hasPermission) {
                 loadWeather(true)
             } else if (!enabled) {
@@ -222,7 +231,9 @@ class HomeViewModel @Inject constructor(
 
     fun loadData(force: Boolean = false) {
         val now = System.currentTimeMillis()
-        if (!force && lastLoadDataMs > 0 && now - lastLoadDataMs < 30_000L) return
+        // A new day always reloads: Home left open over midnight would keep yesterday's totals.
+        val newDay = lastLoadedDay != today
+        if (!force && !newDay && lastLoadDataMs > 0 && now - lastLoadDataMs < 30_000L) return
         if (loadDataJob?.isActive == true && !force) return
         loadDataJob?.cancel()
         loadDataJob = viewModelScope.launch {
@@ -244,6 +255,7 @@ class HomeViewModel @Inject constructor(
 
         _summary.value = newSummary
         _logs.value = newLogs
+        lastLoadedDay = newSummary.date
         if (dataChanged) {
             _logsLastUpdatedAt.value = Instant.now()
         }
@@ -489,9 +501,12 @@ class HomeViewModel @Inject constructor(
                 upcomingEvents = upcoming.take(200),
                 lastUpdatedAt = Instant.now(),
             )
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Calendar error: ${e.message}", e)
-            _calendarState.value = CalendarUiState.Unavailable
+            // A failed re-read keeps the events already on screen.
+            if (_calendarState.value !is CalendarUiState.Success) _calendarState.value = CalendarUiState.Unavailable
         }
     }
 
@@ -538,8 +553,12 @@ class HomeViewModel @Inject constructor(
             Log.d(TAG, "Weather refresh: lat=${location.latitude}, lon=${location.longitude}, force=$forceRefresh")
             val locationName = locationProvider.getLocationName(location.latitude, location.longitude)
             // Always hit the network path after clearCache on force; clothing is recomputed every fetch.
-            val weather = weatherRepository.fetchWeather(location.latitude, location.longitude, locationName)
-            val warnings = weatherRepository.fetchWarnings(location.latitude, location.longitude, force = forceRefresh)
+            // The forecast and the warnings are separate calls; fetch them side by side.
+            val (weather, warnings) = coroutineScope {
+                val w = async { weatherRepository.fetchWeather(location.latitude, location.longitude, locationName) }
+                val alerts = async { weatherRepository.fetchWarnings(location.latitude, location.longitude, force = forceRefresh) }
+                w.await() to alerts.await()
+            }
             val clothingAdvice = ClothingAdvisor.advise(weather)
             val fetchedAt = weatherRepository.lastFetchTimeMs
                 .takeIf { it > 0L }
@@ -555,6 +574,8 @@ class HomeViewModel @Inject constructor(
             )
 
             cacheWeatherForWidget(weather, location.latitude, location.longitude)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Weather error: ${e.message}", e)
             if (_weatherState.value !is WeatherUiState.Success) {
@@ -616,12 +637,11 @@ class HomeViewModel @Inject constructor(
             val log = MacroLogEntity(
                 id = System.currentTimeMillis().toString(),
                 date = today,
-                foodName = foodName.ifBlank { "Quick Add" },
+                foodName = foodName.ifBlank { UNNAMED_FOOD },
                 calories = calories,
                 protein = protein,
             )
             repository.saveLog(log)
-            loadData(force = true)
         }
     }
 }

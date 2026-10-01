@@ -1,6 +1,7 @@
 package com.macrotracker.ui.viewmodel
 
 import android.util.Log
+import com.macrotracker.data.local.UNNAMED_FOOD
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.lifecycle.ViewModel
@@ -194,6 +195,8 @@ class HealthViewModel @Inject constructor(
     enum class DetailMetric { NONE, HEART_RATE, SLEEP }
 
     init {
+        // Food logged on Home, the AI tab or a scan shows here at once.
+        repository.changes.onEach { loadData() }.launchIn(viewModelScope)
         settingsRepository.masterHealthConnectEnabled.drop(1).onEach {
             loadHealthConnect()
         }.launchIn(viewModelScope)
@@ -575,19 +578,17 @@ class HealthViewModel @Inject constructor(
             val log = MacroLogEntity(
                 id = System.currentTimeMillis().toString(),
                 date = today,
-                foodName = foodName.ifBlank { "Quick Add" },
+                foodName = foodName.ifBlank { UNNAMED_FOOD },
                 calories = calories,
                 protein = protein,
             )
             repository.saveLog(log)
-            loadData()
         }
     }
 
     fun deleteLog(id: String) {
         viewModelScope.launch {
             repository.deleteLog(id)
-            loadData()
         }
     }
 }

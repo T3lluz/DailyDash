@@ -1,9 +1,15 @@
 package com.macrotracker.data.local
 
 import java.time.LocalDate
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.channels.BufferOverflow
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/** The name a food entry gets when it was logged without one. */
+const val UNNAMED_FOOD = "Food"
 
 data class DailySummary(
     val date: String,
@@ -19,9 +25,23 @@ class MacroRepository @Inject constructor(
 ) {
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
-    suspend fun saveLog(log: MacroLogEntity) = dao.insertLog(log)
+    private val _changes = MutableSharedFlow<Unit>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
-    suspend fun deleteLog(id: String) = dao.deleteLog(id)
+    /**
+     * Fires after any food log or goal change, from any screen (Home, Health, the AI tab,
+     * a label scan), so every total on screen reloads instead of waiting out a throttle.
+     */
+    val changes: SharedFlow<Unit> = _changes
+
+    suspend fun saveLog(log: MacroLogEntity) {
+        dao.insertLog(log)
+        _changes.tryEmit(Unit)
+    }
+
+    suspend fun deleteLog(id: String) {
+        dao.deleteLog(id)
+        _changes.tryEmit(Unit)
+    }
 
     suspend fun getLogsForDate(date: String): List<MacroLogEntity> = dao.getLogsForDate(date)
 
@@ -64,6 +84,7 @@ class MacroRepository @Inject constructor(
 
     suspend fun saveGoals(calories: Int, protein: Int) {
         dao.upsertGoals(GoalsEntity(id = 0, calorieGoal = calories, proteinGoal = protein))
+        _changes.tryEmit(Unit)
     }
 
     suspend fun getGoals(): GoalsEntity = dao.getGoals() ?: GoalsEntity()
