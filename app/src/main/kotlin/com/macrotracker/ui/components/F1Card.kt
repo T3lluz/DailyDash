@@ -2207,11 +2207,17 @@ private fun QualiRow(result: QualiResult, bestTime: String?, accentColor: Color)
 }
 
 // ── Last race results ─────────────────────────────────────────────────────────
+
+/** Lapped cars ("+1 Lap", "Lapped") finish without a time; only the rest are DNF. */
+private val LappedStatus = Regex("""^\+\d+ Laps?$|^Lapped$""", RegexOption.IGNORE_CASE)
+
+private fun RaceResult.classifiedFinish(): Boolean =
+    time != null || status == null || status == "Finished" || LappedStatus.matches(status)
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun LastRaceResultsList(results: List<RaceResult>, raceName: String?) {
     if (results.isEmpty()) { EmptyF1State("No race results available."); return }
-    val dnfCount = results.count { it.status != null && it.time == null && it.status != "Finished" }
+    val dnfCount = results.count { !it.classifiedFinish() }
     val fl = results.firstOrNull { it.fastestLap }
     val biggestGain = results.filter { (it.positionsGained ?: 0) > 0 }.maxByOrNull { it.positionsGained ?: 0 }
     val podium = results.filter { it.position in 1..3 }.sortedBy { it.position }

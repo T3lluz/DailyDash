@@ -1,6 +1,7 @@
 package com.macrotracker.ui.screens
 
 import android.content.ActivityNotFoundException
+import com.macrotracker.ui.theme.NutritionProtein
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -513,12 +514,12 @@ fun HealthScreen(
                                 MacroProgressBar(
                                     progress = calProgress,
                                     label = "${s.totalCalories} / ${s.calorieGoal} kcal",
-                                    color = if (calProgress > 1f) Error else Primary,
+                                    color = if (calProgress > 1f) Error else NutritionCalories,
                                 )
                                 MacroProgressBar(
                                     progress = protProgress,
                                     label = "${s.totalProtein} / ${s.proteinGoal} g protein",
-                                    color = Secondary,
+                                    color = NutritionProtein,
                                 )
 
                                 val calRemaining = (s.calorieGoal - s.totalCalories).coerceAtLeast(0)
@@ -682,7 +683,7 @@ private fun MacroTrendsSection(
         if (metric == "calories") day?.totalCalories ?: 0 else day?.totalProtein ?: 0
     }
     val selectedMacro = macroHistory.find { it.date == selectedDate }
-    val barColor = if (metric == "calories") NutritionCalories else Primary
+    val barColor = if (metric == "calories") NutritionCalories else NutritionProtein
     val selectedIndex = dates.indexOf(selectedDate).coerceAtLeast(0)
     val labels = dates.map { date ->
         try {
@@ -721,7 +722,7 @@ private fun MacroTrendsSection(
                     HealthChip(
                         label = label,
                         selected = metric == key,
-                        color = if (key == "calories") NutritionCalories else Primary,
+                        color = if (key == "calories") NutritionCalories else NutritionProtein,
                         icon = if (key == "calories") AppIcons.Flame else AppIcons.Dumbbell,
                         onClick = {
                             haptics.tick()

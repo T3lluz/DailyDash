@@ -81,6 +81,9 @@ private data class HomeHealthExtras(
 sealed class HomeHealthState {
     data object Loading : HomeHealthState()
     data object Unavailable : HomeHealthState()
+
+    /** Connected, but the read failed: a retry, not the "connect" prompt. */
+    data object Error : HomeHealthState()
     data class Success(
         val stats: HealthStats,
         val isRefreshing: Boolean = false,
@@ -436,7 +439,11 @@ class HomeViewModel @Inject constructor(
                     HomeHealthExtras(usual.await(), heart.await(), move.await())
             }
             val (stats, hourly, sessions) = reads
-            if (stats.steps == 0L && current is HomeHealthState.Success && current.stats.steps > 0) {
+            // A read of 0 right after a real count is Health Connect catching up; keep the count.
+            // Not across midnight, when 0 is simply today's start.
+            val sameDay = (current as? HomeHealthState.Success)?.lastUpdatedAt
+                ?.atZone(java.time.ZoneId.systemDefault())?.toLocalDate() == LocalDate.now()
+            if (stats.steps == 0L && current is HomeHealthState.Success && current.stats.steps > 0 && sameDay) {
                 Log.w(TAG, "Health Connect returned 0 steps, keeping previous value to avoid flicker")
                 _healthState.value = current.copy(isRefreshing = false)
             } else {
@@ -456,7 +463,7 @@ class HomeViewModel @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "Failed to read health data for home: ${e.message}", e)
             if (current !is HomeHealthState.Success) {
-                _healthState.value = HomeHealthState.Unavailable
+                _healthState.value = HomeHealthState.Error
             } else {
                 _healthState.value = current.copy(isRefreshing = false)
             }

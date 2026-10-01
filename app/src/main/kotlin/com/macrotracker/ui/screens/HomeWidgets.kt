@@ -1,6 +1,11 @@
 package com.macrotracker.ui.screens
 
 import androidx.compose.foundation.background
+import com.macrotracker.ui.theme.NutritionProtein
+import com.macrotracker.ui.theme.NutritionCalories
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -34,6 +39,7 @@ import com.macrotracker.ui.components.CalendarCard
 import com.macrotracker.ui.components.CardHeader
 import com.macrotracker.ui.components.F1Card
 import com.macrotracker.ui.components.GitHubCard
+import com.macrotracker.ui.components.HubErrorState
 import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.components.MailCard
 import com.macrotracker.ui.components.MacroProgressBar
@@ -163,7 +169,7 @@ private fun HomeCalendarWidget(
 @Composable
 private fun HomeBodyStatsWidget(viewModel: HomeViewModel, isVisible: Boolean, onOpenHealth: () -> Unit) {
     if (!isVisible) {
-        WidgetPlaceholderCard(title = "Body Stats", icon = AppIcons.HeartPulse, accent = HealthHeartRate)
+        WidgetPlaceholderCard(title = "Body stats", icon = AppIcons.HeartPulse, accent = HealthHeartRate)
         return
     }
     val healthState by viewModel.healthState.collectAsState()
@@ -184,12 +190,21 @@ private fun HomeBodyStatsWidget(viewModel: HomeViewModel, isVisible: Boolean, on
                 )
             }
             is HomeHealthState.Loading -> {
-                WidgetPlaceholderCard(title = "Body Stats", icon = AppIcons.HeartPulse, accent = HealthHeartRate)
+                WidgetPlaceholderCard(title = "Body stats", icon = AppIcons.HeartPulse, accent = HealthHeartRate)
+            }
+            HomeHealthState.Error -> MacroCard {
+                CardHeader(title = "Body stats", icon = AppIcons.HeartPulse, accent = HealthHeartRate)
+                Spacer(Modifier.height(12.dp))
+                HubErrorState(
+                    message = "Health Connect didn't answer.",
+                    accent = HealthHeartRate,
+                    onRetry = { viewModel.loadHealthConnect() },
+                )
             }
             HomeHealthState.Unavailable -> {
                 // An empty state with a way out: the Health tab has the Connect prompt.
                 WidgetPromptCard(
-                    title = "Body Stats",
+                    title = "Body stats",
                     message = "Connect Health Connect in Settings or Health to see steps, heart rate, and sleep here.",
                     actionLabel = "Open Health",
                     actionIcon = AppIcons.HeartPulse,
@@ -256,86 +271,14 @@ private fun HomeFoodWidget(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .background(Background, RoundedCornerShape(10.dp))
-                    .padding(12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Icon(
-                    AppIcons.Flame,
-                    contentDescription = null,
-                    tint = if (s.totalCalories > s.calorieGoal) Error else Primary,
-                    modifier = Modifier.size(24.dp),
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    "${s.totalCalories}",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
-                )
-                Text(
-                    "/ ${s.calorieGoal} kcal",
-                    fontSize = 12.sp,
-                    color = TextSecondary,
-                )
-            }
-
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .background(Background, RoundedCornerShape(10.dp))
-                    .padding(12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Icon(
-                    AppIcons.Dumbbell,
-                    contentDescription = null,
-                    tint = Secondary,
-                    modifier = Modifier.size(24.dp),
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    "${s.totalProtein}g",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
-                )
-                Text(
-                    "/ ${s.proteinGoal}g protein",
-                    fontSize = 12.sp,
-                    color = TextSecondary,
-                )
-            }
-
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .background(Background, RoundedCornerShape(10.dp))
-                    .padding(12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Icon(
-                    AppIcons.Restaurant,
-                    contentDescription = null,
-                    tint = Primary,
-                    modifier = Modifier.size(24.dp),
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    "${logs.size}",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
-                )
-                Text(
-                    "meals",
-                    fontSize = 12.sp,
-                    color = TextSecondary,
-                )
-            }
+            FoodStat(
+                icon = AppIcons.Flame,
+                tint = if (s.totalCalories > s.calorieGoal) Error else NutritionCalories,
+                value = "${s.totalCalories}",
+                label = "/ ${s.calorieGoal} kcal",
+            )
+            FoodStat(AppIcons.Dumbbell, NutritionProtein, "${s.totalProtein}g", "/ ${s.proteinGoal}g protein")
+            FoodStat(AppIcons.Restaurant, NutritionCalories, "${logs.size}", if (logs.size == 1) "meal" else "meals")
         }
 
         Spacer(modifier = Modifier.height(14.dp))
@@ -345,12 +288,12 @@ private fun HomeFoodWidget(
         MacroProgressBar(
             progress = calProgress,
             label = "Calories",
-            color = if (calProgress > 1f) Error else Primary,
+            color = if (calProgress > 1f) Error else NutritionCalories,
         )
         MacroProgressBar(
             progress = protProgress,
             label = "Protein",
-            color = Secondary,
+            color = NutritionProtein,
         )
 
         WidgetExpandSection(visible = logging) {
@@ -372,5 +315,21 @@ private fun HomeFoodWidget(
             expandLabel = "Log food",
             collapseLabel = "Done",
         )
+    }
+}
+
+@Composable
+private fun RowScope.FoodStat(icon: ImageVector, tint: Color, value: String, label: String) {
+    Column(
+        modifier = Modifier
+            .weight(1f)
+            .background(Background, RoundedCornerShape(10.dp))
+            .padding(12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(value, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+        Text(label, fontSize = 12.sp, color = TextSecondary)
     }
 }

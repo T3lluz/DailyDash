@@ -83,6 +83,7 @@ fun MailCard(
     val state by viewModel.state.collectAsState()
     val tab by viewModel.tab.collectAsState()
     val overlay by viewModel.overlay.collectAsState()
+    val asking by viewModel.asking.collectAsState()
     var notice by remember { mutableStateOf<MailEvent?>(null) }
 
     LaunchedWhileResumed(isVisible) {
@@ -104,7 +105,8 @@ fun MailCard(
         }
     }
 
-    when (val s = state) {
+    WidgetStateSwitch(targetState = state, contentKey = { it::class }, label = "mail") { s ->
+    when (s) {
         MailUiState.Loading -> WidgetPlaceholderCard(title = "Mail", icon = AppIcons.Mail, accent = MailAccent, lines = 3)
         is MailUiState.Error -> MacroCard(borderColor = MailAccent.copy(alpha = 0.16f)) {
             CardHeader(title = "Mail", icon = AppIcons.Mail, accent = MailAccent, subtitle = "From your dashboard server")
@@ -120,8 +122,10 @@ fun MailCard(
             onTab = viewModel::setTab,
             onAct = viewModel::act,
             onAsk = viewModel::ask,
+            asking = asking,
             onUndo = { ids -> notice = null; viewModel.undoArchive(ids) },
         )
+    }
     }
 }
 
@@ -135,6 +139,7 @@ private fun MailContent(
     onTab: (MailTab) -> Unit,
     onAct: (MailRow, String) -> Unit,
     onAsk: (MailRow) -> Unit,
+    asking: Set<String>,
     onUndo: (List<String>) -> Unit,
 ) {
     val uri = LocalUriHandler.current
@@ -150,7 +155,7 @@ private fun MailContent(
             title = "Mail",
             icon = AppIcons.Mail,
             accent = MailAccent,
-            subtitle = if (box.error != null) "not connected"
+            subtitle = if (box.error != null) "Gmail isn't connected on the server"
             else listOfNotNull(
                 "${box.unread} unread in ${box.window}",
                 if (box.stale) "last refresh failed" else null,
@@ -189,6 +194,7 @@ private fun MailContent(
                         row = r,
                         onOpen = { runCatching { uri.openUri(r.url) } },
                         onAct = { a -> haptics.tick(); onAct(r, a) },
+                        asking = r.ids.firstOrNull() in asking,
                         onAsk = { haptics.click(); onAsk(r) },
                     )
                 }
@@ -279,7 +285,7 @@ private fun EmptyMail(tab: MailTab, unread: Int) {
 }
 
 @Composable
-private fun MailRowView(row: MailRow, onOpen: () -> Unit, onAct: (String) -> Unit, onAsk: () -> Unit) {
+private fun MailRowView(row: MailRow, onOpen: () -> Unit, onAct: (String) -> Unit, asking: Boolean, onAsk: () -> Unit) {
     val hue = remember(row.addr) { mailHue(row.addr) }
     val avatar = remember(hue) { Color.hsl(hue.toFloat(), 0.45f, 0.42f) }
     Column(Modifier.fillMaxWidth()) {
@@ -354,7 +360,13 @@ private fun MailRowView(row: MailRow, onOpen: () -> Unit, onAct: (String) -> Uni
             MailAction(AppIcons.Star, if (row.starred) "Unstar" else "Star", tint = if (row.starred) Warning else TextTertiary) {
                 onAct(if (row.starred) "unstar" else "star")
             }
-            MailAction(AppIcons.Sparkles, "Ask Hermes what it needs, and draft a reply", tint = Primary) { onAsk() }
+            if (asking) {
+                Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) {
+                    LoadingSpinner(color = Primary, size = LoadingSpec.SizeInline)
+                }
+            } else {
+                MailAction(AppIcons.Sparkles, "Ask Hermes what it needs, and draft a reply", tint = Primary) { onAsk() }
+            }
         }
     }
 }

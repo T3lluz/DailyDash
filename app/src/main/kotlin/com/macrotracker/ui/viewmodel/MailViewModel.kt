@@ -1,6 +1,7 @@
 package com.macrotracker.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
+import kotlinx.coroutines.flow.update
 import androidx.lifecycle.viewModelScope
 import com.macrotracker.data.dashboard.DashboardRepository
 import com.macrotracker.data.dashboard.MailBox
@@ -143,7 +144,15 @@ class MailViewModel @Inject constructor(
      * Hands the mail to Hermes, who reads it with the server's Google login and drafts a
      * reply without sending it. The chat opens once the turn has started.
      */
+    private val _asking = MutableStateFlow<Set<String>>(emptySet())
+
+    /** Mails being handed to Hermes right now; their Ask button waits, so a second tap starts no second chat. */
+    val asking: StateFlow<Set<String>> = _asking
+
     fun ask(row: MailRow) {
+        val key = row.ids.firstOrNull() ?: return
+        if (key in _asking.value) return
+        _asking.update { it + key }
         viewModelScope.launch {
             try {
                 val thread = hermes.createThread("read", "Mail: ${row.subject}".take(80))
@@ -161,6 +170,8 @@ class MailViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 _events.tryEmit(MailEvent.Failed("Hermes could not take it: ${DashboardRepository.describe(e, host())}"))
+            } finally {
+                _asking.update { it - key }
             }
         }
     }

@@ -102,7 +102,7 @@ fun HomeScreen(
             Triple("BRIEFING", "Briefing", AppIcons.Sparkles),
             Triple("MAIL", "Mail", AppIcons.Mail),
             Triple("UPCOMING", "Coming up", AppIcons.TvPlay),
-            Triple("BODY_STATS", "Body Stats", AppIcons.HeartPulse),
+            Triple("BODY_STATS", "Body stats", AppIcons.HeartPulse),
             Triple("FOOD", "Food", AppIcons.Restaurant),
         )
     }

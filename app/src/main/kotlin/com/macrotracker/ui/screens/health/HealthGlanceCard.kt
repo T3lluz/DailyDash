@@ -142,7 +142,7 @@ fun HealthGlanceCard(
 
     MacroCard(modifier = Modifier.trackOnScreen(onScreen)) {
         CardHeader(
-            title = "Body Stats",
+            title = "Body stats",
             icon = AppIcons.HeartPulse,
             accent = HealthHeartRate,
             subtitle = "Today",

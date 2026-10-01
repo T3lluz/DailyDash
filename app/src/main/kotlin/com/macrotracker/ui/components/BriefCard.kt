@@ -1,6 +1,8 @@
 package com.macrotracker.ui.components
 
 import androidx.compose.foundation.layout.Row
+import kotlinx.coroutines.delay
+import com.macrotracker.ui.util.LaunchedWhileResumed
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -59,11 +61,20 @@ fun BriefCard(
 ) {
     val state by viewModel.state.collectAsState()
 
-    LaunchedEffect(isVisible) {
-        if (isVisible) viewModel.load()
+    // On every return to Home, and every 10 minutes while it is open: a phone left alive
+    // overnight showed yesterday's briefing. While one is being written, look sooner, in
+    // case the live feed's word that it is done was missed.
+    LaunchedWhileResumed(isVisible) {
+        if (!isVisible) return@LaunchedWhileResumed
+        while (true) {
+            viewModel.load()
+            val writing = (viewModel.state.value as? BriefUiState.Ready)?.brief?.isWriting == true
+            delay(if (writing) 20_000L else 10 * 60_000L)
+        }
     }
 
-    when (val s = state) {
+    WidgetStateSwitch(targetState = state, contentKey = { it::class }, label = "brief") { s ->
+    when (s) {
         BriefUiState.Loading -> WidgetPlaceholderCard(
             title = "Briefing",
             icon = AppIcons.Sparkles,
@@ -82,7 +93,10 @@ fun BriefCard(
             onChat = s.brief.thread?.let { id -> { viewModel.openThread(id); onOpenChat() } },
         )
     }
+    }
 }
+
+private val BriefZone: ZoneId = ZoneId.of("Europe/Oslo")
 
 @Composable
 private fun BriefContent(
@@ -92,7 +106,8 @@ private fun BriefContent(
     onChat: (() -> Unit)?,
 ) {
     val context = LocalContext.current
-    val today = LocalDate.now().toString()
+    // The server writes it on Oslo's day, so "today" is Oslo's too.
+    val today = LocalDate.now(BriefZone).toString()
     val fresh = brief.date == today
     val done = fresh && brief.isDone
     val writing = fresh && brief.isWriting
@@ -106,7 +121,7 @@ private fun BriefContent(
             brief.atSec?.let { Instant.ofEpochSecond(it).atZone(ZoneId.systemDefault()).format(clock) },
         ).joinToString(" · ")
         writing -> "${brief.by} is writing it"
-        failed -> "did not finish"
+        failed -> "${brief.by} did not finish"
         else -> "every morning at 06:45"
     }
     var expanded by rememberSaveable(brief.date) { mutableStateOf(LocalTime.now().hour < 14) }

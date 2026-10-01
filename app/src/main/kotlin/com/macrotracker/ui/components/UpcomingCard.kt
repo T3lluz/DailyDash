@@ -178,7 +178,9 @@ fun UpcomingCard(
         }
     }
 
-    when (val s = state) {
+    val stateKey: (UpcomingUiState) -> Any = { if (it is UpcomingUiState.Idle) UpcomingUiState.Loading::class else it::class }
+    WidgetStateSwitch(targetState = state, contentKey = stateKey, label = "upcoming") { s ->
+    when (s) {
         is UpcomingUiState.Success -> UpcomingContent(
             feed = s.feed,
             calendars = calendars,
@@ -200,6 +202,7 @@ fun UpcomingCard(
             lines = 0,
             tiles = 3,
         )
+    }
     }
 }
 
