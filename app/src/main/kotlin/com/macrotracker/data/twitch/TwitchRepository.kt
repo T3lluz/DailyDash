@@ -28,7 +28,6 @@ interface TwitchRepository {
     suspend fun importFollows(accessToken: String, userId: String): Result<FollowImportResult>
     fun isTwitchConnected(): Boolean
     fun twitchAccountLabel(): String?
-    fun twitchUserId(): String?
     suspend fun helixAccessToken(): String?
     val lastFetchTimeMs: Long
 }
@@ -129,7 +128,6 @@ class TwitchRepositoryImpl @Inject constructor(
 
     override fun twitchAccountLabel(): String? = authClient.connectedDisplayName()
 
-    override fun twitchUserId(): String? = authClient.connectedUserId()
 
     override suspend fun helixAccessToken(): String? {
         authClient.validAccessToken()?.let { return it }

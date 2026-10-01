@@ -395,14 +395,7 @@ private fun TwitchLiveBody(
         label = "twLiveBody",
     ) { shown ->
         when (shown) {
-            0 -> ContentSkeleton(
-                tiles = 3,
-                tileHeight = 130.dp,
-                lines = 0,
-                accent = TwHairline,
-                surface = TwSurface,
-                tileShape = TwSharp,
-            )
+            0 -> HeroListSkeleton(accent = TwHairline, surface = TwSurface, shape = TwSharp)
             1 -> HubErrorState(
                 message = (twitchState as? TwitchUiState.Error)?.message ?: "Couldn't load Twitch streams",
                 accent = TwPurple,
@@ -1442,6 +1435,12 @@ private fun TwitchSettingsSheet(
                     ) {
                         items(trackedChannels, key = { it.userId }) { channel ->
                             SwipeToDismissBox(
+                                // A removed channel fades and the rest close the gap, instead of popping.
+                                modifier = Modifier.animateItem(
+                                    fadeInSpec = MacroMotion.fadeTween(),
+                                    placementSpec = MacroMotion.navTabSpring(),
+                                    fadeOutSpec = MacroMotion.fadeTween(150),
+                                ),
                                 state = rememberSwipeToDismissBoxState(),
                                 onDismiss = { value ->
                                     if (value == SwipeToDismissBoxValue.EndToStart) {

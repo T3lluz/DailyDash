@@ -119,6 +119,45 @@ fun ContentSkeleton(
     }
 }
 
+/**
+ * First-load placeholder for an opened media hub (YouTube, Twitch): one 16:9 hero over two
+ * list rows, the shape the feed lands in, so the card doesn't change height when it does.
+ */
+@Composable
+fun HeroListSkeleton(
+    modifier: Modifier = Modifier,
+    accent: Color = Border,
+    surface: Color = Surface,
+    shape: RoundedCornerShape = RoundedCornerShape(10.dp),
+) {
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .clip(shape)
+                .background(surface)
+                .background(accent.copy(alpha = 0.28f)),
+        )
+        repeat(2) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .width(120.dp)
+                        .aspectRatio(16f / 9f)
+                        .clip(shape)
+                        .background(surface)
+                        .background(accent.copy(alpha = 0.16f)),
+                )
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SkeletonBlock(Modifier.fillMaxWidth(0.9f).height(11.dp), color = accent.copy(alpha = 0.40f))
+                    SkeletonBlock(Modifier.fillMaxWidth(0.55f).height(9.dp), color = accent.copy(alpha = 0.22f))
+                }
+            }
+        }
+    }
+}
+
 /** Chat waiting indicator — same pulse language as the rest of DailyDash. */
 @Composable
 fun TypingDots(

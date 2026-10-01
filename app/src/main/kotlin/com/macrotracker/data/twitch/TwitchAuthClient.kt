@@ -62,7 +62,6 @@ class TwitchAuthClient @Inject constructor(
 
         const val SCOPE_USER_READ_FOLLOWS = "user:read:follows"
         /** Console placeholder only — Device Code Flow does not redirect here. */
-        const val REDIRECT_URI = "https://localhost/twitch/oauth"
 
         private const val DEVICE_URL = "https://id.twitch.tv/oauth2/device"
         private const val TOKEN_URL = "https://id.twitch.tv/oauth2/token"

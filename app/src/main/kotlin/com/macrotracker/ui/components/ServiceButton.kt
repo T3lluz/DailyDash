@@ -15,11 +15,12 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.macrotracker.ui.util.rememberHaptics
 
 /**
  * A hub's own call to action in the service's colour: Connect GitHub, Connect Twitch,
  * Add channels. While [busy], a spinner takes the icon's place and [busyLabel] the label's.
+ * The hubs' handlers give the tap its haptic, as they do for every other action on the card,
+ * so this button gives none of its own (both buzzed).
  */
 @Composable
 fun ServiceButton(
@@ -32,9 +33,8 @@ fun ServiceButton(
     busyLabel: String = "Connecting…",
     shape: Shape = RoundedCornerShape(10.dp),
 ) {
-    val haptics = rememberHaptics()
     Button(
-        onClick = { haptics.click(); onClick() },
+        onClick = onClick,
         enabled = !busy,
         colors = ButtonDefaults.buttonColors(containerColor = accent),
         shape = shape,

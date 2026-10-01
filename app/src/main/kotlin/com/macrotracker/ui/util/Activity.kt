@@ -44,3 +44,16 @@ fun Context.openAppSettings() {
 }
 
 private const val PERMISSION_ASKS = "permission_asks"
+
+/**
+ * Opens [url] in whatever app handles it. Quietly does nothing for a blank link or when no
+ * app can open it, where startActivity would throw and take the screen down.
+ */
+fun Context.openUrl(url: String): Boolean {
+    if (url.isBlank()) return false
+    return runCatching {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        if (this !is android.app.Activity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        startActivity(intent)
+    }.isSuccess
+}

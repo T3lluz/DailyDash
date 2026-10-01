@@ -1,6 +1,6 @@
 package com.macrotracker.ui.components
 
-import android.content.Intent
+import com.macrotracker.ui.util.openUrl
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -56,7 +56,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.net.toUri
 import kotlinx.coroutines.delay
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
@@ -282,67 +281,72 @@ fun GitHubCard(
                         tint = TextTertiary,
                         onClick = {
                             val url = hub?.selectedRepo?.htmlUrl ?: data?.user?.htmlUrl ?: "https://github.com"
-                            context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+                            context.openUrl(url)
                         },
                     )
                 },
             )
 
             if (isVisible) {
-                if (!expanded) {
-                    Spacer(Modifier.height(12.dp))
-                    when (state) {
-                        GitHubUiState.Loading, GitHubUiState.Idle -> GhLoading()
-                        GitHubUiState.NeedsAuth -> {
-                            if (authState.isAwaitingBrowser) {
-                                DeviceCodePanel(
-                                    service = "GitHub",
-                                    userCode = authState.deviceLogin?.userCode,
-                                    activationHint = "Approve DailyDash at github.com/login/device",
+                // The glance folds away while the hub unfolds, as on YouTube and Twitch, so the
+                // card eases between heights instead of jumping.
+                WidgetExpandSection(visible = !expanded) {
+                    Column {
+                            Spacer(Modifier.height(12.dp))
+                            when (state) {
+                                GitHubUiState.Loading, GitHubUiState.Idle -> GhLoading()
+                                GitHubUiState.NeedsAuth -> {
+                                    if (authState.isAwaitingBrowser) {
+                                        DeviceCodePanel(
+                                            service = "GitHub",
+                                            userCode = authState.deviceLogin?.userCode,
+                                            activationHint = "Approve DailyDash at github.com/login/device",
+                                            accent = GhAccent,
+                                            codeSurface = GhSurface,
+                                            shape = Sharp,
+                                            onOpenActivation = { viewModel.openActivation() },
+                                            onCancelLogin = { viewModel.cancelBrowserLogin() },
+                                        )
+                                    } else {
+                                        ConnectPrompt {
+                                            expanded = true
+                                            selectedTabName = GhTab.ACCOUNT.name
+                                            haptics.toggleOn()
+                                            viewModel.connectGitHub()
+                                        }
+                                    }
+                                }
+                                is GitHubUiState.Error -> HubErrorState(
+                                    message = (state as GitHubUiState.Error).message,
                                     accent = GhAccent,
-                                    codeSurface = GhSurface,
-                                    shape = Sharp,
-                                    onOpenActivation = { viewModel.openActivation() },
-                                    onCancelLogin = { viewModel.cancelBrowserLogin() },
+                                    onRetry = { viewModel.loadDashboard(forceRefresh = true) },
                                 )
-                            } else {
-                                ConnectPrompt {
-                                    expanded = true
-                                    selectedTabName = GhTab.ACCOUNT.name
-                                    haptics.toggleOn()
-                                    viewModel.connectGitHub()
+                                is GitHubUiState.Success -> {
+                                    val currentHub = hub
+                                    if (currentHub == null) {
+                                        GhLoading()
+                                    } else {
+                                        GitHubCollapsedGlance(
+                                            hub = currentHub,
+                                            haptics = haptics,
+                                            onSelectRepo = { viewModel.selectRepo(it) },
+                                        )
+                                    }
                                 }
                             }
-                        }
-                        is GitHubUiState.Error -> HubErrorState(
-                            message = (state as GitHubUiState.Error).message,
-                            accent = GhAccent,
-                            onRetry = { viewModel.loadDashboard(forceRefresh = true) },
-                        )
-                        is GitHubUiState.Success -> {
-                            val currentHub = hub
-                            if (currentHub == null) {
-                                GhLoading()
-                            } else {
-                                GitHubCollapsedGlance(
-                                    hub = currentHub,
-                                    haptics = haptics,
-                                    onSelectRepo = { viewModel.selectRepo(it) },
-                                )
-                            }
-                        }
+                            WidgetExpandFooter(
+                                expanded = false,
+                                onToggle = {
+                                    expanded = true
+                                    if (state is GitHubUiState.NeedsAuth) {
+                                        selectedTabName = GhTab.ACCOUNT.name
+                                    }
+                                },
+                                accentColor = GhAccent,
+                                expandLabel = if (state is GitHubUiState.NeedsAuth) "Connect" else "Open hub",
+                            )
+                
                     }
-                    WidgetExpandFooter(
-                        expanded = false,
-                        onToggle = {
-                            expanded = true
-                            if (state is GitHubUiState.NeedsAuth) {
-                                selectedTabName = GhTab.ACCOUNT.name
-                            }
-                        },
-                        accentColor = GhAccent,
-                        expandLabel = if (state is GitHubUiState.NeedsAuth) "Connect" else "Open hub",
-                    )
                 }
 
                 WidgetExpandSection(visible = expanded && isVisible) {
@@ -655,7 +659,7 @@ private fun GitHubCollapsedGlance(
                     PulseLine(item) {
                         haptics.tick()
                         item.url?.let {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, it.toUri()))
+                            context.openUrl(it)
                         } ?: item.selectRepo?.let(onSelectRepo)
                     }
                 }
@@ -715,7 +719,7 @@ private fun collapsedStats(hub: GhHub): List<GhStat> {
                 },
             )
         }
-        mine > 0 -> GhStat("$mine", if (mine == 1) "Mine" else "Mine", GhOpen, R.drawable.ic_gh_pr)
+        mine > 0 -> GhStat("$mine", "Mine", GhOpen, R.drawable.ic_gh_pr)
         else -> GhStat("${hub.repos.size}", "Repos", GhAccent, R.drawable.ic_gh_repo)
     }
     val fourth = when {
@@ -1134,7 +1138,7 @@ private fun IssuesTab(
                 filtered.take(30).forEach { issue ->
                     IssueRow(issue) {
                         haptics.tick()
-                        context.startActivity(Intent(Intent.ACTION_VIEW, issue.htmlUrl.toUri()))
+                        context.openUrl(issue.htmlUrl)
                     }
                 }
             }
@@ -1195,7 +1199,7 @@ private fun PullsTab(
                 filtered.take(30).forEach { pr ->
                     PullRow(pr) {
                         haptics.tick()
-                        context.startActivity(Intent(Intent.ACTION_VIEW, pr.htmlUrl.toUri()))
+                        context.openUrl(pr.htmlUrl)
                     }
                 }
             }
@@ -1218,7 +1222,7 @@ private fun ActivityTab(activity: List<GitHubActivity>, haptics: HapticHelper) {
                 ActivityRow(item) {
                     haptics.tick()
                     item.htmlUrl?.let {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, it.toUri()))
+                        context.openUrl(it)
                     }
                 }
             }
@@ -1296,7 +1300,7 @@ private fun InboxTab(
                 NotificationRow(item) {
                     haptics.tick()
                     item.htmlUrl?.let {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, it.toUri()))
+                        context.openUrl(it)
                     }
                 }
             }
@@ -1557,7 +1561,7 @@ private fun RepoDetail(
             IconButton(
                 onClick = {
                     haptics.tick()
-                    context.startActivity(Intent(Intent.ACTION_VIEW, repo.htmlUrl.toUri()))
+                    context.openUrl(repo.htmlUrl)
                 },
                 modifier = Modifier.size(36.dp),
             ) {
@@ -1590,7 +1594,7 @@ private fun RepoDetail(
         if (release != null) {
             ReleaseRow(release) {
                 haptics.tick()
-                context.startActivity(Intent(Intent.ACTION_VIEW, release.htmlUrl.toUri()))
+                context.openUrl(release.htmlUrl)
             }
         }
 
@@ -1609,7 +1613,7 @@ private fun RepoDetail(
                 commits.take(10).forEach { commit ->
                     CommitRow(commit) {
                         haptics.tick()
-                        context.startActivity(Intent(Intent.ACTION_VIEW, commit.htmlUrl.toUri()))
+                        context.openUrl(commit.htmlUrl)
                     }
                 }
             }
@@ -1624,7 +1628,7 @@ private fun RepoDetail(
                 runs.take(8).forEach { run ->
                     WorkflowRow(run) {
                         haptics.tick()
-                        context.startActivity(Intent(Intent.ACTION_VIEW, run.htmlUrl.toUri()))
+                        context.openUrl(run.htmlUrl)
                     }
                 }
             }
@@ -2073,7 +2077,7 @@ private fun RepoRow(repo: GitHubRepo, onClick: () -> Unit) {
                 Icon(AppIcons.Lock, null, tint = GhDraft, modifier = Modifier.size(13.dp))
             }
             IconButton(
-                onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, repo.htmlUrl.toUri())) },
+                onClick = { context.openUrl(repo.htmlUrl) },
                 modifier = Modifier.size(36.dp),
             ) {
                 Icon(

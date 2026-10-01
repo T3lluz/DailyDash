@@ -1,6 +1,7 @@
 package com.macrotracker.ui.components
 
 import android.app.Activity
+import com.macrotracker.ui.util.openUrl
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
@@ -79,7 +80,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.CachePolicy
@@ -234,7 +234,7 @@ fun YoutubeCard(viewModel: YouTubeViewModel = hiltViewModel()) {
                             icon = AppIcons.ExternalLink,
                             contentDescription = "Open YouTube",
                             onClick = {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, "https://www.youtube.com".toUri()))
+                                context.openUrl("https://www.youtube.com")
                             },
                         )
                     }
@@ -580,13 +580,7 @@ private fun YoutubeFeedBody(
         label = "ytFeedBody",
     ) { shown ->
         when (shown) {
-            0 -> ContentSkeleton(
-                tiles = 3,
-                tileAspect = 16f / 9f,
-                lines = 0,
-                accent = YtHairline,
-                surface = YtCardBg,
-            )
+            0 -> HeroListSkeleton(accent = YtHairline, surface = YtCardBg)
             1 -> HubErrorState(
                 message = (youtubeState as? YouTubeUiState.Error)?.message ?: "Couldn't load YouTube videos",
                 accent = YtRed,
@@ -616,7 +610,7 @@ private fun newCutoff(): Instant = Instant.now().minus(24, ChronoUnit.HOURS)
 
 private fun openVideo(context: Context, video: YoutubeVideo) {
     runCatching {
-        context.startActivity(Intent(Intent.ACTION_VIEW, "https://www.youtube.com/watch?v=${video.videoId}".toUri()))
+        context.openUrl("https://www.youtube.com/watch?v=${video.videoId}")
     }
 }
 
@@ -1536,6 +1530,12 @@ private fun WatchingTab(
     ) {
         items(trackedChannels, key = { it.channelId }) { channel ->
             SwipeToDismissBox(
+                // A removed channel fades and the rest close the gap, instead of popping.
+                modifier = Modifier.animateItem(
+                    fadeInSpec = MacroMotion.fadeTween(),
+                    placementSpec = MacroMotion.navTabSpring(),
+                    fadeOutSpec = MacroMotion.fadeTween(150),
+                ),
                 state = rememberSwipeToDismissBoxState(),
                 enableDismissFromStartToEnd = false,
                 onDismiss = { value ->
