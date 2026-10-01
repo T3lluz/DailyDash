@@ -149,10 +149,11 @@ class HealthViewModel @Inject constructor(
     val todaySleepSessions: StateFlow<List<SleepSessionRecord>> = _todaySleepSessions
 
     // Macro trends
-    private val _macroRangeDays = MutableStateFlow(7)
+    // Kept across launches, like the week's first day below; they reset on every start.
+    private val _macroRangeDays = MutableStateFlow(settingsRepository.foodTrendsRange())
     val macroRangeDays: StateFlow<Int> = _macroRangeDays
 
-    private val _macroMetric = MutableStateFlow("calories")
+    private val _macroMetric = MutableStateFlow(settingsRepository.foodTrendsMetric())
     val macroMetric: StateFlow<String> = _macroMetric
 
     private val _macroHistory = MutableStateFlow<List<DailySummary>>(emptyList())
@@ -183,7 +184,9 @@ class HealthViewModel @Inject constructor(
     val readRefusedDespiteGrant: StateFlow<Boolean> =
         healthConnectRepository.readRefusedDespiteGrant
 
-    private val _weekStartDay = MutableStateFlow(DayOfWeek.MONDAY)
+    private val _weekStartDay = MutableStateFlow(
+        runCatching { DayOfWeek.of(settingsRepository.healthWeekStart()) }.getOrDefault(DayOfWeek.MONDAY),
+    )
     val weekStartDay: StateFlow<DayOfWeek> = _weekStartDay
 
     private val _weeksBack = MutableStateFlow(0)
@@ -230,6 +233,7 @@ class HealthViewModel @Inject constructor(
 
     fun setWeekStartDay(day: DayOfWeek) {
         _weekStartDay.value = day
+        settingsRepository.saveHealthWeekStart(day.value)
         reloadWeekOnly()
     }
 
@@ -351,6 +355,7 @@ class HealthViewModel @Inject constructor(
     fun setMacroRangeDays(days: Int) {
         if (_macroRangeDays.value == days) return
         _macroRangeDays.value = days
+        settingsRepository.saveFoodTrendsRange(days)
         // Back to today: a day picked in the 30-day view may not be in the 7-day one.
         _macroSelectedDate.value = today
         loadMacroHistory()
@@ -358,6 +363,7 @@ class HealthViewModel @Inject constructor(
 
     fun setMacroMetric(metric: String) {
         _macroMetric.value = metric
+        settingsRepository.saveFoodTrendsMetric(metric)
     }
 
     fun selectMacroDate(date: String) {
