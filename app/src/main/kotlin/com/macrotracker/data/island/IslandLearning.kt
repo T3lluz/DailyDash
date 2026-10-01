@@ -80,7 +80,7 @@ class IslandLearning @Inject constructor(
 
     @Synchronized
     fun hide(item: IslandItem, at: LocalDateTime = LocalDateTime.now()) {
-        hidden[IslandRanking.key(item)] = at.toLocalDate().toString()
+        hidden[IslandRanking.hideKey(item)] = at.toLocalDate().toString()
         bump(item.kind, DayPart.of(at.hour), SHOWN, HIDE_WEIGHT)
         save()
     }

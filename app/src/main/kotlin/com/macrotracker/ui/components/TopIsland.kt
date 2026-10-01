@@ -388,6 +388,8 @@ private fun IslandEntry(
 @Composable
 private fun ToneMark(item: IslandItem, tone: Color) {
     val pulses = (item.tone == "needs" || item.tone == "live") && !rememberReducedMotion()
+    // The State is read in the draw phase, so the pulse redraws the mark each frame instead
+    // of recomposing the island's item line for as long as something is live.
     val glow = if (pulses) {
         val t = rememberInfiniteTransition(label = "isl_pulse")
         t.animateFloat(
@@ -395,15 +397,15 @@ private fun ToneMark(item: IslandItem, tone: Color) {
             targetValue = 1f,
             animationSpec = infiniteRepeatable(tween(if (item.tone == "needs") 1100 else 1200), RepeatMode.Reverse),
             label = "isl_pulse_a",
-        ).value
+        )
     } else {
-        0f
+        null
     }
     Box(
         modifier = Modifier
             .size(MarkSize)
             .clip(CircleShape)
-            .background(tone.copy(alpha = 0.2f + 0.12f * glow)),
+            .drawBehind { drawRect(tone.copy(alpha = 0.2f + 0.12f * (glow?.value ?: 0f))) },
         contentAlignment = Alignment.Center,
     ) {
         Icon(
@@ -568,5 +570,22 @@ private fun islandIcon(name: String): ImageVector = when (name) {
     "cloud-rain" -> AppIcons.CloudRain
     "shield-alert" -> AppIcons.Warning
     "circle-help" -> AppIcons.Help
+    // The server's other icon names (lucide's), so its items don't all fall back to "i".
+    "thermometer" -> AppIcons.Thermometer
+    "database-backup", "hard-drive" -> AppIcons.HardDrive
+    "power", "zap" -> AppIcons.Bolt
+    "package", "box" -> AppIcons.Blocks
+    "eye" -> AppIcons.Eye
+    "inbox" -> AppIcons.Inbox
+    "briefcase" -> AppIcons.Briefcase
+    "graduation-cap" -> AppIcons.GraduationCap
+    "cloud-sun" -> AppIcons.ThermometerSun
+    "cloud-fog", "cloud-snow", "cloud-lightning", "cloud-drizzle" -> AppIcons.Cloud
+    "git-pull-request", "git-branch", "github" -> AppIcons.GitFork
+    "bell" -> AppIcons.Bell
+    "cpu" -> AppIcons.Cpu
+    "heart-pulse" -> AppIcons.HeartPulse
+    "trophy" -> AppIcons.Trophy
+    "clock" -> AppIcons.Clock
     else -> AppIcons.Info
 }

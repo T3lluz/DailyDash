@@ -59,7 +59,12 @@ class IslandViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val prefs = context.getSharedPreferences("island", Context.MODE_PRIVATE)
-    private var serverItems: List<IslandItem> = repository.cachedIsland()?.items.orEmpty()
+    // The server's last line, until it is too old to be true: away from the tailnet overnight,
+    // "on now" and "in 10 min" items stayed up for good.
+    private var serverAtMs: Long = 0L
+    private var serverItems: List<IslandItem> = repository.cachedIsland()
+        ?.also { serverAtMs = it.atMs }
+        ?.takeIf { !stale(it.atMs) }?.items.orEmpty()
     private var localItems: List<IslandItem> = emptyList()
     private var appItems: List<IslandItem> = emptyList()
     private val _items = MutableStateFlow(ranked())
@@ -100,12 +105,18 @@ class IslandViewModel @Inject constructor(
         if (job?.isActive == true) return
         job = viewModelScope.launch {
             try {
-                serverItems = repository.island().items
+                val feed = repository.island()
+                serverItems = feed.items
+                serverAtMs = feed.atMs.takeIf { it > 0 } ?: System.currentTimeMillis()
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
                 // Off the tailnet: the island keeps what it last knew until it is out of date.
-                serverItems = serverItems.filterNot { it.kind == "cal" && it.tone == "live" }
+                serverItems = if (stale(serverAtMs)) {
+                    emptyList()
+                } else {
+                    serverItems.filterNot { it.kind == "cal" && it.tone == "live" }
+                }
             }
             publish()
         }
@@ -161,16 +172,22 @@ class IslandViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.Default) { learning.shown(next) }
     }
 
+    private fun stale(atMs: Long): Boolean = atMs > 0 && System.currentTimeMillis() - atMs > SERVER_STALE_MS
+
     private fun ranked(): List<IslandItem> = IslandRanking.rank(
-        items = filtered(serverItems + appItems + localItems),
+        items = filtered(serverItems + appItems + IslandRanking.withoutServerCovered(serverItems, localItems)),
         affinity = { learning.affinity(it) },
         hidden = learning.hiddenToday(),
     )
 
     private fun shorten(items: List<IslandItem>) {
-        if (items.isEmpty() || shortJob?.isActive == true) return
+        // Only the server's titles go to the AI: the phone writes its own short ones, and
+        // theirs change with every number ("6,800 steps to go"), one AI call each.
+        val server = serverItems.toSet()
+        val asked = items.filter { it in server }
+        if (asked.isEmpty() || shortJob?.isActive == true) return
         shortJob = viewModelScope.launch {
-            shortener.shorten(items)?.let { _shortTitles.value = it }
+            shortener.shorten(asked)?.let { _shortTitles.value = it }
         }
     }
 
@@ -188,6 +205,9 @@ class IslandViewModel @Inject constructor(
     }
 
     private companion object {
+        /** Older than this, the server's line is dropped and the phone's own items carry the island. */
+        const val SERVER_STALE_MS = 2 * 60 * 60_000L
+
         const val KEY_BRIEF_SEEN = "brief_seen"
         /** What the island is made of: mail and calendar, the briefing, chats, the stats file, settings. */
         val LIVE_CHANNELS = setOf("today", "brief", "threads", "stats", "sync")

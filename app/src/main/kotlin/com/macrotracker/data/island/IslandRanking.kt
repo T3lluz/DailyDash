@@ -47,6 +47,30 @@ object IslandRanking {
     /** One item per thing: the same title from two places (server and phone) shows once. */
     fun key(item: IslandItem): String = "${item.kind}|${item.title}"
 
+    /**
+     * What a long press hides for the day: the thing, not its wording. Items whose title is a
+     * live number ("6,800 steps to go", "14°"), came back as soon as it changed, so an item
+     * without a link or chat of its own is hidden by its kind.
+     */
+    fun hideKey(item: IslandItem): String = "${item.kind}|${item.thread ?: item.href ?: item.route ?: ""}"
+
+    /** The server's kind and the phone's for the same thing: weather now, a server, tonight's episode. */
+    private fun family(kind: String): String? = when (kind) {
+        "sky", "wx", "now" -> "weather"
+        "host", "srv" -> "server"
+        "air", "show" -> "tonight"
+        else -> null
+    }
+
+    /**
+     * The phone's items, less those the server's line already covers: both write the weather,
+     * a server in trouble and tonight's episode, under different kinds and words.
+     */
+    fun withoutServerCovered(server: List<IslandItem>, phone: List<IslandItem>): List<IslandItem> {
+        val covered = server.mapNotNull { family(it.kind) }.toSet()
+        return phone.filterNot { family(it.kind) in covered }
+    }
+
     fun rank(
         items: List<IslandItem>,
         affinity: (kind: String) -> Float,
@@ -54,7 +78,7 @@ object IslandRanking {
         max: Int = MAX_ITEMS,
     ): List<IslandItem> =
         items
-            .filterNot { key(it) in hidden }
+            .filterNot { hideKey(it) in hidden }
             .distinctBy { key(it) }
             .withIndex()
             .sortedWith(

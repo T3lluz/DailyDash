@@ -84,8 +84,10 @@ class IslandShortener @Inject constructor(
             failedAt = System.currentTimeMillis()
             return null
         }
-        // Oldest first, so the cap drops what has not been seen for longest.
-        val merged = LinkedHashMap(known).apply { putAll(parsed) }
+        // Oldest first, so the cap drops what has not been seen for longest. A title the model
+        // skipped keeps its plain short form, so it isn't asked for again on every refresh.
+        val skipped = (wanted - parsed.keys).associateWith { firstWords(it) }
+        val merged = LinkedHashMap(known).apply { putAll(skipped); putAll(parsed) }
         while (merged.size > MAX_KEPT) merged.remove(merged.keys.first())
         prefs.edit { putString(KEY_TITLES, JSONObject(merged as Map<*, *>).toString()) }
         return merged

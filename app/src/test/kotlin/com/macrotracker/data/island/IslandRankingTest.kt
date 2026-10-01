@@ -40,7 +40,7 @@ class IslandRankingTest {
     @Test fun `a hidden item and a repeat are left out, and the line is capped`() {
         val items = listOf(item("now", "quiet"), item("now", "quiet"), item("yt", "quiet")) +
             (1..10).map { item("x$it", "quiet") }
-        val ranked = IslandRanking.rank(items, flat, hidden = setOf("yt|yt"))
+        val ranked = IslandRanking.rank(items, flat, hidden = setOf("yt|"))
         assertEquals(IslandRanking.MAX_ITEMS, ranked.size)
         assertEquals(1, ranked.count { it.kind == "now" })
         assertEquals(0, ranked.count { it.kind == "yt" })
@@ -53,5 +53,17 @@ class IslandRankingTest {
         assertEquals(DayPart.AFTERNOON, DayPart.of(15))
         assertEquals(DayPart.EVENING, DayPart.of(20))
         assertEquals(DayPart.LATE, DayPart.of(23))
+    }
+
+    @Test fun `hiding an item with a live number keeps it hidden when the number changes`() {
+        val hidden = setOf(IslandRanking.hideKey(item("steps", "quiet", "6,800 steps to go")))
+        val ranked = IslandRanking.rank(listOf(item("steps", "quiet", "5,200 steps to go")), flat, hidden = hidden)
+        assertEquals(0, ranked.size)
+    }
+
+    @Test fun `the phone's weather and server items give way to the server's`() {
+        val server = listOf(item("sky", "quiet", "Rain at 16"), item("mail", "quiet"))
+        val phone = listOf(item("now", "quiet", "14°"), item("srv", "warn", "pi is offline"), item("steps", "quiet"))
+        assertEquals(listOf("srv", "steps"), IslandRanking.withoutServerCovered(server, phone).map { it.kind })
     }
 }
