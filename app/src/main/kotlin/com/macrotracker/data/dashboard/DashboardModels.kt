@@ -108,6 +108,8 @@ enum class MailTab(val key: String, val label: String) {
 data class MailBox(
     val account: String,
     val tabs: Map<MailTab, List<MailRow>>,
+    /** Newest inbox rows from `_today.json` (`mail.inbox`); empty on older copies. */
+    val inbox: List<MailRow> = emptyList(),
     /** Unread in the window the collector reads (three weeks). */
     val unread: Int,
     val window: String,
@@ -117,20 +119,28 @@ data class MailBox(
     val stale: Boolean,
     /** Set when Google cannot be reached and there is no copy at all. */
     val error: String?,
-)
+) {
+    /** Inbox for a widget: the server's list, or inbox-flagged tab rows on an older copy. */
+    fun listedInbox(): List<MailRow> =
+        inbox.ifEmpty {
+            tabs.values.flatten().filter { it.inbox }.distinctBy { it.id }
+                .sortedByDescending { it.at ?: Instant.EPOCH }
+        }
+}
 
 internal fun parseMailBox(today: JSONObject): MailBox? {
     val g = today.optJSONObject("google")
     val m = today.optJSONObject("mail")
     if (m == null) {
         val err = g?.nonBlank("error") ?: return null
-        return MailBox("", emptyMap(), 0, "", 0, 0, stale = true, error = err)
+        return MailBox("", emptyMap(), emptyList(), 0, "", 0, 0, stale = true, error = err)
     }
     val counts = m.optJSONObject("counts") ?: JSONObject()
     val tabs = MailTab.entries.associateWith { tab -> m.optJSONArray(tab.key).objects().map(::parseMailRow) }
     return MailBox(
         account = m.optString("account"),
         tabs = tabs,
+        inbox = m.optJSONArray("inbox").objects().map(::parseMailRow),
         unread = counts.optInt("unread"),
         window = counts.optString("window").ifBlank { "3 weeks" },
         noise = counts.optInt("noise"),

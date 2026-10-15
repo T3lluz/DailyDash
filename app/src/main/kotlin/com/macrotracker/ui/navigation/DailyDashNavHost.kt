@@ -18,6 +18,7 @@ import com.macrotracker.ui.screens.MealChatScreen
 import com.macrotracker.ui.screens.ServerScreen
 import com.macrotracker.ui.screens.SettingsScreen
 import com.macrotracker.ui.screens.WidgetsScreen
+import com.macrotracker.ui.screens.settings.PermissionsSettingsScreen
 import com.macrotracker.ui.screens.tilesmith.TilesmithStudioScreen
 import com.macrotracker.ui.screens.onboarding.PermissionsScreen
 import com.macrotracker.ui.screens.onboarding.TutorialScreen
@@ -54,6 +55,7 @@ private val SubScreens = setOf(
     SettingsRoutes.SERVERS,
     SettingsRoutes.SERVER_DASHBOARD,
     SettingsRoutes.ABOUT,
+    SettingsRoutes.PERMISSIONS,
 )
 
 private fun isSubScreen(route: String?): Boolean = route != null && route in SubScreens
@@ -170,6 +172,7 @@ fun DailyDashNavHost(
                 onNavigateToAbout = { navController.navigateToSubScreen(SettingsRoutes.ABOUT) },
                 onNavigateToWidgets = { navController.navigateToSubScreen(SubScreenRoutes.WIDGETS) },
                 onNavigateToServers = { navController.navigateToSubScreen(SettingsRoutes.SERVERS) },
+                onNavigateToPermissions = { navController.navigateToSubScreen(SettingsRoutes.PERMISSIONS) },
             )
         }
 
@@ -208,6 +211,10 @@ fun DailyDashNavHost(
 
         subScreen(SettingsRoutes.AI) { entry ->
             AiSettingsScreen(onNavigateBack = { navController.popSubScreen(entry) })
+        }
+
+        subScreen(SettingsRoutes.PERMISSIONS) { entry ->
+            PermissionsSettingsScreen(onNavigateBack = { navController.popSubScreen(entry) })
         }
 
         subScreen(SettingsRoutes.NUTRITION) { entry ->
@@ -264,6 +271,7 @@ fun DailyDashNavHost(
                 starterId = entry.arguments?.getString("starter"),
                 onNavigateBack = { navController.popSubScreen(entry) },
                 onOpenRoute = { navController.navigateToSubScreen(it) },
+                onOpenTab = { navController.navigateToTab(it) },
             )
         }
 

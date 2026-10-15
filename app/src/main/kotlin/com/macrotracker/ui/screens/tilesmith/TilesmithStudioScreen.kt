@@ -1,14 +1,17 @@
 package com.macrotracker.ui.screens.tilesmith
 
-import android.Manifest
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,14 +43,18 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -57,22 +64,29 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.health.connect.client.PermissionController
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.macrotracker.data.phone.PhoneExtras
+import com.macrotracker.data.phone.PhoneNotificationListener
 import com.macrotracker.data.remote.AiProvider
 import com.macrotracker.ui.components.AiProviderChips
 import com.macrotracker.ui.components.SubScreenHeader
+import com.macrotracker.ui.components.modelLogoBrand
+import com.macrotracker.ui.components.rememberGoogleConsent
 import com.macrotracker.ui.navigation.SettingsRoutes
 import com.macrotracker.ui.screens.ai.HermesModelSelector
+import com.macrotracker.ui.screens.ai.ModelLogo
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
@@ -90,22 +104,35 @@ import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.util.requestOrOpenSettings
 import com.macrotracker.ui.viewmodel.HermesViewModel
 import com.macrotracker.ui.viewmodel.SettingsViewModel
+import com.macrotracker.widget.tilesmith.BlockStyle
+import com.macrotracker.widget.tilesmith.BlockType
 import com.macrotracker.widget.tilesmith.TileAsk
+import com.macrotracker.widget.tilesmith.TileBlock
+import com.macrotracker.widget.tilesmith.TileDesign
 import com.macrotracker.widget.tilesmith.TileNeed
 import com.macrotracker.widget.tilesmith.TilePalette
 import com.macrotracker.widget.tilesmith.TileRules
 import com.macrotracker.widget.tilesmith.TileShape
 import com.macrotracker.widget.tilesmith.TileSize
+import com.macrotracker.widget.tilesmith.TileSources
+import com.macrotracker.widget.tilesmith.TileStarters
 import com.macrotracker.widget.tilesmith.TileSurface
+import com.macrotracker.widget.tilesmith.TileTone
+import com.macrotracker.widget.tilesmith.TilesmithPin
+import com.macrotracker.widget.tilesmith.TilesmithStore
 import com.macrotracker.widget.tilesmith.TilesmithWidgetSpec
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
- * The Tilesmith studio: the widget on a stage, the conversation that shapes it (the AI drafts,
- * every comment revises), what it still needs (one tap each), the tweaks that need no AI (size,
- * colours, background, shape, how often it updates), and one button to put it on the home
- * screen. Everything saves as it changes.
+ * The Tilesmith studio. With no design open it is the front door: describe a widget, start
+ * from one of the starters, or open one of your widgets. With one open: the widget on a stage,
+ * what it still needs (one tap each, or all of Android's at once), the conversation that shapes
+ * it with the AI's suggested next changes, its blocks to tweak one by one, the tweaks that need
+ * no AI (size, colours, background, shape, how often it updates), and one button to put it on
+ * the home screen. Every change saves as it happens; the widgets button switches designs.
  */
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun TilesmithStudioScreen(
     designId: String?,
@@ -113,6 +140,7 @@ fun TilesmithStudioScreen(
     starterId: String?,
     onNavigateBack: () -> Unit,
     onOpenRoute: (String) -> Unit,
+    onOpenTab: (String) -> Unit = {},
     viewModel: TilesmithViewModel = hiltViewModel(),
     settingsViewModel: SettingsViewModel = hiltViewModel(),
     hermesViewModel: HermesViewModel = hiltViewModel(),
@@ -120,6 +148,7 @@ fun TilesmithStudioScreen(
     val context = LocalContext.current
     val haptics = rememberHaptics()
     val state by viewModel.state.collectAsState()
+    val designs by viewModel.designs.collectAsState()
     val aiProvider by settingsViewModel.aiProvider.collectAsState()
     LaunchedEffect(designId, prompt, starterId) { viewModel.open(designId, prompt, starterId) }
     LaunchedEffect(aiProvider) { viewModel.recheck() }
@@ -130,14 +159,22 @@ fun TilesmithStudioScreen(
     var input by rememberSaveable { mutableStateOf("") }
     var confirm by remember { mutableStateOf<TileAsk?>(null) }
     var renaming by remember { mutableStateOf(false) }
+    var showWidgets by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<Int?>(null) }
+    var managing by remember { mutableStateOf<TileDesign?>(null) }
 
     val runtimePerms = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { viewModel.granted() }
     val healthPerms = rememberLauncherForActivityResult(PermissionController.createRequestPermissionResultContract()) { viewModel.granted() }
+    val googleConsent = rememberGoogleConsent { error ->
+        viewModel.granted()
+        if (error != null) Toast.makeText(context, error, Toast.LENGTH_LONG).show()
+    }
+    val pickPicture = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let(viewModel::attach) }
 
     fun handle(ask: TileAsk) {
         haptics.click()
         when (ask.need) {
-            TileNeed.CALENDAR, TileNeed.LOCATION -> {
+            TileNeed.CALENDAR, TileNeed.LOCATION, TileNeed.CONTACTS, TileNeed.PHOTOS, TileNeed.BLUETOOTH -> {
                 val first = ask.permissions.firstOrNull() ?: return
                 context.requestOrOpenSettings(first) { runtimePerms.launch(ask.permissions.toTypedArray()) }
             }
@@ -151,6 +188,12 @@ fun TilesmithStudioScreen(
                 runCatching { healthPerms.launch(ask.permissions) }
             }
             TileNeed.USAGE -> runCatching { context.startActivity(PhoneExtras.usageSettingsIntent(context)) }
+            TileNeed.NOTIFICATIONS -> runCatching { context.startActivity(PhoneNotificationListener.settingsIntent(context)) }
+            TileNeed.GOOGLE -> googleConsent(ask.scopes)
+            TileNeed.YOUTUBE, TileNeed.TWITCH -> {
+                Toast.makeText(context, if (ask.need == TileNeed.YOUTUBE) "Follow channels on Home's YouTube card" else "Connect Twitch on Home's Twitch card", Toast.LENGTH_LONG).show()
+                onOpenTab("home")
+            }
             TileNeed.SERVER -> onOpenRoute(SettingsRoutes.SERVERS)
             TileNeed.GITHUB, TileNeed.DASHBOARD -> onOpenRoute(SettingsRoutes.CONNECTIONS)
             TileNeed.AI -> onOpenRoute(SettingsRoutes.AI)
@@ -175,100 +218,126 @@ fun TilesmithStudioScreen(
             SubScreenHeader(
                 title = design?.name ?: "Tilesmith",
                 subtitle = when {
-                    design == null -> "New widget"
+                    design == null -> "Describe any widget and AI builds it"
                     state.placed == 1 -> "Tilesmith · on your home screen"
                     state.placed > 1 -> "Tilesmith · ${state.placed} on your home screen"
                     else -> "Tilesmith · ${design.size.label} ${design.size.cells}"
                 },
                 onNavigateBack = onNavigateBack,
                 trailing = {
-                    if (state.undo != null && !state.busy) {
+                    if (state.undo.isNotEmpty() && !state.busy) {
                         TextButton(onClick = { haptics.tick(); viewModel.undo() }) {
                             Text("Undo", color = TilesmithAccent, fontWeight = FontWeight.SemiBold)
                         }
                     }
                     if (design != null) {
-                        Box(
-                            Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .clickable { haptics.tick(); renaming = true },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(AppIcons.Edit, contentDescription = "Rename", tint = TextSecondary, modifier = Modifier.size(19.dp))
-                        }
+                        HeaderButton(AppIcons.Edit, "Rename") { haptics.tick(); renaming = true }
+                        HeaderButton(AppIcons.Grid, "Your widgets") { haptics.tick(); showWidgets = true }
                     }
                 },
             )
 
-            Stage(state, dark, onToggleDark = { haptics.tick(); dark = !dark })
+            if (design == null && !state.busy) {
+                EmptyStudio(
+                    designs = designs.orEmpty(),
+                    aiReady = state.aiReady,
+                    onOpen = { haptics.click(); viewModel.switchTo(it.id) },
+                    onManage = { haptics.tick(); managing = it },
+                    onStarter = { haptics.click(); viewModel.startFrom(it) },
+                    onExample = { input = it },
+                )
+            } else {
+                Stage(state, dark, onToggleDark = { haptics.tick(); dark = !dark })
 
-            AnimatedVisibility(visible = state.dropped > 0) {
-                Note("${state.dropped} block${if (state.dropped == 1) "" else "s"} didn't fit this size. Undo brings ${if (state.dropped == 1) "it" else "them"} back.")
-            }
-
-            if (state.asks.isNotEmpty()) {
-                SectionTitle("It needs")
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    state.asks.forEach { ask -> AskRow(ask) { handle(ask) } }
+                AnimatedVisibility(visible = state.dropped > 0) {
+                    Note("${state.dropped} block${if (state.dropped == 1) "" else "s"} didn't fit this size. Undo brings ${if (state.dropped == 1) "it" else "them"} back.")
                 }
-            }
 
-            if (state.lines.isNotEmpty()) {
-                SectionTitle("Conversation")
-                Conversation(state)
-            }
-
-            if (design != null) {
-                SectionTitle("Size")
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TileSize.entries.forEach { s ->
-                        SizeChip(s, selected = design.size == s) { haptics.tick(); viewModel.setSize(s) }
+                if (state.asks.isNotEmpty()) {
+                    SectionTitle("It needs")
+                    val runtime = state.asks.filter { it.runtime }
+                    if (runtime.size >= 2) {
+                        AllowAll(runtime.size) {
+                            haptics.confirm()
+                            runtimePerms.launch(runtime.flatMap { it.permissions }.distinct().toTypedArray())
+                        }
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        state.asks.forEach { ask -> AskRow(ask) { handle(ask) } }
                     }
                 }
 
-                SectionTitle("Colours")
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(end = 8.dp)) {
-                    items(TilePalette.entries.toList()) { p ->
-                        PaletteSwatch(p, selected = design.palette == p, dark = dark) { haptics.tick(); viewModel.setPalette(p) }
-                    }
+                if (state.lines.isNotEmpty()) {
+                    SectionTitle("Conversation")
+                    Conversation(state)
                 }
-
-                SectionTitle("Background")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TileSurface.entries.forEach { s ->
-                        SurfaceChip(s, design.palette, dark, selected = design.surface == s, modifier = Modifier.weight(1f)) {
-                            haptics.tick()
-                            viewModel.setSurface(s)
+                if (state.suggestions.isNotEmpty() && !state.busy && state.aiReady) {
+                    Spacer(Modifier.height(10.dp))
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        state.suggestions.forEach { s ->
+                            SuggestionChip(s) {
+                                haptics.confirm()
+                                viewModel.send(s)
+                            }
                         }
                     }
                 }
 
-                SectionTitle("Shape")
-                val current = design.blocks.firstNotNullOfOrNull { it.shape }
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(end = 8.dp)) {
-                    items(TileShape.entries.toList()) { s ->
-                        ShapeChip(s, selected = current == s) { haptics.tick(); viewModel.setShape(s) }
-                    }
-                }
+                if (design != null) {
+                    SectionTitle("Blocks")
+                    BlocksList(design, onEdit = { haptics.tick(); editing = it })
 
-                SectionTitle("Updates")
-                val effective = TileRules.effectiveRefreshMinutes(design)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TileRules.REFRESH_CHOICES.forEach { m ->
-                        Chip(if (m < 60) "$m min" else "${m / 60} h", selected = design.refreshMinutes == m) { haptics.tick(); viewModel.setRefresh(m) }
+                    SectionTitle("Size")
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TileSize.entries.forEach { s ->
+                            SizeChip(s, selected = design.size == s) { haptics.tick(); viewModel.setSize(s) }
+                        }
                     }
+
+                    SectionTitle("Colours")
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(end = 8.dp)) {
+                        items(TilePalette.entries.toList()) { p ->
+                            PaletteSwatch(p, selected = design.palette == p, dark = dark) { haptics.tick(); viewModel.setPalette(p) }
+                        }
+                    }
+
+                    SectionTitle("Background")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TileSurface.entries.forEach { s ->
+                            SurfaceChip(s, design.palette, dark, selected = design.surface == s, modifier = Modifier.weight(1f)) {
+                                haptics.tick()
+                                viewModel.setSurface(s)
+                            }
+                        }
+                    }
+
+                    SectionTitle("Shape")
+                    val current = design.blocks.firstNotNullOfOrNull { it.shape }
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(end = 8.dp)) {
+                        items(TileShape.entries.toList()) { s ->
+                            ShapeChip(s, selected = current == s) { haptics.tick(); viewModel.setShape(s) }
+                        }
+                    }
+
+                    SectionTitle("Updates")
+                    val effective = TileRules.effectiveRefreshMinutes(design)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TileRules.REFRESH_CHOICES.forEach { m ->
+                            Chip(if (m < 60) "$m min" else "${m / 60} h", selected = design.refreshMinutes == m) { haptics.tick(); viewModel.setRefresh(m) }
+                        }
+                    }
+                    Text(
+                        text = when {
+                            effective > design.refreshMinutes -> "Its data changes every $effective min at most, so it updates every $effective. Clocks, countdowns and what's playing update live."
+                            else -> "Every ${if (effective < 60) "$effective min" else "${effective / 60} h"}, and when you unlock the phone. Clocks, countdowns and what's playing update live; AI lines keep their own pace."
+                        },
+                        fontSize = 12.sp,
+                        color = TextSecondary,
+                        lineHeight = 16.sp,
+                        modifier = Modifier.padding(start = 4.dp, top = 8.dp),
+                    )
                 }
-                Text(
-                    text = when {
-                        effective > design.refreshMinutes -> "Its data changes every $effective min at most, so it updates every $effective. Clocks and countdowns tick live."
-                        else -> "Every ${if (effective < 60) "$effective min" else "${effective / 60} h"}, and when you unlock the phone. Clocks and countdowns tick live; AI lines keep their own pace."
-                    },
-                    fontSize = 12.sp,
-                    color = TextSecondary,
-                    lineHeight = 16.sp,
-                    modifier = Modifier.padding(start = 4.dp, top = 8.dp),
-                )
             }
         }
 
@@ -288,6 +357,11 @@ fun TilesmithStudioScreen(
                 input = ""
             },
             onStop = { haptics.tick(); viewModel.stop() },
+            onAttach = {
+                haptics.tick()
+                pickPicture.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            },
+            onClearAttachment = { haptics.tick(); viewModel.clearAttachment() },
             onConnectAi = { onOpenRoute(if (aiProvider == AiProvider.HERMES) SettingsRoutes.CONNECTIONS else SettingsRoutes.AI) },
             onPin = {
                 haptics.confirm()
@@ -296,6 +370,74 @@ fun TilesmithStudioScreen(
                 }
             },
         )
+    }
+
+    if (showWidgets) {
+        val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(onDismissRequest = { showWidgets = false }, sheetState = sheet, containerColor = Background) {
+            Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Your widgets", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary, modifier = Modifier.weight(1f))
+                    Row(
+                        Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(TilesmithAccent)
+                            .clickable { haptics.click(); showWidgets = false; viewModel.newWidget() }
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(AppIcons.Add, null, tint = OnAccent, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("New", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = OnAccent)
+                    }
+                }
+                Text("Tap one to open it here, hold it to duplicate or delete.", fontSize = 12.sp, color = TextSecondary, modifier = Modifier.padding(top = 2.dp, bottom = 12.dp))
+                DesignGrid(
+                    designs = designs.orEmpty(),
+                    current = design?.id,
+                    onOpen = { haptics.click(); showWidgets = false; viewModel.switchTo(it.id) },
+                    onManage = { haptics.tick(); managing = it },
+                )
+            }
+        }
+    }
+
+    managing?.let { d ->
+        AlertDialog(
+            onDismissRequest = { managing = null },
+            title = { Text(d.name) },
+            text = { Text("Duplicate it to try a variation, or delete it. Copies on your home screen ask you to pick another design.", color = TextSecondary) },
+            confirmButton = {
+                TextButton(onClick = { haptics.confirm(); viewModel.delete(d.id); managing = null }) { Text("Delete", color = Error) }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = {
+                        val copy = viewModel.duplicate(d)
+                        managing = null
+                        showWidgets = false
+                        viewModel.switchTo(copy.id)
+                    }) { Text("Duplicate", color = TilesmithAccent) }
+                    TextButton(onClick = { managing = null }) { Text("Cancel", color = TextSecondary) }
+                }
+            },
+            containerColor = Surface,
+        )
+    }
+
+    editing?.let { index ->
+        val block = design?.blocks?.getOrNull(index)
+        if (block != null) {
+            BlockEditor(
+                block = block,
+                index = index,
+                count = design.blocks.size,
+                onChange = { change -> viewModel.updateBlock(index, change) },
+                onMove = { delta -> viewModel.moveBlock(index, delta); editing = index + delta },
+                onRemove = { viewModel.removeBlock(index); editing = null },
+                onDismiss = { editing = null },
+            )
+        }
     }
 
     confirm?.let { ask ->
@@ -358,6 +500,172 @@ fun TilesmithStudioScreen(
             dismissButton = { TextButton(onClick = { renaming = false }) { Text("Cancel", color = TextSecondary) } },
             containerColor = Surface,
         )
+    }
+}
+
+@Composable
+private fun HeaderButton(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = label, tint = TextSecondary, modifier = Modifier.size(19.dp))
+    }
+}
+
+// ── The front door: no design open ──────────────────────────────────────────
+
+/** What people tend to ask for, as one-tap fills for the composer. */
+private val EXAMPLES = listOf(
+    "Newest YouTube videos as cards I can swipe",
+    "My Gmail inbox, scrollable",
+    "What's playing, with skip buttons",
+    "Next F1 session countdown and standings",
+    "A photo from my phone every hour",
+    "Premier League scores today",
+)
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun EmptyStudio(
+    designs: List<TileDesign>,
+    aiReady: Boolean,
+    onOpen: (TileDesign) -> Unit,
+    onManage: (TileDesign) -> Unit,
+    onStarter: (String) -> Unit,
+    onExample: (String) -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp)
+            .clip(RoundedCornerShape(28.dp))
+            .background(Brush.linearGradient(listOf(TilesmithAccent.copy(alpha = 0.22f), TilesmithAccent.copy(alpha = 0.05f))))
+            .border(1.dp, Border, RoundedCornerShape(28.dp))
+            .padding(18.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            MorphingShape(HeroShapes, TilesmithAccent, Modifier.size(44.dp))
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text("What should it show?", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                Text(
+                    if (aiReady) "Describe it below, or attach a picture of a widget you like. Anything from your phone, your accounts or the web."
+                    else "Pick a starter, or connect an AI to describe your own.",
+                    fontSize = 13.sp,
+                    color = TextSecondary,
+                    lineHeight = 18.sp,
+                )
+            }
+        }
+        if (aiReady) {
+            Spacer(Modifier.height(12.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                EXAMPLES.forEach { e -> SuggestionChip(e) { onExample(e) } }
+            }
+        }
+    }
+
+    if (designs.isNotEmpty()) {
+        SectionTitle("Your widgets")
+        DesignGrid(designs, current = null, onOpen = onOpen, onManage = onManage)
+    }
+
+    SectionTitle("Start from")
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        TileStarters.all.chunked(2).forEach { pair ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                pair.forEach { s ->
+                    Row(
+                        Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Surface)
+                            .border(1.dp, Border, RoundedCornerShape(16.dp))
+                            .clickable { onStarter(s.id) }
+                            .padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        ShapeGlyph(
+                            s.design.blocks.firstNotNullOfOrNull { it.shape } ?: TileShape.COOKIE_9,
+                            s.design.palette.takeIf { it != TilePalette.WALLPAPER }?.let { p -> Color(p.seed) } ?: TilesmithAccent,
+                            Modifier.size(24.dp),
+                        )
+                        Spacer(Modifier.width(9.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(s.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(s.prompt, fontSize = 11.sp, color = TextTertiary, maxLines = 2, lineHeight = 14.sp, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+/** Your designs, two across, each as its widget draws it, newest first. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun DesignGrid(designs: List<TileDesign>, current: String?, onOpen: (TileDesign) -> Unit, onManage: (TileDesign) -> Unit) {
+    val context = LocalContext.current
+    val placedTick by TilesmithStore.placedChanges.collectAsState()
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        designs.chunked(2).forEach { pair ->
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                pair.forEach { d ->
+                    val placed by produceState(0, d.id, placedTick) {
+                        value = withContext(Dispatchers.IO) { TilesmithPin.placedCount(context, d.id) }
+                    }
+                    val on = d.id == current
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(if (on) TilesmithAccent.copy(alpha = 0.12f) else Surface)
+                            .border(if (on) 1.5.dp else 1.dp, if (on) TilesmithAccent else Border, RoundedCornerShape(18.dp))
+                            .combinedClickable(onClick = { onOpen(d) }, onLongClick = { onManage(d) })
+                            .padding(10.dp),
+                    ) {
+                        TilePreview(
+                            design = d,
+                            values = remember(d.id, d.updatedAt) { TilesmithStore.values(context, d.id) },
+                            size = TilesmithWidgetSpec.previewSizeOf(d.size),
+                            dark = context.isNight(),
+                            modifier = Modifier.fillMaxWidth().height(92.dp),
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(d.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            when {
+                                placed > 1 -> "$placed on home screen"
+                                placed == 1 -> "On home screen"
+                                else -> "${d.size.label} · ${ago(d.updatedAt)}"
+                            },
+                            fontSize = 11.sp,
+                            color = if (placed > 0) Success else TextTertiary,
+                            maxLines = 1,
+                        )
+                    }
+                }
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+private fun ago(ms: Long): String {
+    val m = (System.currentTimeMillis() - ms) / 60_000
+    return when {
+        m < 1 -> "just now"
+        m < 60 -> "${m}m ago"
+        m < 24 * 60 -> "${m / 60}h ago"
+        m < 7 * 24 * 60 -> "${m / (24 * 60)}d ago"
+        else -> java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+            .format(java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.getDefault()))
     }
 }
 
@@ -431,6 +739,179 @@ private fun Stage(state: StudioState, dark: Boolean, onToggleDark: () -> Unit) {
     }
 }
 
+// ── Blocks: one at a time ───────────────────────────────────────────────────
+
+private fun blockIcon(t: BlockType): ImageVector = when (t) {
+    BlockType.METRIC -> AppIcons.Gauge
+    BlockType.RING -> AppIcons.ChartPie
+    BlockType.BAR -> AppIcons.Rows
+    BlockType.CHART -> AppIcons.ChartColumn
+    BlockType.LIST -> AppIcons.List
+    BlockType.TEXT -> AppIcons.NotepadText
+    BlockType.BADGE -> AppIcons.Star
+    BlockType.CLOCK -> AppIcons.Clock
+    BlockType.DATE -> AppIcons.CalendarDays
+    BlockType.COUNTDOWN -> AppIcons.Clock
+    BlockType.BUTTON -> AppIcons.Link
+    BlockType.AI -> AppIcons.Sparkles
+    BlockType.IMAGE -> AppIcons.Images
+    BlockType.CAROUSEL -> AppIcons.Video
+    BlockType.MEDIA -> AppIcons.Music
+}
+
+/** What a block shows, in a few words: its label, else its source's name, else its own text. */
+private fun blockTitle(b: TileBlock): String =
+    b.label ?: TileSources.byKey(b.bind)?.label ?: b.text?.take(40) ?: b.type.label
+
+@Composable
+private fun BlocksList(design: TileDesign, onEdit: (Int) -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(Surface)
+            .border(1.dp, Border, RoundedCornerShape(16.dp)),
+    ) {
+        design.blocks.forEachIndexed { i, b ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { onEdit(i) }
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.size(30.dp).clip(RoundedCornerShape(9.dp)).background(TilesmithAccent.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+                    Icon(blockIcon(b.type), null, tint = TilesmithAccent, modifier = Modifier.size(16.dp))
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(blockTitle(b), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        listOfNotNull(b.type.label, b.query?.let { "“$it”" }, b.url?.let { com.macrotracker.widget.tilesmith.TilesmithStore.siteHost(it) }).joinToString(" · "),
+                        fontSize = 12.sp,
+                        color = TextSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Icon(AppIcons.ChevronRight, null, tint = TextTertiary, modifier = Modifier.size(18.dp))
+            }
+        }
+    }
+    Text(
+        "Tap a block to change how it looks, or move or remove it. For anything else, just say it below.",
+        fontSize = 12.sp,
+        color = TextSecondary,
+        lineHeight = 16.sp,
+        modifier = Modifier.padding(start = 4.dp, top = 8.dp),
+    )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun BlockEditor(
+    block: TileBlock,
+    index: Int,
+    count: Int,
+    onChange: ((TileBlock) -> TileBlock) -> Unit,
+    onMove: (Int) -> Unit,
+    onRemove: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val haptics = rememberHaptics()
+    val source = TileSources.byKey(block.bind)
+    val types = (TileSources.typesFor(source) + block.type).distinct()
+    var label by remember(index, block.label) { mutableStateOf(block.label.orEmpty()) }
+    AlertDialog(
+        onDismissRequest = {
+            if (label.trim() != block.label.orEmpty()) onChange { it.copy(label = label.trim().take(40).ifBlank { null }) }
+            onDismiss()
+        },
+        containerColor = Surface,
+        title = { Text(blockTitle(block)) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                source?.let { Text(it.hint, fontSize = 12.sp, color = TextSecondary, lineHeight = 16.sp) }
+                EditorTitle("Label")
+                BasicTextField(
+                    value = label,
+                    onValueChange = { label = it.take(40) },
+                    singleLine = true,
+                    textStyle = TextStyle(color = TextPrimary, fontSize = 15.sp),
+                    cursorBrush = SolidColor(TilesmithAccent),
+                    decorationBox = { inner ->
+                        if (label.isEmpty()) Text(source?.label ?: "No label", color = TextTertiary, fontSize = 15.sp)
+                        inner()
+                    },
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(SurfaceElevated).padding(12.dp),
+                )
+                EditorTitle("Shows as")
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    types.forEach { t ->
+                        Chip(t.label, selected = block.type == t) { haptics.tick(); onChange { it.copy(type = t) } }
+                    }
+                }
+                if (block.type == BlockType.LIST) {
+                    EditorTitle("List")
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(null to "Fits", "scroll" to "Scrolls", "thumbs" to "Pictures", "plain" to "No pictures").forEach { (v, l) ->
+                            Chip(l, selected = block.variant == v) { haptics.tick(); onChange { it.copy(variant = v) } }
+                        }
+                    }
+                }
+                if (block.type == BlockType.CHART) {
+                    EditorTitle("Chart")
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(null to "Bars", "line" to "Line").forEach { (v, l) ->
+                            Chip(l, selected = block.variant == v) { haptics.tick(); onChange { it.copy(variant = v) } }
+                        }
+                    }
+                }
+                EditorTitle("Colour")
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    TileTone.entries.forEach { t ->
+                        Chip(t.id.replaceFirstChar { it.uppercase() }, selected = block.tone == t) { haptics.tick(); onChange { it.copy(tone = t) } }
+                    }
+                }
+                EditorTitle("Style")
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    BlockStyle.entries.forEach { st ->
+                        Chip(st.id.replaceFirstChar { it.uppercase() }, selected = block.style == st) {
+                            haptics.tick()
+                            onChange { it.copy(style = st, shape = if (st == BlockStyle.SHAPE) it.shape ?: TileShape.COOKIE_9 else it.shape) }
+                        }
+                    }
+                }
+                EditorTitle("Width in its row")
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    (1..4).forEach { w ->
+                        Chip("$w×", selected = block.weight == w) { haptics.tick(); onChange { it.copy(weight = w) } }
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (index > 0) Chip("Move earlier", selected = false) { haptics.tick(); onMove(-1) }
+                    if (index < count - 1) Chip("Move later", selected = false) { haptics.tick(); onMove(1) }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                if (label.trim() != block.label.orEmpty()) onChange { it.copy(label = label.trim().take(40).ifBlank { null }) }
+                onDismiss()
+            }) { Text("Done", color = TilesmithAccent) }
+        },
+        dismissButton = {
+            if (count > 1) TextButton(onClick = { haptics.reject(); onRemove() }) { Text("Remove", color = Error) }
+        },
+    )
+}
+
+@Composable
+private fun EditorTitle(text: String) {
+    Text(text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary, modifier = Modifier.padding(top = 14.dp, bottom = 6.dp))
+}
+
 // ── Pieces ──────────────────────────────────────────────────────────────────
 
 @Composable
@@ -467,6 +948,31 @@ private fun iconFor(need: TileNeed): ImageVector = when (need) {
     TileNeed.AI -> AppIcons.Sparkles
     TileNeed.COMMAND -> AppIcons.Terminal
     TileNeed.SITE -> AppIcons.Link
+    TileNeed.GOOGLE -> AppIcons.Mail
+    TileNeed.YOUTUBE -> AppIcons.Video
+    TileNeed.TWITCH -> AppIcons.TvPlay
+    TileNeed.NOTIFICATIONS -> AppIcons.Music
+    TileNeed.CONTACTS -> AppIcons.Users
+    TileNeed.PHOTOS -> AppIcons.Images
+    TileNeed.BLUETOOTH -> AppIcons.Bluetooth
+}
+
+@Composable
+private fun AllowAll(count: Int, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(46.dp)
+            .clip(RoundedCornerShape(23.dp))
+            .background(TilesmithAccent)
+            .clickable(onClick = onClick),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(AppIcons.ShieldCheck, null, tint = OnAccent, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("Allow all $count at once", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = OnAccent)
+    }
 }
 
 @Composable
@@ -494,7 +1000,9 @@ private fun AskRow(ask: TileAsk, onClick: () -> Unit) {
         Text(
             when (ask.need) {
                 TileNeed.COMMAND, TileNeed.SITE -> "Review"
-                TileNeed.SERVER, TileNeed.GITHUB, TileNeed.DASHBOARD, TileNeed.AI -> "Set up"
+                TileNeed.SERVER, TileNeed.GITHUB, TileNeed.DASHBOARD, TileNeed.AI, TileNeed.YOUTUBE, TileNeed.TWITCH -> "Set up"
+                TileNeed.GOOGLE -> "Connect"
+                TileNeed.NOTIFICATIONS, TileNeed.USAGE -> "Open"
                 else -> "Allow"
             },
             fontSize = 13.sp,
@@ -524,7 +1032,15 @@ private fun Conversation(state: StudioState) {
         }
         lines.forEach { line ->
             if (line.fromUser) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
+                    line.picture?.let { p ->
+                        Image(
+                            p.asImageBitmap(),
+                            contentDescription = "Attached picture",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.padding(bottom = 4.dp).size(96.dp).clip(RoundedCornerShape(14.dp)),
+                        )
+                    }
                     Text(
                         line.text,
                         fontSize = 14.sp,
@@ -555,6 +1071,23 @@ private fun Conversation(state: StudioState) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SuggestionChip(text: String, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(50))
+            .background(TilesmithAccent.copy(alpha = 0.12f))
+            .border(1.dp, TilesmithAccent.copy(alpha = 0.45f), RoundedCornerShape(50))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(AppIcons.Sparkles, null, tint = TilesmithAccent, modifier = Modifier.size(13.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(text, fontSize = 13.sp, color = TextPrimary, fontWeight = FontWeight.Medium, maxLines = 1)
     }
 }
 
@@ -662,9 +1195,13 @@ private fun BottomBar(
     onInput: (String) -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
+    onAttach: () -> Unit,
+    onClearAttachment: () -> Unit,
     onConnectAi: () -> Unit,
     onPin: () -> Unit,
 ) {
+    // The provider is one pill; the full picker opens from it, so the composer keeps its room.
+    var picking by remember { mutableStateOf(false) }
     Column(
         Modifier
             .fillMaxWidth()
@@ -673,12 +1210,32 @@ private fun BottomBar(
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        AiProviderChips(
-            selected = aiProvider,
-            onSelect = onSelectProvider,
-        )
-        if (aiProvider == AiProvider.HERMES) {
-            HermesModelSelector(viewModel = hermesViewModel, showStatus = true)
+        AnimatedVisibility(visible = picking) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                AiProviderChips(selected = aiProvider, onSelect = { onSelectProvider(it) })
+                if (aiProvider == AiProvider.HERMES) HermesModelSelector(viewModel = hermesViewModel, showStatus = true)
+            }
+        }
+        state.attachment?.let { a ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box {
+                    Image(a.thumb.asImageBitmap(), contentDescription = "Picture to build from", contentScale = ContentScale.Crop, modifier = Modifier.size(56.dp).clip(RoundedCornerShape(12.dp)))
+                    Box(
+                        Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(2.dp)
+                            .size(20.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.6f))
+                            .clickable(onClick = onClearAttachment),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(AppIcons.Close, contentDescription = "Remove picture", tint = Color.White, modifier = Modifier.size(12.dp))
+                    }
+                }
+                Spacer(Modifier.width(10.dp))
+                Text("The AI builds from this picture with your own data.", fontSize = 12.sp, color = TextSecondary, lineHeight = 16.sp)
+            }
         }
         if (state.aiReady) {
             val composerShape = RoundedCornerShape(24.dp)
@@ -689,14 +1246,24 @@ private fun BottomBar(
                     .clip(composerShape)
                     .background(Surface)
                     .border(1.dp, Border, composerShape)
-                    .padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+                    .padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                ProviderPill(aiProvider, open = picking) { picking = !picking }
+                Box(
+                    Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .clickable(enabled = !state.busy, onClick = onAttach),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(AppIcons.ImagePlus, contentDescription = "Attach a picture", tint = if (state.attachment != null) TilesmithAccent else TextSecondary, modifier = Modifier.size(19.dp))
+                }
                 BasicTextField(
                     value = input,
                     onValueChange = onInput,
                     enabled = !state.busy,
-                    modifier = Modifier.weight(1f).padding(vertical = 8.dp),
+                    modifier = Modifier.weight(1f).padding(vertical = 8.dp, horizontal = 4.dp),
                     textStyle = TextStyle(color = TextPrimary, fontSize = 15.sp, lineHeight = 20.sp),
                     cursorBrush = SolidColor(TilesmithAccent),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
@@ -705,9 +1272,10 @@ private fun BottomBar(
                     decorationBox = { inner ->
                         if (input.isEmpty()) {
                             Text(
-                                if (state.design == null) "Describe your widget…" else "Tell it what to change…",
+                                if (state.design == null) "Describe any widget…" else "Tell it what to change…",
                                 color = TextTertiary,
                                 fontSize = 15.sp,
+                                maxLines = 1,
                             )
                         }
                         inner()
@@ -739,13 +1307,13 @@ private fun BottomBar(
                     .padding(horizontal = 14.dp, vertical = 11.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(AppIcons.Sparkles, contentDescription = null, tint = TilesmithAccent, modifier = Modifier.size(18.dp))
+                ProviderPill(aiProvider, open = picking) { picking = !picking }
                 Spacer(Modifier.width(10.dp))
                 Text(
                     if (aiProvider == AiProvider.HERMES) {
                         "Set your dashboard in Settings → Connections, and be on the tailnet."
                     } else {
-                        "Connect an AI in Settings → AI to describe widgets and change them by comment."
+                        "Connect ${aiProvider.displayName} in Settings → AI to describe widgets and change them by comment."
                     },
                     fontSize = 12.sp,
                     color = TextSecondary,
@@ -785,5 +1353,23 @@ private fun BottomBar(
                 )
             }
         }
+    }
+}
+
+/** The AI that builds: its logo, and a tap opens the picker above the composer. */
+@Composable
+private fun ProviderPill(provider: AiProvider, open: Boolean, onClick: () -> Unit) {
+    val brand = provider.modelLogoBrand()
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(50))
+            .background(if (open) TilesmithAccent.copy(alpha = 0.16f) else SurfaceElevated)
+            .clickable(onClick = onClick)
+            .padding(start = 5.dp, end = 8.dp, top = 5.dp, bottom = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (brand != null) ModelLogo(brand, 24.dp) else Icon(AppIcons.Sparkles, null, tint = TilesmithAccent, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(2.dp))
+        Icon(if (open) AppIcons.ChevronDown else AppIcons.ChevronUp, contentDescription = "Pick the AI (${provider.displayName})", tint = TextSecondary, modifier = Modifier.size(14.dp))
     }
 }

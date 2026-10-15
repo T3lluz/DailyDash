@@ -107,3 +107,17 @@ internal fun shareCap(lengths: List<Float>, room: Float): Float {
     }
     return sorted.last()
 }
+
+/**
+ * Each shown item's own width at its fold in [fit] (a label cut to the cap counts at the
+ * cap): the island splits the line by these, so room left over goes to every item in
+ * proportion to its size and the line runs edge to edge.
+ */
+fun islandShares(widths: List<IslandFoldWidths>, fit: IslandFit): List<Float> =
+    (0 until fit.shown).map { i ->
+        val w = widths[i]
+        val fold = fit.folds[i]
+        val own = w[fold]
+        val cap = fit.labelCap
+        if (cap != null && fold >= IslandFold.LABEL && w.labelText > cap) own - (w.labelText - cap) else own
+    }

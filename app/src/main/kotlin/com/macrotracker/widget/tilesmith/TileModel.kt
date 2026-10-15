@@ -135,6 +135,12 @@ enum class BlockType(val id: String, val label: String) {
     BUTTON("button", "Button"),
     /** A line your AI writes on each refresh, from your data or the web. */
     AI("ai", "AI line"),
+    /** A picture: a thumbnail, album art, a photo, a webcam frame, or any image address. */
+    IMAGE("image", "Image"),
+    /** Cards with pictures you swipe through: latest videos, who's live, posters, photos. */
+    CAROUSEL("carousel", "Carousel"),
+    /** What's playing, its art, and play / pause / skip. */
+    MEDIA("media", "Player"),
     ;
 
     companion object {
@@ -153,6 +159,10 @@ enum class BlockType(val id: String, val label: String) {
                 "timer" -> COUNTDOWN
                 "action", "link" -> BUTTON
                 "brief", "web", "search", "summary" -> AI
+                "photo", "picture", "thumbnail", "cover", "art", "img" -> IMAGE
+                "stack", "cards", "gallery", "slides", "slideshow", "pager", "swipe", "deck" -> CAROUSEL
+                "player", "nowplaying", "now_playing", "music", "controls", "playback" -> MEDIA
+                "feed", "scroll", "inbox" -> LIST
                 else -> null
             }
         }
@@ -161,7 +171,8 @@ enum class BlockType(val id: String, val label: String) {
 
 /**
  * One block. [bind] names a source in [TileSources] (`health.steps`); the rest tune it.
- * Parameterised sources read [server], [cmd], [url], [path] and [text] (the AI line's ask).
+ * Parameterised sources read [server], [cmd], [url], [path], [query], [fields] and [text]
+ * (the AI line's ask).
  */
 data class TileBlock(
     val type: BlockType,
@@ -175,7 +186,7 @@ data class TileBlock(
     val style: BlockStyle = BlockStyle.TILE,
     /** A ring's or bar's target, over the source's own. */
     val goal: Double? = null,
-    /** List rows or chart points at most. */
+    /** List rows (30 at most, for a scrolling list), carousel cards (12) or chart points at most. */
     val max: Int? = null,
     /** Which server (label or id) a `server.*` source reads; the first when blank. */
     val server: String? = null,
@@ -190,8 +201,18 @@ data class TileBlock(
     val every: Int? = null,
     /** What a tap does: see [TileTap]. */
     val tap: String? = null,
-    /** A chart's look: `bars` or `line`. */
+    /** A chart's look (`bars`, `line`), a list's (`scroll`, `thumbs`), an image's (`fit`). */
     val variant: String? = null,
+    /**
+     * What a parameterised source looks for: a Gmail search, YouTube channels, a Tasks list,
+     * a photo album, an app's notifications. Each source's hint says what it takes.
+     */
+    val query: String? = null,
+    /**
+     * `web.json` lists: where each row's parts sit in an item of the array at [path]
+     * (`title`, `sub`, `trailing`, `image`, `link`, as JSON paths inside the item).
+     */
+    val fields: Map<String, String> = emptyMap(),
 )
 
 data class TileRow(val height: Int = 1, val cells: List<TileBlock>)
@@ -221,11 +242,15 @@ data class TileDesign(
     }
 }
 
-/** A tap target: `app`, `app:<screen>`, `url:<https link>`, `refresh`, `edit`. */
+/**
+ * A tap target: `app`, `app:<screen>`, `url:<https link>`, `refresh`, `edit`, or `open`
+ * (what the value itself links to: the next event, the newest video, the inbox).
+ */
 object TileTap {
     const val APP = "app"
     const val REFRESH = "refresh"
     const val EDIT = "edit"
+    const val OPEN = "open"
     val SCREENS = listOf("home", "health", "ai", "settings", "widgets", "servers", "console", "usage", "hermes")
 
     fun normalize(raw: String?): String? {
@@ -233,7 +258,8 @@ object TileTap {
         if (t.isEmpty()) return null
         val lower = t.lowercase()
         return when {
-            lower == APP || lower == REFRESH || lower == EDIT -> lower
+            lower == APP || lower == REFRESH || lower == EDIT || lower == OPEN -> lower
+            lower == "link" || lower == "item" -> OPEN
             lower.startsWith("app:") -> lower.substringAfter(':').takeIf { it in SCREENS }?.let { "app:$it" } ?: APP
             lower in SCREENS -> "app:$lower"
             lower.startsWith("url:") -> t.substringAfter(':').trim().takeIf(::isWebLink)?.let { "url:$it" }
@@ -374,6 +400,8 @@ object TileCodec {
         b.every?.let { put("every", it) }
         b.tap?.let { put("tap", it) }
         b.variant?.let { put("variant", it) }
+        b.query?.let { put("query", it) }
+        if (b.fields.isNotEmpty()) put("fields", JSONObject(b.fields as Map<*, *>))
     }
 
     /**
@@ -428,7 +456,7 @@ object TileCodec {
         return TileBlock(
             type = type,
             weight = o.optInt("w", o.optInt("weight", 1)).coerceIn(1, 4),
-            bind = str("bind", 60)?.lowercase(),
+            bind = TileSources.canonical(str("bind", 60)),
             label = str("label", 40),
             text = str("text", 400),
             icon = str("icon", 30)?.lowercase()?.let { TileIcons.normalize(it) },
@@ -436,7 +464,8 @@ object TileCodec {
             tone = TileTone.byId(str("tone")) ?: TileTone.PRIMARY,
             style = BlockStyle.byId(str("style")) ?: if (TileShape.byId(str("shape")) != null && type == BlockType.BADGE) BlockStyle.SHAPE else BlockStyle.TILE,
             goal = dbl("goal"),
-            max = if (o.has("max")) o.optInt("max").coerceIn(1, 12) else null,
+            // Scrolling lists hold up to 30 rows; the rest show what fits.
+            max = if (o.has("max")) o.optInt("max").coerceIn(1, 30) else null,
             server = str("server", 60),
             cmd = str("cmd", 300),
             url = str("url", 400)?.takeIf(TileTap::isWebLink),
@@ -445,8 +474,15 @@ object TileCodec {
             every = if (o.has("every")) o.optInt("every").coerceIn(1, 24 * 60) else null,
             tap = TileTap.normalize(str("tap", 400)),
             variant = str("variant", 12)?.lowercase(),
+            query = str("query", 200) ?: str("q", 200) ?: str("channel", 200) ?: str("album", 200),
+            fields = o.optJSONObject("fields")?.let { f ->
+                FIELD_KEYS.mapNotNull { k -> f.optString(k).trim().takeIf { it.isNotEmpty() }?.let { k to it.take(80) } }.toMap()
+            }.orEmpty(),
         )
     }
+
+    /** The parts of a row a `web.json` list can map. */
+    val FIELD_KEYS = listOf("title", "sub", "trailing", "image", "link")
 
     fun parseList(raw: String?): List<TileDesign> {
         if (raw.isNullOrBlank()) return emptyList()

@@ -34,12 +34,17 @@ object TileLayout {
         BlockType.BAR, BlockType.CLOCK, BlockType.BUTTON -> 34f
         BlockType.TEXT -> 26f
         BlockType.DATE -> 22f
+        BlockType.IMAGE -> 40f
+        BlockType.CAROUSEL -> 96f
+        BlockType.MEDIA -> 56f
     }
 
     /** The least width a block of [type] can show anything useful in. */
     fun minWidth(type: BlockType): Float = when (type) {
         BlockType.RING, BlockType.BADGE -> 52f
         BlockType.LIST, BlockType.CHART, BlockType.BAR, BlockType.AI -> 70f
+        BlockType.CAROUSEL, BlockType.MEDIA -> 120f
+        BlockType.IMAGE -> 40f
         else -> 48f
     }
 

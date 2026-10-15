@@ -16,6 +16,7 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.graphics.createBitmap
+import com.macrotracker.widget.tilesmith.TilesmithLive
 import dagger.hilt.android.AndroidEntryPoint
 import org.json.JSONObject
 import javax.inject.Inject
@@ -42,10 +43,16 @@ class PhoneNotificationListener : NotificationListenerService() {
 
     private var sessions: MediaSessionManager? = null
     private val controllerCallback = object : MediaController.Callback() {
-        override fun onPlaybackStateChanged(state: PlaybackState?) = hub.poke(PhoneHub.Poke.MEDIA)
+        override fun onPlaybackStateChanged(state: PlaybackState?) = mediaChanged()
         override fun onQueueChanged(queue: MutableList<android.media.session.MediaSession.QueueItem>?) = hub.poke(PhoneHub.Poke.MEDIA)
-        override fun onMetadataChanged(metadata: android.media.MediaMetadata?) = hub.poke(PhoneHub.Poke.MEDIA)
+        override fun onMetadataChanged(metadata: android.media.MediaMetadata?) = mediaChanged()
         override fun onSessionDestroyed() = pickController()
+    }
+
+    /** The dashboard's phone hub and Tilesmith's player widgets both follow the track. */
+    private fun mediaChanged() {
+        hub.poke(PhoneHub.Poke.MEDIA)
+        TilesmithLive.poke(applicationContext, TilesmithLive.MEDIA)
     }
     private val sessionsChanged = MediaSessionManager.OnActiveSessionsChangedListener { pickController() }
 
@@ -70,10 +77,12 @@ class PhoneNotificationListener : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         hub.notificationPosted(sbn)
+        if (sbn.packageName != packageName) TilesmithLive.poke(applicationContext, TilesmithLive.NOTIFICATIONS)
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
         hub.notificationRemoved(sbn.key)
+        if (sbn.packageName != packageName) TilesmithLive.poke(applicationContext, TilesmithLive.NOTIFICATIONS)
     }
 
     /** The playing session if there is one, else the most recent. */
@@ -87,7 +96,7 @@ class PhoneNotificationListener : NotificationListenerService() {
             next?.registerCallback(controllerCallback)
             PhoneMedia.controller = next
         }
-        hub.poke(PhoneHub.Poke.MEDIA)
+        mediaChanged()
     }
 
     // ── commands from the dashboard ──────────────────────────────────────────

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Darkens the bottom of a picture so white text reads on any image. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <gradient
+        android:angle="270"
+        android:centerY="0.45"
+        android:startColor="#00000000"
+        android:centerColor="#1A000000"
+        android:endColor="#B3000000" />
+</shape>

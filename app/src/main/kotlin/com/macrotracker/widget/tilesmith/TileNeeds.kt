@@ -4,8 +4,10 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
+import com.macrotracker.data.google.GoogleScope
 import com.macrotracker.data.health.HealthConnectRepository
 import com.macrotracker.data.phone.PhoneExtras
+import com.macrotracker.data.phone.PhoneNotificationListener
 import com.macrotracker.widget.widgetEntryPoint
 
 /**
@@ -16,12 +18,21 @@ data class TileAsk(
     val need: TileNeed,
     val title: String,
     val detail: String,
-    /** Android or Health Connect permissions to request, for [TileNeed.CALENDAR], LOCATION and HEALTH. */
+    /** Android or Health Connect permissions to request, for [TileNeed.CALENDAR], LOCATION, HEALTH, CONTACTS, PHOTOS and BLUETOOTH. */
     val permissions: Set<String> = emptySet(),
     val server: String? = null,
     val cmd: String? = null,
     val url: String? = null,
-)
+    /** Google access to ask for, for [TileNeed.GOOGLE]. */
+    val scopes: Set<GoogleScope> = emptySet(),
+) {
+    /** Answered by Android's own permission dialog, so several can go in one tap. */
+    val runtime: Boolean get() = need in RUNTIME && permissions.isNotEmpty()
+
+    companion object {
+        val RUNTIME = setOf(TileNeed.CALENDAR, TileNeed.LOCATION, TileNeed.CONTACTS, TileNeed.PHOTOS, TileNeed.BLUETOOTH)
+    }
+}
 
 /** Works out what a design still needs; the studio shows each as one tap. */
 object TileNeeds {
@@ -64,6 +75,40 @@ object TileNeeds {
                 }
             }
         }
+        if (TileNeed.CONTACTS in needs && !granted(app, Manifest.permission.READ_CONTACTS)) {
+            out += TileAsk(TileNeed.CONTACTS, "Contacts", "For birthdays and your favourite people", setOf(Manifest.permission.READ_CONTACTS))
+        }
+        if (TileNeed.PHOTOS in needs && !TileReaders.photosGranted(app)) {
+            out += TileAsk(TileNeed.PHOTOS, "Photos", "So it can show your pictures", TileReaders.photoPermissions)
+        }
+        if (TileNeed.BLUETOOTH in needs && !TileReaders.bluetoothGranted(app)) {
+            out += TileAsk(TileNeed.BLUETOOTH, "Bluetooth", "For your headphones and watch, and their battery", setOf(TileReaders.bluetoothPermission))
+        }
+        if (TileNeed.NOTIFICATIONS in needs && !PhoneNotificationListener.granted(app)) {
+            out += TileAsk(TileNeed.NOTIFICATIONS, "Notification access", "For what's playing and your notifications. One switch in Android's settings")
+        }
+        if (TileNeed.GOOGLE in needs) {
+            val google = ep.googleAccess()
+            val dash = ep.settingsRepository().dashboardServerUrl.value.isNotBlank()
+            val wanted = blocks.mapNotNull { b ->
+                when {
+                    b.bind?.startsWith("gmail.") == true -> GoogleScope.GMAIL.takeIf { !google.granted(it) && (!dash || !b.query.isNullOrBlank()) }
+                    b.bind?.startsWith("tasks.") == true -> GoogleScope.TASKS.takeIf { !google.granted(it) }
+                    else -> null
+                }
+            }.toSet()
+            if (wanted.isNotEmpty()) {
+                out += TileAsk(TileNeed.GOOGLE, "Google: ${wanted.joinToString(" and ") { it.label }}", "Read-only, from your Google account", scopes = wanted)
+            }
+        }
+        if (TileNeed.YOUTUBE in needs && blocks.any { it.bind?.startsWith("youtube.") == true && it.query.isNullOrBlank() } &&
+            ep.youTubeRepository().getTrackedChannels().isEmpty()
+        ) {
+            out += TileAsk(TileNeed.YOUTUBE, "YouTube channels", "Follow channels on Home's YouTube card, or name them in the widget")
+        }
+        if (TileNeed.TWITCH in needs && ep.twitchRepository().getTrackedChannels().isEmpty()) {
+            out += TileAsk(TileNeed.TWITCH, "Twitch", "Connect Twitch on Home's Twitch card")
+        }
         if (TileNeed.USAGE in needs && !PhoneExtras.usageGranted(app)) {
             out += TileAsk(TileNeed.USAGE, "Usage access", "Android's switch for reading screen time")
         }
@@ -84,7 +129,7 @@ object TileNeeds {
                 out += TileAsk(TileNeed.COMMAND, "Run a command", b.cmd.trim(), server = b.server, cmd = b.cmd)
             }
         }
-        blocks.filter { it.bind == "web.json" && !it.url.isNullOrBlank() }.distinctBy { TilesmithStore.siteHost(it.url!!) }.forEach { b ->
+        blocks.filter { TileSources.byKey(it.bind)?.needs?.contains(TileNeed.SITE) == true && !it.url.isNullOrBlank() }.distinctBy { TilesmithStore.siteHost(it.url!!) }.forEach { b ->
             if (!TilesmithStore.siteApproved(app, b.url!!)) {
                 out += TileAsk(TileNeed.SITE, "Read ${TilesmithStore.siteHost(b.url) ?: "a site"}", b.url, url = b.url)
             }
@@ -102,6 +147,9 @@ object TileNeeds {
         val github = runCatching { ep.gitHubRepository().hasToken() }.getOrDefault(false)
         val dash = ep.settingsRepository().dashboardServerUrl.value.isNotBlank()
         val ai = ep.aiCredentialResolver().hasCredentials()
+        val google = ep.googleAccess()
+        val youtube = runCatching { ep.youTubeRepository().getTrackedChannels().isNotEmpty() }.getOrDefault(false)
+        val twitch = runCatching { ep.twitchRepository().getTrackedChannels().isNotEmpty() }.getOrDefault(false)
         return TileSources.all.map { s ->
             val missing = s.needs.firstOrNull { n ->
                 when (n) {
@@ -114,9 +162,25 @@ object TileNeeds {
                     TileNeed.DASHBOARD -> !dash
                     TileNeed.AI -> !ai
                     TileNeed.COMMAND, TileNeed.SITE -> false
+                    TileNeed.GOOGLE -> when {
+                        s.key.startsWith("gmail.") -> !google.granted(GoogleScope.GMAIL) && !dash
+                        else -> !google.granted(GoogleScope.TASKS)
+                    }
+                    // A channel named in the block works without any followed.
+                    TileNeed.YOUTUBE -> false
+                    TileNeed.TWITCH -> !twitch
+                    TileNeed.NOTIFICATIONS -> !PhoneNotificationListener.granted(app)
+                    TileNeed.CONTACTS -> !granted(app, Manifest.permission.READ_CONTACTS)
+                    TileNeed.PHOTOS -> !TileReaders.photosGranted(app)
+                    TileNeed.BLUETOOTH -> !TileReaders.bluetoothGranted(app)
                 }
             }
-            TilesmithAi.SourceState(s.key, missing == null, missing?.label)
+            TilesmithAi.SourceState(
+                s.key,
+                missing == null,
+                missing?.label,
+                extra = if (s.key.startsWith("youtube.") && !youtube) "no channels followed yet: put channel names in query" else null,
+            )
         }
     }
 }

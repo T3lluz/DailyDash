@@ -21,13 +21,17 @@ import androidx.glance.action.clickable
 import androidx.glance.appwidget.AndroidRemoteViews
 import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.appwidget.cornerRadius
+import androidx.glance.appwidget.lazy.LazyColumn
+import androidx.glance.appwidget.lazy.items
 import androidx.glance.background
+import androidx.glance.layout.ContentScale
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxSize
+import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
@@ -130,7 +134,10 @@ class TileTheme(val palette: TilePalette, val surface: TileSurface) {
         else -> TileRole.SURFACE
     }
 
-    private val dataTypes = setOf(BlockType.RING, BlockType.BAR, BlockType.CHART, BlockType.LIST, BlockType.TEXT, BlockType.AI)
+    private val dataTypes = setOf(
+        BlockType.RING, BlockType.BAR, BlockType.CHART, BlockType.LIST, BlockType.TEXT, BlockType.AI,
+        BlockType.IMAGE, BlockType.CAROUSEL, BlockType.MEDIA,
+    )
 
     /** A shape on the widget's own background: its container, or the accent where the container would vanish into a coloured surface. */
     private fun shapeOnBg(t: TileTone): Pair<TileRole, TileRole> =
@@ -158,9 +165,15 @@ class TileTheme(val palette: TilePalette, val surface: TileSurface) {
     private fun distinct(r: TileRole, behind: TileRole) = if (r == behind) TileRole.OUTLINE_VARIANT else r
 }
 
-/** What a tap on the widget or a block does, as Glance actions. Built by [TilesmithWidgets]. */
-fun interface TileActions {
+/** What a tap on the widget, a block or one of its rows does, as Glance actions. Built by [TilesmithWidgets]. */
+interface TileActions {
     fun forTap(tap: String?, value: TileValue?): Action?
+
+    /** A row's or a card's own link: a video, a mail, a contact. */
+    fun forLink(link: String): Action? = null
+
+    /** The player block's buttons (`toggle`, `next`, `prev`). */
+    fun forMedia(cmd: String): Action? = null
 }
 
 /**
@@ -187,7 +200,7 @@ fun TileRoot(design: TileDesign, values: Map<String, TileValue>, preview: Boolea
                     row.cells.forEachIndexed { ci, cell ->
                         if (ci > 0) Spacer(GlanceModifier.width(plan.gap.dp))
                         val v = valueFor(cell.block, values, preview)
-                        Block(context, theme, cell.block, v, cell.width, cell.height, inner, actions)
+                        Block(context, theme, cell.block, v, cell.width, cell.height, inner, actions, preview)
                     }
                 }
             }
@@ -216,21 +229,30 @@ private fun Float.d(): Dp = this.coerceAtLeast(0f).dp
 private fun text(sp: Float, color: ColorProvider, weight: FontWeight = FontWeight.Normal, align: TextAlign = TextAlign.Start) =
     TextStyle(fontSize = WidgetText.size(sp.sp), color = color, fontWeight = weight, textAlign = align)
 
+/** Blocks that run to their tile's edge: a picture, a card stack. */
+private val edgeToEdge = setOf(BlockType.IMAGE, BlockType.CAROUSEL)
+
 @Composable
-private fun Block(context: Context, theme: TileTheme, b: TileBlock, v: TileValue?, w: Float, h: Float, innerRadius: Float, actions: TileActions?) {
+private fun Block(context: Context, theme: TileTheme, b: TileBlock, v: TileValue?, w: Float, h: Float, innerRadius: Float, actions: TileActions?, preview: Boolean) {
     val look = theme.look(b)
     val radius = min(innerRadius, min(w, h) / 2f)
     var m = GlanceModifier.size(w.d(), h.d())
     if (look.bg != null) m = m.cornerRadius(radius.dp).background(theme.c(look.bg))
     if (b.type == BlockType.BUTTON && look.bg != null) m = GlanceModifier.size(w.d(), h.d()).cornerRadius((h / 2f).dp).background(theme.c(look.bg))
-    val tap = actions?.forTap(b.tap, v)
+    if (b.type in edgeToEdge) m = GlanceModifier.size(w.d(), h.d()).cornerRadius(radius.dp).background(theme.c(look.bg ?: theme.neutralTile))
+    // A carousel's cards take their own taps; the stack itself must not.
+    val tap = if (b.type == BlockType.CAROUSEL) null else actions?.forTap(b.tap, v)
     if (tap != null) m = m.clickable(tap)
     val padded = look.bg != null || b.style == BlockStyle.FILLED
     // Very short tiles (a strip resized down) give their padding back to the text.
-    val p = if (padded) min((min(w, h) * 0.12f).coerceIn(8f, 14f), ((h - 18f) / 2f).coerceAtLeast(2f)) else 2f
+    val p = when {
+        b.type in edgeToEdge -> 0f
+        padded -> min((min(w, h) * 0.12f).coerceIn(8f, 14f), ((h - 18f) / 2f).coerceAtLeast(2f))
+        else -> 2f
+    }
     val cw = (w - 2 * p).coerceAtLeast(1f)
     val ch = (h - 2 * p).coerceAtLeast(1f)
-    Box(m.padding(p.dp), contentAlignment = if (b.type == BlockType.RING || b.type == BlockType.BADGE || b.type == BlockType.BUTTON) Alignment.Center else Alignment.TopStart) {
+    Box(m.padding(p.dp), contentAlignment = if (b.type == BlockType.RING || b.type == BlockType.BADGE || b.type == BlockType.BUTTON || b.type in edgeToEdge) Alignment.Center else Alignment.TopStart) {
         val state = v?.state ?: TileValueState.OK
         when {
             b.bind != null && state == TileValueState.NEEDS -> Note(context, theme, look, "key", v?.note ?: "Needs access", cw, ch)
@@ -240,13 +262,16 @@ private fun Block(context: Context, theme: TileTheme, b: TileBlock, v: TileValue
                 BlockType.RING -> RingBlock(context, theme, look, b, v, cw, ch)
                 BlockType.BAR -> BarBlock(context, theme, look, b, v, cw, ch)
                 BlockType.CHART -> ChartBlock(context, theme, look, b, v, cw, ch)
-                BlockType.LIST -> ListBlock(context, theme, look, b, v, cw, ch)
+                BlockType.LIST -> ListBlock(context, theme, look, b, v, cw, ch, actions)
                 BlockType.TEXT, BlockType.AI -> TextBlock(context, theme, look, b, v, cw, ch)
                 BlockType.BADGE -> BadgeBlock(context, theme, look, b, v, cw, ch)
                 BlockType.CLOCK -> ClockBlock(context, theme, look, b, cw, ch, date = false)
                 BlockType.DATE -> ClockBlock(context, theme, look, b, cw, ch, date = true)
                 BlockType.COUNTDOWN -> CountdownBlock(context, theme, look, b, v, cw, ch)
                 BlockType.BUTTON -> ButtonBlock(context, theme, look, b, cw, ch)
+                BlockType.IMAGE -> ImageBlock(context, theme, look, b, v, cw, ch, radius)
+                BlockType.CAROUSEL -> CarouselBlock(context, theme, look, b, v, cw, ch, preview)
+                BlockType.MEDIA -> MediaBlock(context, theme, look, b, v, cw, ch, radius, actions)
             }
         }
     }
@@ -555,9 +580,25 @@ private fun ChartBlock(context: Context, theme: TileTheme, look: TileLook, b: Ti
 
 // ── List ───────────────────────────────────────────────────────────────────
 
+/** Sources whose rows carry 16:9 pictures (videos, streams, articles); the rest get square ones. */
+private fun widePictures(b: TileBlock): Boolean {
+    val k = b.bind.orEmpty()
+    return k.startsWith("youtube.") || k.startsWith("twitch.") || k == "web.feed" || k.startsWith("upcoming.") || k == "web.json" || k == "ai.list"
+}
+
+/** Round pictures: people. */
+private fun roundPictures(b: TileBlock): Boolean = b.bind.orEmpty().startsWith("contacts.")
+
+/**
+ * Rows: a mark or a picture, the title and its line, and something at the end. A list fills
+ * its room with whole rows; `variant: scroll` makes it a list you scroll inside the widget
+ * (an inbox, a feed), and rows with pictures show them unless `variant: plain`. A row with a
+ * link opens it.
+ */
 @Composable
-private fun ListBlock(context: Context, theme: TileTheme, look: TileLook, b: TileBlock, v: TileValue?, w: Float, h: Float) {
-    val items = v?.items.orEmpty()
+private fun ListBlock(context: Context, theme: TileTheme, look: TileLook, b: TileBlock, v: TileValue?, w: Float, h: Float, actions: TileActions?) {
+    val scroll = b.variant == "scroll"
+    val items = v?.items.orEmpty().let { if (scroll) it.take(b.max ?: 30) else it }
     val label = b.label ?: TileSources.byKey(b.bind)?.label
     val headSp = 12f
     val headH = if (label != null && h >= 70f) TileText.lineHeight(context, headSp, FontWeight.Medium) + 4f else 0f
@@ -565,37 +606,96 @@ private fun ListBlock(context: Context, theme: TileTheme, look: TileLook, b: Til
     val titleH = TileText.lineHeight(context, titleSp, FontWeight.Medium)
     val subH = TileText.lineHeight(context, 11f)
     val gap = 4f
-    val withSub = items.any { it.sub != null } && (h - headH) / (titleH + subH + gap) >= minOf(items.size, 2)
-    val rowH = titleH + (if (withSub) subH else 0f)
-    val fitRows = floor((h - headH + gap) / (rowH + gap)).toInt().coerceAtLeast(0)
-    val shown = items.take(minOf(fitRows, b.max ?: 8, 8))
+    val pictures = b.variant != "plain" && (b.variant == "thumbs" || items.any { it.image != null }) && w >= 150f
+    val withSub = items.any { it.sub != null } && (scroll || pictures || (h - headH) / (titleH + subH + gap) >= minOf(items.size, 2))
+    val textH = titleH + (if (withSub) subH else 0f)
+    val rowH = if (pictures) maxOf(textH, if (widePictures(b)) 40f else 34f) else textH
+    val picH = rowH
+    val picW = if (pictures && widePictures(b)) picH * 16f / 9f else picH
+    val bodyH = h - headH
+    val row: @Composable (TileItem) -> Unit = { item -> ListRow(context, theme, look, b, item, w, rowH, titleSp, withSub, if (pictures) picW else 0f, picH, actions) }
     Column(GlanceModifier.size(w.d(), h.d())) {
         if (headH > 0f) {
             Label(context, label, w, headSp, theme.c(look.variant), drop = false, height = headH - 4f)
             Spacer(GlanceModifier.height(4.dp))
         }
-        if (shown.isEmpty()) {
-            Text(v?.note ?: "Nothing here", style = text(titleSp, theme.c(look.variant)), maxLines = 2, modifier = GlanceModifier.width(w.d()))
-        }
-        shown.forEachIndexed { i, item ->
-            if (i > 0) Spacer(GlanceModifier.height(gap.dp))
-            val mark = item.color?.let { runCatching { Color(android.graphics.Color.parseColor(it)) }.getOrNull() }
-            val markW = if (mark != null) 10f else 0f
-            val trailW = item.trailing?.let { TileText.width(context, it, 12f, FontWeight.Bold).coerceAtMost(w * 0.45f) + 6f } ?: 0f
-            Row(GlanceModifier.size(w.d(), rowH.d()), verticalAlignment = Alignment.CenterVertically) {
-                if (mark != null) {
-                    Box(GlanceModifier.size(4.dp, (rowH - 4f).coerceAtLeast(6f).d()).cornerRadius(2.dp).background(ColorProvider(mark))) {}
-                    Spacer(GlanceModifier.width(6.dp))
-                }
-                val textW = (w - markW - trailW).coerceAtLeast(10f)
-                Column(GlanceModifier.width(textW.d())) {
-                    Text(item.title, style = text(titleSp, theme.c(look.content), FontWeight.Medium), maxLines = 1)
-                    if (withSub) Text(item.sub ?: "", style = text(11f, theme.c(look.variant)), maxLines = 1)
-                }
-                if (item.trailing != null) {
-                    Text(item.trailing, style = text(12f, theme.c(look.accent.takeIf { look.bg != null } ?: look.content), FontWeight.Bold, TextAlign.End), maxLines = 1, modifier = GlanceModifier.width(trailW.d()))
+        when {
+            items.isEmpty() -> Text(v?.note ?: "Nothing here", style = text(titleSp, theme.c(look.variant)), maxLines = 2, modifier = GlanceModifier.width(w.d()))
+            scroll -> LazyColumn(GlanceModifier.size(w.d(), bodyH.d())) {
+                items(items) { item ->
+                    Column(GlanceModifier.width(w.d())) {
+                        row(item)
+                        Spacer(GlanceModifier.height(gap.dp))
+                    }
                 }
             }
+            else -> {
+                val fitRows = floor((bodyH + gap) / (rowH + gap)).toInt().coerceAtLeast(0)
+                items.take(minOf(fitRows, b.max ?: 8, 8)).forEachIndexed { i, item ->
+                    if (i > 0) Spacer(GlanceModifier.height(gap.dp))
+                    row(item)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ListRow(
+    context: Context,
+    theme: TileTheme,
+    look: TileLook,
+    b: TileBlock,
+    item: TileItem,
+    w: Float,
+    rowH: Float,
+    titleSp: Float,
+    withSub: Boolean,
+    picW: Float,
+    picH: Float,
+    actions: TileActions?,
+) {
+    val mark = if (picW > 0f) null else item.color?.let { runCatching { Color(android.graphics.Color.parseColor(it)) }.getOrNull() }
+    val markW = if (mark != null) 10f else if (picW > 0f) picW + 8f else 0f
+    val trailW = item.trailing?.let { TileText.width(context, it, 12f, FontWeight.Bold).coerceAtMost(w * 0.4f) + 6f } ?: 0f
+    var m = GlanceModifier.size(w.d(), rowH.d())
+    item.link?.let { link -> actions?.forLink(link)?.let { m = m.clickable(it) } }
+    Row(m, verticalAlignment = Alignment.CenterVertically) {
+        if (mark != null) {
+            Box(GlanceModifier.size(4.dp, (rowH - 4f).coerceAtLeast(6f).d()).cornerRadius(2.dp).background(ColorProvider(mark))) {}
+            Spacer(GlanceModifier.width(6.dp))
+        } else if (picW > 0f) {
+            val r = if (roundPictures(b)) picH / 2f else 8f
+            Picture(context, theme, look, item.image, picW, picH, r, TileSources.byKey(b.bind)?.icon)
+            Spacer(GlanceModifier.width(8.dp))
+        }
+        val textW = (w - markW - trailW).coerceAtLeast(10f)
+        Column(GlanceModifier.width(textW.d())) {
+            Text(item.title, style = text(titleSp, theme.c(look.content), FontWeight.Medium), maxLines = 1)
+            if (withSub) Text(item.sub ?: "", style = text(11f, theme.c(look.variant)), maxLines = 1)
+        }
+        if (item.trailing != null) {
+            Text(item.trailing, style = text(12f, theme.c(look.accent.takeIf { look.bg != null } ?: look.content), FontWeight.Bold, TextAlign.End), maxLines = 1, modifier = GlanceModifier.width(trailW.d()))
+        }
+    }
+}
+
+/** A cached picture at [w] × [h] dp with [radius] corners, or a quiet tile with [icon] until it is in. */
+@Composable
+private fun Picture(context: Context, theme: TileTheme, look: TileLook, src: String?, w: Float, h: Float, radius: Float, icon: String?, fit: Boolean = false) {
+    val r = min(radius, min(w, h) / 2f)
+    val bmp = TileImages.load(context, src, TileImages.px(context, w), TileImages.px(context, h), fit, TileImages.px(context, r).toFloat())
+    if (bmp != null) {
+        Image(
+            provider = ImageProvider(bmp),
+            contentDescription = null,
+            contentScale = if (fit) ContentScale.Fit else ContentScale.Crop,
+            modifier = GlanceModifier.size(w.d(), h.d()).cornerRadius(r.dp),
+        )
+    } else {
+        Box(GlanceModifier.size(w.d(), h.d()).cornerRadius(r.dp).background(theme.c(look.track)), contentAlignment = Alignment.Center) {
+            val res = TileIcons.res(icon) ?: R.drawable.tsm_ic_image
+            Icon(res, (min(w, h) * 0.42f).coerceIn(10f, 28f), theme.c(look.variant))
         }
     }
 }
@@ -672,6 +772,185 @@ private fun BadgeBlock(context: Context, theme: TileTheme, look: TileLook, b: Ti
                 Label(context, label, w, 12f, theme.c(look.variant), align = TextAlign.Center)
             }
         }
+    }
+}
+
+// ── Image ──────────────────────────────────────────────────────────────────
+
+/**
+ * A picture filling its tile: a photo, album art, a webcam, the newest video's thumbnail, or
+ * the image at the block's own `url`. The label (or the value's words) sits on a scrim at the
+ * bottom when there is room; `variant: fit` shows all of it instead of filling.
+ */
+@Composable
+private fun ImageBlock(context: Context, theme: TileTheme, look: TileLook, b: TileBlock, v: TileValue?, w: Float, h: Float, radius: Float) {
+    val src = if (b.bind == null) b.url else v?.picture
+    val fit = b.variant == "fit"
+    val first = v?.items?.firstOrNull()
+    val caption = b.label ?: when {
+        b.variant == "bare" -> null
+        v?.image != null -> v.text
+        first != null -> first.title
+        else -> null
+    }
+    val captionH = if (caption != null && h >= 72f && w >= 90f) TileText.lineHeight(context, 13f, FontWeight.Bold) + 18f else 0f
+    Box(GlanceModifier.size(w.d(), h.d()), contentAlignment = Alignment.BottomStart) {
+        Picture(context, theme, look, src, w, h, radius, TileSources.byKey(b.bind)?.icon ?: "image", fit)
+        if (captionH > 0f) {
+            Box(
+                GlanceModifier.size(w.d(), (captionH + 12f).d()).cornerRadius(radius.dp).background(ImageProvider(R.drawable.tsm_scrim_bottom)),
+                contentAlignment = Alignment.BottomStart,
+            ) {
+                Text(
+                    caption!!,
+                    style = text(13f, ColorProvider(Color.White), FontWeight.Bold),
+                    maxLines = 1,
+                    modifier = GlanceModifier.width(w.d()).padding(start = 10.dp, end = 10.dp, bottom = 8.dp),
+                )
+            }
+        }
+    }
+}
+
+// ── Carousel ───────────────────────────────────────────────────────────────
+
+/**
+ * Cards you swipe through: a StackView of the source's rows, each its picture with the title
+ * on a scrim and its link a tap away. Widgets can't scroll sideways, so this is the carousel
+ * Android allows (the stack the old YouTube widget used). Before Android 12 it shows the first card.
+ */
+@Composable
+private fun CarouselBlock(context: Context, theme: TileTheme, look: TileLook, b: TileBlock, v: TileValue?, w: Float, h: Float, preview: Boolean) {
+    val items = v?.items.orEmpty().take((b.max ?: 10).coerceIn(1, 12))
+    if (items.isEmpty()) {
+        Box(GlanceModifier.size(w.d(), h.d()), contentAlignment = Alignment.Center) {
+            Text(v?.note ?: "Nothing here yet", style = text(13f, theme.c(look.variant), align = TextAlign.Center), maxLines = 2)
+        }
+        return
+    }
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+        val first = items.first()
+        Box(GlanceModifier.size(w.d(), h.d()), contentAlignment = Alignment.BottomStart) {
+            Picture(context, theme, look, first.image, w, h, 0f, TileSources.byKey(b.bind)?.icon)
+            Box(GlanceModifier.size(w.d(), (h * 0.5f).d()).background(ImageProvider(R.drawable.tsm_scrim_bottom)), contentAlignment = Alignment.BottomStart) {
+                Text(first.title, style = text(14f, ColorProvider(Color.White), FontWeight.Bold), maxLines = 2, modifier = GlanceModifier.width(w.d()).padding(10.dp))
+            }
+        }
+        return
+    }
+    // A StackView draws each card a little inside its bounds so the ones behind show.
+    val cardW = w * 0.9f
+    val cardH = h * 0.86f
+    val wPx = TileImages.px(context, cardW)
+    val hPx = TileImages.px(context, cardH)
+    val titleSp = when {
+        cardH >= 170f -> 15f
+        cardH >= 120f -> 14f
+        else -> 12.5f
+    }
+    val showSub = cardH >= 110f
+    val builder = RemoteViews.RemoteCollectionItems.Builder().setHasStableIds(true).setViewTypeCount(1)
+    val seen = HashSet<Long>()
+    items.forEachIndexed { i, item ->
+        val card = RemoteViews(context.packageName, R.layout.tsm_card)
+        val bmp = TileImages.load(context, item.image, wPx, hPx)
+        if (bmp != null) card.setImageViewBitmap(R.id.tsm_card_image, bmp) else card.setViewVisibility(R.id.tsm_card_image, android.view.View.INVISIBLE)
+        card.setTextViewText(R.id.tsm_card_title, item.title)
+        card.setTextViewTextSize(R.id.tsm_card_title, TypedValue.COMPLEX_UNIT_DIP, TileText.drawnDp(titleSp))
+        card.setInt(R.id.tsm_card_title, "setMaxLines", if (cardH >= 130f) 2 else 1)
+        val sub = item.sub?.takeIf { showSub && it.isNotBlank() }
+        if (sub != null) {
+            card.setTextViewText(R.id.tsm_card_sub, sub)
+            card.setTextViewTextSize(R.id.tsm_card_sub, TypedValue.COMPLEX_UNIT_DIP, TileText.drawnDp(11.5f))
+        } else {
+            card.setViewVisibility(R.id.tsm_card_sub, android.view.View.GONE)
+        }
+        val badge = listOfNotNull(item.trailing, if (items.size > 1) "${i + 1}/${items.size}" else null).joinToString(" · ").ifBlank { null }
+        if (badge != null) card.setTextViewText(R.id.tsm_card_badge, badge) else card.setViewVisibility(R.id.tsm_card_badge, android.view.View.GONE)
+        card.setContentDescription(R.id.tsm_card_root, listOfNotNull(item.title, item.sub, item.trailing).joinToString(", "))
+        if (!preview && item.link != null) card.setOnClickFillInIntent(R.id.tsm_card_root, TilesmithLinks.fillIn(item.link))
+        var id = ((item.link ?: item.title).hashCode().toLong() shl 8) + i
+        while (!seen.add(id)) id++
+        builder.addItem(id, card)
+    }
+    val rv = RemoteViews(context.packageName, R.layout.tsm_stack).apply {
+        setRemoteAdapter(R.id.tsm_stack, builder.build())
+        setEmptyView(R.id.tsm_stack, R.id.tsm_stack_empty)
+        if (!preview) setPendingIntentTemplate(R.id.tsm_stack, TilesmithLinks.template(context, CAROUSEL_REQUEST))
+    }
+    AndroidRemoteViews(rv, GlanceModifier.size(w.d(), h.d()))
+}
+
+/** The request code of every card stack's template: one shared PendingIntent, filled in per card. */
+private const val CAROUSEL_REQUEST = 7301
+
+// ── Player ─────────────────────────────────────────────────────────────────
+
+/**
+ * What's playing: the album art, the track and artist, and previous / play-pause / next. Wide
+ * tiles put the art beside the words, tall ones above. The buttons work on any app's session.
+ */
+@Composable
+private fun MediaBlock(context: Context, theme: TileTheme, look: TileLook, b: TileBlock, v: TileValue?, w: Float, h: Float, radius: Float, actions: TileActions?) {
+    val title = v?.text ?: "Nothing playing"
+    val artist = v?.sub
+    val playing = v?.active == true
+    val wide = w >= h * 1.25f
+    val btn = (min(w, h) * if (wide) 0.3f else 0.22f).coerceIn(28f, 44f)
+    val controlsW = btn * 3 + 16f
+    val art = if (wide) min(h, w * 0.4f) else min(w, h - btn - TileText.lineHeight(context, 14f, FontWeight.Bold) - 14f).coerceAtLeast(0f)
+    val textW = if (wide) (w - art - 12f).coerceAtLeast(10f) else w
+    // The play button sits on the accent; on a filled tile the accent is already what's on it.
+    val onFill = if (b.style == BlockStyle.FILLED) look.bg ?: theme.onAccent(b.tone) else theme.onAccent(b.tone)
+    val controls: @Composable () -> Unit = {
+        Row(GlanceModifier.width(minOf(controlsW, textW).d()), verticalAlignment = Alignment.CenterVertically) {
+            MediaButton(theme, "prev", R.drawable.tsm_ic_skip_prev, btn * 0.86f, null, look.content, actions)
+            Spacer(GlanceModifier.width(8.dp))
+            MediaButton(theme, "toggle", if (playing) R.drawable.tsm_ic_pause else R.drawable.tsm_ic_play, btn, look.accent, onFill, actions)
+            Spacer(GlanceModifier.width(8.dp))
+            MediaButton(theme, "next", R.drawable.tsm_ic_skip_next, btn * 0.86f, null, look.content, actions)
+        }
+    }
+    val words: @Composable (Float, Float) -> Unit = { tw, th ->
+        val fit = TileText.fit(context, title, tw, (th * 0.62f).coerceAtLeast(14f), 18f, 11f, maxLines = 2, weight = FontWeight.Bold)
+        Column(GlanceModifier.width(tw.d())) {
+            Text(title, style = text(fit.sp, theme.c(look.content), FontWeight.Bold), maxLines = fit.lines.coerceAtLeast(1))
+            if (artist != null && th >= 34f) Label(context, artist, tw, 12f, theme.c(look.variant), FontWeight.Normal)
+        }
+    }
+    if (wide) {
+        Row(GlanceModifier.size(w.d(), h.d()), verticalAlignment = Alignment.CenterVertically) {
+            if (art >= 36f) {
+                Picture(context, theme, look, v?.image, art, art, radius * 0.8f, "music")
+                Spacer(GlanceModifier.width(12.dp))
+            }
+            val tw = if (art >= 36f) textW else w
+            Column(GlanceModifier.size(tw.d(), h.d()), verticalAlignment = Alignment.CenterVertically) {
+                words(tw, h - btn - 8f)
+                Spacer(GlanceModifier.height(6.dp))
+                controls()
+            }
+        }
+    } else {
+        Column(GlanceModifier.size(w.d(), h.d()), horizontalAlignment = Alignment.CenterHorizontally, verticalAlignment = Alignment.CenterVertically) {
+            if (art >= 40f) {
+                Picture(context, theme, look, v?.image, art, art, radius * 0.8f, "music")
+                Spacer(GlanceModifier.height(6.dp))
+            }
+            words(w, TileText.lineHeight(context, 14f, FontWeight.Bold) * 2)
+            Spacer(GlanceModifier.height(4.dp))
+            controls()
+        }
+    }
+}
+
+@Composable
+private fun MediaButton(theme: TileTheme, cmd: String, icon: Int, size: Float, fill: TileRole?, tint: TileRole, actions: TileActions?) {
+    var m = GlanceModifier.size(size.d()).cornerRadius((size / 2f).dp)
+    if (fill != null) m = m.background(theme.c(fill))
+    actions?.forMedia(cmd)?.let { m = m.clickable(it) }
+    Box(m, contentAlignment = Alignment.Center) {
+        Icon(icon, size * 0.48f, theme.c(tint))
     }
 }
 

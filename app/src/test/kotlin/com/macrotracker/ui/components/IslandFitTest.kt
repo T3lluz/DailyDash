@@ -62,4 +62,15 @@ class IslandFitTest {
     @Test fun `nothing to fit`() {
         assertEquals(IslandFit(emptyList(), 0, 0), fit(0, 100f))
     }
+
+    @Test fun `spare room is shared by each item's own width`() {
+        val f = fit(2, 400f)
+        assertEquals(listOf(200f, 120f), islandShares(List(2) { item }, f))
+    }
+
+    @Test fun `a label cut to the cap counts at the cap`() {
+        val f = IslandFit(listOf(LABEL_BARE, LABEL_BARE), 2, 2, labelCap = 30f)
+        // 80 bare with a 50 label, cut to 30: 60 each.
+        assertEquals(listOf(60f, 60f), islandShares(List(2) { item }, f))
+    }
 }

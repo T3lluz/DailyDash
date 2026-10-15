@@ -133,11 +133,14 @@ object TilesmithStore {
     fun values(context: Context, designId: String): Map<String, TileValue> =
         TileValueCodec.parseMap(valuesPrefs(context).getString(valuesKey(designId), null))
 
-    fun saveValues(context: Context, designId: String, values: Map<String, TileValue>) {
-        valuesPrefs(context).edit()
-            .putString(valuesKey(designId), TileValueCodec.encodeMap(values))
-            .putLong(stampKey(designId), System.currentTimeMillis())
-            .apply()
+    /**
+     * Keeps what [designId]'s sources read. [stamp] marks it as a full pass; a live update of
+     * one source (the track that's playing) leaves the design's own pace alone.
+     */
+    fun saveValues(context: Context, designId: String, values: Map<String, TileValue>, stamp: Boolean = true) {
+        val edit = valuesPrefs(context).edit().putString(valuesKey(designId), TileValueCodec.encodeMap(values))
+        if (stamp) edit.putLong(stampKey(designId), System.currentTimeMillis())
+        edit.apply()
     }
 
     /** When [designId]'s sources were last read. */

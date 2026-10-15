@@ -5,6 +5,7 @@ import com.macrotracker.data.calendar.CalendarRepository
 import com.macrotracker.data.dashboard.DashboardRepository
 import com.macrotracker.data.f1.F1Repository
 import com.macrotracker.data.github.GitHubRepository
+import com.macrotracker.data.google.GoogleAccess
 import com.macrotracker.data.health.HealthConnectRepository
 import com.macrotracker.data.local.MacroRepository
 import com.macrotracker.data.local.SettingsRepository
@@ -15,6 +16,10 @@ import com.macrotracker.data.server.DashboardLinkRepository
 import com.macrotracker.data.server.ServerMonitorRepository
 import com.macrotracker.data.server.ServerStore
 import com.macrotracker.data.server.SshClient
+import com.macrotracker.data.twitch.TwitchRepository
+import com.macrotracker.data.upcoming.UpcomingRepository
+import com.macrotracker.data.youtube.YouTubeRepository
+import com.macrotracker.data.youtube.YouTubeRssFeedService
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -42,6 +47,11 @@ interface WidgetEntryPoint {
     fun macroRepository(): MacroRepository
     fun dashboardRepository(): DashboardRepository
     fun sshClient(): SshClient
+    fun googleAccess(): GoogleAccess
+    fun youTubeRepository(): YouTubeRepository
+    fun youTubeRssFeedService(): YouTubeRssFeedService
+    fun twitchRepository(): TwitchRepository
+    fun upcomingRepository(): UpcomingRepository
 }
 
 internal fun Context.widgetEntryPoint(): WidgetEntryPoint =

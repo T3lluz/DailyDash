@@ -17,6 +17,12 @@ YOUTUBE_API_KEY=
 # 3) Create OAuth client type Android:
 #      package: com.macrotracker
 #      SHA-1 (tester.jks): 0C:C3:12:0A:18:2C:5A:A1:8F:39:5F:11:DB:65:1C:7D:DF:33:91:6C
+# Gmail and Google Tasks for Tilesmith widgets (Settings → Permissions → Google account),
+# through the same Android OAuth client as YouTube, so still no secrets in the app:
+# 1) Same Cloud project → APIs & Services → enable "Gmail API" and "Google Tasks API"
+# 2) OAuth consent screen → Data access → add .../auth/gmail.readonly and .../auth/tasks.readonly
+# 3) Publish the consent screen (In production). Unverified is fine for personal use; in Testing
+#    mode Google drops the grant after 7 days and the widget asks you to connect again.
 
 # Twitch Helix (home Live board + Connect Twitch / import follows)
 # 1) https://dev.twitch.tv/console → Register Your Application (Confidential)

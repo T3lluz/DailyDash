@@ -669,6 +669,8 @@ object AiApiClient {
                 },
             )
         } catch (e: Exception) {
+            // Stop in the studio cancels the call: that must stay a cancellation, not turn into "can't reach Hermes".
+            if (e is kotlinx.coroutines.CancellationException) throw e
             val msg = e.message.orEmpty()
             if (msg.startsWith("Hermes") ||
                 msg.startsWith("The dashboard") ||
