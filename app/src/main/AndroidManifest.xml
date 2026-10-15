@@ -65,6 +65,8 @@
     <uses-permission android:name="android.permission.health.READ_BODY_WATER_MASS" />
     <uses-permission android:name="android.permission.health.READ_BLOOD_GLUCOSE" />
     <uses-permission android:name="android.permission.health.READ_SKIN_TEMPERATURE" />
+    <!-- Tilesmith widgets refresh in the background; asked for only when a widget shows health data. -->
+    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
 
 
     <!-- Allow discovery of Health Connect on Android 11+ -->
@@ -263,6 +265,71 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/github_widget_info" />
         </receiver>
+
+        <receiver
+            android:name=".widget.tilesmith.TilesmithMiniReceiver"
+            android:exported="true"
+            android:label="@string/widget_tilesmith_mini_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/tilesmith_mini_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.tilesmith.TilesmithSmallReceiver"
+            android:exported="true"
+            android:label="@string/widget_tilesmith_small_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/tilesmith_small_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.tilesmith.TilesmithBarReceiver"
+            android:exported="true"
+            android:label="@string/widget_tilesmith_bar_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/tilesmith_bar_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.tilesmith.TilesmithWideReceiver"
+            android:exported="true"
+            android:label="@string/widget_tilesmith_wide_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/tilesmith_wide_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.tilesmith.TilesmithLargeReceiver"
+            android:exported="true"
+            android:label="@string/widget_tilesmith_large_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/tilesmith_large_widget_info" />
+        </receiver>
+
+        <!-- Tilesmith's pin callback: tells a newly pinned copy which design it shows. -->
+        <receiver
+            android:name=".widget.tilesmith.TilesmithPinReceiver"
+            android:exported="false" />
 
 
         <!-- Phone hub: notification access mirrors notifications to the dashboard and runs

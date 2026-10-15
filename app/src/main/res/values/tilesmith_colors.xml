@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tilesmith "Wallpaper" palette: the colour roles widgets tint with. Before Android 12 there is no wallpaper colour, so they are the Ocean scheme. See widget/tilesmith/TilePalettes.kt. -->
+<resources>
+    <color name="tsm_primary">#FF005CBD</color>
+    <color name="tsm_on_primary">#FFFFFFFF</color>
+    <color name="tsm_primary_container">#FFD7E2FF</color>
+    <color name="tsm_on_primary_container">#FF004591</color>
+    <color name="tsm_secondary">#FF585C7E</color>
+    <color name="tsm_on_secondary">#FFFFFFFF</color>
+    <color name="tsm_secondary_container">#FFDFE0FF</color>
+    <color name="tsm_on_secondary_container">#FF404565</color>
+    <color name="tsm_tertiary">#FF615889</color>
+    <color name="tsm_on_tertiary">#FFFFFFFF</color>
+    <color name="tsm_tertiary_container">#FFE6DEFF</color>
+    <color name="tsm_on_tertiary_container">#FF494070</color>
+    <color name="tsm_error">#FFBA1A1A</color>
+    <color name="tsm_on_error">#FFFFFFFF</color>
+    <color name="tsm_error_container">#FFFFDAD6</color>
+    <color name="tsm_on_error_container">#FF93000A</color>
+    <color name="tsm_surface">#FFF9F9FF</color>
+    <color name="tsm_on_surface">#FF171C25</color>
+    <color name="tsm_on_surface_variant">#FF414753</color>
+    <color name="tsm_surface_container_lowest">#FFFFFFFF</color>
+    <color name="tsm_surface_container_low">#FFF1F3FF</color>
+    <color name="tsm_surface_container">#FFEAEDFA</color>
+    <color name="tsm_surface_container_high">#FFE5E8F5</color>
+    <color name="tsm_surface_container_highest">#FFDFE2EF</color>
+    <color name="tsm_outline">#FF727785</color>
+    <color name="tsm_outline_variant">#FFC1C6D6</color>
+    <color name="tsm_inverse_surface">#FF2C303A</color>
+    <color name="tsm_inverse_on_surface">#FFEDF0FD</color>
+</resources>

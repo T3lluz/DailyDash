@@ -191,7 +191,17 @@ fun MainScreen(
         when (where) {
             "console" -> navController.navigateToSubScreen(SubScreenRoutes.CONSOLE)
             "usage" -> navController.navigateToSubScreen(SubScreenRoutes.USAGE)
-            "hermes" -> if (hasAiApiKey) navController.navigateToTab(Screen.AI.route)
+            "hermes", "ai" -> if (hasAiApiKey) navController.navigateToTab(Screen.AI.route)
+            // Tilesmith widgets' taps: a screen of the app, or the studio on a design.
+            "home" -> navController.navigateToTab(Screen.Home.route)
+            "health" -> navController.navigateToTab(Screen.Health.route)
+            "settings" -> navController.navigateToTab(Screen.Settings.route)
+            "widgets" -> navController.navigateToSubScreen(SubScreenRoutes.WIDGETS)
+            "servers" -> navController.navigate(SettingsRoutes.SERVER_DASHBOARD) { launchSingleTop = true }
+            else -> if (where.startsWith(SubScreenRoutes.TILESMITH)) {
+                val design = where.substringAfter(':', "").ifBlank { null }
+                navController.navigateToSubScreen(SubScreenRoutes.tilesmith(designId = design))
+            }
         }
         onOpenRequestHandled()
     }

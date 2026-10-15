@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tilesmith icon "play": white so the widget tints it with a colour role. From AppIcons (Lucide); see widget/tilesmith/TileIcons.kt. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M6 4 v16 a1 1 0 0 0 1.524 0.852 l13 -8 a1 1 0 0 0 0 -1.704 l-13 -8 a1 1 0 0 0 -1.524 0.852 z"
+        android:fillColor="#FFFFFF" />
+</vector>

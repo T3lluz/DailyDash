@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 14+ in dark mode: the system's own M3 colour tokens. -->
+<resources>
+    <color name="tsm_primary">@android:color/system_primary_dark</color>
+    <color name="tsm_on_primary">@android:color/system_on_primary_dark</color>
+    <color name="tsm_primary_container">@android:color/system_primary_container_dark</color>
+    <color name="tsm_on_primary_container">@android:color/system_on_primary_container_dark</color>
+    <color name="tsm_secondary">@android:color/system_secondary_dark</color>
+    <color name="tsm_on_secondary">@android:color/system_on_secondary_dark</color>
+    <color name="tsm_secondary_container">@android:color/system_secondary_container_dark</color>
+    <color name="tsm_on_secondary_container">@android:color/system_on_secondary_container_dark</color>
+    <color name="tsm_tertiary">@android:color/system_tertiary_dark</color>
+    <color name="tsm_on_tertiary">@android:color/system_on_tertiary_dark</color>
+    <color name="tsm_tertiary_container">@android:color/system_tertiary_container_dark</color>
+    <color name="tsm_on_tertiary_container">@android:color/system_on_tertiary_container_dark</color>
+    <color name="tsm_error">#FFFFB4AB</color>
+    <color name="tsm_on_error">#FF690005</color>
+    <color name="tsm_error_container">#FF93000A</color>
+    <color name="tsm_on_error_container">#FFFFDAD6</color>
+    <color name="tsm_surface">@android:color/system_surface_dark</color>
+    <color name="tsm_on_surface">@android:color/system_on_surface_dark</color>
+    <color name="tsm_on_surface_variant">@android:color/system_on_surface_variant_dark</color>
+    <color name="tsm_surface_container_lowest">@android:color/system_surface_container_lowest_dark</color>
+    <color name="tsm_surface_container_low">@android:color/system_surface_container_low_dark</color>
+    <color name="tsm_surface_container">@android:color/system_surface_container_dark</color>
+    <color name="tsm_surface_container_high">@android:color/system_surface_container_high_dark</color>
+    <color name="tsm_surface_container_highest">@android:color/system_surface_container_highest_dark</color>
+    <color name="tsm_outline">@android:color/system_outline_dark</color>
+    <color name="tsm_outline_variant">@android:color/system_outline_variant_dark</color>
+    <color name="tsm_inverse_surface">@android:color/system_neutral1_100</color>
+    <color name="tsm_inverse_on_surface">@android:color/system_neutral1_800</color>
+</resources>

@@ -180,6 +180,9 @@ dependencies {
     // Glance (App Widgets)
     implementation(libs.glance.appwidget)
     implementation(libs.glance.material3)
+
+    // Material 3 Expressive's shape library (RoundedPolygon, Morph): Tilesmith's shapes and its morphing hero
+    implementation(libs.graphics.shapes)
     
     // Installed icon library for full-app usage (Weather, UI, etc.)
 
@@ -202,6 +205,14 @@ dependencies {
     if (widgetShots) {
         testImplementation(libs.robolectric)
         testImplementation(libs.androidx.test.core)
+    }
+}
+
+// Tilesmith's shape vectors are generated from the M3 shape polygons; TileShapeVectorsTest pins them.
+// `./gradlew :app:testDebugUnitTest --tests '*TileShapeVectorsTest*' -PtilesmithWriteShapes` rewrites them.
+if (providers.gradleProperty("tilesmithWriteShapes").isPresent) {
+    tasks.withType<Test>().configureEach {
+        systemProperty("tilesmith.writeShapes", layout.projectDirectory.dir("src/main/res/drawable").asFile.path)
     }
 }
 

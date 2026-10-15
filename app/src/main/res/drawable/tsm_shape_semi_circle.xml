@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material 3 Expressive shape "semi_circle", generated from M3Shapes by TileShapeVectorsTest; do not edit. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M96.95,78.2C95.06,80.08 92.46,81.25 89.58,81.25C63.19,81.25 36.81,81.25 10.42,81.25C4.66,81.25 0,76.59 0,70.83C0,70.14 0,69.44 0,68.75C0,41.14 22.39,18.75 50,18.75C77.61,18.75 100,41.14 100,68.75C100,69.44 100,70.14 100,70.83C100,73.71 98.83,76.31 96.95,78.2Z" />
+</vector>

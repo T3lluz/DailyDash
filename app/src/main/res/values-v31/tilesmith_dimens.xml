@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The launcher's own widget radii, so Tilesmith widgets round like every other widget on the home screen. -->
+<resources>
+    <dimen name="tsm_widget_radius">@android:dimen/system_app_widget_background_radius</dimen>
+    <dimen name="tsm_inner_radius">@android:dimen/system_app_widget_inner_radius</dimen>
+</resources>

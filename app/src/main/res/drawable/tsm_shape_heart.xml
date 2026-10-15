@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material 3 Expressive shape "heart", generated from M3Shapes by TileShapeVectorsTest; do not edit. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M50,28.59C50.16,28.59 50.33,28.53 50.44,28.39C54.29,23.99 58.15,19.58 62,15.18C70.46,5.49 85.63,5.85 93.63,15.91C100,23.92 99.85,35.3 93.27,43.13C78.9,60.23 64.53,77.33 50.16,94.43C50.12,94.48 50.06,94.51 50,94.51C49.94,94.51 49.88,94.48 49.84,94.43C35.47,77.33 21.1,60.23 6.73,43.13C0.15,35.3 0,23.92 6.37,15.91C14.37,5.85 29.54,5.49 38,15.18C41.85,19.58 45.71,23.99 49.56,28.39C49.67,28.53 49.84,28.59 50,28.59Z" />
+</vector>

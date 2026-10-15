@@ -39,6 +39,7 @@ import com.macrotracker.data.chat.ChatBot
 import com.macrotracker.data.chat.ChatRole
 import com.macrotracker.ui.components.PillButton
 import com.macrotracker.ui.components.WidgetExpandSection
+import com.macrotracker.ui.screens.tilesmith.TilesmithAccent
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.ServerBrand
 import com.macrotracker.ui.theme.Surface
@@ -74,6 +75,7 @@ fun SysopChatPane(
     /** Switches Tech support to Hermes on the dashboard server; null hides the option. */
     onUseHermes: (() -> Unit)? = null,
     onOpenConsole: (() -> Unit)? = null,
+    onOpenTilesmith: (() -> Unit)? = null,
 ) {
     val bot = ChatBot.SYSOP
     val state by viewModel.state(bot).collectAsState()
@@ -122,6 +124,12 @@ fun SysopChatPane(
                 active = state.loading,
                 accent = ServerBrand,
             ) {
+                if (onOpenTilesmith != null) {
+                    // Tilesmith: describe a widget and the AI builds it.
+                    IconButton(onClick = { haptics.tick(); onOpenTilesmith() }, modifier = Modifier.size(36.dp)) {
+                        Icon(AppIcons.Blocks, contentDescription = "Tilesmith widget maker", tint = TilesmithAccent, modifier = Modifier.size(19.dp))
+                    }
+                }
                 if (onOpenConsole != null) {
                     IconButton(onClick = { haptics.tick(); onOpenConsole() }, modifier = Modifier.size(36.dp)) {
                         Icon(AppIcons.SquareTerminal, contentDescription = "Console", tint = TextSecondary, modifier = Modifier.size(19.dp))

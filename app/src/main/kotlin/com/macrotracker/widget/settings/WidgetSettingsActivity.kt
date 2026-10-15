@@ -27,6 +27,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -73,7 +75,14 @@ import com.macrotracker.widget.DashWidgets
 import com.macrotracker.widget.WidgetInstances
 import com.macrotracker.widget.WidgetRefreshWorker
 import com.macrotracker.widget.WidgetViewOption
+import com.macrotracker.MainActivity
+import com.macrotracker.ui.screens.tilesmith.ShapeGlyph
+import com.macrotracker.ui.screens.tilesmith.TilesmithAccent
 import com.macrotracker.widget.kit.WidgetAi
+import com.macrotracker.widget.tilesmith.TileDesign
+import com.macrotracker.widget.tilesmith.TileShape
+import com.macrotracker.widget.tilesmith.TilesmithStore
+import com.macrotracker.widget.tilesmith.TilesmithWidgetSpec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -124,9 +133,15 @@ private fun WidgetSettingsScreen(appWidgetId: Int, onClose: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val haptics = rememberHaptics()
-    val specs = remember { DashWidgets.all }
+    val specs = remember { DashWidgets.listed }
     val current = remember { WidgetInstances.specFor(context, appWidgetId) }
     var chosen by remember { mutableStateOf(current) }
+    // A Tilesmith copy shows one of your designs; picking one makes the copy a Tilesmith widget.
+    val currentDesign = remember {
+        if (current === TilesmithWidgetSpec) TilesmithStore.designIdFor(context, appWidgetId, TilesmithWidgetSpec.placedSize(context, appWidgetId)) else null
+    }
+    var design by remember { mutableStateOf(currentDesign) }
+    val designs = remember { TilesmithStore.designs(context) }
     val size = remember(chosen.key) { WidgetInstances.portraitSize(context, appWidgetId) ?: chosen.previewSize }
     val option = remember(chosen.key, size) { chosen.viewOption(context, size) }
 
@@ -140,7 +155,7 @@ private fun WidgetSettingsScreen(appWidgetId: Int, onClose: () -> Unit) {
     }
     val picked = option?.let { o -> views[chosen.key]?.takeIf { v -> v == AUTO || o.choices.any { it.id == v } } }
     val shownChoice = option?.let { o -> picked ?: if (o.auto != null) AUTO else o.choices.first().id }
-    val previewView = shownChoice?.takeIf { it != AUTO }
+    val previewView = if (chosen === TilesmithWidgetSpec) design else shownChoice?.takeIf { it != AUTO }
 
     var render by remember { mutableStateOf<RemoteViews?>(null) }
     var renderFailed by remember { mutableStateOf(false) }
@@ -157,7 +172,13 @@ private fun WidgetSettingsScreen(appWidgetId: Int, onClose: () -> Unit) {
         saving = true
         val view = option?.let { o -> picked?.let { o.stateKey to it.takeIf { v -> v != AUTO } } }
         scope.launch {
-            withContext(Dispatchers.IO) { WidgetInstances.apply(context, appWidgetId, chosen, view) }
+            withContext(Dispatchers.IO) {
+                if (chosen === TilesmithWidgetSpec) {
+                    design?.let { id -> TilesmithStore.assign(context, appWidgetId, id) }
+                    TilesmithStore.design(context, design)?.let { runCatching { TilesmithWidgetSpec.refreshDesign(context, it) } }
+                }
+                WidgetInstances.apply(context, appWidgetId, chosen, view)
+            }
             onClose()
         }
     }
@@ -175,9 +196,11 @@ private fun WidgetSettingsScreen(appWidgetId: Int, onClose: () -> Unit) {
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 16.dp),
         ) {
+            val chosenName = if (chosen === TilesmithWidgetSpec) TilesmithStore.design(context, design)?.name ?: "Tilesmith" else chosen.title
+            val currentName = if (current === TilesmithWidgetSpec) TilesmithStore.design(context, currentDesign)?.name ?: "Tilesmith" else current.title
             SubScreenHeader(
                 title = "Widget settings",
-                subtitle = if (chosen.key == current.key) "Showing ${current.title}" else "${current.title} → ${chosen.title}",
+                subtitle = if (chosenName == currentName) "Showing $currentName" else "$currentName → $chosenName",
                 onNavigateBack = onClose,
             )
 
@@ -222,6 +245,26 @@ private fun WidgetSettingsScreen(appWidgetId: Int, onClose: () -> Unit) {
                     }
                 }
             }
+
+            SectionTitle("Tilesmith")
+            TilesmithPicker(
+                designs = designs,
+                selected = design.takeIf { chosen === TilesmithWidgetSpec },
+                onPick = { id ->
+                    haptics.tick()
+                    chosen = TilesmithWidgetSpec
+                    design = id
+                },
+                onOpenStudio = { id ->
+                    haptics.click()
+                    context.startActivity(
+                        Intent(context, MainActivity::class.java)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                            .putExtra(MainActivity.EXTRA_OPEN, if (id == null) "tilesmith" else "tilesmith:$id"),
+                    )
+                    onClose()
+                },
+            )
 
             if (WidgetAi.isAvailable(context)) {
                 var ai by remember { mutableStateOf(WidgetAi.isEnabled(context)) }
@@ -275,7 +318,11 @@ private fun WidgetSettingsScreen(appWidgetId: Int, onClose: () -> Unit) {
                 modifier = Modifier.weight(1f),
             )
             MacroButton(
-                text = if (chosen.key == current.key) "Done" else "Show ${chosen.title}",
+                text = when {
+                    chosen === TilesmithWidgetSpec && design != currentDesign -> "Show ${TilesmithStore.design(context, design)?.name ?: "it"}"
+                    chosen.key == current.key -> "Done"
+                    else -> "Show ${chosen.title}"
+                },
                 onClick = ::done,
                 enabled = !saving,
                 modifier = Modifier.weight(1f),
@@ -377,4 +424,49 @@ private fun ChoiceChip(label: String, selected: Boolean, spec: DashWidgetSpec, o
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 8.dp),
     )
+}
+
+/**
+ * Your Tilesmith designs, to show on this copy, and a way into the studio: edit the one it
+ * shows, or make a new one.
+ */
+@Composable
+private fun TilesmithPicker(designs: List<TileDesign>, selected: String?, onPick: (String) -> Unit, onOpenStudio: (String?) -> Unit) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(designs, key = { it.id }) { d ->
+            val on = d.id == selected
+            val shape = RoundedCornerShape(14.dp)
+            Column(
+                modifier = Modifier
+                    .clip(shape)
+                    .background(if (on) TilesmithAccent.copy(alpha = 0.14f) else Surface)
+                    .border(if (on) 1.5.dp else 1.dp, if (on) TilesmithAccent.copy(alpha = 0.8f) else Border, shape)
+                    .clickable { onPick(d.id) }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                ShapeGlyph(d.blocks.firstNotNullOfOrNull { it.shape } ?: TileShape.COOKIE_9, if (on) TilesmithAccent else TextSecondary, Modifier.size(26.dp))
+                Spacer(Modifier.height(6.dp))
+                Text(d.name, fontSize = 12.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium, color = if (on) TextPrimary else TextSecondary, maxLines = 1)
+                Text("${d.size.label} ${d.size.cells}", fontSize = 10.sp, color = TextTertiary, maxLines = 1)
+            }
+        }
+        item {
+            val shape = RoundedCornerShape(14.dp)
+            Column(
+                modifier = Modifier
+                    .clip(shape)
+                    .background(Surface)
+                    .border(1.dp, Border, shape)
+                    .clickable { onOpenStudio(selected) }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Icon(if (selected != null) AppIcons.Edit else AppIcons.Sparkles, contentDescription = null, tint = TilesmithAccent, modifier = Modifier.size(26.dp))
+                Spacer(Modifier.height(6.dp))
+                Text(if (selected != null) "Edit in Tilesmith" else "Make one with AI", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = TextPrimary, maxLines = 1)
+                Text("Opens the app", fontSize = 10.sp, color = TextTertiary, maxLines = 1)
+            }
+        }
+    }
 }

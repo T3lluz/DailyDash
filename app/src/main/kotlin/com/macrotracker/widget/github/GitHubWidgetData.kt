@@ -43,8 +43,8 @@ internal object GitHubWidgetStore {
     private const val AVATAR_FILE = "widget_github_avatar.png"
     private const val AVATAR_PX = 96
 
-    /** Just under the shared worker's 15 minutes, so every pass fetches. */
-    private const val TTL_MS = 12 * 60 * 1000L
+    /** Just under the widget's ten-minute cadence ([GitHubWidgetSpec.refreshEveryMs]), so every pass fetches. */
+    const val TTL_MS = 9 * 60 * 1000L
 
     /** The repository's own memory cache; a fetch older than this that didn't move failed. */
     private const val REPO_CACHE_MS = 5 * 60 * 1000L
@@ -109,14 +109,14 @@ internal object GitHubWidgetStore {
         return runCatching { BitmapFactory.decodeFile(file.path) }.getOrNull()
     }
 
-    /** Never throws. Quick when nothing is due. */
-    suspend fun refresh(context: Context, force: Boolean) {
+    /** Never throws. Quick when nothing is due. [maxAgeMs]: how old the data may be (Tilesmith asks for its own). */
+    suspend fun refresh(context: Context, force: Boolean, maxAgeMs: Long = TTL_MS) {
         val app = context.applicationContext
-        runCatching { withContext(Dispatchers.IO) { refreshNow(app, force) } }
+        runCatching { withContext(Dispatchers.IO) { refreshNow(app, force, maxAgeMs) } }
             .onFailure { Log.w(TAG, "refresh failed: ${it.message}") }
     }
 
-    private suspend fun refreshNow(app: Context, force: Boolean) {
+    private suspend fun refreshNow(app: Context, force: Boolean, maxAgeMs: Long) {
         val repo = app.widgetEntryPoint().gitHubRepository()
         val prev = stored(app)
         val now = System.currentTimeMillis()
@@ -125,7 +125,7 @@ internal object GitHubWidgetStore {
             disconnect(app, prev, now)
             return
         }
-        if (!force && prev != null && prev.connected && prev.hasData && now - prev.attemptAt < TTL_MS) return
+        if (!force && prev != null && prev.connected && prev.hasData && now - prev.attemptAt < maxAgeMs) return
 
         val before = repo.lastFetchTimeMs
         val result = repo.getDashboard(forceRefresh = force)

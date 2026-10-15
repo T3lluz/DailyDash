@@ -154,6 +154,9 @@ class HealthConnectRepository @Inject constructor(
          */
         val SKIN_TEMPERATURE_PERMISSION = HealthPermission.getReadPermission(SkinTemperatureRecord::class)
 
+        /** Reads while the app is in the background: what a Tilesmith widget's refresh runs as. */
+        const val BACKGROUND_PERMISSION = HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND
+
         /** How far back Body & Vitals reads: long enough for a weight trend. */
         const val VITALS_HISTORY_DAYS = 90L
 
@@ -256,6 +259,22 @@ class HealthConnectRepository @Inject constructor(
                 HealthConnectFeatures.FEATURE_STATUS_AVAILABLE
         } catch (e: Exception) {
             Log.w(TAG, "Failed to check for skin temperature: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * Whether this Health Connect lets an app read while it isn't on screen, which a home-screen
+     * widget's refresh needs (Android 14+ with a recent Health Connect). Asked once.
+     */
+    @OptIn(ExperimentalFeatureAvailabilityApi::class)
+    val backgroundReadAvailable: Boolean by lazy {
+        val hc = client ?: return@lazy false
+        try {
+            hc.features.getFeatureStatus(HealthConnectFeatures.FEATURE_READ_HEALTH_DATA_IN_BACKGROUND) ==
+                HealthConnectFeatures.FEATURE_STATUS_AVAILABLE
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to check for background reads: ${e.message}")
             false
         }
     }

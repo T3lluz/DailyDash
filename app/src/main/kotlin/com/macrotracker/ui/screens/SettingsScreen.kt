@@ -1,5 +1,9 @@
 package com.macrotracker.ui.screens
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import com.macrotracker.ui.util.findActivity
 import com.macrotracker.data.update.prettyVersion
 import androidx.compose.foundation.background
@@ -20,8 +24,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
@@ -59,6 +61,7 @@ import com.macrotracker.ui.viewmodel.AppUpdateViewModel
 import com.macrotracker.ui.viewmodel.ServerViewModel
 import com.macrotracker.ui.viewmodel.SettingsViewModel
 import com.macrotracker.ui.viewmodel.GoalsViewModel
+import com.macrotracker.widget.tilesmith.TilesmithStore
 
 /** The AI row's tint: the same lilac the widgets' AI line uses. */
 private val AiTint = Color(0xFFB4A7F5)
@@ -175,12 +178,17 @@ fun SettingsScreen(
         }
 
         SettingsGroup(title = "Home screen", delayMs = 100) {
+            val context = LocalContext.current
+            // "New" until Tilesmith has been opened once; checked again on every return here.
+            var tilesmithSeen by remember { mutableStateOf(TilesmithStore.seen(context)) }
+            LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { tilesmithSeen = TilesmithStore.seen(context) }
             SettingsNavRow(
                 icon = AppIcons.Blocks,
                 tint = Primary,
-                title = "Widgets",
-                summary = "Home screen widgets",
-                status = widgetsPlaced?.let { n -> if (n == 0) "None placed" else "$n placed" },
+                title = "Widgets & Tilesmith",
+                summary = "Make your own with AI, or add a ready-made one",
+                status = if (!tilesmithSeen) "New" else widgetsPlaced?.let { n -> if (n == 0) "None placed" else "$n placed" },
+                statusTone = if (!tilesmithSeen) SettingsStatusTone.ATTENTION else SettingsStatusTone.PLAIN,
                 onClick = onNavigateToWidgets,
             )
         }

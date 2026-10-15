@@ -37,6 +37,9 @@ object ServerWidgetSpec : DashWidgetSpec {
         return WidgetViewOption(SERVER_STATE_KEY, "Server", servers.map { WidgetViewOption.Choice(it.id, it.label) })
     }
 
+    /** Every five minutes: the SSH poll is a few seconds, and a server that went down should show. */
+    override fun refreshEveryMs(context: Context): Long = 5 * 60_000L
+
     override suspend fun refresh(context: Context, force: Boolean) {
         ServerWidgetStore.refresh(context, force)
     }

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material 3 Expressive shape "circle", generated from M3Shapes by TileShapeVectorsTest; do not edit. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M100,50C100,55.17 99.19,60.35 97.57,65.33C94.34,75.29 88.03,83.97 79.56,90.12C71.08,96.28 60.88,99.6 50.4,99.6C39.93,99.6 29.73,96.28 21.25,90.12C12.78,83.97 6.47,75.29 3.24,65.33C0,55.36 0,44.64 3.24,34.67C6.47,24.71 12.78,16.03 21.25,9.88C29.73,3.72 39.93,0.4 50.4,0.4C60.88,0.4 71.08,3.72 79.56,9.88C88.03,16.03 94.34,24.71 97.57,34.67C99.19,39.65 100,44.83 100,50Z" />
+</vector>

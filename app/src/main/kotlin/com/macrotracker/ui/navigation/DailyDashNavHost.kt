@@ -18,6 +18,7 @@ import com.macrotracker.ui.screens.MealChatScreen
 import com.macrotracker.ui.screens.ServerScreen
 import com.macrotracker.ui.screens.SettingsScreen
 import com.macrotracker.ui.screens.WidgetsScreen
+import com.macrotracker.ui.screens.tilesmith.TilesmithStudioScreen
 import com.macrotracker.ui.screens.onboarding.PermissionsScreen
 import com.macrotracker.ui.screens.onboarding.TutorialScreen
 import com.macrotracker.ui.screens.onboarding.WelcomeScreen
@@ -40,6 +41,7 @@ private val TabOrder = listOf(
 // tabs' cross-fade on the way in and a slide on the way out.
 private val SubScreens = setOf(
     SubScreenRoutes.WIDGETS,
+    SubScreenRoutes.TILESMITH_PATTERN,
     SubScreenRoutes.USAGE,
     SubScreenRoutes.CONSOLE,
     OnboardingRoutes.PERMISSIONS,
@@ -155,6 +157,7 @@ fun DailyDashNavHost(
                 onNavigateToAiSettings = { navController.navigateToSubScreen(SettingsRoutes.AI) },
                 onOpenConsole = { navController.navigateToSubScreen(SubScreenRoutes.CONSOLE) },
                 onOpenUsage = { navController.navigateToSubScreen(SubScreenRoutes.USAGE) },
+                onOpenTilesmith = { navController.navigateToSubScreen(SubScreenRoutes.tilesmith()) },
                 serverHandoffId = entry.arguments?.getString(Screen.AI.ARG_SEED),
             )
         }
@@ -235,7 +238,33 @@ fun DailyDashNavHost(
         }
 
         subScreen(SubScreenRoutes.WIDGETS) { entry ->
-            WidgetsScreen(onNavigateBack = { navController.popSubScreen(entry) })
+            WidgetsScreen(
+                onNavigateBack = { navController.popSubScreen(entry) },
+                onOpenTilesmith = { design, prompt, starter ->
+                    navController.navigateToSubScreen(SubScreenRoutes.tilesmith(design, prompt, starter))
+                },
+            )
+        }
+
+        composable(
+            route = SubScreenRoutes.TILESMITH_PATTERN,
+            arguments = listOf(
+                navArgument("design") { nullable = true; defaultValue = null },
+                navArgument("prompt") { nullable = true; defaultValue = null },
+                navArgument("starter") { nullable = true; defaultValue = null },
+            ),
+            enterTransition = { MacroMotion.subScreenEnter },
+            exitTransition = { MacroMotion.subScreenExit },
+            popEnterTransition = { MacroMotion.subScreenPopEnter },
+            popExitTransition = { MacroMotion.subScreenPopExit },
+        ) { entry ->
+            TilesmithStudioScreen(
+                designId = entry.arguments?.getString("design"),
+                prompt = entry.arguments?.getString("prompt"),
+                starterId = entry.arguments?.getString("starter"),
+                onNavigateBack = { navController.popSubScreen(entry) },
+                onOpenRoute = { navController.navigateToSubScreen(it) },
+            )
         }
 
         subScreen(SubScreenRoutes.MEAL_CHAT) { entry ->

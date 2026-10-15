@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material 3 Expressive shape "diamond", generated from M3Shapes by TileShapeVectorsTest; do not edit. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M50,100C47.27,100 44.54,99.26 42.13,97.77C39.8,96.33 37.17,92.93 31.91,86.11C25.2,77.41 18.49,68.71 11.77,60.02C7.39,54.33 7.39,46.41 11.77,40.73C18.49,32.03 25.2,23.33 31.91,14.63C37.17,7.82 39.8,4.41 42.13,2.98C46.95,0 53.05,0 57.87,2.98C60.2,4.41 62.83,7.82 68.09,14.63C74.8,23.33 81.51,32.03 88.23,40.73C92.61,46.41 92.61,54.33 88.23,60.02C81.51,68.71 74.8,77.41 68.09,86.11C62.83,92.93 60.2,96.33 57.87,97.77C55.46,99.26 52.73,100 50,100Z" />
+</vector>

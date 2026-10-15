@@ -38,14 +38,14 @@ object WidgetInstances {
     fun placedIds(context: Context): List<Int> = runCatching {
         val manager = AppWidgetManager.getInstance(context) ?: return emptyList()
         DashWidgets.all.flatMap { spec ->
-            manager.getAppWidgetIds(ComponentName(context, spec.receiver))?.toList().orEmpty()
+            spec.receivers.flatMap { r -> manager.getAppWidgetIds(ComponentName(context, r))?.toList().orEmpty() }
         }
     }.getOrDefault(emptyList())
 
     /** The widget [appWidgetId] was placed as, from its receiver; null if the id is gone. */
     fun placedAs(context: Context, appWidgetId: Int): DashWidgetSpec? = runCatching {
         val provider = AppWidgetManager.getInstance(context)?.getAppWidgetInfo(appWidgetId)?.provider ?: return null
-        DashWidgets.all.firstOrNull { it.receiver.name == provider.className }
+        DashWidgets.all.firstOrNull { spec -> spec.receivers.any { it.name == provider.className } }
     }.getOrNull()
 
     /** What [appWidgetId] shows: its own pick, else what it was placed as. */

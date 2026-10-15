@@ -232,6 +232,30 @@ object MacroMotion {
      * while the new one rises in from below, the way a countdown ticks on iOS. Only digits
      * that change move, and the roll is done well before the next second.
      */
+    /**
+     * Tilesmith's shapes morphing from one to the next (graphics-shapes' `Morph`), M3
+     * Expressive's signature motion: a spring-like settle into each shape, then a short hold.
+     * The hero morphs slowly; the "smithing" mark while the AI works is quicker.
+     */
+    object Tilesmith {
+        /** One shape to the next, hero. */
+        const val MORPH_MS = 900
+
+        /** How long the hero holds a shape before the next morph. */
+        const val HOLD_MS = 1_400
+
+        /** One shape to the next while the AI works. */
+        const val WORKING_MS = 650
+
+        /** Overshoots a little and settles, as M3's expressive spatial springs do. */
+        val MORPH_EASING = CubicBezierEasing(0.34f, 1.36f, 0.64f, 1f)
+
+        /** A slow turn under the morph, degrees per morph. */
+        const val TURN_DEG = 45f
+
+        fun <T> stagePop() = spring<T>(dampingRatio = 0.62f, stiffness = 380f)
+    }
+
     object CountdownRoll {
         const val DURATION_MS = 420
 

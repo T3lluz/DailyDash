@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material 3 Expressive shape "square", generated from M3Shapes by TileShapeVectorsTest; do not edit. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M91.21,91.21C85.78,96.64 78.28,100 70,100C56.67,100 43.33,100 30,100C13.43,100 0,86.57 0,70C0,56.67 0,43.33 0,30C0,13.43 13.43,0 30,0C43.33,0 56.67,0 70,0C86.57,0 100,13.43 100,30C100,43.33 100,56.67 100,70C100,78.28 96.64,85.78 91.21,91.21Z" />
+</vector>
