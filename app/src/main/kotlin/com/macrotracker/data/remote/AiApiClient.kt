@@ -10,11 +10,12 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.concurrent.TimeUnit
 
 /**
- * Shared Gemini / OpenAI / OpenRouter / Claude HTTP helpers used by nutrition, weather,
- * and widget AI features. Chat lives in [AiChatClient], which reuses the Claude
- * request builder here.
+ * Shared Gemini / OpenAI / OpenRouter / Claude / Hermes HTTP helpers used by nutrition,
+ * weather, Tilesmith and widget AI features. Chat lives in [AiChatClient], which reuses
+ * the Claude request builder here.
  * Keeps provider-specific request/response shapes in one place.
  */
 object AiApiClient {
@@ -55,6 +56,12 @@ object AiApiClient {
         val webSearch: Boolean = false,
         /** Claude's `output_config.effort`; these calls are short, so `low` unless a caller needs more. */
         val effort: String = "low",
+        /**
+         * Dashboard base URL when [AiProvider.HERMES] is selected, e.g. `https://t3lluz.com`.
+         * The call goes to `<url>/_api/v1/chat/completions`, the same OpenAI-shaped shim
+         * Tech support's chats already use.
+         */
+        val dashboardUrl: String = "",
     )
 
     suspend fun generate(
@@ -63,7 +70,9 @@ object AiApiClient {
         apiKey: String,
         params: GenerateParams,
     ): String {
-        require(apiKey.isNotBlank()) { "API key is blank" }
+        if (provider != AiProvider.HERMES) {
+            require(apiKey.isNotBlank()) { "API key is blank" }
+        }
         return when (provider) {
             AiProvider.GEMINI -> generateGemini(httpClient, apiKey, params)
             AiProvider.OPENAI -> generateOpenAiCompatible(
@@ -90,6 +99,7 @@ object AiApiClient {
                 )
             }
             AiProvider.ANTHROPIC -> generateAnthropic(httpClient, apiKey, params)
+            AiProvider.HERMES -> generateHermes(httpClient, params)
         }
     }
 
@@ -597,7 +607,139 @@ object AiApiClient {
         responseBody
     }
 
+    // ── Hermes (t3lluz dashboard shim) ──────────────────────────────────────
+
+    /**
+     * One-shot completion through `<dashboard>/_api/v1/chat/completions`.
+     *
+     * That is the OpenAI-shaped endpoint the dashboard already exposes for Hermes'
+     * own model calls. With no live chat slot it runs as a plain completion
+     * (no tools, no extra thread), which is what Tilesmith and widget lines need.
+     */
+    private suspend fun generateHermes(
+        httpClient: OkHttpClient,
+        params: GenerateParams,
+    ): String {
+        if (params.base64Jpeg != null) {
+            throw Exception("Hermes on the dashboard can't see photos. Pick Gemini, OpenAI, OpenRouter or Claude for scans.")
+        }
+        val base = params.dashboardUrl.trim().trimEnd('/')
+        if (base.isBlank()) {
+            throw Exception("Set your dashboard server in Settings → Connections.")
+        }
+        val client = httpClient.newBuilder()
+            .connectTimeout(HERMES_CONNECT_TIMEOUT_S, TimeUnit.SECONDS)
+            .readTimeout(HERMES_READ_TIMEOUT_S, TimeUnit.SECONDS)
+            .build()
+
+        val model = runCatching { fetchHermesModel(client, base) }.getOrDefault("")
+        val messages = JSONArray()
+        if (params.jsonMode) {
+            messages.put(
+                JSONObject()
+                    .put("role", "system")
+                    .put("content", "Reply with a single raw JSON object and nothing else. No prose, no markdown fences."),
+            )
+        }
+        messages.put(JSONObject().put("role", "user").put("content", params.prompt))
+        val body = JSONObject()
+            .put("model", model)
+            .put("messages", messages)
+            .put("max_tokens", params.maxOutputTokens)
+            .put("temperature", params.temperature)
+
+        Log.d(TAG, "→ Hermes $model | json=${params.jsonMode}")
+        try {
+            val (code, responseBody) = doPost(client, dashboardPath(base, "/v1/chat/completions"), body.toString())
+            Log.d(TAG, "← Hermes $model | $code | ${responseBody.take(200)}")
+            if (code in 200..299) {
+                val text = extractOpenAiText(responseBody)
+                if (text.isNotBlank()) return text
+            }
+            if (isApiKeyError(code, responseBody)) {
+                throw Exception("The dashboard rejected that. Check Settings → Connections.")
+            }
+            if (code == 429 || isRateLimitError(responseBody)) {
+                throw Exception("Hermes is busy. Wait a moment and try again.")
+            }
+            val snippet = responseBody.replace(Regex("<[^>]+>"), "").take(200).trim()
+            throw Exception(
+                hermesReachError(code, snippet).ifBlank {
+                    "Hermes sent nothing back. Try again, or pick another provider in Settings → AI."
+                },
+            )
+        } catch (e: Exception) {
+            val msg = e.message.orEmpty()
+            if (msg.startsWith("Hermes") ||
+                msg.startsWith("The dashboard") ||
+                msg.startsWith("Set your dashboard") ||
+                msg.contains("truncated")
+            ) {
+                throw e
+            }
+            throw Exception(hermesReachError(0, msg).ifBlank { msg }, e)
+        }
+    }
+
+    private suspend fun fetchHermesModel(httpClient: OkHttpClient, base: String): String {
+        val (code, body) = doGet(httpClient, dashboardPath(base, "/ai/status"))
+        if (code !in 200..299) return ""
+        return hermesModelFromStatus(body)
+    }
+
+    /** `<dashboard>/_api<path>`. [dashboardUrl] may have a trailing slash. */
+    internal fun dashboardPath(dashboardUrl: String, path: String): String {
+        val base = dashboardUrl.trim().trimEnd('/')
+        require(base.isNotBlank()) { "Set your dashboard server in Settings → Connections." }
+        val p = if (path.startsWith("/")) path else "/$path"
+        return "$base/_api$p"
+    }
+
+    /** The dashboard's current model id from `/ai/status`, or blank. */
+    internal fun hermesModelFromStatus(body: String): String {
+        val root = JSONObject(body)
+        val listed = root.optJSONArray("models")
+        if (listed != null) {
+            for (i in 0 until listed.length()) {
+                val o = listed.optJSONObject(i) ?: continue
+                if (o.optBoolean("current")) {
+                    val id = o.optString("id")
+                    if (id.isNotBlank()) return id
+                }
+            }
+        }
+        return root.optJSONObject("hermes")?.optString("model").orEmpty()
+    }
+
+    private fun hermesReachError(code: Int, snippet: String): String {
+        val lower = snippet.lowercase()
+        val offline = lower.contains("failed to connect") ||
+            lower.contains("unable to resolve") ||
+            lower.contains("timeout") ||
+            lower.contains("timed out") ||
+            lower.contains("connection refused") ||
+            lower.contains("network is unreachable")
+        return when {
+            offline || code == 0 ->
+                "Couldn't reach Hermes. Are you on the tailnet? Check Settings → Connections."
+            snippet.isNotBlank() -> "Hermes request failed ($code): $snippet"
+            code > 0 -> "Hermes request failed ($code)."
+            else -> ""
+        }
+    }
+
     // ── Shared HTTP / errors ────────────────────────────────────────────────
+
+    private suspend fun doGet(
+        httpClient: OkHttpClient,
+        url: String,
+    ): Pair<Int, String> = withContext(Dispatchers.IO) {
+        httpClient.newCall(
+            Request.Builder().url(url).header("Cache-Control", "no-cache").get().build(),
+        ).execute().use { response ->
+            Pair(response.code, response.body?.string() ?: "")
+        }
+    }
 
     private suspend fun doPost(
         httpClient: OkHttpClient,
@@ -650,11 +792,14 @@ object AiApiClient {
         provider: AiProvider,
         openRouterModelId: String? = null,
         anthropicModelId: String? = null,
+        hermesModelId: String? = null,
     ): String = when (provider) {
         AiProvider.GEMINI -> "gemini-2.0-flash"
         AiProvider.OPENAI -> "gpt-4o-mini"
         AiProvider.OPENROUTER -> OpenRouterModels.find(openRouterModelId).displayName
         AiProvider.ANTHROPIC -> AnthropicModels.find(anthropicModelId).displayName
+        AiProvider.HERMES -> hermesModelId?.substringAfter(':')?.replace('-', ' ')
+            ?.replace('@', ' ')?.ifBlank { null } ?: "Hermes"
     }
 
     fun keyHint(provider: AiProvider): String = when (provider) {
@@ -667,6 +812,9 @@ object AiApiClient {
         AiProvider.ANTHROPIC ->
             "Connect a Claude Pro, Max, Team, or Enterprise account to use your subscription. " +
                 "An API key from console.anthropic.com still works if you prefer to pay per token."
+        AiProvider.HERMES ->
+            "Uses the AI already running on your dashboard (t3lluz). Same model as Tech support. " +
+                "No key on the phone. You need to be on the tailnet. Photos still need Gemini, OpenAI or Claude."
     }
 
     fun keyPlaceholder(provider: AiProvider): String = when (provider) {
@@ -674,17 +822,22 @@ object AiApiClient {
         AiProvider.OPENAI -> "Paste your OpenAI API key here"
         AiProvider.OPENROUTER -> "Paste your OpenRouter API key here"
         AiProvider.ANTHROPIC -> "Optional — paste an Anthropic API key (sk-ant-…)"
+        AiProvider.HERMES -> ""
     }
 
     /** Soft format check for the settings field (warning only). */
     fun looksLikeValidKey(provider: AiProvider, key: String): Boolean {
-        if (key.isBlank()) return true
+        if (key.isBlank() || provider == AiProvider.HERMES) return true
         val trimmed = key.trim()
         return when (provider) {
             AiProvider.GEMINI -> trimmed.startsWith("AIza")
             AiProvider.OPENAI -> trimmed.startsWith("sk-") && !trimmed.startsWith("sk-or-")
             AiProvider.OPENROUTER -> trimmed.startsWith("sk-or-")
             AiProvider.ANTHROPIC -> trimmed.startsWith("sk-ant-")
+            AiProvider.HERMES -> true
         }
     }
+
+    private const val HERMES_CONNECT_TIMEOUT_S = 8L
+    private const val HERMES_READ_TIMEOUT_S = 120L
 }

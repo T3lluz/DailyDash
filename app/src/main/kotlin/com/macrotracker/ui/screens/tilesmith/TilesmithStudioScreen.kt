@@ -68,8 +68,11 @@ import androidx.compose.ui.unit.sp
 import androidx.health.connect.client.PermissionController
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.macrotracker.data.phone.PhoneExtras
+import com.macrotracker.data.remote.AiProvider
+import com.macrotracker.ui.components.AiProviderChips
 import com.macrotracker.ui.components.SubScreenHeader
 import com.macrotracker.ui.navigation.SettingsRoutes
+import com.macrotracker.ui.screens.ai.HermesModelSelector
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
@@ -85,6 +88,8 @@ import com.macrotracker.ui.theme.Warning
 import com.macrotracker.ui.util.LaunchedWhileResumed
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.util.requestOrOpenSettings
+import com.macrotracker.ui.viewmodel.HermesViewModel
+import com.macrotracker.ui.viewmodel.SettingsViewModel
 import com.macrotracker.widget.tilesmith.TileAsk
 import com.macrotracker.widget.tilesmith.TileNeed
 import com.macrotracker.widget.tilesmith.TilePalette
@@ -109,11 +114,15 @@ fun TilesmithStudioScreen(
     onNavigateBack: () -> Unit,
     onOpenRoute: (String) -> Unit,
     viewModel: TilesmithViewModel = hiltViewModel(),
+    settingsViewModel: SettingsViewModel = hiltViewModel(),
+    hermesViewModel: HermesViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
     val haptics = rememberHaptics()
     val state by viewModel.state.collectAsState()
+    val aiProvider by settingsViewModel.aiProvider.collectAsState()
     LaunchedEffect(designId, prompt, starterId) { viewModel.open(designId, prompt, starterId) }
+    LaunchedEffect(aiProvider) { viewModel.recheck() }
     // Back from Android's settings or Health Connect: check what's allowed now.
     LaunchedWhileResumed { viewModel.recheck() }
 
@@ -265,6 +274,12 @@ fun TilesmithStudioScreen(
 
         BottomBar(
             state = state,
+            aiProvider = aiProvider,
+            onSelectProvider = { provider ->
+                haptics.tick()
+                settingsViewModel.setAiProvider(provider)
+            },
+            hermesViewModel = hermesViewModel,
             input = input,
             onInput = { input = it },
             onSend = {
@@ -273,7 +288,7 @@ fun TilesmithStudioScreen(
                 input = ""
             },
             onStop = { haptics.tick(); viewModel.stop() },
-            onConnectAi = { onOpenRoute(SettingsRoutes.AI) },
+            onConnectAi = { onOpenRoute(if (aiProvider == AiProvider.HERMES) SettingsRoutes.CONNECTIONS else SettingsRoutes.AI) },
             onPin = {
                 haptics.confirm()
                 viewModel.pin {
@@ -640,6 +655,9 @@ private fun ShapeChip(shape: TileShape, selected: Boolean, onClick: () -> Unit) 
 @Composable
 private fun BottomBar(
     state: StudioState,
+    aiProvider: AiProvider,
+    onSelectProvider: (AiProvider) -> Unit,
+    hermesViewModel: HermesViewModel,
     input: String,
     onInput: (String) -> Unit,
     onSend: () -> Unit,
@@ -655,6 +673,13 @@ private fun BottomBar(
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        AiProviderChips(
+            selected = aiProvider,
+            onSelect = onSelectProvider,
+        )
+        if (aiProvider == AiProvider.HERMES) {
+            HermesModelSelector(viewModel = hermesViewModel, showStatus = true)
+        }
         if (state.aiReady) {
             val composerShape = RoundedCornerShape(24.dp)
             val canSend = input.isNotBlank() && !state.busy
@@ -717,7 +742,11 @@ private fun BottomBar(
                 Icon(AppIcons.Sparkles, contentDescription = null, tint = TilesmithAccent, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    "Connect an AI in Settings → AI to describe widgets and change them by comment.",
+                    if (aiProvider == AiProvider.HERMES) {
+                        "Set your dashboard in Settings → Connections, and be on the tailnet."
+                    } else {
+                        "Connect an AI in Settings → AI to describe widgets and change them by comment."
+                    },
                     fontSize = 12.sp,
                     color = TextSecondary,
                     lineHeight = 16.sp,

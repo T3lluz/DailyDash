@@ -134,6 +134,7 @@ class SettingsViewModel @Inject constructor(
 
     fun setAiProvider(provider: AiProvider) {
         settings.setAiProvider(provider)
+        refreshConnectionStatus()
     }
 
     fun setAnthropicModelId(modelId: String) {

@@ -45,12 +45,13 @@ object TilesmithAi {
                 params = AiApiClient.GenerateParams(
                     prompt = prompt,
                     temperature = 0.5,
-                    maxOutputTokens = if (provider == AiProvider.ANTHROPIC) 6000 else 3000,
+                    maxOutputTokens = if (provider == AiProvider.ANTHROPIC || provider == AiProvider.HERMES) 6000 else 3000,
                     jsonMode = true,
                     openRouterModelId = settings.getOpenRouterModelId(),
                     anthropicModelId = settings.getAnthropicModelId(),
                     anthropicOAuth = auth.anthropicOAuth,
                     effort = "medium",
+                    dashboardUrl = settings.dashboardServerUrl.value,
                 ),
             )
         }

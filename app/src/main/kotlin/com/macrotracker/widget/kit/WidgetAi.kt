@@ -37,7 +37,7 @@ object WidgetAi {
         prefs(context).edit().putBoolean(KEY_ENABLED, enabled).apply()
     }
 
-    /** Whether an AI provider is set up at all (a key, or a Claude session). */
+    /** Whether an AI provider is set up at all (a key, a Claude session, or Hermes). */
     fun isAvailable(context: Context): Boolean = runCatching {
         context.widgetEntryPoint().aiCredentialResolver().hasCredentials()
     }.getOrDefault(false)
@@ -119,6 +119,7 @@ object WidgetAi {
                 openRouterModelId = settings.getOpenRouterModelId(),
                 anthropicModelId = settings.getAnthropicModelId(),
                 anthropicOAuth = auth.anthropicOAuth,
+                dashboardUrl = settings.dashboardServerUrl.value,
             ),
         )
     }
