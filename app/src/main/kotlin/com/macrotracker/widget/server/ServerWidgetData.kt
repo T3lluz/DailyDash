@@ -37,8 +37,11 @@ internal object ServerWidgetStore {
     private const val PREFS = "daily_dash_widget_server"
     private const val KEY = "snapshot"
 
-    /** Under the worker's 15 minutes, so a pass that runs a little early still polls. */
-    private const val TTL_MS = 12 * 60_000L
+    /**
+     * Just under the widget's five-minute cadence ([ServerWidgetSpec.refreshEveryMs]), so a
+     * pass that runs a little early still polls.
+     */
+    const val TTL_MS = 4 * 60_000L + 30_000L
 
     /** Long enough for a connect, the first probes and the second sample. */
     private const val WAIT_MS = 25_000L
@@ -97,10 +100,11 @@ internal object ServerWidgetStore {
         prefs(context).edit().putString(KEY, SrvCodec.encode(snapshot)).apply()
     }
 
-    suspend fun refresh(context: Context, force: Boolean) {
+    /** [maxAgeMs]: how old the readings may be before a pass polls again (Tilesmith asks for its own). */
+    suspend fun refresh(context: Context, force: Boolean, maxAgeMs: Long = TTL_MS) {
         val app = context.applicationContext
         try {
-            mutex.withLock { refreshLocked(app, force) }
+            mutex.withLock { refreshLocked(app, force, maxAgeMs) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -108,7 +112,7 @@ internal object ServerWidgetStore {
         }
     }
 
-    private suspend fun refreshLocked(context: Context, force: Boolean) {
+    private suspend fun refreshLocked(context: Context, force: Boolean, maxAgeMs: Long) {
         val ep = context.widgetEntryPoint()
         val repo = ep.serverMonitorRepository()
         val profiles = ep.serverStore().profiles.value
@@ -126,7 +130,7 @@ internal object ServerWidgetStore {
 
         val changed = prev == null ||
             prev.servers.map { Triple(it.id, it.enabled, it.label) } != profiles.map { Triple(it.id, it.enabled, it.label) }
-        val mode = refreshMode(force, repo.isActive(), prev?.fetchedAt ?: 0L, now, changed, TTL_MS)
+        val mode = refreshMode(force, repo.isActive(), prev?.fetchedAt ?: 0L, now, changed, maxAgeMs)
         if (mode == RefreshMode.SKIP) {
             if (prev != null && prev.askLabel != askLabel) save(context, prev.copy(askLabel = askLabel))
             return

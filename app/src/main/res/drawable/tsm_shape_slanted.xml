@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material 3 Expressive shape "slanted", generated from M3Shapes by TileShapeVectorsTest; do not edit. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M87.55,91.4C86.77,92.11 85.93,92.74 85.04,93.31C80.46,96.2 74.1,96.18 61.38,96.14C47.65,96.09 33.92,96.05 20.2,96.01C19.24,96 18.77,96 18.5,95.99C8.06,95.66 0,86.71 0.75,76.29C0.77,76.02 0.82,75.55 0.91,74.6C2.28,61.11 3.65,47.62 5.01,34.14C6.3,21.48 6.94,15.15 10.29,10.9C11.6,9.24 13.18,7.82 14.96,6.69C19.54,3.8 25.9,3.82 38.62,3.86C52.35,3.91 66.08,3.95 79.8,3.99C80.76,4 81.23,4 81.5,4.01C91.94,4.34 100,13.29 99.25,23.71C99.23,23.98 99.18,24.45 99.09,25.4C97.72,38.89 96.35,52.38 94.99,65.86C93.7,78.52 93.06,84.85 89.71,89.1C89.05,89.93 88.33,90.7 87.55,91.4Z" />
+</vector>

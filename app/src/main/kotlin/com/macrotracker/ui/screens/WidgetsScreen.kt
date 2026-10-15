@@ -59,6 +59,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.macrotracker.R
 import com.macrotracker.ui.components.MacroCard
+import com.macrotracker.ui.screens.tilesmith.TilesmithHero
 import com.macrotracker.ui.components.SegmentedTab
 import com.macrotracker.ui.components.SegmentedTabs
 import com.macrotracker.ui.components.SkeletonBlock
@@ -89,6 +90,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun WidgetsScreen(
     onNavigateBack: () -> Unit = {},
+    onOpenTilesmith: (designId: String?, prompt: String?, starterId: String?) -> Unit = { _, _, _ -> },
 ) {
     val context = LocalContext.current
     val haptics = rememberHaptics()
@@ -96,7 +98,7 @@ fun WidgetsScreen(
 
     val appWidgetManager = remember { AppWidgetManager.getInstance(context) }
     val pinSupported = remember { appWidgetManager.isRequestPinAppWidgetSupported }
-    val specs = remember { DashWidgets.all }
+    val specs = remember { DashWidgets.listed }
 
     // Brief "Added!" feedback after a pin request, per widget.
     var recentlyPinned by remember { mutableStateOf<String?>(null) }
@@ -135,11 +137,11 @@ fun WidgetsScreen(
             .background(Background),
     ) {
         SubScreenHeader(
-            title = "Widgets",
+            title = "Widgets & Tilesmith",
             subtitle = when {
                 placedTotal == 1 -> "1 on your home screen"
                 placedTotal > 1 -> "$placedTotal on your home screen"
-                else -> "${specs.size} for your home screen"
+                else -> "Make your own, or add a ready-made one"
             },
             onNavigateBack = onNavigateBack,
             modifier = Modifier.padding(horizontal = 16.dp),
@@ -185,6 +187,15 @@ fun WidgetsScreen(
                 .padding(bottom = 24.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            TilesmithHero(onOpen = onOpenTilesmith)
+            Text(
+                text = "READY-MADE",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextSecondary,
+                letterSpacing = 0.8.sp,
+                modifier = Modifier.padding(start = 4.dp, top = 8.dp),
+            )
             AiBriefsCard(
                 enabled = aiEnabled,
                 available = aiAvailable,

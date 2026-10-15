@@ -28,7 +28,7 @@
   </p>
 </div>
 
-**Install:** grab the APK from [Releases](https://github.com/T3lluz/DailyDash/releases/latest) · turn services on in **Settings → Connections** · press and hold a Home or Health card to reorder it. The app updates itself from Releases and shows **What's new** after each update.
+**Install:** grab the APK from [Releases](https://github.com/T3lluz/DailyDash/releases/latest) · turn services on in **Settings → Connections** · press and hold a Home or Health card to reorder it · make your own widgets in **Settings → Widgets & Tilesmith**. The app updates itself from Releases and shows **What's new** after each update.
 
 ## Features
 
@@ -51,7 +51,8 @@
 | <img src="docs/integrations/servers.svg" width="20" alt="" /> | **Servers** | CPU, memory, disks, network, sensors, containers, ports, systemd, journal, updates, alerts; live notification with dials and an **Ask** button | SSH login, nothing installed server-side |
 | <img src="docs/integrations/ai.svg" width="20" alt="" /> | **AI** | Log meals by describing them; **Tech support** chat, as **Hermes** on your server or **Sysop** on the phone | An AI provider; Hermes needs the dashboard server <sup>†</sup> |
 | <img src="docs/integrations/phone.svg" width="20" alt="" /> | **Phone hub** | The phone on your desk dashboard: battery, media, notifications (dismiss, reply); ring, torch, open URL, clipboard, volume from the desk; **Send to desk** in the share sheet | Dashboard server <sup>†</sup> |
-| <img src="docs/integrations/widgets.svg" width="20" alt="" /> | **Widget** | Weather on the home screen (5×3) | Long-press the home screen |
+| <img src="docs/integrations/widgets.svg" width="20" alt="" /> | **Widgets** | Weather, calendar, F1, servers and GitHub on the home screen, each resizable | Long-press the home screen |
+| <img src="docs/integrations/ai.svg" width="20" alt="" /> | **Tilesmith** | Describe a widget and AI builds it in Material 3 Expressive, from any of your data, the web or a server command; comment to change it, one tap to add it | An AI provider (starters work without one) |
 
 <sup>†</sup> The t3lluz dashboard, reached over <img src="docs/integrations/tailscale.svg" width="12" alt="" /> Tailscale and set in **Settings → Connections**.
 

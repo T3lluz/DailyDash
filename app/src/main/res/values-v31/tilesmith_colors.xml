@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12-13: the wallpaper's tonal palettes, mapped onto the M3 roles by tone (error stays the static M3 red). -->
+<resources>
+    <color name="tsm_primary">@android:color/system_accent1_600</color>
+    <color name="tsm_on_primary">@android:color/system_accent1_0</color>
+    <color name="tsm_primary_container">@android:color/system_accent1_100</color>
+    <color name="tsm_on_primary_container">@android:color/system_accent1_900</color>
+    <color name="tsm_secondary">@android:color/system_accent2_600</color>
+    <color name="tsm_on_secondary">@android:color/system_accent2_0</color>
+    <color name="tsm_secondary_container">@android:color/system_accent2_100</color>
+    <color name="tsm_on_secondary_container">@android:color/system_accent2_900</color>
+    <color name="tsm_tertiary">@android:color/system_accent3_600</color>
+    <color name="tsm_on_tertiary">@android:color/system_accent3_0</color>
+    <color name="tsm_tertiary_container">@android:color/system_accent3_100</color>
+    <color name="tsm_on_tertiary_container">@android:color/system_accent3_900</color>
+    <color name="tsm_error">#FFBA1A1A</color>
+    <color name="tsm_on_error">#FFFFFFFF</color>
+    <color name="tsm_error_container">#FFFFDAD6</color>
+    <color name="tsm_on_error_container">#FF93000A</color>
+    <color name="tsm_surface">@android:color/system_neutral1_10</color>
+    <color name="tsm_on_surface">@android:color/system_neutral1_900</color>
+    <color name="tsm_on_surface_variant">@android:color/system_neutral2_700</color>
+    <color name="tsm_surface_container_lowest">@android:color/system_neutral1_0</color>
+    <color name="tsm_surface_container_low">@android:color/system_neutral1_10</color>
+    <color name="tsm_surface_container">@android:color/system_neutral1_50</color>
+    <color name="tsm_surface_container_high">@android:color/system_neutral2_100</color>
+    <color name="tsm_surface_container_highest">@android:color/system_neutral1_100</color>
+    <color name="tsm_outline">@android:color/system_neutral2_500</color>
+    <color name="tsm_outline_variant">@android:color/system_neutral2_200</color>
+    <color name="tsm_inverse_surface">@android:color/system_neutral1_800</color>
+    <color name="tsm_inverse_on_surface">@android:color/system_neutral1_50</color>
+</resources>

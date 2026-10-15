@@ -36,6 +36,9 @@ object CalendarWidgetSpec : DashWidgetSpec {
         CalendarWidgetWork.cancel(context)
     }
 
+    /** Every five minutes: a local read, so "in 25 min" and the next event stay right. */
+    override fun refreshEveryMs(context: Context): Long = 5 * 60_000L
+
     /**
      * The calendar is local, so there is nothing to fetch: a fresh read, the AI brief
      * when it is due, and the observer and next tick armed (both cheap when already so).

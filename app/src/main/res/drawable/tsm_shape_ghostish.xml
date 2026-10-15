@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material 3 Expressive shape "ghostish", generated from M3Shapes by TileShapeVectorsTest; do not edit. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M50,0C76.32,0 97.66,21.34 97.66,47.66C97.66,57.11 97.66,66.56 97.66,76C97.66,90.69 81.91,100 69.05,92.92C66.86,91.71 64.67,90.5 62.47,89.3C58.98,87.37 55.06,86.37 51.07,86.37C50.36,86.37 49.64,86.37 48.93,86.37C44.94,86.37 41.02,87.37 37.53,89.3C35.33,90.5 33.14,91.71 30.95,92.92C18.09,100 2.34,90.69 2.34,76C2.34,66.56 2.34,57.11 2.34,47.66C2.34,21.34 23.68,0 50,0Z" />
+</vector>

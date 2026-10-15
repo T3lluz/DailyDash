@@ -32,6 +32,7 @@ fun AIScreen(
     onNavigateToAiSettings: () -> Unit,
     onOpenConsole: () -> Unit = {},
     onOpenUsage: () -> Unit = {},
+    onOpenTilesmith: () -> Unit = {},
     serverHandoffId: String? = null,
     chatViewModel: ChatViewModel = hiltViewModel(),
     hermesViewModel: HermesViewModel = hiltViewModel(),
@@ -74,6 +75,7 @@ fun AIScreen(
                 viewModel = hermesViewModel,
                 onOpenUsage = onOpenUsage,
                 onOpenConsole = onOpenConsole,
+                onOpenTilesmith = onOpenTilesmith,
                 onUsePhoneAi = { hermesViewModel.setUsesHermes(false) },
             )
         } else {
@@ -81,6 +83,7 @@ fun AIScreen(
                 viewModel = chatViewModel,
                 onNavigateToAiSettings = onNavigateToAiSettings,
                 onOpenConsole = onOpenConsole,
+                onOpenTilesmith = onOpenTilesmith,
                 onUseHermes = {
                     sysopForHandoff = false
                     hermesViewModel.setUsesHermes(true)

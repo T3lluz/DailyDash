@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material 3 Expressive shape "oval", generated from M3Shapes by TileShapeVectorsTest; do not edit. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M90.85,9.15C94.25,12.55 96.61,16.99 97.74,22.27C100,32.82 97.14,45.86 89.78,58.52C82.43,71.18 71.18,82.43 58.52,89.78C45.86,97.14 32.82,100 22.27,97.74C11.72,95.48 4.52,88.28 2.26,77.73C0,67.18 2.86,54.14 10.22,41.48C17.57,28.82 28.82,17.57 41.48,10.22C54.14,2.86 67.18,0 77.73,2.26C83.01,3.39 87.45,5.75 90.85,9.15Z" />
+</vector>

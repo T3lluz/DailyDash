@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material 3 Expressive shape "triangle", generated from M3Shapes by TileShapeVectorsTest; do not edit. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M50,7.78C54.38,7.78 58.75,9.95 61.25,14.28C72.5,33.76 83.75,53.25 95,72.73C100,81.39 93.75,92.22 83.75,92.22C61.25,92.22 38.75,92.22 16.25,92.22C6.25,92.22 0,81.39 5,72.73C16.25,53.25 27.5,33.76 38.75,14.28C41.25,9.95 45.63,7.78 50,7.78Z" />
+</vector>

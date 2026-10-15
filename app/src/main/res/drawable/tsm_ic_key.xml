@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tilesmith icon "key": white so the widget tints it with a colour role. From AppIcons (Lucide); see widget/tilesmith/TileIcons.kt. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M2.586 17.414 A2 2 0 0 0 2 18.828 V21 a1 1 0 0 0 1 1 h3 a1 1 0 0 0 1 -1 v-1 a1 1 0 0 1 1 -1 h1 a1 1 0 0 0 1 -1 v-1 a1 1 0 0 1 1 -1 h0.172 a2 2 0 0 0 1.414 -0.586 l0.814 -0.814 a6.5 6.5 0 1 0 -4 -4 z"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M16 7.5 a0.5 0.5 0 1 0 1 0 a0.5 0.5 0 1 0 -1 0"
+        android:fillColor="#FFFFFF" />
+</vector>

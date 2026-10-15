@@ -1,6 +1,11 @@
 package com.macrotracker
 
 import android.app.Application
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.delay
 import coil.ImageLoader
 import coil.ImageLoaderFactory
@@ -46,6 +51,17 @@ class DailyDashApp : Application(), ImageLoaderFactory {
         settingsSync.bind()
         phoneHub.bind()
         PackageReplacedReceiver.ensureChannel(this)
+        // Unlocking the phone brings the widgets up to date (each still keeps its own TTLs).
+        runCatching {
+            ContextCompat.registerReceiver(
+                this,
+                object : BroadcastReceiver() {
+                    override fun onReceive(context: Context, intent: Intent) = WidgetRefreshWorker.onUnlocked(context)
+                },
+                IntentFilter(Intent.ACTION_USER_PRESENT),
+                ContextCompat.RECEIVER_NOT_EXPORTED,
+            )
+        }
         // Nothing below has to happen before the first frame, so it stays off the main
         // thread: asking the launcher which widgets are placed is a call per widget kind.
         CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {

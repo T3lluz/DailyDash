@@ -53,4 +53,17 @@ object SubScreenRoutes {
 
     /** Estimating a meal with the AI (MealChatScreen), pushed from Food. */
     const val MEAL_CHAT = "meal_chat"
+
+    /** The Tilesmith studio: a saved design, a starter, or a request for the AI (TilesmithStudioScreen). */
+    const val TILESMITH = "tilesmith"
+    const val TILESMITH_PATTERN = "tilesmith?design={design}&prompt={prompt}&starter={starter}"
+
+    fun tilesmith(designId: String? = null, prompt: String? = null, starterId: String? = null): String {
+        val parts = listOfNotNull(
+            designId?.let { "design=${android.net.Uri.encode(it)}" },
+            prompt?.let { "prompt=${android.net.Uri.encode(it)}" },
+            starterId?.let { "starter=${android.net.Uri.encode(it)}" },
+        )
+        return if (parts.isEmpty()) TILESMITH else "$TILESMITH?${parts.joinToString("&")}"
+    }
 }

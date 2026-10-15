@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material 3 Expressive shape "gem", generated from M3Shapes by TileShapeVectorsTest; do not edit. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M49.95,100C49.14,100 48.33,99.95 47.52,99.87C43.56,99.46 39.76,97.72 32.16,94.24C26,91.42 19.84,88.59 13.68,85.77C5.27,81.91 0.42,72.98 1.75,63.83C3.14,54.36 4.52,44.89 5.9,35.42C6.8,29.28 10.15,23.78 15.19,20.17C22.73,14.76 30.27,9.36 37.81,3.96C41.4,1.38 45.72,0 50.14,0.01C54.56,0.02 58.87,1.41 62.45,4C69.97,9.44 77.49,14.87 85.01,20.3C90.04,23.93 93.37,29.45 94.24,35.59C95.59,45.06 96.93,54.54 98.28,64.02C99.58,73.17 94.69,82.09 86.27,85.91C80.1,88.71 73.93,91.51 67.75,94.31C60.14,97.76 56.34,99.49 52.38,99.88C51.57,99.96 50.76,100 49.95,100Z" />
+</vector>

@@ -51,6 +51,9 @@ object GitHubWidgetSpec : DashWidgetSpec {
         )
     }
 
+    /** Every ten minutes: reviews and the inbox move during a working day. */
+    override fun refreshEveryMs(context: Context): Long = 10 * 60_000L
+
     override suspend fun refresh(context: Context, force: Boolean) {
         GitHubWidgetStore.refresh(context, force)
     }

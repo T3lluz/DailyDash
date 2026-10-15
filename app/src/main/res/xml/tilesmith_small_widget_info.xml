@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Tilesmith, Small (2×2): a design made in the app's Tilesmith studio. One receiver per
+    size so a pinned design lands at its own size; it still resizes, and the layout drops whole
+    blocks rather than squeezing them. The shared worker refreshes it, so updatePeriodMillis is 0.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_tilesmith_description"
+    android:previewImage="@drawable/widget_preview_tilesmith_small"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:configure="com.macrotracker.widget.settings.WidgetSettingsActivity"
+    android:widgetFeatures="reconfigurable|configuration_optional"
+    android:minWidth="110dp"
+    android:minHeight="110dp"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="50dp"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellWidth="2"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen" />

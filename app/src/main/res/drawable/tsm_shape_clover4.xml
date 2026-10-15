@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material 3 Expressive shape "clover4", generated from M3Shapes by TileShapeVectorsTest; do not edit. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M50,9.81C50.48,9.44 50.97,9.07 51.45,8.7C62.76,0 78.77,1.04 88.87,11.13C98.96,21.23 100,37.24 91.3,48.55C90.93,49.03 90.56,49.52 90.19,50C90.56,50.48 90.93,50.97 91.3,51.45C100,62.76 98.96,78.77 88.87,88.87C78.77,98.96 62.76,100 51.45,91.3C50.97,90.93 50.48,90.56 50,90.19C49.52,90.56 49.03,90.93 48.55,91.3C37.24,100 21.23,98.96 11.13,88.87C1.04,78.77 0,62.76 8.7,51.45C9.07,50.97 9.44,50.48 9.81,50C9.44,49.52 9.07,49.03 8.7,48.55C0,37.24 1.04,21.23 11.13,11.13C21.23,1.04 37.24,0 48.55,8.7C49.03,9.07 49.52,9.44 50,9.81Z" />
+</vector>

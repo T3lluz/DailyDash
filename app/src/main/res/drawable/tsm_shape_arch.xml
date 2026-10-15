@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material 3 Expressive shape "arch", generated from M3Shapes by TileShapeVectorsTest; do not edit. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M14.64,14.64C23.69,5.6 36.19,-0 50,0C77.61,0 100,22.39 100,50C100,61.95 100,73.91 100,85.86C100,93.67 93.67,100 85.86,100C61.95,100 38.05,100 14.14,100C6.33,100 0,93.67 0,85.86C0,73.91 0,61.95 0,50C0,36.19 5.6,23.69 14.64,14.64Z" />
+</vector>

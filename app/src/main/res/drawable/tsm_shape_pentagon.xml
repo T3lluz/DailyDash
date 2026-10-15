@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material 3 Expressive shape "pentagon", generated from M3Shapes by TileShapeVectorsTest; do not edit. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M50,4.28C53.38,4.28 56.75,5.3 59.64,7.34C70.37,14.92 81.11,22.49 91.84,30.07C97.59,34.12 100,41.47 97.77,48.14C93.73,60.26 89.68,72.37 85.64,84.49C83.4,91.19 77.12,95.72 70.05,95.72C56.68,95.72 43.32,95.72 29.95,95.72C22.88,95.72 16.6,91.19 14.36,84.49C10.32,72.37 6.27,60.26 2.23,48.14C0,41.47 2.41,34.12 8.16,30.07C18.89,22.49 29.63,14.92 40.36,7.34C43.25,5.3 46.62,4.28 50,4.28Z" />
+</vector>

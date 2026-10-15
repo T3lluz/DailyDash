@@ -30,6 +30,9 @@ object WeatherWidgetSpec : DashWidgetSpec {
         WeatherWidgetDataProvider.loadData(context)
     }
 
+    /** Every ten minutes: the forecast repository caches for eight, so this re-renders the hours more than it fetches. */
+    override fun refreshEveryMs(context: Context): Long = 10 * 60_000L
+
     /** The sizes with an Hourly / Daily list let each copy pick which it opens on. */
     override fun viewOption(context: Context, size: DpSize): WidgetViewOption? {
         val dims = WidgetDims(size)

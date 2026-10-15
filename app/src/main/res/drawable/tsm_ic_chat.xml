@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tilesmith icon "chat": white so the widget tints it with a colour role. From AppIcons (Lucide); see widget/tilesmith/TileIcons.kt. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M2.992 16.342 a2 2 0 0 1 0.094 1.167 l-1.065 3.29 a1 1 0 0 0 1.236 1.168 l3.413 -0.998 a2 2 0 0 1 1.099 0.092 a10 10 0 1 0 -4.777 -4.719"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

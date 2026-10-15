@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material 3 Expressive shape "cookie4", generated from M3Shapes by TileShapeVectorsTest; do not edit. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M87.14,87.08C81.05,93.18 71.59,95.91 62.2,91.86C60.84,91.27 59.48,90.69 58.12,90.1C52.95,87.87 47.09,87.87 41.92,90.11C40.58,90.7 39.23,91.28 37.89,91.86C19.11,100 0.05,80.97 8.16,62.18C8.74,60.82 9.33,59.46 9.92,58.1C12.15,52.93 12.14,47.07 9.9,41.9C9.32,40.56 8.74,39.21 8.16,37.87C0.02,19.09 19.04,0.03 37.83,8.14C39.19,8.73 40.55,9.31 41.91,9.9C47.08,12.13 52.95,12.13 58.11,9.89C59.46,9.3 60.8,8.72 62.15,8.14C80.93,0 99.98,19.03 91.88,37.82C91.29,39.18 90.7,40.54 90.12,41.9C87.88,47.07 87.89,52.93 90.13,58.1C90.71,59.44 91.29,60.79 91.88,62.13C95.95,71.52 93.22,80.98 87.14,87.08Z" />
+</vector>

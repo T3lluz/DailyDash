@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tilesmith "Wallpaper" palette in dark mode before Android 12: the Ocean scheme. -->
+<resources>
+    <color name="tsm_primary">#FFACC7FF</color>
+    <color name="tsm_on_primary">#FF002F67</color>
+    <color name="tsm_primary_container">#FF004591</color>
+    <color name="tsm_on_primary_container">#FFD7E2FF</color>
+    <color name="tsm_secondary">#FFC0C4EB</color>
+    <color name="tsm_on_secondary">#FF2A2E4D</color>
+    <color name="tsm_secondary_container">#FF404565</color>
+    <color name="tsm_on_secondary_container">#FFDFE0FF</color>
+    <color name="tsm_tertiary">#FFCABFF8</color>
+    <color name="tsm_on_tertiary">#FF322958</color>
+    <color name="tsm_tertiary_container">#FF494070</color>
+    <color name="tsm_on_tertiary_container">#FFE6DEFF</color>
+    <color name="tsm_error">#FFFFB4AB</color>
+    <color name="tsm_on_error">#FF690005</color>
+    <color name="tsm_error_container">#FF93000A</color>
+    <color name="tsm_on_error_container">#FFFFDAD6</color>
+    <color name="tsm_surface">#FF0F131C</color>
+    <color name="tsm_on_surface">#FFDFE2EF</color>
+    <color name="tsm_on_surface_variant">#FFC1C6D6</color>
+    <color name="tsm_surface_container_lowest">#FF0A0E17</color>
+    <color name="tsm_surface_container_low">#FF171C25</color>
+    <color name="tsm_surface_container">#FF1B2029</color>
+    <color name="tsm_surface_container_high">#FF262A33</color>
+    <color name="tsm_surface_container_highest">#FF31353E</color>
+    <color name="tsm_outline">#FF8B919F</color>
+    <color name="tsm_outline_variant">#FF414753</color>
+    <color name="tsm_inverse_surface">#FFDFE2EF</color>
+    <color name="tsm_inverse_on_surface">#FF2C303A</color>
+</resources>

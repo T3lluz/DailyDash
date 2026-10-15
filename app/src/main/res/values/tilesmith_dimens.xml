@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tilesmith widget corners. Android 12+ takes the launcher's own radii (values-v31). -->
+<resources>
+    <dimen name="tsm_widget_radius">24dp</dimen>
+    <dimen name="tsm_inner_radius">14dp</dimen>
+</resources>

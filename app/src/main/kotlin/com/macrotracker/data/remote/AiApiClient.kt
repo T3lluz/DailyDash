@@ -27,6 +27,9 @@ object AiApiClient {
     private const val OPENAI_URL = "https://api.openai.com/v1/chat/completions"
     private val OPENAI_MODELS = listOf("gpt-4o-mini", "gpt-4o")
 
+    /** Chat Completions' web-search models: they search before answering and take no temperature. */
+    private val OPENAI_SEARCH_MODELS = listOf("gpt-4o-mini-search-preview", "gpt-4o-search-preview")
+
     private const val OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
     const val ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
@@ -44,6 +47,14 @@ object AiApiClient {
         val anthropicModelId: String? = null,
         /** True when [apiKey] is a Claude subscription OAuth access token. */
         val anthropicOAuth: Boolean = false,
+        /**
+         * Let the model search the web before it answers: Claude's web search tool, Gemini's
+         * Google Search grounding, OpenAI's search model, OpenRouter's web plugin. Plain text
+         * only (no [jsonMode]) on Gemini and OpenAI, which can't do both.
+         */
+        val webSearch: Boolean = false,
+        /** Claude's `output_config.effort`; these calls are short, so `low` unless a caller needs more. */
+        val effort: String = "low",
     )
 
     suspend fun generate(
@@ -60,7 +71,7 @@ object AiApiClient {
                 apiKey = apiKey,
                 params = params,
                 url = OPENAI_URL,
-                models = OPENAI_MODELS,
+                models = if (params.webSearch) OPENAI_SEARCH_MODELS else OPENAI_MODELS,
                 providerLabel = "OpenAI",
             )
             AiProvider.OPENROUTER -> {
@@ -106,7 +117,7 @@ object AiApiClient {
 
         for (model in GEMINI_MODELS) {
             // Prefer structured JSON when requested; always try unstructured as fallback.
-            val structuredOptions = if (params.jsonMode) listOf(true, false) else listOf(false)
+            val structuredOptions = if (params.jsonMode && !params.webSearch) listOf(true, false) else listOf(false)
             for (structured in structuredOptions) {
                 for (attempt in 0..1) {
                     if (attempt > 0) delay(2000)
@@ -124,6 +135,9 @@ object AiApiClient {
                             JSONArray().put(JSONObject().put("parts", partsArray)),
                         )
                         .put("generationConfig", generationConfig)
+                    if (params.webSearch) {
+                        body.put("tools", JSONArray().put(JSONObject().put("google_search", JSONObject())))
+                    }
 
                     val url = "$GEMINI_BASE/$model:generateContent?key=$apiKey"
                     Log.d(TAG, "→ Gemini $model | structured=$structured | attempt=$attempt")
@@ -252,10 +266,15 @@ object AiApiClient {
                                 .put("content", userContent),
                         ),
                     )
-                    .put("temperature", params.temperature)
                     .put("max_tokens", params.maxOutputTokens)
+                val searchModel = model.contains("-search-")
+                if (!searchModel) body.put("temperature", params.temperature)
+                if (searchModel) body.put("web_search_options", JSONObject())
+                if (params.webSearch && providerLabel == "OpenRouter") {
+                    body.put("plugins", JSONArray().put(JSONObject().put("id", "web").put("max_results", 4)))
+                }
 
-                if (params.jsonMode) {
+                if (params.jsonMode && !searchModel) {
                     body.put("response_format", JSONObject().put("type", "json_object"))
                 }
 
@@ -405,6 +424,17 @@ object AiApiClient {
         return body
     }
 
+    private const val MAX_PAUSE_CONTINUATIONS = 2
+
+    /**
+     * Claude's server-side web search. The dynamic-filtering version runs on Opus 5, Sonnet 5
+     * and the 4.6+ family; Haiku 4.5 keeps the basic one.
+     */
+    fun anthropicWebSearchTool(model: String): JSONObject = JSONObject()
+        .put("type", if (model.startsWith("claude-haiku")) "web_search_20250305" else "web_search_20260209")
+        .put("name", "web_search")
+        .put("max_uses", 4)
+
     fun anthropicHeaders(apiKey: String, oauth: Boolean = false): Map<String, String> =
         if (oauth) {
             ClaudeOAuth.authorizationHeaders(apiKey)
@@ -442,8 +472,10 @@ object AiApiClient {
 
         var lastError = ""
         var lastCode = 0
+        var continuations = 0
 
-        for (attempt in 0..1) {
+        var attempt = 0
+        while (attempt <= 1) {
             if (attempt > 0) delay(2000)
 
             val body = buildAnthropicBody(
@@ -452,9 +484,10 @@ object AiApiClient {
                 messages = messages,
                 maxTokens = params.maxOutputTokens,
                 temperature = params.temperature,
-                // These are short extractions, not reasoning problems — don't pay for depth.
-                effort = "low",
+                // Most callers are short extractions, not reasoning problems — don't pay for depth.
+                effort = params.effort,
             )
+            if (params.webSearch) body.put("tools", JSONArray().put(anthropicWebSearchTool(model)))
 
             Log.d(TAG, "→ Claude $model | json=${params.jsonMode} | attempt=$attempt")
 
@@ -467,6 +500,23 @@ object AiApiClient {
                 )
                 Log.d(TAG, "← Claude $model | $code | ${responseBody.take(200)}")
 
+                // A long web search can pause the turn: send it back as it stands and the
+                // server picks up where it stopped (no "continue" message).
+                if (code in 200..299 && continuations < MAX_PAUSE_CONTINUATIONS &&
+                    runCatching { JSONObject(responseBody).optString("stop_reason") }.getOrNull() == "pause_turn"
+                ) {
+                    val content = JSONObject(responseBody).optJSONArray("content") ?: JSONArray()
+                    val last = messages.optJSONObject(messages.length() - 1)
+                    if (last?.optString("role") == "assistant") {
+                        val sofar = last.optJSONArray("content") ?: JSONArray()
+                        for (k in 0 until content.length()) sofar.put(content.get(k))
+                        last.put("content", sofar)
+                    } else {
+                        messages.put(JSONObject().put("role", "assistant").put("content", content))
+                    }
+                    continuations++
+                    continue
+                }
                 if (code in 200..299) {
                     val text = extractAnthropicText(responseBody)
                     if (text.isNotBlank()) return text
@@ -485,7 +535,10 @@ object AiApiClient {
                     )
                 }
                 if (code == 429 || isRateLimitError(responseBody)) {
-                    if (attempt == 0) continue
+                    if (attempt == 0) {
+                        attempt++
+                        continue
+                    }
                     break
                 }
                 // 400 here means a malformed request, not a transient fault — retrying
@@ -496,6 +549,7 @@ object AiApiClient {
                 Log.e(TAG, "Claude exception ($model): ${e.message}")
                 lastError = e.message ?: "Unknown error"
             }
+            attempt++
         }
 
         if (isRateLimitError(lastError) || lastCode == 429) {

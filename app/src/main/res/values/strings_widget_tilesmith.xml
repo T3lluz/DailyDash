@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_tilesmith_mini_name">Tilesmith · Mini</string>
+    <string name="widget_tilesmith_small_name">Tilesmith · Small</string>
+    <string name="widget_tilesmith_bar_name">Tilesmith · Bar</string>
+    <string name="widget_tilesmith_wide_name">Tilesmith · Wide</string>
+    <string name="widget_tilesmith_large_name">Tilesmith · Large</string>
+    <string name="widget_tilesmith_description">A widget you made in Tilesmith: describe it and AI builds it in Material 3 Expressive. Place it, then pick which design it shows</string>
+</resources>

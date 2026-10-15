@@ -152,6 +152,7 @@ fun HermesChatPane(
     modifier: Modifier = Modifier,
     onOpenUsage: () -> Unit = {},
     onOpenConsole: () -> Unit = {},
+    onOpenTilesmith: () -> Unit = {},
     usageViewModel: com.macrotracker.ui.viewmodel.UsageViewModel = androidx.hilt.navigation.compose.hiltViewModel(),
 ) {
     val usageState by usageViewModel.state.collectAsState()
@@ -286,6 +287,7 @@ fun HermesChatPane(
                     onUsePhoneAi = onUsePhoneAi,
                     onOpenConsole = onOpenConsole,
                     onOpenUsage = onOpenUsage,
+                    onOpenTilesmith = onOpenTilesmith,
                 )
                 // The chat on screen is read as it moves, so it never gets its own dot.
                 LaunchedEffect(state.threadId, current?.updatedMs) { viewModel.markSeen(state.threadId) }

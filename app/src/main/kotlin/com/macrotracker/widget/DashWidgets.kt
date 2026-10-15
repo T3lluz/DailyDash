@@ -17,6 +17,7 @@ import com.macrotracker.widget.f1.F1WidgetSpec
 import com.macrotracker.widget.github.GitHubWidgetSpec
 import com.macrotracker.widget.kit.WidgetDataBus
 import com.macrotracker.widget.server.ServerWidgetSpec
+import com.macrotracker.widget.tilesmith.TilesmithWidgetSpec
 
 /**
  * One DailyDash home-screen widget, as the shared plumbing (refresh worker, refresh
@@ -34,6 +35,12 @@ interface DashWidgetSpec {
     val sizeLabel: String
     val accent: Color
     val receiver: Class<out GlanceAppWidgetReceiver>
+
+    /** Every receiver a copy of this widget can be placed from: one, or Tilesmith's one per size. */
+    val receivers: List<Class<out GlanceAppWidgetReceiver>> get() = listOf(receiver)
+
+    /** Listed with the ready-made widgets (the Widgets screen's cards, the settings' Show row). */
+    val listed: Boolean get() = true
     /** The size the Widgets screen and the launcher picker preview it at. */
     val previewSize: DpSize
 
@@ -61,6 +68,13 @@ interface DashWidgetSpec {
 
     /** No placed copy shows this widget any more: stop its own background work. */
     fun onNoneShown(context: Context) {}
+
+    /**
+     * How soon this widget wants its next pass, when that is sooner than the shared 15 minutes
+     * (WorkManager's floor for periodic work); null when 15 minutes is plenty. The refresh
+     * worker's fast lane runs at the soonest any placed widget asks for.
+     */
+    fun refreshEveryMs(context: Context): Long? = null
 
     /**
      * Pulls fresh data into the widget's own cache (network allowed; called off the main
@@ -93,8 +107,11 @@ object DashWidgets {
     private const val PREFS = "daily_dash_widget"
 
     val all: List<DashWidgetSpec> by lazy {
-        listOf(WeatherWidgetSpec, CalendarWidgetSpec, F1WidgetSpec, ServerWidgetSpec, GitHubWidgetSpec)
+        listOf(WeatherWidgetSpec, CalendarWidgetSpec, F1WidgetSpec, ServerWidgetSpec, GitHubWidgetSpec, TilesmithWidgetSpec)
     }
+
+    /** The ready-made widgets: what the Widgets screen lists as cards. */
+    val listed: List<DashWidgetSpec> get() = all.filter { it.listed }
 
     fun byKey(key: String): DashWidgetSpec? = all.firstOrNull { it.key == key }
 
@@ -141,14 +158,17 @@ object DashWidgets {
         val key = if (spec.key == WeatherWidgetSpec.key) "preview_published_at" else "preview_published_at_${spec.key}"
         val now = System.currentTimeMillis()
         if (!force && now - prefs.getLong(key, 0L) < PREVIEW_INTERVAL_MS) return
-        runCatching {
-            val accepted = AppWidgetManager.getInstance(app).setWidgetPreview(
-                ComponentName(app, spec.receiver),
-                AppWidgetProviderInfo.WIDGET_CATEGORY_HOME_SCREEN,
-                spec.renderPreview(app),
-            )
-            if (!accepted) Log.d(TAG, "preview ${spec.key} not taken (Android rate-limits these)")
-        }.onFailure { Log.w(TAG, "preview ${spec.key} not published: ${it.message}") }
+        for (receiver in spec.receivers) {
+            runCatching {
+                val views = if (spec === TilesmithWidgetSpec) TilesmithWidgetSpec.pickerPreview(app, receiver) else spec.renderPreview(app)
+                val accepted = views != null && AppWidgetManager.getInstance(app).setWidgetPreview(
+                    ComponentName(app, receiver),
+                    AppWidgetProviderInfo.WIDGET_CATEGORY_HOME_SCREEN,
+                    views,
+                )
+                if (!accepted) Log.d(TAG, "preview ${spec.key} not taken (Android rate-limits these)")
+            }.onFailure { Log.w(TAG, "preview ${spec.key} not published: ${it.message}") }
+        }
         // Stamped whether or not Android took it: a refused one used to render all the
         // widgets again on every cold start, and Android limits these calls anyway.
         prefs.edit().putLong(key, now).apply()

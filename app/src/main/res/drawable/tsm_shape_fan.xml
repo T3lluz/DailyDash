@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material 3 Expressive shape "fan", generated from M3Shapes by TileShapeVectorsTest; do not edit. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M95.72,95.53C93.88,97.41 91.55,98.81 88.92,99.51C87.06,100 84.3,100 78.8,100C57.58,100 36.35,100 15.12,100C6.8,100 0.05,93.25 0.05,84.92C0.05,61.6 0.05,38.29 0.05,14.97C0.05,6.67 6.88,0 15.17,0.2C17.27,0.24 19.36,0.29 21.46,0.34C64.17,1.35 98.6,35.67 99.73,78.38C99.73,78.42 99.73,78.46 99.74,78.5C99.88,84 99.95,86.75 99.51,88.63C98.88,91.28 97.55,93.65 95.72,95.53Z" />
+</vector>

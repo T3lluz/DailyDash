@@ -80,6 +80,7 @@ import com.macrotracker.data.hermes.HermesTurnActivity
 import com.macrotracker.ui.components.LivePulseDot
 import com.macrotracker.ui.components.LoadingSpinner
 import com.macrotracker.ui.components.dottedGlass
+import com.macrotracker.ui.screens.tilesmith.TilesmithAccent
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
@@ -158,6 +159,7 @@ internal fun HermesHeader(
     onUsePhoneAi: (() -> Unit)?,
     onOpenConsole: () -> Unit,
     onOpenUsage: () -> Unit,
+    onOpenTilesmith: () -> Unit = {},
 ) {
     val haptics = rememberHaptics()
     var menuOpen by remember { mutableStateOf(false) }
@@ -208,6 +210,10 @@ internal fun HermesHeader(
                 Spacer(Modifier.width(6.dp))
                 Text(status, color = TextTertiary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+        }
+        // Tilesmith: describe a widget and the AI builds it.
+        IconButton(onClick = { haptics.tick(); onOpenTilesmith() }) {
+            Icon(AppIcons.Blocks, contentDescription = "Tilesmith widget maker", tint = TilesmithAccent, modifier = Modifier.size(20.dp))
         }
         IconButton(onClick = { haptics.tick(); onOpenConsole() }) {
             Icon(AppIcons.SquareTerminal, contentDescription = "Console", tint = TextSecondary, modifier = Modifier.size(20.dp))
