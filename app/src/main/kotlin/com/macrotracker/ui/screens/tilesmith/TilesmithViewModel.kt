@@ -149,10 +149,18 @@ class TilesmithViewModel @Inject constructor(
 
     /** What the design still needs; called again after each grant. */
     fun recheck() {
-        val d = _state.value.design ?: return
         viewModelScope.launch(Dispatchers.IO) {
-            val asks = runCatching { TileNeeds.check(context, d) }.getOrDefault(emptyList())
-            _state.update { if (it.design?.id == d.id) it.copy(asks = asks, aiReady = credentials.hasCredentials()) else it }
+            val d = _state.value.design
+            val asks = if (d != null) {
+                runCatching { TileNeeds.check(context, d) }.getOrDefault(emptyList())
+            } else {
+                emptyList()
+            }
+            val ready = credentials.hasCredentials()
+            _state.update { s ->
+                if (d != null && s.design?.id != d.id) s
+                else s.copy(asks = if (d != null) asks else s.asks, aiReady = ready)
+            }
         }
     }
 

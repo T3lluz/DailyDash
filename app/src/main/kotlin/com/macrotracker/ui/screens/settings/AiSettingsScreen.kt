@@ -2,9 +2,7 @@ package com.macrotracker.ui.screens.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -37,8 +35,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -50,6 +46,10 @@ import com.macrotracker.data.remote.AiApiClient
 import com.macrotracker.data.remote.AiProvider
 import com.macrotracker.data.remote.AnthropicModels
 import com.macrotracker.data.remote.OpenRouterModels
+import com.macrotracker.ui.components.AiProviderToggle
+import com.macrotracker.ui.screens.ai.HermesModelSelector
+import com.macrotracker.ui.screens.ai.ModelBrands
+import com.macrotracker.ui.screens.ai.ModelLogo
 import com.macrotracker.ui.components.SubScreenHeader
 import com.macrotracker.ui.components.subScreenBottomPadding
 import com.macrotracker.ui.components.ButtonVariant
@@ -58,14 +58,13 @@ import com.macrotracker.ui.components.MacroButton
 import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
-import com.macrotracker.ui.theme.BorderStrong
-import com.macrotracker.ui.theme.SurfaceElevated
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.Success
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.rememberHaptics
+import com.macrotracker.ui.viewmodel.HermesViewModel
 import com.macrotracker.ui.viewmodel.SettingsViewModel
 import com.macrotracker.ui.theme.AppIcons
 
@@ -73,6 +72,7 @@ import com.macrotracker.ui.theme.AppIcons
 fun AiSettingsScreen(
     onNavigateBack: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
+    hermesViewModel: HermesViewModel = hiltViewModel(),
 ) {
     val savedKey by viewModel.geminiApiKey.collectAsState()
     val savedOpenAiKey by viewModel.openAiApiKey.collectAsState()
@@ -87,6 +87,7 @@ fun AiSettingsScreen(
     val claudeAwaitingCode by viewModel.claudeAwaitingCode.collectAsState()
     val claudeBusy by viewModel.claudeBusy.collectAsState()
     val claudeMessage by viewModel.claudeMessage.collectAsState()
+    val dashboardUrl by viewModel.dashboardServerUrl.collectAsState()
     var claudeCode by remember { mutableStateOf("") }
 
     val activeSavedKey = when (aiProvider) {
@@ -94,6 +95,7 @@ fun AiSettingsScreen(
         AiProvider.OPENAI -> savedOpenAiKey
         AiProvider.OPENROUTER -> savedOpenRouterKey
         AiProvider.ANTHROPIC -> savedAnthropicKey
+        AiProvider.HERMES -> ""
     }
     var draftKey by remember(aiProvider, activeSavedKey) { mutableStateOf(activeSavedKey) }
     var keyVisible by remember { mutableStateOf(false) }
@@ -101,8 +103,11 @@ fun AiSettingsScreen(
     val haptics = rememberHaptics()
 
     val isDirty = draftKey.trim() != activeSavedKey
-    val hasKey = activeSavedKey.isNotBlank() ||
-        (aiProvider == AiProvider.ANTHROPIC && claudeConnected)
+    val hasKey = when (aiProvider) {
+        AiProvider.HERMES -> dashboardUrl.isNotBlank()
+        AiProvider.ANTHROPIC -> activeSavedKey.isNotBlank() || claudeConnected
+        else -> activeSavedKey.isNotBlank()
+    }
     val keyFormatOk = AiApiClient.looksLikeValidKey(aiProvider, draftKey)
     val keyFeedback: String? = when {
         draftKey.isNotBlank() && !keyFormatOk -> when (aiProvider) {
@@ -110,6 +115,7 @@ fun AiSettingsScreen(
             AiProvider.OPENAI -> "Doesn't look like an OpenAI key (should start with sk-…)"
             AiProvider.OPENROUTER -> "Doesn't look like an OpenRouter key (should start with sk-or-…)"
             AiProvider.ANTHROPIC -> "Doesn't look like an Anthropic key (should start with sk-ant-…)"
+            AiProvider.HERMES -> null
         }
         else -> null
     }
@@ -144,7 +150,7 @@ fun AiSettingsScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Choose Gemini, OpenAI, OpenRouter, or Claude for food estimates, label scanning, chat, and weather tips.",
+                text = "Choose Gemini, OpenAI, OpenRouter, Claude, or Hermes for food estimates, Tilesmith, chat, and weather tips.",
                 fontSize = 13.sp,
                 color = TextSecondary,
                 lineHeight = 18.sp,
@@ -160,7 +166,15 @@ fun AiSettingsScreen(
                 },
             )
 
-            if (aiProvider == AiProvider.ANTHROPIC) {
+            if (aiProvider == AiProvider.HERMES) {
+                Spacer(modifier = Modifier.height(14.dp))
+                Text(
+                    text = "Dashboard AI",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = TextPrimary,
+                )
+            } else if (aiProvider == AiProvider.ANTHROPIC) {
                 Spacer(modifier = Modifier.height(16.dp))
                 ClaudeSubscriptionBlock(
                     connected = claudeConnected,
@@ -206,6 +220,15 @@ fun AiSettingsScreen(
                 color = TextSecondary,
                 lineHeight = 16.sp,
             )
+            if (aiProvider == AiProvider.HERMES) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = if (dashboardUrl.isNotBlank()) dashboardUrl else "No dashboard address set",
+                    fontSize = 13.sp,
+                    color = if (dashboardUrl.isNotBlank()) TextPrimary else Error,
+                )
+            }
+            if (aiProvider != AiProvider.HERMES) {
             Spacer(modifier = Modifier.height(10.dp))
 
             OutlinedTextField(
@@ -297,6 +320,7 @@ fun AiSettingsScreen(
                     )
                 }
             }
+            }
         }
 
         Spacer(modifier = Modifier.height(10.dp))
@@ -306,6 +330,7 @@ fun AiSettingsScreen(
                 title = when (aiProvider) {
                     AiProvider.OPENROUTER -> "OpenRouter model"
                     AiProvider.ANTHROPIC -> "Claude model"
+                    AiProvider.HERMES -> "Dashboard model"
                     else -> "AI model"
                 },
             )
@@ -326,6 +351,15 @@ fun AiSettingsScreen(
                         viewModel.setOpenRouterModelId(modelId)
                     },
                 )
+            } else if (aiProvider == AiProvider.HERMES) {
+                Text(
+                    text = "Same picker as Tech support: logos, favourites, depth. The model you pick is the dashboard's current one, so Tilesmith, food estimates and widget lines use it too.",
+                    fontSize = 12.sp,
+                    color = TextSecondary,
+                    lineHeight = 16.sp,
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                HermesModelSelector(viewModel = hermesViewModel)
             } else if (aiProvider == AiProvider.ANTHROPIC) {
                 Text(
                     text = if (claudeConnected) {
@@ -357,6 +391,11 @@ fun AiSettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                        ModelBrands.brandOfProvider(aiProvider.displayName).takeIf { it.isNotBlank() }?.let { brand ->
+                            ModelLogo(brand, 22.dp)
+                            Spacer(modifier = Modifier.width(10.dp))
+                        }
                     Column {
                         Text(
                             text = AiApiClient.modelLabel(aiProvider),
@@ -370,10 +409,12 @@ fun AiSettingsScreen(
                                 AiProvider.OPENAI -> "Fast · Vision-capable · gpt-4o-mini"
                                 AiProvider.OPENROUTER -> ""
                                 AiProvider.ANTHROPIC -> ""
+                                AiProvider.HERMES -> ""
                             },
                             fontSize = 12.sp,
                             color = TextSecondary,
                         )
+                    }
                     }
                     Text(
                         text = if (hasKey) "Active" else "No key",
@@ -506,50 +547,6 @@ private fun ClaudeSubscriptionBlock(
     }
 }
 
-@Composable
-private fun AiProviderToggle(
-    selected: AiProvider,
-    onSelect: (AiProvider) -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Background, RoundedCornerShape(12.dp))
-            .border(1.dp, Border.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            // Four providers no longer fit one row without truncating "OpenRouter".
-            AiProvider.entries.chunked(2).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    row.forEach { provider ->
-                        val isSelected = provider == selected
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(9.dp))
-                                .background(if (isSelected) SurfaceElevated else Color.Transparent)
-                                .border(1.dp, if (isSelected) BorderStrong else Color.Transparent, RoundedCornerShape(9.dp))
-                                .clickable { onSelect(provider) }
-                                .padding(vertical = 10.dp, horizontal = 2.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text = provider.displayName,
-                                fontSize = 12.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) TextPrimary else TextSecondary,
-                                maxLines = 1,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun OpenRouterModelSelector(
@@ -574,6 +571,10 @@ private fun OpenRouterModelSelector(
                 .fillMaxWidth()
                 .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
             label = { Text("Model") },
+            leadingIcon = {
+                val brand = ModelBrands.brandOf(selected.id, "")
+                if (brand.isNotBlank()) ModelLogo(brand, 22.dp)
+            },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             supportingText = {
                 Text(
@@ -610,6 +611,11 @@ private fun OpenRouterModelSelector(
                     text = {
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                val brand = ModelBrands.brandOf(model.id, "")
+                                if (brand.isNotBlank()) {
+                                    ModelLogo(brand, 22.dp)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                }
                                 Text(
                                     text = model.displayName,
                                     fontSize = 14.sp,
@@ -682,6 +688,7 @@ private fun AnthropicModelSelector(
                 .fillMaxWidth()
                 .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
             label = { Text("Model") },
+            leadingIcon = { ModelLogo("anthropic", 22.dp) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             supportingText = {
                 Text(
@@ -717,6 +724,8 @@ private fun AnthropicModelSelector(
                     text = {
                         Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                ModelLogo("anthropic", 22.dp)
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
                                     text = model.displayName,
                                     fontSize = 14.sp,

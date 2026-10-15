@@ -215,6 +215,7 @@ class SettingsRepository @Inject constructor(
             AiProvider.OPENAI -> saveOpenAiApiKey(key)
             AiProvider.OPENROUTER -> saveOpenRouterApiKey(key)
             AiProvider.ANTHROPIC -> saveAnthropicApiKey(key)
+            AiProvider.HERMES -> {}
         }
     }
 
@@ -232,6 +233,7 @@ class SettingsRepository @Inject constructor(
             AiProvider.OPENAI -> getOpenAiApiKey()
             AiProvider.OPENROUTER -> getOpenRouterApiKey()
             AiProvider.ANTHROPIC -> getAnthropicApiKey()
+            AiProvider.HERMES -> ""
         }
 
     fun setOnboardingCompleted(completed: Boolean = true) {

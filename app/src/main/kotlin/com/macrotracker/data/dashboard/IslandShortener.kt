@@ -74,6 +74,7 @@ class IslandShortener @Inject constructor(
                             openRouterModelId = settings.getOpenRouterModelId(),
                             anthropicModelId = settings.getAnthropicModelId(),
                             anthropicOAuth = auth.anthropicOAuth,
+                            dashboardUrl = settings.dashboardServerUrl.value,
                         ),
                     )
                 }

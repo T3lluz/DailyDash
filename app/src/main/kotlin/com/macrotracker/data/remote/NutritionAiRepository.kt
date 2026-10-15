@@ -72,6 +72,7 @@ class NutritionAiRepository @Inject constructor(
                 openRouterModelId = settings.getOpenRouterModelId(),
                 anthropicModelId = settings.getAnthropicModelId(),
                 anthropicOAuth = auth.anthropicOAuth,
+                dashboardUrl = settings.dashboardServerUrl.value,
             ),
         )
         return parseNutritionEstimate(responseText, foodQuery)
@@ -114,6 +115,7 @@ class NutritionAiRepository @Inject constructor(
                 openRouterModelId = settings.getOpenRouterModelId(),
                 anthropicModelId = settings.getAnthropicModelId(),
                 anthropicOAuth = auth.anthropicOAuth,
+                dashboardUrl = settings.dashboardServerUrl.value,
             ),
         )
         return parseNutritionEstimate(responseText, "Meal photo")
@@ -149,6 +151,7 @@ class NutritionAiRepository @Inject constructor(
                 openRouterModelId = settings.getOpenRouterModelId(),
                 anthropicModelId = settings.getAnthropicModelId(),
                 anthropicOAuth = auth.anthropicOAuth,
+                dashboardUrl = settings.dashboardServerUrl.value,
             ),
         )
         return parseScanResult(responseText)
@@ -167,6 +170,8 @@ class NutritionAiRepository @Inject constructor(
                 "No OpenRouter API key set. Go to Settings, choose OpenRouter, and paste your key from openrouter.ai/keys."
             AiProvider.ANTHROPIC ->
                 "Claude is not connected. Go to Settings → AI, choose Claude, and tap Connect Claude (or paste an API key)."
+            AiProvider.HERMES ->
+                "Hermes lives on your dashboard. Set the address in Settings → Connections, and be on the tailnet."
         }
         throw Exception(hint)
     }

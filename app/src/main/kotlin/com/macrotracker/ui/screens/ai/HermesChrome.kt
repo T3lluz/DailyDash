@@ -685,7 +685,7 @@ internal fun HermesComposer(
  * the one sheet with both.
  */
 @Composable
-private fun ModelPill(
+internal fun ModelPill(
     model: HermesModelOption?,
     fallback: String?,
     switching: Boolean,

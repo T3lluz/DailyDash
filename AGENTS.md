@@ -25,7 +25,7 @@ GITHUB_TOKEN=...           # optional PAT fallback if OAuth Client ID is not set
 ```
 **GitHub Releases:** `.github/workflows/build-apk.yml` writes the same keys from repo Actions secrets into `local.properties` before `assembleRelease`. Required for Twitch in published APKs: `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`. Required for GitHub Connect in published APKs: Actions secret `GH_OAUTH_CLIENT_ID` (OAuth App Client ID — **not** a PAT and **not** the automatic Actions `GITHUB_TOKEN`; GitHub forbids secrets named `GITHUB_*`). CI writes it as `GITHUB_CLIENT_ID` in `local.properties`. Optional mirrors of local keys: `GEMINI_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `YOUTUBE_API_KEY`. YouTube **Connect Google** does not use BuildConfig keys — it needs Google Cloud Console (YouTube Data API v3 + Android OAuth client for package `com.macrotracker` + `tester.jks` SHA-1); CI already signs releases with `app/tester.jks`.
 
-At runtime, Settings lets the user pick **Gemini**, **OpenAI**, **OpenRouter**, or **Claude**. Gemini / OpenAI / OpenRouter need a pasted API key. Claude can **Connect** with Claude Code's public OAuth (Pro / Max / Team / Enterprise — same login T3 Code uses via `claude auth login`) so usage comes from the Claude.ai subscription; an `sk-ant-…` key remains an optional fallback. For OpenRouter, Settings also shows a curated cheap-model picker with list prices. Stored keys take priority over build-time keys; a Claude OAuth session wins over a stored Anthropic key. `NutritionAiRepository` / chat (`data/chat/AiChatClient`) all route through `AiApiClient` based on `SettingsRepository.aiProvider` (`AiCredentialResolver` + `ClaudeAuthClient`).
+At runtime, Settings lets the user pick **Gemini**, **OpenAI**, **OpenRouter**, **Claude**, or **Hermes**. Gemini / OpenAI / OpenRouter need a pasted API key. Claude can **Connect** with Claude Code's public OAuth (Pro / Max / Team / Enterprise — same login T3 Code uses via `claude auth login`) so usage comes from the Claude.ai subscription; an `sk-ant-…` key remains an optional fallback. Hermes is the dashboard's own model (`<dashboard>/_api/v1/chat/completions`); no key on the phone, tailnet required, and the Settings / Tilesmith picker is the same model pill as Tech support. For OpenRouter, Settings also shows a curated cheap-model picker with list prices. Stored keys take priority over build-time keys; a Claude OAuth session wins over a stored Anthropic key. `NutritionAiRepository` / chat (`data/chat/AiChatClient`) / Tilesmith all route through `AiApiClient` based on `SettingsRepository.aiProvider` (`AiCredentialResolver` + `ClaudeAuthClient`).
 
 ## Architecture Overview
 ```
@@ -40,7 +40,7 @@ com.macrotracker/
                               SettingsRepository (two SharedPrefs: `macro_tracker_settings` +
                               `health_connect_settings`; per-metric health toggles + master toggle
                               + `weatherEnabled`/`calendarEnabled` all as `StateFlow`)
-    remote/                ← Gemini/OpenAI/OpenRouter/Claude via OkHttp (`AiApiClient`; NutritionAiRepository),
+    remote/                ← Gemini/OpenAI/OpenRouter/Claude/Hermes via OkHttp (`AiApiClient`; NutritionAiRepository),
                               WeatherRepository (met.no forecast, and MET warnings from MetAlerts as the
                               dashboard shows them, `fetchWarnings`, 15 min) + ClothingAdvice, LocationProvider
     chat/                  ← AI tab chat: ChatRepository, AiChatClient, BotPrompts, ServerAiHandoff

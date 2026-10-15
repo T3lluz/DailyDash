@@ -800,6 +800,7 @@ specific and useful at a glance. Never invent facts; when you searched the web, 
                 anthropicModelId = settings.getAnthropicModelId(),
                 anthropicOAuth = auth.anthropicOAuth,
                 webSearch = b.web,
+                dashboardUrl = settings.dashboardServerUrl.value,
             ),
         )
         val clean = WidgetAi.clean(text, 220)

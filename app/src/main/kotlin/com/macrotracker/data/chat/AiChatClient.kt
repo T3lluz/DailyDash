@@ -145,6 +145,7 @@ class AiChatClient @Inject constructor(
                         "X-Title" to "DailyDash",
                     ),
                 )
+                AiProvider.HERMES -> hermesRequest(systemBlocks, trimmed)
                 AiProvider.GEMINI -> error("handled above")
             }
             val call = streamingClient.newCall(request)
@@ -263,6 +264,35 @@ class AiChatClient @Inject constructor(
         return builder.build()
     }
 
+    /** Completions on the dashboard shim. Same URL Tech support's model calls already use. */
+    private fun hermesRequest(
+        systemBlocks: List<String>,
+        history: List<ChatTurn>,
+    ): Request {
+        val base = settings.dashboardServerUrl.value.trim().trimEnd('/')
+        if (base.isBlank()) {
+            error("Set your dashboard server in Settings → Connections")
+        }
+        val model = runCatching {
+            val req = Request.Builder()
+                .url(AiApiClient.dashboardPath(base, "/ai/status"))
+                .header("Cache-Control", "no-cache")
+                .get()
+                .build()
+            httpClient.newCall(req).execute().use { response ->
+                if (!response.isSuccessful) ""
+                else AiApiClient.hermesModelFromStatus(response.body?.string().orEmpty())
+            }
+        }.getOrDefault("")
+        return openAiRequest(
+            apiKey = "",
+            url = AiApiClient.dashboardPath(base, "/v1/chat/completions"),
+            model = model,
+            systemBlocks = systemBlocks,
+            history = history,
+        )
+    }
+
     private fun openAiRequest(
         apiKey: String,
         url: String,
@@ -310,7 +340,9 @@ class AiChatClient @Inject constructor(
             .post(body.toString().toRequestBody(jsonMedia))
             .header("Content-Type", "application/json")
             .header("Accept", "text/event-stream")
-            .header("Authorization", "Bearer $apiKey")
+        if (apiKey.isNotBlank()) {
+            builder.header("Authorization", "Bearer $apiKey")
+        }
         extraHeaders.forEach { (k, v) -> builder.header(k, v) }
         return builder.build()
     }
@@ -339,10 +371,10 @@ class AiChatClient @Inject constructor(
         val detail = AiApiClient.anthropicErrorMessage(raw)
         return when {
             AiApiClient.isApiKeyError(code, raw) -> ChatDelta.Failed(
-                if (provider == AiProvider.ANTHROPIC) {
-                    "Claude rejected that login. Reconnect in Settings → AI."
-                } else {
-                    "${provider.displayName} rejected that API key. Check Settings → AI."
+                when (provider) {
+                    AiProvider.ANTHROPIC -> "Claude rejected that login. Reconnect in Settings → AI."
+                    AiProvider.HERMES -> "The dashboard rejected that. Check Settings → Connections."
+                    else -> "${provider.displayName} rejected that API key. Check Settings → AI."
                 },
                 showSettingsCta = true,
             )
@@ -369,10 +401,12 @@ class AiChatClient @Inject constructor(
         credentials.resolve().takeUnless { it.isBlank }
 
     private fun missingCredentials(): ChatDelta.Failed = ChatDelta.Failed(
-        if (provider == AiProvider.ANTHROPIC) {
-            "Claude is not connected. Connect your account in Settings → AI, then try again."
-        } else {
-            "No API key set. Add one in Settings → AI, then try again."
+        when (provider) {
+            AiProvider.ANTHROPIC ->
+                "Claude is not connected. Connect your account in Settings → AI, then try again."
+            AiProvider.HERMES ->
+                "Set your dashboard server in Settings → Connections, then try again."
+            else -> "No API key set. Add one in Settings → AI, then try again."
         },
         showSettingsCta = true,
     )

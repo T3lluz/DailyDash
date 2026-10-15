@@ -22,12 +22,16 @@ class AiCredentialResolver @Inject constructor(
     private val claudeAuth: ClaudeAuthClient,
 ) {
     fun hasCredentials(provider: AiProvider = settings.getAiProvider()): Boolean = when (provider) {
+        AiProvider.HERMES -> settings.dashboardServerUrl.value.trim().isNotBlank()
         AiProvider.ANTHROPIC ->
             claudeAuth.hasSession() || storedOrBuildKey(provider).isNotBlank()
         else -> storedOrBuildKey(provider).isNotBlank()
     }
 
     suspend fun resolve(provider: AiProvider = settings.getAiProvider()): ResolvedAiAuth {
+        if (provider == AiProvider.HERMES) {
+            return ResolvedAiAuth(secret = if (hasCredentials(provider)) DASHBOARD_TOKEN else "")
+        }
         if (provider == AiProvider.ANTHROPIC) {
             val access = claudeAuth.validAccessToken()
             if (!access.isNullOrBlank()) {
@@ -38,6 +42,7 @@ class AiCredentialResolver @Inject constructor(
     }
 
     private fun storedOrBuildKey(provider: AiProvider): String {
+        if (provider == AiProvider.HERMES) return ""
         val stored = settings.getApiKeyForProvider(provider).trim()
         if (stored.isNotBlank()) return stored
         return when (provider) {
@@ -45,6 +50,12 @@ class AiCredentialResolver @Inject constructor(
             AiProvider.OPENAI -> BuildConfig.OPENAI_API_KEY.trim()
             AiProvider.OPENROUTER -> BuildConfig.OPENROUTER_API_KEY.trim()
             AiProvider.ANTHROPIC -> BuildConfig.ANTHROPIC_API_KEY.trim()
+            AiProvider.HERMES -> ""
         }
+    }
+
+    companion object {
+        /** Placeholder so [ResolvedAiAuth.isBlank] is false; the bridge does not read it. */
+        private const val DASHBOARD_TOKEN = "hermes"
     }
 }
