@@ -110,7 +110,7 @@ private fun Scene(light: Boolean, items: List<IslandItem>, hermes: NavActivity?)
             Backdrop(light, Modifier.weight(1f))
             Backdrop(!light, Modifier.weight(1f))
         }
-        TopIsland(items = items, visible = true, hermes = hermes, hazeState = haze, onItem = {}, modifier = Modifier.align(Alignment.TopCenter))
+        TopIsland(items = items, visible = true, hermes = hermes, onItem = {}, modifier = Modifier.align(Alignment.TopCenter))
         Box(Modifier.align(Alignment.BottomCenter)) {
             PillNavigationBar(
                 items = listOf(Screen.Home, Screen.Health, Screen.AI, Screen.Settings),

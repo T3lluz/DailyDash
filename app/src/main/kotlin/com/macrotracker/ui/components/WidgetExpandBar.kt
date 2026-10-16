@@ -95,11 +95,6 @@ fun WidgetExpandBar(
             modifier = Modifier
                 .clip(RoundedCornerShape(20.dp))
                 .background(accentColor.copy(alpha = pillAlpha))
-                .dottedFrost(
-                    color = accentColor.copy(alpha = 0.12f),
-                    cell = DottedFrostSpec.CompactCell,
-                    core = DottedFrostSpec.CompactCore,
-                )
                 .clickable(
                     interactionSource = interactionSource,
                     indication = ripple(color = accentColor, bounded = true, radius = 80.dp),

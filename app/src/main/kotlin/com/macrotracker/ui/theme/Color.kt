@@ -55,7 +55,6 @@ val HeaderColor = TextPrimary
 /** Frosted pill / overlay chrome (navbar, floating composer). */
 val GlassTint = SurfaceChrome
 val GlassHairline = Color(0xFFE4E4E4).copy(alpha = 0.15f)
-val GlassDot = Color(0xFFE4E4E4).copy(alpha = 0.07f)
 
 /** Health activity maps and inset wells — named, not one-off hex. */
 val MapSurface = SurfaceChrome
