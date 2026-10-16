@@ -147,7 +147,7 @@ fun TilesmithHero(
                 decorationBox = { inner ->
                     if (prompt.isEmpty()) {
                         Text(
-                            if (aiReady) "A steps ring and my next meeting…" else "Pick a starter below (connect an AI to describe your own)",
+                            if (aiReady) "A steps ring and my next meeting…" else "Pick a starter below (pick an AI to describe your own)",
                             color = TextTertiary,
                             fontSize = 15.sp,
                             maxLines = 1,

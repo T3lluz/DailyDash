@@ -4,14 +4,20 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,20 +27,22 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -44,8 +52,11 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -53,6 +64,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -69,6 +81,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -79,18 +92,17 @@ import androidx.health.connect.client.PermissionController
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.macrotracker.data.phone.PhoneExtras
 import com.macrotracker.data.phone.PhoneNotificationListener
-import com.macrotracker.data.remote.AiProvider
-import com.macrotracker.ui.components.AiProviderChips
-import com.macrotracker.ui.components.SubScreenHeader
-import com.macrotracker.ui.components.modelLogoBrand
+import com.macrotracker.ui.components.AiPickerSheet
+import com.macrotracker.ui.components.AiPill
+import com.macrotracker.ui.components.SegmentedTab
+import com.macrotracker.ui.components.SegmentedTabs
 import com.macrotracker.ui.components.rememberGoogleConsent
 import com.macrotracker.ui.navigation.SettingsRoutes
-import com.macrotracker.ui.screens.ai.HermesModelSelector
-import com.macrotracker.ui.screens.ai.ModelLogo
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.Error
+import com.macrotracker.ui.theme.HeaderColor
 import com.macrotracker.ui.theme.OnAccent
 import com.macrotracker.ui.theme.Success
 import com.macrotracker.ui.theme.Surface
@@ -102,8 +114,7 @@ import com.macrotracker.ui.theme.Warning
 import com.macrotracker.ui.util.LaunchedWhileResumed
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.util.requestOrOpenSettings
-import com.macrotracker.ui.viewmodel.HermesViewModel
-import com.macrotracker.ui.viewmodel.SettingsViewModel
+import com.macrotracker.ui.viewmodel.AiSetupViewModel
 import com.macrotracker.widget.tilesmith.BlockStyle
 import com.macrotracker.widget.tilesmith.BlockType
 import com.macrotracker.widget.tilesmith.TileAsk
@@ -122,15 +133,20 @@ import com.macrotracker.widget.tilesmith.TilesmithPin
 import com.macrotracker.widget.tilesmith.TilesmithStore
 import com.macrotracker.widget.tilesmith.TilesmithWidgetSpec
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
+/** The studio's three panes under the stage. */
+private enum class StudioTab(val key: String, val label: String) { CHAT("chat", "Chat"), BLOCKS("blocks", "Blocks"), LOOK("look", "Look") }
+
 /**
- * The Tilesmith studio. With no design open it is the front door: describe a widget, start
- * from one of the starters, or open one of your widgets. With one open: the widget on a stage,
- * what it still needs (one tap each, or all of Android's at once), the conversation that shapes
- * it with the AI's suggested next changes, its blocks to tweak one by one, the tweaks that need
- * no AI (size, colours, background, shape, how often it updates), and one button to put it on
- * the home screen. Every change saves as it happens; the widgets button switches designs.
+ * The Tilesmith studio. Its top bar never scrolls away: back, the widget's name (tap to
+ * rename), Undo, your widgets, and Add to home screen. With no design open it is the front
+ * door: describe a widget, start from one of the starters, or open one of yours. With one
+ * open, the widget sits on a stage that stays put, what it still needs is one strip under it,
+ * and three panes take the rest: the chat (its own scroll, newest at the bottom, with a live
+ * line saying what the AI is doing), the blocks, and the look. The composer is always at the
+ * bottom. Every change saves as it happens.
  */
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -142,26 +158,29 @@ fun TilesmithStudioScreen(
     onOpenRoute: (String) -> Unit,
     onOpenTab: (String) -> Unit = {},
     viewModel: TilesmithViewModel = hiltViewModel(),
-    settingsViewModel: SettingsViewModel = hiltViewModel(),
-    hermesViewModel: HermesViewModel = hiltViewModel(),
+    aiViewModel: AiSetupViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
     val haptics = rememberHaptics()
     val state by viewModel.state.collectAsState()
     val designs by viewModel.designs.collectAsState()
-    val aiProvider by settingsViewModel.aiProvider.collectAsState()
+    val ai by aiViewModel.state.collectAsState()
     LaunchedEffect(designId, prompt, starterId) { viewModel.open(designId, prompt, starterId) }
-    LaunchedEffect(aiProvider) { viewModel.recheck() }
+    LaunchedEffect(ai.selected, ai.current?.ready) { viewModel.recheck() }
     // Back from Android's settings or Health Connect: check what's allowed now.
     LaunchedWhileResumed { viewModel.recheck() }
 
     var dark by rememberSaveable { mutableStateOf(context.isNight()) }
     var input by rememberSaveable { mutableStateOf("") }
+    var tab by rememberSaveable { mutableStateOf(StudioTab.CHAT) }
     var confirm by remember { mutableStateOf<TileAsk?>(null) }
     var renaming by remember { mutableStateOf(false) }
     var showWidgets by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<Int?>(null) }
     var managing by remember { mutableStateOf<TileDesign?>(null) }
+    var pickingAi by remember { mutableStateOf(false) }
+    // A message to the AI is a chat: show it.
+    LaunchedEffect(state.busy) { if (state.busy) tab = StudioTab.CHAT }
 
     val runtimePerms = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { viewModel.granted() }
     val healthPerms = rememberLauncherForActivityResult(PermissionController.createRequestPermissionResultContract()) { viewModel.granted() }
@@ -201,43 +220,47 @@ fun TilesmithStudioScreen(
         }
     }
 
+    fun pin() {
+        haptics.confirm()
+        viewModel.pin {
+            Toast.makeText(context, "Your launcher can't add widgets from apps. Long-press the home screen → Widgets → DailyDash → Tilesmith.", Toast.LENGTH_LONG).show()
+        }
+    }
+
     val design = state.design
+    val front = design == null && !state.busy
     Column(
         Modifier
             .fillMaxSize()
             .background(Background)
             .imePadding(),
     ) {
-        Column(
-            Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 16.dp),
-        ) {
-            SubScreenHeader(
-                title = design?.name ?: "Tilesmith",
-                subtitle = when {
-                    design == null -> "Describe any widget and AI builds it"
-                    state.placed == 1 -> "Tilesmith · on your home screen"
-                    state.placed > 1 -> "Tilesmith · ${state.placed} on your home screen"
-                    else -> "Tilesmith · ${design.size.label} ${design.size.cells}"
-                },
-                onNavigateBack = onNavigateBack,
-                trailing = {
-                    if (state.undo.isNotEmpty() && !state.busy) {
-                        TextButton(onClick = { haptics.tick(); viewModel.undo() }) {
-                            Text("Undo", color = TilesmithAccent, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-                    if (design != null) {
-                        HeaderButton(AppIcons.Edit, "Rename") { haptics.tick(); renaming = true }
-                        HeaderButton(AppIcons.Grid, "Your widgets") { haptics.tick(); showWidgets = true }
-                    }
-                },
-            )
+        StudioTopBar(
+            title = design?.name ?: "Tilesmith",
+            subtitle = when {
+                design == null -> "Describe any widget and AI builds it"
+                state.placed == 1 -> "${design.size.label} · on your home screen"
+                state.placed > 1 -> "${design.size.label} · ${state.placed} on your home screen"
+                else -> "${design.size.label} ${design.size.cells}"
+            },
+            onBack = onNavigateBack,
+            onRename = if (design != null) ({ haptics.tick(); renaming = true }) else null,
+            canUndo = state.undo.isNotEmpty() && !state.busy,
+            onUndo = { haptics.tick(); viewModel.undo() },
+            onWidgets = { haptics.tick(); showWidgets = true },
+            placed = state.placed,
+            pinning = state.pinning,
+            onPin = if (design != null) ::pin else null,
+        )
 
-            if (design == null && !state.busy) {
+        if (front) {
+            Column(
+                Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 16.dp),
+            ) {
                 EmptyStudio(
                     designs = designs.orEmpty(),
                     aiReady = state.aiReady,
@@ -246,109 +269,60 @@ fun TilesmithStudioScreen(
                     onStarter = { haptics.click(); viewModel.startFrom(it) },
                     onExample = { input = it },
                 )
-            } else {
-                Stage(state, dark, onToggleDark = { haptics.tick(); dark = !dark })
+            }
+        } else {
+            val ime = WindowInsets.isImeVisible
+            Stage(state, dark, compact = ime, onToggleDark = { haptics.tick(); dark = !dark })
 
-                AnimatedVisibility(visible = state.dropped > 0) {
-                    Note("${state.dropped} block${if (state.dropped == 1) "" else "s"} didn't fit this size. Undo brings ${if (state.dropped == 1) "it" else "them"} back.")
-                }
+            if (state.asks.isNotEmpty()) {
+                NeedsStrip(
+                    asks = state.asks,
+                    onAsk = ::handle,
+                    onAllowAll = { runtime ->
+                        haptics.confirm()
+                        runtimePerms.launch(runtime.flatMap { it.permissions }.distinct().toTypedArray())
+                    },
+                )
+            }
+            AnimatedVisibility(visible = state.dropped > 0) {
+                Note("${state.dropped} block${if (state.dropped == 1) "" else "s"} didn't fit this size. Undo brings ${if (state.dropped == 1) "it" else "them"} back.")
+            }
 
-                if (state.asks.isNotEmpty()) {
-                    SectionTitle("It needs")
-                    val runtime = state.asks.filter { it.runtime }
-                    if (runtime.size >= 2) {
-                        AllowAll(runtime.size) {
-                            haptics.confirm()
-                            runtimePerms.launch(runtime.flatMap { it.permissions }.distinct().toTypedArray())
-                        }
-                        Spacer(Modifier.height(8.dp))
-                    }
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        state.asks.forEach { ask -> AskRow(ask) { handle(ask) } }
-                    }
-                }
+            if (design != null && !ime) {
+                SegmentedTabs(
+                    tabs = StudioTab.entries.map { SegmentedTab(it.key, it.label, accent = TilesmithAccent) },
+                    selectedKey = tab.key,
+                    onSelect = { key -> haptics.tick(); tab = StudioTab.entries.first { it.key == key } },
+                    compact = true,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp),
+                )
+            }
 
-                if (state.lines.isNotEmpty()) {
-                    SectionTitle("Conversation")
-                    Conversation(state)
-                }
-                if (state.suggestions.isNotEmpty() && !state.busy && state.aiReady) {
-                    Spacer(Modifier.height(10.dp))
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        state.suggestions.forEach { s ->
-                            SuggestionChip(s) {
-                                haptics.confirm()
-                                viewModel.send(s)
-                            }
-                        }
-                    }
-                }
-
-                if (design != null) {
-                    SectionTitle("Blocks")
-                    BlocksList(design, onEdit = { haptics.tick(); editing = it })
-
-                    SectionTitle("Size")
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TileSize.entries.forEach { s ->
-                            SizeChip(s, selected = design.size == s) { haptics.tick(); viewModel.setSize(s) }
-                        }
-                    }
-
-                    SectionTitle("Colours")
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(end = 8.dp)) {
-                        items(TilePalette.entries.toList()) { p ->
-                            PaletteSwatch(p, selected = design.palette == p, dark = dark) { haptics.tick(); viewModel.setPalette(p) }
-                        }
-                    }
-
-                    SectionTitle("Background")
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TileSurface.entries.forEach { s ->
-                            SurfaceChip(s, design.palette, dark, selected = design.surface == s, modifier = Modifier.weight(1f)) {
-                                haptics.tick()
-                                viewModel.setSurface(s)
-                            }
-                        }
-                    }
-
-                    SectionTitle("Shape")
-                    val current = design.blocks.firstNotNullOfOrNull { it.shape }
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(end = 8.dp)) {
-                        items(TileShape.entries.toList()) { s ->
-                            ShapeChip(s, selected = current == s) { haptics.tick(); viewModel.setShape(s) }
-                        }
-                    }
-
-                    SectionTitle("Updates")
-                    val effective = TileRules.effectiveRefreshMinutes(design)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TileRules.REFRESH_CHOICES.forEach { m ->
-                            Chip(if (m < 60) "$m min" else "${m / 60} h", selected = design.refreshMinutes == m) { haptics.tick(); viewModel.setRefresh(m) }
-                        }
-                    }
-                    Text(
-                        text = when {
-                            effective > design.refreshMinutes -> "Its data changes every $effective min at most, so it updates every $effective. Clocks, countdowns and what's playing update live."
-                            else -> "Every ${if (effective < 60) "$effective min" else "${effective / 60} h"}, and when you unlock the phone. Clocks, countdowns and what's playing update live; AI lines keep their own pace."
-                        },
-                        fontSize = 12.sp,
-                        color = TextSecondary,
-                        lineHeight = 16.sp,
-                        modifier = Modifier.padding(start = 4.dp, top = 8.dp),
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                when {
+                    design == null || tab == StudioTab.CHAT || ime -> ChatPane(
+                        state = state,
+                        onSuggestion = { s -> haptics.confirm(); viewModel.send(s) },
+                    )
+                    tab == StudioTab.BLOCKS -> BlocksPane(design, onEdit = { haptics.tick(); editing = it })
+                    else -> LookPane(
+                        design = design,
+                        dark = dark,
+                        onSize = { haptics.tick(); viewModel.setSize(it) },
+                        onPalette = { haptics.tick(); viewModel.setPalette(it) },
+                        onSurface = { haptics.tick(); viewModel.setSurface(it) },
+                        onShape = { haptics.tick(); viewModel.setShape(it) },
+                        onRefresh = { haptics.tick(); viewModel.setRefresh(it) },
+                        onAi = { on -> if (on) haptics.toggleOn() else haptics.toggleOff(); viewModel.setAi(on) },
                     )
                 }
             }
         }
 
-        BottomBar(
+        Composer(
             state = state,
-            aiProvider = aiProvider,
-            onSelectProvider = { provider ->
-                haptics.tick()
-                settingsViewModel.setAiProvider(provider)
-            },
-            hermesViewModel = hermesViewModel,
+            aiPill = { AiPill(ai.current, open = pickingAi, onClick = { pickingAi = true }) },
+            aiReady = state.aiReady,
             input = input,
             onInput = { input = it },
             onSend = {
@@ -362,13 +336,17 @@ fun TilesmithStudioScreen(
                 pickPicture.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
             },
             onClearAttachment = { haptics.tick(); viewModel.clearAttachment() },
-            onConnectAi = { onOpenRoute(if (aiProvider == AiProvider.HERMES) SettingsRoutes.CONNECTIONS else SettingsRoutes.AI) },
-            onPin = {
-                haptics.confirm()
-                viewModel.pin {
-                    Toast.makeText(context, "Your launcher can't add widgets from apps. Long-press the home screen → Widgets → DailyDash → Tilesmith.", Toast.LENGTH_LONG).show()
-                }
-            },
+            onConnectAi = { onOpenRoute(SettingsRoutes.AI) },
+            pictureNote = state.attachment?.let { if (ai.selected.seesPictures) null else "${ai.selected.displayName} can't see pictures. Pick Claude, Gemini or OpenAI." },
+        )
+    }
+
+    if (pickingAi) {
+        AiPickerSheet(
+            viewModel = aiViewModel,
+            onDismiss = { pickingAi = false },
+            onManage = { onOpenRoute(SettingsRoutes.AI) },
+            note = if (state.attachment != null) "Pictures need Claude, Gemini or OpenAI" else "The AI that builds your widgets",
         )
     }
 
@@ -391,7 +369,7 @@ fun TilesmithStudioScreen(
                         Text("New", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = OnAccent)
                     }
                 }
-                Text("Tap one to open it here, hold it to duplicate or delete.", fontSize = 12.sp, color = TextSecondary, modifier = Modifier.padding(top = 2.dp, bottom = 12.dp))
+                Text("Tap one to open it, hold it to duplicate or delete.", fontSize = 12.sp, color = TextSecondary, modifier = Modifier.padding(top = 2.dp, bottom = 12.dp))
                 DesignGrid(
                     designs = designs.orEmpty(),
                     current = design?.id,
@@ -460,7 +438,7 @@ fun TilesmithStudioScreen(
                         ask.cmd ?: ask.url ?: "",
                         fontSize = 13.sp,
                         color = TextPrimary,
-                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        fontFamily = FontFamily.Monospace,
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(10.dp))
@@ -503,16 +481,89 @@ fun TilesmithStudioScreen(
     }
 }
 
+// ── The top bar: always there ───────────────────────────────────────────────
+
 @Composable
-private fun HeaderButton(icon: ImageVector, label: String, onClick: () -> Unit) {
+private fun StudioTopBar(
+    title: String,
+    subtitle: String,
+    onBack: () -> Unit,
+    onRename: (() -> Unit)?,
+    canUndo: Boolean,
+    onUndo: () -> Unit,
+    onWidgets: () -> Unit,
+    placed: Int,
+    pinning: Boolean,
+    onPin: (() -> Unit)?,
+) {
+    val haptics = rememberHaptics()
+    Column(Modifier.fillMaxWidth().background(Background).statusBarsPadding()) {
+        Row(
+            Modifier.fillMaxWidth().height(60.dp).padding(start = 6.dp, end = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            BarButton(AppIcons.ArrowBack, "Back", tint = TextPrimary) { haptics.click(); onBack() }
+            Column(
+                Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable(enabled = onRename != null) { onRename?.invoke() }
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(title, fontSize = 19.sp, fontWeight = FontWeight.Bold, color = HeaderColor, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    if (onRename != null) {
+                        Spacer(Modifier.width(5.dp))
+                        Icon(AppIcons.Edit, contentDescription = "Rename", tint = TextTertiary, modifier = Modifier.size(13.dp))
+                    }
+                }
+                Text(subtitle, fontSize = 12.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            AnimatedVisibility(visible = canUndo, enter = fadeIn(), exit = fadeOut()) {
+                BarButton(AppIcons.Undo, "Undo", tint = TextPrimary, onClick = onUndo)
+            }
+            BarButton(AppIcons.Grid, "Your widgets", tint = TextSecondary, onClick = onWidgets)
+            if (onPin != null) {
+                Spacer(Modifier.width(4.dp))
+                val added = placed > 0
+                Row(
+                    Modifier
+                        .height(36.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(if (added) Success.copy(alpha = 0.16f) else TilesmithAccent)
+                        .clickable(enabled = !pinning, onClick = onPin)
+                        .padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(if (added) AppIcons.CheckCircle else AppIcons.Add, null, tint = if (added) Success else OnAccent, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(5.dp))
+                    Text(
+                        when {
+                            pinning -> "Adding…"
+                            added -> "Added"
+                            else -> "Add"
+                        },
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (added) Success else OnAccent,
+                    )
+                }
+            }
+        }
+        HorizontalDivider(color = Border.copy(alpha = 0.6f))
+    }
+}
+
+@Composable
+private fun BarButton(icon: ImageVector, label: String, tint: Color, onClick: () -> Unit) {
     Box(
         Modifier
-            .size(40.dp)
+            .size(42.dp)
             .clip(CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = label, tint = TextSecondary, modifier = Modifier.size(19.dp))
+        Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(20.dp))
     }
 }
 
@@ -541,7 +592,7 @@ private fun EmptyStudio(
     Column(
         Modifier
             .fillMaxWidth()
-            .padding(top = 4.dp)
+            .padding(top = 14.dp)
             .clip(RoundedCornerShape(28.dp))
             .background(Brush.linearGradient(listOf(TilesmithAccent.copy(alpha = 0.22f), TilesmithAccent.copy(alpha = 0.05f))))
             .border(1.dp, Border, RoundedCornerShape(28.dp))
@@ -553,8 +604,8 @@ private fun EmptyStudio(
             Column(Modifier.weight(1f)) {
                 Text("What should it show?", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
                 Text(
-                    if (aiReady) "Describe it below, or attach a picture of a widget you like. Anything from your phone, your accounts or the web."
-                    else "Pick a starter, or connect an AI to describe your own.",
+                    if (aiReady) "Describe it below, or attach a picture of a widget you like."
+                    else "Pick a starter, or choose an AI below to describe your own.",
                     fontSize = 13.sp,
                     color = TextSecondary,
                     lineHeight = 18.sp,
@@ -671,36 +722,35 @@ private fun ago(ms: Long): String {
 
 // ── The stage ───────────────────────────────────────────────────────────────
 
+/**
+ * The widget on its stage, a fixed height so the panes under it never jump; shorter while the
+ * keyboard is up. While the AI works, the live line sits on the stage's bottom edge.
+ */
 @Composable
-private fun Stage(state: StudioState, dark: Boolean, onToggleDark: () -> Unit) {
+private fun Stage(state: StudioState, dark: Boolean, compact: Boolean, onToggleDark: () -> Unit) {
     val design = state.design
     val (top, bottom) = stageColors(design?.palette ?: TilePalette.WALLPAPER, dark)
-    val shape = RoundedCornerShape(28.dp)
+    val shape = RoundedCornerShape(26.dp)
+    val height by animateDpAsState(if (compact) 128.dp else 216.dp, label = "stage_height")
     Box(
         Modifier
+            .padding(start = 16.dp, end = 16.dp, top = 12.dp)
             .fillMaxWidth()
-            .padding(top = 4.dp)
+            .height(height)
             .clip(shape)
             .background(Brush.linearGradient(listOf(top, bottom)))
-            .border(1.dp, Border, shape)
-            .animateContentSize(),
+            .border(1.dp, Border, shape),
     ) {
         if (design != null) {
-            val size = TilesmithWidgetSpec.previewSizeOf(design.size)
-            val ratio = size.width / size.height
             TilePreview(
                 design = design,
                 values = state.values,
-                size = size,
+                size = TilesmithWidgetSpec.previewSizeOf(design.size),
                 dark = dark,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 300.dp)
-                    .aspectRatio(ratio.coerceIn(0.6f, 3.2f), matchHeightConstraintsFirst = false)
-                    .padding(horizontal = 28.dp, vertical = 34.dp),
+                    .fillMaxSize()
+                    .padding(horizontal = 28.dp, vertical = if (compact) 14.dp else 28.dp),
             )
-        } else {
-            Box(Modifier.fillMaxWidth().height(220.dp))
         }
         // Light or dark: the widget follows the phone, so both are worth a look.
         Row(
@@ -717,23 +767,192 @@ private fun Stage(state: StudioState, dark: Boolean, onToggleDark: () -> Unit) {
             Spacer(Modifier.width(5.dp))
             Text(if (dark) "Dark" else "Light", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
         }
-        if (state.busy) {
-            Box(
+        if (state.busy && design == null) {
+            MorphingShape(HeroShapes, TilesmithAccent, Modifier.align(Alignment.Center).size(64.dp), working = true)
+        }
+        val status = when {
+            state.busy -> state.step ?: "Working"
+            state.reading -> "Reading its data"
+            else -> null
+        }
+        AnimatedVisibility(
+            visible = status != null,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.BottomStart).padding(10.dp),
+        ) {
+            Row(
                 Modifier
-                    .matchParentSize()
-                    .background(Color.Black.copy(alpha = if (design == null) 0f else 0.45f)),
-                contentAlignment = Alignment.Center,
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .padding(start = 6.dp, end = 11.dp, top = 5.dp, bottom = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    MorphingShape(HeroShapes, TilesmithAccent, Modifier.size(64.dp), working = true)
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        if (design == null || state.lines.count { it.fromUser } <= 1) "Smithing your widget…" else "Working on it…",
-                        color = Color.White,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    )
+                MorphingShape(HeroShapes, TilesmithAccent, Modifier.size(16.dp), working = true)
+                Spacer(Modifier.width(7.dp))
+                AnimatedContent(targetState = status.orEmpty(), transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "stage_status") { s ->
+                    Text(s, fontSize = 11.5.sp, color = Color.White, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 230.dp))
                 }
+            }
+        }
+    }
+}
+
+/** What the design still needs, as one strip of chips; "Allow all" for Android's own dialogs. */
+@Composable
+private fun NeedsStrip(asks: List<TileAsk>, onAsk: (TileAsk) -> Unit, onAllowAll: (List<TileAsk>) -> Unit) {
+    val runtime = asks.filter { it.runtime }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, top = 10.dp)
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(AppIcons.Warning, null, tint = Warning, modifier = Modifier.size(14.dp))
+            Spacer(Modifier.width(5.dp))
+            Text("Needs", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Warning)
+        }
+        if (runtime.size >= 2) {
+            NeedChip(AppIcons.ShieldCheck, "Allow all ${runtime.size}", filled = true) { onAllowAll(runtime) }
+        }
+        asks.forEach { ask -> NeedChip(iconFor(ask.need), ask.title, filled = false) { onAsk(ask) } }
+        Spacer(Modifier.width(10.dp))
+    }
+}
+
+@Composable
+private fun NeedChip(icon: ImageVector, label: String, filled: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(50))
+            .background(if (filled) TilesmithAccent else Warning.copy(alpha = 0.12f))
+            .border(1.dp, if (filled) TilesmithAccent else Warning.copy(alpha = 0.4f), RoundedCornerShape(50))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 11.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, tint = if (filled) OnAccent else Warning, modifier = Modifier.size(14.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(label, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = if (filled) OnAccent else TextPrimary, maxLines = 1)
+    }
+}
+
+// ── Chat: its own scroll, newest at the bottom ──────────────────────────────
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ChatPane(state: StudioState, onSuggestion: (String) -> Unit) {
+    val list = rememberLazyListState()
+    val chips = state.suggestions.isNotEmpty() && !state.busy && state.aiReady
+    val total = (if (state.lines.isEmpty() && !state.busy) 1 else 0) + state.lines.size + (if (state.busy) 1 else 0) + (if (chips) 1 else 0)
+    // Follows the conversation: each new line, and each change of what the AI is doing.
+    LaunchedEffect(total, state.step, state.stepDetail) {
+        if (total > 0) list.animateScrollToItem(total - 1)
+    }
+    LazyColumn(
+        state = list,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        if (state.lines.isEmpty() && !state.busy) {
+            item(key = "empty") {
+                Text(
+                    "Tell it what to change: a bigger ring, your calendar instead, a carousel of videos…",
+                    fontSize = 13.sp,
+                    color = TextTertiary,
+                    lineHeight = 18.sp,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
+            }
+        }
+        items(state.lines.size, key = { "l$it" }) { i -> ChatLine(state.lines[i]) }
+        if (state.busy) {
+            item(key = "working") { WorkingLine(state.step, state.stepDetail, state.busySince) }
+        }
+        if (chips) {
+            item(key = "suggestions") {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    state.suggestions.forEach { s -> SuggestionChip(s) { onSuggestion(s) } }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChatLine(line: StudioLine) {
+    if (line.fromUser) {
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
+            line.picture?.let { p ->
+                Image(
+                    p.asImageBitmap(),
+                    contentDescription = "Attached picture",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.padding(bottom = 4.dp).size(96.dp).clip(RoundedCornerShape(14.dp)),
+                )
+            }
+            Text(
+                line.text,
+                fontSize = 14.sp,
+                color = OnAccent,
+                lineHeight = 20.sp,
+                modifier = Modifier
+                    .widthIn(max = 290.dp)
+                    .clip(RoundedCornerShape(18.dp, 18.dp, 4.dp, 18.dp))
+                    .background(TilesmithAccent)
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+            )
+        }
+    } else {
+        Row(verticalAlignment = Alignment.Top) {
+            ShapeGlyph(TileShape.COOKIE_9, if (line.error) Error else TilesmithAccent, Modifier.padding(top = 4.dp).size(22.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(
+                line.text,
+                fontSize = 14.sp,
+                color = if (line.error) Error else TextPrimary,
+                lineHeight = 20.sp,
+                modifier = Modifier
+                    .widthIn(max = 300.dp)
+                    .clip(RoundedCornerShape(4.dp, 18.dp, 18.dp, 18.dp))
+                    .background(Surface)
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+            )
+        }
+    }
+}
+
+/**
+ * The AI at work, as one line that keeps changing: a morphing shape, what it is doing now
+ * ("Adding a ring · Steps"), the heading of what it is thinking about, and how long it has
+ * taken so far.
+ */
+@Composable
+private fun WorkingLine(step: String?, detail: String?, since: Long) {
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedWhileResumed(since) {
+        while (true) {
+            now = System.currentTimeMillis()
+            delay(1_000L)
+        }
+    }
+    val seconds = ((now - since) / 1000).coerceAtLeast(0)
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.animateContentSize()) {
+        MorphingShape(HeroShapes, TilesmithAccent, Modifier.size(22.dp), working = true)
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AnimatedContent(targetState = step ?: "Working", transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "chat_step", modifier = Modifier.weight(1f, fill = false)) { s ->
+                    Text(s, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Text("  ·  ${if (seconds < 60) "${seconds}s" else "${seconds / 60}m ${seconds % 60}s"}", fontSize = 12.sp, color = TextTertiary, fontFamily = FontFamily.Monospace, maxLines = 1)
+            }
+            AnimatedVisibility(visible = !detail.isNullOrBlank()) {
+                Text(detail.orEmpty(), fontSize = 12.5.sp, color = TextSecondary, maxLines = 2, lineHeight = 17.sp, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -764,47 +983,55 @@ private fun blockTitle(b: TileBlock): String =
     b.label ?: TileSources.byKey(b.bind)?.label ?: b.text?.take(40) ?: b.type.label
 
 @Composable
-private fun BlocksList(design: TileDesign, onEdit: (Int) -> Unit) {
+private fun BlocksPane(design: TileDesign, onEdit: (Int) -> Unit) {
     Column(
         Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(Surface)
-            .border(1.dp, Border, RoundedCornerShape(16.dp)),
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
     ) {
-        design.blocks.forEachIndexed { i, b ->
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clickable { onEdit(i) }
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(Modifier.size(30.dp).clip(RoundedCornerShape(9.dp)).background(TilesmithAccent.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
-                    Icon(blockIcon(b.type), null, tint = TilesmithAccent, modifier = Modifier.size(16.dp))
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .background(Surface)
+                .border(1.dp, Border, RoundedCornerShape(18.dp)),
+        ) {
+            design.blocks.forEachIndexed { i, b ->
+                if (i > 0) HorizontalDivider(color = Border, modifier = Modifier.padding(start = 56.dp))
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { onEdit(i) }
+                        .padding(horizontal = 14.dp, vertical = 11.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.size(30.dp).clip(RoundedCornerShape(9.dp)).background(TilesmithAccent.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+                        Icon(blockIcon(b.type), null, tint = TilesmithAccent, modifier = Modifier.size(16.dp))
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(blockTitle(b), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            listOfNotNull(b.type.label, b.query?.let { "“$it”" }, b.url?.let { TilesmithStore.siteHost(it) }).joinToString(" · "),
+                            fontSize = 12.sp,
+                            color = TextSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Icon(AppIcons.ChevronRight, null, tint = TextTertiary, modifier = Modifier.size(18.dp))
                 }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(blockTitle(b), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(
-                        listOfNotNull(b.type.label, b.query?.let { "“$it”" }, b.url?.let { com.macrotracker.widget.tilesmith.TilesmithStore.siteHost(it) }).joinToString(" · "),
-                        fontSize = 12.sp,
-                        color = TextSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                Icon(AppIcons.ChevronRight, null, tint = TextTertiary, modifier = Modifier.size(18.dp))
             }
         }
+        Text(
+            "Tap a block to change how it looks, move it or remove it. For anything else, say it in the chat.",
+            fontSize = 12.sp,
+            color = TextTertiary,
+            lineHeight = 16.sp,
+            modifier = Modifier.padding(start = 4.dp, top = 10.dp),
+        )
     }
-    Text(
-        "Tap a block to change how it looks, or move or remove it. For anything else, just say it below.",
-        fontSize = 12.sp,
-        color = TextSecondary,
-        lineHeight = 16.sp,
-        modifier = Modifier.padding(start = 4.dp, top = 8.dp),
-    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -912,6 +1139,108 @@ private fun EditorTitle(text: String) {
     Text(text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary, modifier = Modifier.padding(top = 14.dp, bottom = 6.dp))
 }
 
+// ── Look: the tweaks that need no AI ────────────────────────────────────────
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun LookPane(
+    design: TileDesign,
+    dark: Boolean,
+    onSize: (TileSize) -> Unit,
+    onPalette: (TilePalette) -> Unit,
+    onSurface: (TileSurface) -> Unit,
+    onShape: (TileShape) -> Unit,
+    onRefresh: (Int) -> Unit,
+    onAi: (Boolean) -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+    ) {
+        SectionTitle("Size")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            TileSize.entries.forEach { s -> SizeChip(s, selected = design.size == s) { onSize(s) } }
+        }
+
+        SectionTitle("Colours")
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(end = 8.dp)) {
+            items(TilePalette.entries.toList()) { p ->
+                PaletteSwatch(p, selected = design.palette == p, dark = dark) { onPalette(p) }
+            }
+        }
+
+        SectionTitle("Background")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TileSurface.entries.forEach { s ->
+                SurfaceChip(s, design.palette, dark, selected = design.surface == s, modifier = Modifier.weight(1f)) { onSurface(s) }
+            }
+        }
+
+        SectionTitle("Shape")
+        val current = design.blocks.firstNotNullOfOrNull { it.shape }
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(end = 8.dp)) {
+            items(TileShape.entries.toList()) { s -> ShapeChip(s, selected = current == s) { onShape(s) } }
+        }
+
+        SectionTitle("Updates")
+        val effective = TileRules.effectiveRefreshMinutes(design)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            TileRules.REFRESH_CHOICES.forEach { m ->
+                Chip(if (m < 60) "$m min" else "${m / 60} h", selected = design.refreshMinutes == m) { onRefresh(m) }
+            }
+        }
+        Text(
+            when {
+                effective > design.refreshMinutes -> "Its data changes every $effective min at most, so it updates every $effective. Clocks, countdowns and what's playing update live."
+                else -> "Every ${if (effective < 60) "$effective min" else "${effective / 60} h"}, and when you unlock the phone. Clocks, countdowns and what's playing update live."
+            },
+            fontSize = 12.sp,
+            color = TextTertiary,
+            lineHeight = 16.sp,
+            modifier = Modifier.padding(start = 4.dp, top = 8.dp),
+        )
+
+        SectionTitle("AI")
+        val aiBlocks = design.blocks.count { it.bind == "ai.text" || it.bind == "ai.list" }
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .background(Surface)
+                .border(1.dp, Border, RoundedCornerShape(18.dp))
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(32.dp).clip(RoundedCornerShape(10.dp)).background(TilesmithAccent.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+                Icon(AppIcons.Sparkles, null, tint = TilesmithAccent, modifier = Modifier.size(17.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("AI lines on this widget", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                Text(
+                    when {
+                        aiBlocks == 0 -> "It has no AI lines. Ask in the chat to add one."
+                        design.ai -> "$aiBlocks AI block${if (aiBlocks == 1) "" else "s"} ask your AI as it updates. Only this widget; the ready-made widgets have their own switch."
+                        else -> "Off: its AI blocks stay empty. Everything else keeps updating."
+                    },
+                    fontSize = 12.sp,
+                    color = TextSecondary,
+                    lineHeight = 16.sp,
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Switch(
+                checked = design.ai,
+                onCheckedChange = onAi,
+                enabled = aiBlocks > 0,
+                colors = SwitchDefaults.colors(checkedTrackColor = TilesmithAccent, checkedThumbColor = OnAccent),
+            )
+        }
+    }
+}
+
 // ── Pieces ──────────────────────────────────────────────────────────────────
 
 @Composable
@@ -922,7 +1251,7 @@ private fun SectionTitle(text: String) {
         fontWeight = FontWeight.Bold,
         color = TextSecondary,
         letterSpacing = 0.8.sp,
-        modifier = Modifier.padding(start = 4.dp, top = 22.dp, bottom = 9.dp),
+        modifier = Modifier.padding(start = 4.dp, top = 20.dp, bottom = 9.dp),
     )
 }
 
@@ -933,7 +1262,7 @@ private fun Note(text: String) {
         fontSize = 12.sp,
         color = Warning,
         lineHeight = 16.sp,
-        modifier = Modifier.padding(start = 4.dp, top = 10.dp),
+        modifier = Modifier.padding(start = 20.dp, end = 16.dp, top = 8.dp),
     )
 }
 
@@ -955,123 +1284,6 @@ private fun iconFor(need: TileNeed): ImageVector = when (need) {
     TileNeed.CONTACTS -> AppIcons.Users
     TileNeed.PHOTOS -> AppIcons.Images
     TileNeed.BLUETOOTH -> AppIcons.Bluetooth
-}
-
-@Composable
-private fun AllowAll(count: Int, onClick: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .height(46.dp)
-            .clip(RoundedCornerShape(23.dp))
-            .background(TilesmithAccent)
-            .clickable(onClick = onClick),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(AppIcons.ShieldCheck, null, tint = OnAccent, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(8.dp))
-        Text("Allow all $count at once", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = OnAccent)
-    }
-}
-
-@Composable
-private fun AskRow(ask: TileAsk, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(16.dp)
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(Surface)
-            .border(1.dp, Border, shape)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 11.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(34.dp).clip(CircleShape).background(Warning.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
-            Icon(iconFor(ask.need), contentDescription = null, tint = Warning, modifier = Modifier.size(17.dp))
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(ask.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1)
-            Text(ask.detail, fontSize = 12.sp, color = TextSecondary, maxLines = 2, lineHeight = 16.sp)
-        }
-        Spacer(Modifier.width(10.dp))
-        Text(
-            when (ask.need) {
-                TileNeed.COMMAND, TileNeed.SITE -> "Review"
-                TileNeed.SERVER, TileNeed.GITHUB, TileNeed.DASHBOARD, TileNeed.AI, TileNeed.YOUTUBE, TileNeed.TWITCH -> "Set up"
-                TileNeed.GOOGLE -> "Connect"
-                TileNeed.NOTIFICATIONS, TileNeed.USAGE -> "Open"
-                else -> "Allow"
-            },
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
-            color = OnAccent,
-            modifier = Modifier
-                .clip(RoundedCornerShape(50))
-                .background(TilesmithAccent)
-                .padding(horizontal = 14.dp, vertical = 7.dp),
-        )
-    }
-}
-
-@Composable
-private fun Conversation(state: StudioState) {
-    var all by remember { mutableStateOf(false) }
-    val lines = if (all) state.lines else state.lines.takeLast(4)
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (!all && state.lines.size > lines.size) {
-            Text(
-                "Show ${state.lines.size - lines.size} earlier",
-                fontSize = 12.sp,
-                color = TilesmithAccent,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.clickable { all = true }.padding(4.dp),
-            )
-        }
-        lines.forEach { line ->
-            if (line.fromUser) {
-                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
-                    line.picture?.let { p ->
-                        Image(
-                            p.asImageBitmap(),
-                            contentDescription = "Attached picture",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.padding(bottom = 4.dp).size(96.dp).clip(RoundedCornerShape(14.dp)),
-                        )
-                    }
-                    Text(
-                        line.text,
-                        fontSize = 14.sp,
-                        color = OnAccent,
-                        lineHeight = 20.sp,
-                        modifier = Modifier
-                            .widthIn(max = 290.dp)
-                            .clip(RoundedCornerShape(18.dp, 18.dp, 4.dp, 18.dp))
-                            .background(TilesmithAccent)
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                    )
-                }
-            } else {
-                Row(verticalAlignment = Alignment.Top) {
-                    ShapeGlyph(TileShape.COOKIE_9, if (line.error) Error else TilesmithAccent, Modifier.padding(top = 4.dp).size(22.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        line.text,
-                        fontSize = 14.sp,
-                        color = if (line.error) Error else TextPrimary,
-                        lineHeight = 20.sp,
-                        modifier = Modifier
-                            .widthIn(max = 300.dp)
-                            .clip(RoundedCornerShape(4.dp, 18.dp, 18.dp, 18.dp))
-                            .background(Surface)
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                    )
-                }
-            }
-        }
-    }
 }
 
 @Composable
@@ -1183,14 +1395,13 @@ private fun ShapeChip(shape: TileShape, selected: Boolean, onClick: () -> Unit) 
     }
 }
 
-// ── Bottom: the composer and the one button ─────────────────────────────────
+// ── The composer: always at the bottom ──────────────────────────────────────
 
 @Composable
-private fun BottomBar(
+private fun Composer(
     state: StudioState,
-    aiProvider: AiProvider,
-    onSelectProvider: (AiProvider) -> Unit,
-    hermesViewModel: HermesViewModel,
+    aiPill: @Composable () -> Unit,
+    aiReady: Boolean,
     input: String,
     onInput: (String) -> Unit,
     onSend: () -> Unit,
@@ -1198,28 +1409,20 @@ private fun BottomBar(
     onAttach: () -> Unit,
     onClearAttachment: () -> Unit,
     onConnectAi: () -> Unit,
-    onPin: () -> Unit,
+    pictureNote: String?,
 ) {
-    // The provider is one pill; the full picker opens from it, so the composer keeps its room.
-    var picking by remember { mutableStateOf(false) }
     Column(
         Modifier
             .fillMaxWidth()
             .background(Background)
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+            .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        AnimatedVisibility(visible = picking) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                AiProviderChips(selected = aiProvider, onSelect = { onSelectProvider(it) })
-                if (aiProvider == AiProvider.HERMES) HermesModelSelector(viewModel = hermesViewModel, showStatus = true)
-            }
-        }
         state.attachment?.let { a ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box {
-                    Image(a.thumb.asImageBitmap(), contentDescription = "Picture to build from", contentScale = ContentScale.Crop, modifier = Modifier.size(56.dp).clip(RoundedCornerShape(12.dp)))
+                    Image(a.thumb.asImageBitmap(), contentDescription = "Picture to build from", contentScale = ContentScale.Crop, modifier = Modifier.size(52.dp).clip(RoundedCornerShape(12.dp)))
                     Box(
                         Modifier
                             .align(Alignment.TopEnd)
@@ -1234,53 +1437,74 @@ private fun BottomBar(
                     }
                 }
                 Spacer(Modifier.width(10.dp))
-                Text("The AI builds from this picture with your own data.", fontSize = 12.sp, color = TextSecondary, lineHeight = 16.sp)
+                Text(
+                    pictureNote ?: "It builds from this picture, with your own data.",
+                    fontSize = 12.sp,
+                    color = if (pictureNote != null) Warning else TextSecondary,
+                    lineHeight = 16.sp,
+                )
             }
         }
-        if (state.aiReady) {
-            val composerShape = RoundedCornerShape(24.dp)
-            val canSend = input.isNotBlank() && !state.busy
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(composerShape)
-                    .background(Surface)
-                    .border(1.dp, Border, composerShape)
-                    .padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                ProviderPill(aiProvider, open = picking) { picking = !picking }
-                Box(
-                    Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .clickable(enabled = !state.busy, onClick = onAttach),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(AppIcons.ImagePlus, contentDescription = "Attach a picture", tint = if (state.attachment != null) TilesmithAccent else TextSecondary, modifier = Modifier.size(19.dp))
-                }
+        val composerShape = RoundedCornerShape(26.dp)
+        val canSend = aiReady && input.isNotBlank() && !state.busy
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(composerShape)
+                .background(Surface)
+                .border(1.dp, if (state.busy) TilesmithAccent.copy(alpha = 0.5f) else Border, composerShape)
+                .padding(6.dp),
+        ) {
+            if (aiReady) {
                 BasicTextField(
                     value = input,
                     onValueChange = onInput,
                     enabled = !state.busy,
-                    modifier = Modifier.weight(1f).padding(vertical = 8.dp, horizontal = 4.dp),
-                    textStyle = TextStyle(color = TextPrimary, fontSize = 15.sp, lineHeight = 20.sp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+                    textStyle = TextStyle(color = TextPrimary, fontSize = 15.sp, lineHeight = 21.sp),
                     cursorBrush = SolidColor(TilesmithAccent),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                     keyboardActions = KeyboardActions(onSend = { if (canSend) onSend() }),
-                    maxLines = 4,
+                    maxLines = 5,
                     decorationBox = { inner ->
                         if (input.isEmpty()) {
                             Text(
-                                if (state.design == null) "Describe any widget…" else "Tell it what to change…",
+                                when {
+                                    state.busy -> state.step?.let { "$it…" } ?: "Working…"
+                                    state.design == null -> "Describe any widget…"
+                                    else -> "Tell it what to change…"
+                                },
                                 color = TextTertiary,
                                 fontSize = 15.sp,
                                 maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                         inner()
                     },
                 )
+            } else {
+                Text(
+                    "Pick an AI to describe widgets and change them by chat.",
+                    fontSize = 13.sp,
+                    color = TextSecondary,
+                    lineHeight = 18.sp,
+                    modifier = Modifier.fillMaxWidth().clickable(onClick = onConnectAi).padding(horizontal = 10.dp, vertical = 10.dp),
+                )
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                aiPill()
+                Spacer(Modifier.width(4.dp))
+                Box(
+                    Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .clickable(enabled = !state.busy && aiReady, onClick = onAttach),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(AppIcons.ImagePlus, contentDescription = "Attach a picture", tint = if (state.attachment != null) TilesmithAccent else TextSecondary, modifier = Modifier.size(19.dp))
+                }
+                Spacer(Modifier.weight(1f))
                 Box(
                     Modifier
                         .size(40.dp)
@@ -1290,86 +1514,13 @@ private fun BottomBar(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        if (state.busy) AppIcons.Pause else AppIcons.Send,
+                        if (state.busy) AppIcons.Close else AppIcons.Send,
                         contentDescription = if (state.busy) "Stop" else "Send",
                         tint = if (state.busy || canSend) OnAccent else TextSecondary,
                         modifier = Modifier.size(18.dp),
                     )
                 }
             }
-        } else {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Surface)
-                    .clickable(onClick = onConnectAi)
-                    .padding(horizontal = 14.dp, vertical = 11.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                ProviderPill(aiProvider, open = picking) { picking = !picking }
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    if (aiProvider == AiProvider.HERMES) {
-                        "Set your dashboard in Settings → Connections, and be on the tailnet."
-                    } else {
-                        "Connect ${aiProvider.displayName} in Settings → AI to describe widgets and change them by comment."
-                    },
-                    fontSize = 12.sp,
-                    color = TextSecondary,
-                    lineHeight = 16.sp,
-                    modifier = Modifier.weight(1f),
-                )
-            }
         }
-        if (state.design != null) {
-            val placed = state.placed > 0
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .height(54.dp)
-                    .clip(RoundedCornerShape(27.dp))
-                    .background(if (placed) Success.copy(alpha = 0.16f) else TilesmithAccent)
-                    .clickable(enabled = !state.pinning, onClick = onPin),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    if (placed) AppIcons.CheckCircle else AppIcons.Add,
-                    contentDescription = null,
-                    tint = if (placed) Success else OnAccent,
-                    modifier = Modifier.size(20.dp),
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    when {
-                        state.pinning -> "Confirm on the home screen…"
-                        placed -> "On your home screen · add another"
-                        else -> "Add to home screen"
-                    },
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (placed) Success else OnAccent,
-                )
-            }
-        }
-    }
-}
-
-/** The AI that builds: its logo, and a tap opens the picker above the composer. */
-@Composable
-private fun ProviderPill(provider: AiProvider, open: Boolean, onClick: () -> Unit) {
-    val brand = provider.modelLogoBrand()
-    Row(
-        Modifier
-            .clip(RoundedCornerShape(50))
-            .background(if (open) TilesmithAccent.copy(alpha = 0.16f) else SurfaceElevated)
-            .clickable(onClick = onClick)
-            .padding(start = 5.dp, end = 8.dp, top = 5.dp, bottom = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (brand != null) ModelLogo(brand, 24.dp) else Icon(AppIcons.Sparkles, null, tint = TilesmithAccent, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.width(2.dp))
-        Icon(if (open) AppIcons.ChevronDown else AppIcons.ChevronUp, contentDescription = "Pick the AI (${provider.displayName})", tint = TextSecondary, modifier = Modifier.size(14.dp))
     }
 }
