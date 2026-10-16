@@ -198,8 +198,8 @@ private val BubbleLead = spring<Float>(dampingRatio = 0.78f, stiffness = 520f)
 private val BubbleTrail = spring<Float>(dampingRatio = 0.9f, stiffness = 190f)
 
 /**
- * The selected tab's bubble: a pane of smooth frosted glass on the dotted bar. It blurs the
- * page behind the bar on its own, over an opaque base, so the bar's dots never show through
+ * The selected tab's bubble: a lighter pane of frosted glass on the bar. It blurs the page
+ * behind the bar on its own, over an opaque base, so the bar's glass doesn't double up under
  * it; a faint light hairline draws its edge and a small soft shadow lifts it off the bar.
  * While it travels it stretches between [left] and [right] and flattens a little. The ends
  * are read in the layout and draw phases only, so a move never recomposes the bar.

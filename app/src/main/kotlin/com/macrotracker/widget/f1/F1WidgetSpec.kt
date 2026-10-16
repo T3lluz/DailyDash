@@ -60,7 +60,7 @@ object F1WidgetSpec : DashWidgetSpec {
         val data = cached ?: F1WidgetSample.snapshot(now)
         val brief = when {
             cached != null -> F1WidgetStore.brief(context)
-            WidgetAi.isEnabled(context) -> F1WidgetSample.BRIEF
+            WidgetAi.isEnabled(context, key) -> F1WidgetSample.BRIEF
             else -> null
         }
         val is24h = DateFormat.is24HourFormat(context)

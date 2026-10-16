@@ -7,6 +7,16 @@
         <item name="android:windowLightStatusBar">false</item>
     </style>
 
+    <!-- A widget's settings: a sheet over the home screen, the launcher still showing behind it. -->
+    <style name="Theme.DailyDash.Sheet" parent="Theme.DailyDash">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+
     <!-- Splash theme shown during cold start before Compose is ready -->
     <style name="Theme.DailyDash.Splash" parent="Theme.DailyDash">
         <item name="android:windowBackground">@drawable/splash_background</item>

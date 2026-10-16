@@ -55,6 +55,12 @@ data class StudioState(
     /** The AI is working; [busyFor] is what it was asked. */
     val busy: Boolean = false,
     val busyFor: String? = null,
+    /** What it is doing right now ("Thinking", "Adding a ring · Steps"), and since when. */
+    val step: String? = null,
+    val stepDetail: String? = null,
+    val busySince: Long = 0L,
+    /** The preview is reading the design's sources. */
+    val reading: Boolean = false,
     val asks: List<TileAsk> = emptyList(),
     val aiReady: Boolean = false,
     /** The designs before the last changes, newest last, for Undo. */
@@ -178,9 +184,10 @@ class TilesmithViewModel @Inject constructor(
         val d = design ?: return
         valuesJob?.cancel()
         valuesJob = viewModelScope.launch(Dispatchers.IO) {
-            _state.update { if (it.design?.id == d.id) it.copy(values = TilesmithStore.values(context, d.id)) else it }
-            val v = runCatching { TileResolver.refresh(context, d, force) }.getOrNull() ?: return@launch
-            _state.update { if (it.design?.id == d.id) it.copy(values = v) else it }
+            _state.update { if (it.design?.id == d.id) it.copy(values = TilesmithStore.values(context, d.id), reading = true) else it }
+            val v = runCatching { TileResolver.refresh(context, d, force) }.getOrNull()
+            _state.update { if (it.design?.id == d.id) it.copy(values = v ?: it.values, reading = false) else it }
+            v ?: return@launch
             // Placed copies show what was just read, and keep to the design's (maybe new) pace.
             if (_state.value.placed > 0) {
                 TilesmithPin.redraw(context)
@@ -222,17 +229,24 @@ class TilesmithViewModel @Inject constructor(
         val ask = text.trim()
         if (ask.isEmpty() || _state.value.busy) return
         if (!credentials.hasCredentials()) {
-            _state.update { it.copy(aiReady = false, lines = it.lines + StudioLine(false, "Connect an AI in Settings → AI and I can build this for you.", error = true)) }
+            _state.update { it.copy(aiReady = false, lines = it.lines + StudioLine(false, "Pick an AI in Settings → AI and I can build this for you.", error = true)) }
             return
         }
         val current = _state.value.design?.takeIf { TilesmithStore.design(context, it.id) != null }
         val picture = _state.value.attachment
-        _state.update { it.copy(busy = true, busyFor = ask, suggestions = emptyList(), attachment = null, lines = it.lines + StudioLine(true, ask, picture = picture?.thumb)) }
+        _state.update {
+            it.copy(
+                busy = true, busyFor = ask, busySince = System.currentTimeMillis(), step = "Reading your sources", stepDetail = null,
+                suggestions = emptyList(), attachment = null, lines = it.lines + StudioLine(true, ask, picture = picture?.thumb),
+            )
+        }
         aiJob = viewModelScope.launch {
             val result = runCatching {
                 withContext(Dispatchers.IO) {
                     val sources = TileNeeds.sourceStates(context)
-                    TilesmithAi.draft(context, ask, sources, current, picture?.jpegBase64)
+                    TilesmithAi.draft(context, ask, sources, current, picture?.jpegBase64) { p ->
+                        _state.update { s -> if (s.busy) s.copy(step = p.step, stepDetail = p.detail) else s }
+                    }
                 }
             }
             result.onSuccess { r ->
@@ -244,13 +258,13 @@ class TilesmithViewModel @Inject constructor(
                     createdAt = current?.createdAt ?: now,
                     chat = chat,
                 )
-                _state.update { it.copy(busy = false, busyFor = null, suggestions = r.suggestions, lines = it.lines + StudioLine(false, reply)) }
+                _state.update { it.copy(busy = false, busyFor = null, step = null, stepDetail = null, suggestions = r.suggestions, lines = it.lines + StudioLine(false, reply)) }
                 show(design, undo = _state.value.undo + listOfNotNull(current))
             }.onFailure { e ->
                 if (e is kotlinx.coroutines.CancellationException) return@onFailure
                 // The picture goes back in the composer, so a retry doesn't need picking it again.
                 _state.update {
-                    it.copy(busy = false, busyFor = null, attachment = it.attachment ?: picture, lines = it.lines + StudioLine(false, e.message?.take(240) ?: "That didn't work. Try again?", error = true))
+                    it.copy(busy = false, busyFor = null, step = null, stepDetail = null, attachment = it.attachment ?: picture, lines = it.lines + StudioLine(false, e.message?.take(240) ?: "That didn't work. Try again?", error = true))
                 }
             }
         }
@@ -258,7 +272,7 @@ class TilesmithViewModel @Inject constructor(
 
     fun stop() {
         aiJob?.cancel()
-        _state.update { it.copy(busy = false, busyFor = null) }
+        _state.update { it.copy(busy = false, busyFor = null, step = null, stepDetail = null, lines = it.lines + StudioLine(false, "Stopped. Nothing changed.")) }
     }
 
     // ── Tweaks: one tap each, no AI ─────────────────────────────────────────
@@ -346,6 +360,12 @@ class TilesmithViewModel @Inject constructor(
     fun setSurface(s: TileSurface) = edit { it.copy(surface = s) }
 
     fun setRefresh(minutes: Int) = edit { it.copy(refreshMinutes = minutes) }
+
+    /** This design's AI lines on or off; its other blocks keep updating either way. */
+    fun setAi(on: Boolean) {
+        edit { it.copy(ai = on) }
+        if (on) loadValues(force = true)
+    }
 
     fun rename(name: String) = edit { it.copy(name = name.trim().take(40).ifBlank { it.name }) }
 

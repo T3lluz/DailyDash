@@ -111,7 +111,7 @@ private val PAGES = listOf(
         body = "On the AI tab, describe a meal like \"large bowl of porridge with banana\" and Clanker returns calories and protein you can portion and log. Switch to Tech support to ask Sysop about your servers.",
         tips = listOf(
             "Type a dish name to get smart add-on suggestions",
-            "Connect Claude, or add a Gemini, OpenAI or OpenRouter key, in Settings → AI",
+            "Sign in to Claude, use Cursor through your dashboard, or add a Gemini or OpenAI key, in Settings → AI",
             "Tap the sparkle on any server card to ask Sysop about it",
         ),
     ),

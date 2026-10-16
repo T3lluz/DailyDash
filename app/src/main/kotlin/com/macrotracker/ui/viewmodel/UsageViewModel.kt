@@ -12,7 +12,6 @@ import com.macrotracker.data.local.SettingsRepository
 import com.macrotracker.data.dashboard.LimitWindow
 import com.macrotracker.data.usage.ClaudeLimits
 import com.macrotracker.data.usage.ExtraUsage
-import com.macrotracker.data.usage.OpenRouterKeyUsage
 import com.macrotracker.data.usage.ProviderLimitsRepository
 import com.macrotracker.data.usage.ProviderReading
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -39,7 +38,6 @@ data class UsageUiState(
     val claudeNote: String? = null,
     val claudeConnected: Boolean = false,
     val claudeExtra: ExtraUsage? = null,
-    val openRouter: OpenRouterKeyUsage? = null,
 )
 
 /**
@@ -79,7 +77,6 @@ class UsageViewModel @Inject constructor(
             _state.value = _state.value.copy(loading = true)
             // What the providers say themselves, beside what the server counted.
             val claude = runCatching { providers.claude(fresh) }.getOrElse { ProviderReading.Failed(it.message ?: "Claude didn't answer") }
-            val router = runCatching { providers.openRouter(fresh) }.getOrNull()
             val exact = (claude as? ProviderReading.Read)?.value
             fun withProviders(base: UsageUiState) = base.copy(
                 usage = base.usage?.let { u -> if (exact != null && exact.windows.isNotEmpty()) u.copy(limits = exact.toLimitWindows()) else u },
@@ -87,7 +84,6 @@ class UsageViewModel @Inject constructor(
                 claudeNote = (claude as? ProviderReading.Failed)?.message,
                 claudeConnected = claude !is ProviderReading.NotConnected,
                 claudeExtra = exact?.extra,
-                openRouter = (router as? ProviderReading.Read)?.value,
             )
             try {
                 val u = repository.usage(fresh)

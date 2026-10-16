@@ -7,7 +7,7 @@ import com.macrotracker.data.remote.AiCredentialResolver
 import com.macrotracker.data.remote.AiProvider
 import com.macrotracker.data.remote.AnthropicModels
 import com.macrotracker.data.remote.ClaudeOAuth
-import com.macrotracker.data.remote.OpenRouterModels
+import com.macrotracker.data.remote.OpenAiModels
 import com.macrotracker.data.remote.ResolvedAiAuth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
@@ -66,12 +66,8 @@ class AiChatClient @Inject constructor(
 
     val hasApiKey: Boolean get() = credentials.hasCredentials()
 
-    /** "Claude Opus 5" / "gpt-4o-mini" — shown under the bot name in the chat header. */
-    fun modelLabel(): String = AiApiClient.modelLabel(
-        provider = provider,
-        openRouterModelId = settings.getOpenRouterModelId(),
-        anthropicModelId = settings.getAnthropicModelId(),
-    )
+    /** "Claude Opus 5.5" / "Auto" — shown under the bot name in the chat header. */
+    fun modelLabel(): String = AiApiClient.modelLabel(provider = provider, model = settings.modelFor(provider))
 
     /**
      * Streams one assistant reply.
@@ -103,8 +99,7 @@ class AiChatClient @Inject constructor(
                 try {
                     val text = AiApiClient.generate(
                         httpClient = httpClient,
-                        provider = AiProvider.GEMINI,
-                        apiKey = auth.secret,
+                        auth = auth,
                         params = AiApiClient.GenerateParams(
                             prompt = flattenForSingleShot(systemBlocks, trimmed),
                             base64Jpeg = trimmed.lastOrNull()?.imageBase64,
@@ -133,19 +128,9 @@ class AiChatClient @Inject constructor(
             }
             val request = when (selected) {
                 AiProvider.ANTHROPIC -> anthropicRequest(auth, systemBlocks, trimmed)
-                AiProvider.OPENAI -> openAiRequest(auth.secret, OPENAI_URL, OPENAI_CHAT_MODEL, systemBlocks, trimmed)
-                AiProvider.OPENROUTER -> openAiRequest(
-                    apiKey = auth.secret,
-                    url = OPENROUTER_URL,
-                    model = OpenRouterModels.resolveId(settings.getOpenRouterModelId()),
-                    systemBlocks = systemBlocks,
-                    history = trimmed,
-                    extraHeaders = mapOf(
-                        "HTTP-Referer" to "https://github.com/T3lluz/DailyDash",
-                        "X-Title" to "DailyDash",
-                    ),
-                )
+                AiProvider.OPENAI -> openAiRequest(auth.secret, OPENAI_URL, auth.model.ifBlank { OPENAI_CHAT_MODEL }, systemBlocks, trimmed)
                 AiProvider.HERMES -> hermesRequest(systemBlocks, trimmed)
+                AiProvider.CURSOR -> hermesRequest(systemBlocks, trimmed, model = AiApiClient.cursorModel(auth.model))
                 AiProvider.GEMINI -> error("handled above")
             }
             val call = streamingClient.newCall(request)
@@ -220,7 +205,7 @@ class AiChatClient @Inject constructor(
         systemBlocks: List<String>,
         history: List<ChatTurn>,
     ): Request {
-        val model = AnthropicModels.resolveId(settings.getAnthropicModelId())
+        val model = AnthropicModels.resolveId(auth.model)
         val messages = JSONArray()
         history.forEach { turn ->
             messages.put(
@@ -264,16 +249,20 @@ class AiChatClient @Inject constructor(
         return builder.build()
     }
 
-    /** Completions on the dashboard shim. Same URL Tech support's model calls already use. */
+    /**
+     * Completions on the dashboard shim. Same URL Tech support's model calls already use.
+     * [model] picks one for this call (Cursor's); null is Hermes' current model.
+     */
     private fun hermesRequest(
         systemBlocks: List<String>,
         history: List<ChatTurn>,
+        model: String? = null,
     ): Request {
         val base = settings.dashboardServerUrl.value.trim().trimEnd('/')
         if (base.isBlank()) {
             error("Set your dashboard server in Settings → Connections")
         }
-        val model = runCatching {
+        val modelId = model ?: runCatching {
             val req = Request.Builder()
                 .url(AiApiClient.dashboardPath(base, "/ai/status"))
                 .header("Cache-Control", "no-cache")
@@ -287,7 +276,7 @@ class AiChatClient @Inject constructor(
         return openAiRequest(
             apiKey = "",
             url = AiApiClient.dashboardPath(base, "/v1/chat/completions"),
-            model = model,
+            model = modelId,
             systemBlocks = systemBlocks,
             history = history,
         )
@@ -331,9 +320,14 @@ class AiChatClient @Inject constructor(
         val body = JSONObject()
             .put("model", model)
             .put("messages", messages)
-            .put("temperature", 0.6)
-            .put("max_tokens", CHAT_MAX_TOKENS)
             .put("stream", true)
+        if (url == OPENAI_URL) {
+            // OpenAI's reasoning models take no temperature and only max_completion_tokens.
+            body.put("max_completion_tokens", CHAT_MAX_TOKENS)
+            if (!OpenAiModels.isReasoning(model)) body.put("temperature", 0.6)
+        } else {
+            body.put("temperature", 0.6).put("max_tokens", CHAT_MAX_TOKENS)
+        }
 
         val builder = Request.Builder()
             .url(url)
@@ -372,8 +366,8 @@ class AiChatClient @Inject constructor(
         return when {
             AiApiClient.isApiKeyError(code, raw) -> ChatDelta.Failed(
                 when (provider) {
-                    AiProvider.ANTHROPIC -> "Claude rejected that login. Reconnect in Settings → AI."
-                    AiProvider.HERMES -> "The dashboard rejected that. Check Settings → Connections."
+                    AiProvider.ANTHROPIC -> "Claude rejected that sign-in. Sign in again in Settings → AI."
+                    AiProvider.HERMES, AiProvider.CURSOR -> "The dashboard rejected that. Check Settings → Connections."
                     else -> "${provider.displayName} rejected that API key. Check Settings → AI."
                 },
                 showSettingsCta = true,
@@ -403,8 +397,8 @@ class AiChatClient @Inject constructor(
     private fun missingCredentials(): ChatDelta.Failed = ChatDelta.Failed(
         when (provider) {
             AiProvider.ANTHROPIC ->
-                "Claude is not connected. Connect your account in Settings → AI, then try again."
-            AiProvider.HERMES ->
+                "Claude isn't signed in. Sign in with your plan in Settings → AI, then try again."
+            AiProvider.HERMES, AiProvider.CURSOR ->
                 "Set your dashboard server in Settings → Connections, then try again."
             else -> "No API key set. Add one in Settings → AI, then try again."
         },
@@ -457,7 +451,6 @@ class AiChatClient @Inject constructor(
 
         private const val OPENAI_URL = "https://api.openai.com/v1/chat/completions"
         private const val OPENAI_CHAT_MODEL = "gpt-4o-mini"
-        private const val OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
         /**
          * Below the 64k streaming default on purpose: these are phone-sized

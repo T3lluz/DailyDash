@@ -140,7 +140,7 @@ object WeatherWidgetDataProvider {
      */
     suspend fun refreshBrief(context: Context) {
         runCatching {
-            if (!WidgetAi.isEnabled(context) || !anyPlacedCopyShowsBrief(context)) return
+            if (!WidgetAi.isEnabled(context, "weather") || !anyPlacedCopyShowsBrief(context)) return
             val d = loadWeather(context)
             if (!d.hasWeatherData || d.weatherDisabled || d.hours.isEmpty()) return
             val zone = ZoneId.systemDefault()

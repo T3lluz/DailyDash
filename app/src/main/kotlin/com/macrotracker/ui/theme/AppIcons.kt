@@ -254,6 +254,7 @@ object AppIcons {
     val Coins: ImageVector by lazy { icon("Coins") { s("M13.744 17.736 a6 6 0 1 1 -7.48 -7.48"); s("M15 6 h1 v4"); s("m6.134 14.768 0.866 -0.5 2 3.464"); s("M10 8 a6 6 0 1 0 12 0 a6 6 0 1 0 -12 0") } }
     /** Lucide `repeat` */
     val Repeat: ImageVector by lazy { icon("Repeat") { s("m17 2 4 4 -4 4"); s("M3 11 v-1 a4 4 0 0 1 4 -4 h14"); s("m7 22 -4 -4 4 -4"); s("M21 13 v1 a4 4 0 0 1 -4 4 H3") } }
+    val Undo: ImageVector by lazy { icon("Undo") { s("M9 14 L4 9 l5 -5"); s("M4 9 h10.5 a5.5 5.5 0 0 1 5.5 5.5 a5.5 5.5 0 0 1 -5.5 5.5 H11") } }
     /** Lucide `calendar-plus` */
     val CalendarPlus: ImageVector by lazy { icon("CalendarPlus") { s("M16 18 h6"); s("M16 2 v3"); s("M19 15 v6"); s("M21 11.5 V5 a2 2 0 0 0 -2 -2 H5 a2 2 0 0 0 -2 2 v14 a2 2 0 0 0 2 2 h8.3"); s("M3 9 h18"); s("M8 2 v3") } }
     /** Lucide `pause` */

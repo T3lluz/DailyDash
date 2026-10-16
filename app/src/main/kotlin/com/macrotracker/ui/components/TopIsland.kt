@@ -2,11 +2,15 @@ package com.macrotracker.ui.components
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -16,19 +20,23 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -45,6 +53,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -75,65 +84,47 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.macrotracker.data.dashboard.IslandItem
-import com.macrotracker.data.island.IslandRanking
 import com.macrotracker.data.dashboard.compactIslandEnd
 import com.macrotracker.data.dashboard.islandLabel
+import com.macrotracker.data.island.IslandRanking
 import com.macrotracker.ui.theme.AppIcons
-import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Error
-import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.ServerGood
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
+import com.macrotracker.ui.theme.TextTertiary
 import com.macrotracker.ui.theme.Warning
 import com.macrotracker.ui.theme.WeatherRain
+import com.macrotracker.ui.util.LaunchedWhileResumed
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.util.rememberReducedMotion
 import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.delay
 
 /*
- * The island, on the phone: the web's line under its clock (today.js), hanging from the
- * status bar in the navbar's chrome (dotted glass, darker rim, the web's shadow).
- * The three things that matter most right now on one line (IslandRanking: what waits on
- * you in Hermes, what is on or about to start, then what suits this hour), and a "+N" for
- * the rest, which opens them as a list under the line. Nothing scrolls: when three don't
- * fit, they fold (IslandFit.kt), the detail first, then each title to its label (a word or
- * two the AI writes to fit three across, IslandShortener), then the countdowns, and only
- * then are the longest labels cut short. When they fit with room to spare, each item grows
- * by its share of the line (its title can use the room, its countdown keeps to the slot's
- * right edge), so the line always runs edge to edge instead of bunching in the middle.
- * Each icon sits on its own plain frosted disc, so the dot grid never shows through it.
- *
- * While Hermes works the island grows a second line under the first for him (the web puts
- * him first on its one line; a phone has no room for both side by side): the scanner,
- * what he is doing and a clock, then Done or Needs you when the turn ends. On its own he
- * is the island's only line.
+ * The island: a black pill hanging under the status bar on Home, Health and Settings, after
+ * iOS's Dynamic Island and Android 16's live-update chips. It shows the most relevant things
+ * side by side, as many as fit (two at most), in IslandRanking's order: what waits on you in
+ * Hermes, what is on now or about to start, then what suits this hour. Nothing turns on a
+ * timer: the line-up changes only when the ranking does (an event starts, a countdown gets
+ * close, the hour moves on), and then the words roll up while the pill springs to its new
+ * width. The rest wait at its right end as small discs; a tap there opens everything as a
+ * card under the status bar (a tap outside folds it back). While Hermes works he leads.
+ * The same clean frosted glass as the navbar (`chromeGlass`): the page shows through, blurred.
  */
 
-private val LineHeight = 44.dp
-private val IslandShape = RoundedCornerShape(LineHeight / 2)
-private val HermesLineHeight = 38.dp
+private val PillHeight = 40.dp
 private val IslandTop = 6.dp
+/** Under the discs, so overlapping ones keep their edge on the see-through glass. */
+private val DiscBase = Color(0xFF141416)
+private val CardCorner = 26.dp
+private val DiscSize = 26.dp
+private val MiniDisc = 20.dp
+private val RowHeight = 52.dp
 
-/** Room between the island's edge and what it holds, clear of the curve and the outline. */
-private val LinePad = 4.dp
-private val EntryHeight = 34.dp
-private val EntryGap = 2.dp
-private val EntryStart = 3.dp
-private val EntryEnd = 6.dp
-private val PartGap = 5.dp
-private val MarkSize = 22.dp
-private val MarkIcon = 12.dp
-private val RingSize = 13.dp
-private val TitleMax = 190.dp
-private val TitleMaxRest = 150.dp
-private val SubMax = 140.dp
-
-/** A label is never cut shorter than this to keep three on the line; one item goes behind "+N" instead. */
-private val MinLabel = 34.dp
-private val MoreRowHeight = 46.dp
+/** The island's own spring: quick, with a touch of overshoot, like the one it is after. */
+private fun <T> islandSpring() = spring<T>(dampingRatio = 0.72f, stiffness = 420f)
 
 @Composable
 fun TopIsland(
@@ -142,87 +133,85 @@ fun TopIsland(
     /** What Hermes is doing (the tracker's turn, or how the last one ended). */
     hermes: NavActivity? = null,
     onHermes: (NavActivity) -> Unit = {},
+    /** The page behind, for the frosted glass (the navbar's). */
     hazeState: HazeState?,
     onItem: (IslandItem) -> Unit,
     modifier: Modifier = Modifier,
-    /** The AI's labels by full title, so three items fit across (IslandViewModel.labels). */
+    /** The AI's short labels by full title, used when a title doesn't fit (IslandViewModel.labels). */
     labels: Map<String, String> = emptyMap(),
     /** A long press on an item: hidden for the rest of the day. */
     onHide: (IslandItem) -> Unit = {},
 ) {
-    val shown = islandLine(items, hermes)
-    val show = visible && (shown.isNotEmpty() || hermes != null)
-    // What was on the island stays on it while it, or one of its lines, folds away.
+    val line = islandLine(items, hermes)
+    val show = visible && (line.isNotEmpty() || hermes != null)
+    // What was on the island stays on it while it folds away.
     val held = remember { IslandHeld() }
-    if (show) held.frame = IslandFrame(shown, hermes)
-    if (shown.isNotEmpty()) held.items = shown
-    if (hermes != null) held.hermes = hermes
-    val frame = if (show) IslandFrame(shown, hermes) else held.frame
-    // The list behind "+N"; it folds away with the island and after a tap on one of its rows.
+    if (show) {
+        held.items = line
+        held.hermes = hermes
+    }
+    val shownItems = if (show) line else held.items
+    val shownHermes = if (show) hermes else held.hermes
+
     var expanded by remember { mutableStateOf(false) }
     LaunchedEffect(show) { if (!show) expanded = false }
 
-    BoxWithConstraints(
-        modifier = modifier
-            .fillMaxWidth()
-            .statusBarsPadding()
-            // As wide as the navbar, whatever it holds: the two pieces of chrome frame the page alike.
-            .padding(start = ChromeSideInset, end = ChromeSideInset, top = IslandTop),
-        contentAlignment = Alignment.TopCenter,
-    ) {
-        val lineWidth = maxWidth - LinePad * 2
-        AnimatedVisibility(
-            visible = show,
-            enter = fadeIn(MacroMotion.fadeTween()) +
-                scaleIn(MacroMotion.navTabSpring(), initialScale = 0.86f, transformOrigin = TransformOrigin(0.5f, 0f)) +
-                slideInVertically(MacroMotion.navTabSpring()) { -it / 3 },
-            exit = fadeOut(MacroMotion.fadeTween(150)) +
-                scaleOut(targetScale = 0.9f, transformOrigin = TransformOrigin(0.5f, 0f)) +
-                slideOutVertically { -it / 4 },
+    Box(modifier.then(if (expanded) Modifier.fillMaxSize() else Modifier.fillMaxWidth())) {
+        // Expanded: the page dims a little, and a tap anywhere outside folds the card back.
+        AnimatedVisibility(visible = expanded, enter = fadeIn(tween(180)), exit = fadeOut(tween(160))) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.32f))
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { expanded = false },
+            )
+        }
+        BoxWithConstraints(
+            Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                // As wide as the navbar at most: the two pieces of chrome frame the page alike.
+                .padding(start = ChromeSideInset - 12.dp, end = ChromeSideInset - 12.dp, top = IslandTop),
+            contentAlignment = Alignment.TopCenter,
         ) {
-            Column(
-                modifier = Modifier
-                    .chromeGlass(hazeState, IslandShape)
-                    // After the chrome, so the size animation's clip never cuts its shadow.
-                    .animateContentSize(MacroMotion.navTabSpring())
-                    .fillMaxWidth(),
+            val maxWidth = maxWidth
+            AnimatedVisibility(
+                visible = show,
+                enter = fadeIn(tween(160)) +
+                    scaleIn(islandSpring(), initialScale = 0.55f, transformOrigin = TransformOrigin(0.5f, 0f)),
+                exit = fadeOut(tween(140)) +
+                    scaleOut(tween(180), targetScale = 0.6f, transformOrigin = TransformOrigin(0.5f, 0f)),
             ) {
-                AnimatedVisibility(
-                    visible = frame.items.isNotEmpty(),
-                    enter = expandVertically(MacroMotion.navTabSpring(), expandFrom = Alignment.Top) + fadeIn(MacroMotion.fadeTween()),
-                    exit = shrinkVertically(MacroMotion.navTabSpring(), shrinkTowards = Alignment.Top) + fadeOut(MacroMotion.fadeTween(120)),
+                val corner by animateDpAsState(if (expanded) CardCorner else PillHeight / 2, islandSpring(), label = "island_corner")
+                val shape = RoundedCornerShape(corner)
+                Column(
+                    Modifier
+                        .then(if (expanded) Modifier.fillMaxWidth() else Modifier.widthIn(min = 120.dp, max = maxWidth))
+                        .chromeGlass(hazeState, shape)
+                        // After the chrome, so the size spring never cuts its shadow.
+                        .animateContentSize(islandSpring()),
                 ) {
-                    val line = rememberIslandLine(frame.items.ifEmpty { held.items }, labels, lineWidth)
-                    Column {
-                        ItemLine(
-                            line = line,
-                            expanded = expanded,
-                            hazeState = hazeState,
-                            onMore = { expanded = !expanded },
-                            onItem = onItem,
+                    if (expanded) {
+                        ExpandedCard(
+                            items = shownItems,
+                            hermes = shownHermes,
+                            onHermes = { expanded = false; onHermes(it) },
+                            onItem = { expanded = false; onItem(it) },
                             onHide = onHide,
+                            onClose = { expanded = false },
                         )
-                        AnimatedVisibility(
-                            visible = expanded && line.fit.hidden > 0,
-                            enter = expandVertically(MacroMotion.navTabSpring(), expandFrom = Alignment.Top) + fadeIn(MacroMotion.fadeTween()),
-                            exit = shrinkVertically(MacroMotion.navTabSpring(), shrinkTowards = Alignment.Top) + fadeOut(MacroMotion.fadeTween(120)),
-                        ) {
-                            MoreList(
-                                items = line.items.drop(line.fit.shown),
-                                hazeState = hazeState,
-                                onItem = { expanded = false; onItem(it) },
-                                onHide = onHide,
-                            )
-                        }
+                    } else {
+                        CompactPill(
+                            items = shownItems,
+                            hermes = shownHermes,
+                            labels = labels,
+                            maxWidth = maxWidth,
+                            onItem = onItem,
+                            onHermes = onHermes,
+                            onHide = onHide,
+                            onMore = { expanded = true },
+                        )
                     }
-                }
-                AnimatedVisibility(
-                    visible = frame.hermes != null,
-                    enter = expandVertically(MacroMotion.navTabSpring(), expandFrom = Alignment.Top) + fadeIn(MacroMotion.fadeTween()),
-                    exit = shrinkVertically(MacroMotion.navTabSpring(), shrinkTowards = Alignment.Top) + fadeOut(MacroMotion.fadeTween(120)),
-                ) {
-                    val h = frame.hermes ?: held.hermes
-                    if (h != null) HermesLine(h, alone = frame.items.isEmpty(), onClick = { onHermes(h) })
                 }
             }
         }
@@ -234,204 +223,371 @@ private fun islandLine(items: List<IslandItem>, hermes: NavActivity?): List<Isla
     if (hermes?.tone == NavActivityTone.NEEDS_YOU) items.filterNot { it.kind == "need" && it.thread == hermes.key } else items
 
 /**
- * How far down from the status bar the island reaches when it shows [items] and [hermes],
- * plus a hair of air, or nothing when it is hidden. Tab headers keep at least this much
- * room above them ([LocalIslandClearance]), the way the web's top bar pushes its page down
- * as its tab grows, so a second line never covers a screen's title.
+ * How far down from the status bar the island reaches, plus a hair of air, or nothing when it
+ * is hidden. Tab headers keep at least this much room above them ([LocalIslandClearance]).
+ * The pill is always one line; the card opens over the page.
  */
 fun islandClearance(items: List<IslandItem>, hermes: NavActivity?, visible: Boolean): Dp {
     if (!visible) return 0.dp
-    val line = islandLine(items, hermes).isNotEmpty()
-    val height = when {
-        line && hermes != null -> LineHeight + HermesLineHeight
-        line || hermes != null -> LineHeight
-        else -> return 0.dp
-    }
-    return IslandTop + height + 2.dp
+    if (islandLine(items, hermes).isEmpty() && hermes == null) return 0.dp
+    return IslandTop + PillHeight + 2.dp
 }
 
 /** [islandClearance] for the tab screens under the island; MainScreen provides it. */
 val LocalIslandClearance = compositionLocalOf { 0.dp }
 
-private class IslandFrame(val items: List<IslandItem>, val hermes: NavActivity?)
-
 /** Plain holders, read in the same composition that writes them; nothing observes them. */
 private class IslandHeld {
-    var frame = IslandFrame(emptyList(), null)
     var items: List<IslandItem> = emptyList()
     var hermes: NavActivity? = null
 }
 
+// ── The pill ────────────────────────────────────────────────────────────────
+
+/** One item on the pill, with the words it shows there. */
+@Immutable
+private data class PillEntry(val item: IslandItem, val text: String, val end: String)
+
 /**
- * The island's line worked out for one width: its items, their labels, how they fold, and
- * each shown item's own width at its fold ([natural]), which is its share of the room left over.
+ * What the pill shows: Hermes when he is at work, then as many of the top items side by side
+ * as fit ([MAX_ON_PILL] at most), each with its whole title when there is room, else its
+ * short label and a shorter countdown; the rest wait as discs.
  */
 @Immutable
-private class IslandLine(
-    val items: List<IslandItem>,
-    val labels: List<String>,
-    val ends: List<String>,
-    val fit: IslandFit,
-    val natural: List<Float>,
-)
+private data class PillPlan(val hermes: NavActivity?, val entries: List<PillEntry>, val rest: List<IslandItem>) {
+    /** Changes only when what is shown (or its order) changes, not when a countdown ticks. */
+    val key: String = (listOfNotNull(hermes?.let { "hermes" }) + entries.map { IslandRanking.key(it.item) }).joinToString("|")
+}
+
+/** At most this many items with words on the pill; two read well on a phone. */
+private const val MAX_ON_PILL = 2
+
+private val EntryGap = 10.dp
+private val Divider = 21.dp
 
 @Composable
-private fun rememberIslandLine(items: List<IslandItem>, labels: Map<String, String>, width: Dp): IslandLine {
+private fun rememberPillPlan(items: List<IslandItem>, hermes: NavActivity?, labels: Map<String, String>, maxWidth: Dp): PillPlan {
     val styles = islandTextStyles()
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    return remember(items, labels, width, styles, density) {
-        val shown = items.map { islandLabel(it, labels) }
-        val ends = items.map { compactIslandEnd(it.end) }
-        val fit = with(density) {
-            fun text(t: String, style: TextStyle, max: Dp = Dp.Infinity): Float =
-                if (t.isBlank()) 0f else minOf(measurer.measure(t, style, maxLines = 1, softWrap = false).size.width.toFloat(), max.toPx())
-            fun part(w: Float): Float = if (w > 0f) PartGap.toPx() + w else 0f
-            val ring = (RingSize + PartGap).toPx()
-            // Only the line's own items are measured: the rest go behind "+N" whatever their length.
-            val widths = items.mapIndexed { i, item ->
-                if (i >= IslandRanking.MAX_SHOWN) return@mapIndexed IslandFoldWidths(0f, 0f, 0f, 0f, 0f)
-                val titleStyle = if (item.tone == "quiet") styles.quietTitle else styles.title
-                val title = part(text(item.title, titleStyle, if (i == 0) TitleMax else TitleMaxRest))
-                val labelText = text(shown[i], titleStyle, TitleMaxRest)
-                val sub = part(text(item.sub, styles.sub, SubMax))
-                val fullEnd = part(text(item.end, styles.end))
-                val end = part(text(ends[i], styles.end))
-                val rings = if (item.ring != null) ring else 0f
-                // A few pixels of slack, so rounding never ellipsizes a word that fits.
-                val base = (EntryStart + MarkSize + EntryEnd).toPx() + 4f
-                IslandFoldWidths(
-                    detail = base + title + sub + rings + fullEnd,
-                    title = base + title + rings + end,
-                    label = base + part(labelText) + rings + end,
-                    labelBare = base + part(labelText) + rings,
-                    labelText = labelText,
-                )
+    return remember(items, hermes?.label, hermes?.tone, labels, maxWidth, styles, density) {
+        fun w(text: String, style: TextStyle): Dp =
+            if (text.isBlank()) 0.dp else with(density) { measurer.measure(text, style, maxLines = 1, softWrap = false).size.width.toDp() }
+        fun entryWidth(item: IslandItem, text: String, end: String): Dp =
+            DiscSize + EntryGap + w(text, if (item.tone == "quiet") styles.quietTitle else styles.title) +
+                (if (item.ring != null) 22.dp else 0.dp) + (if (end.isNotEmpty()) EntryGap + w(end, styles.end) else 0.dp) + 6.dp
+        val hermesWidth = hermes?.let { 22.dp + 9.dp + w("Hermes", styles.sub) + 6.dp + minOf(w(it.label, styles.title), 170.dp) + 10.dp + w("0:00", styles.end) + 8.dp } ?: 0.dp
+        val most = minOf(items.size, if (hermes != null) 1 else MAX_ON_PILL)
+        // The richest way to show the most items that fits; one item always shows, cut short if it must.
+        for (n in most downTo if (hermes != null) 0 else 1) {
+            val rest = items.drop(n)
+            val room = maxWidth - 14.dp - clusterWidth(rest.size) - hermesWidth - Divider * (n - 1 + if (hermes != null && n > 0) 1 else 0)
+            val shown = items.take(n)
+            val looks = listOf<(Int, IslandItem) -> PillEntry>(
+                { _, it -> PillEntry(it, it.title.trim(), it.end.trim()) },
+                { i, it -> if (i == 0) PillEntry(it, it.title.trim(), it.end.trim()) else PillEntry(it, islandLabel(it, labels), compactIslandEnd(it.end)) },
+                { _, it -> PillEntry(it, islandLabel(it, labels), compactIslandEnd(it.end)) },
+            )
+            for (look in looks) {
+                val entries = shown.mapIndexed(look)
+                if (entries.sumOf { e -> entryWidth(e.item, e.text, e.end).value.toDouble() }.dp <= room) return@remember PillPlan(hermes, entries, rest)
             }
-            val fitted = fitIslandLine(
-                widths = widths,
-                available = width.toPx(),
-                gap = EntryGap.toPx(),
-                minLabel = MinLabel.toPx(),
-                maxShown = IslandRanking.MAX_SHOWN,
-            ) { hidden -> (OverflowPad * 2).toPx() + text("+$hidden", styles.end) + 2f }
-            fitted to islandShares(widths, fitted)
+            if (n == 1 && hermes == null) {
+                val only = items.first()
+                return@remember PillPlan(null, listOf(PillEntry(only, islandLabel(only, labels), compactIslandEnd(only.end))), rest)
+            }
         }
-        IslandLine(items, shown, ends, fit.first, fit.second)
+        PillPlan(hermes, emptyList(), items)
+    }
+}
+
+private fun clusterWidth(count: Int): Dp = when (count) {
+    0 -> 0.dp
+    else -> 8.dp + 10.dp + MiniDisc + (MiniDisc - 7.dp) * (minOf(count, 3) - 1) + (if (count > 3) 26.dp else 0.dp)
+}
+
+@Composable
+private fun CompactPill(
+    items: List<IslandItem>,
+    hermes: NavActivity?,
+    labels: Map<String, String>,
+    maxWidth: Dp,
+    onItem: (IslandItem) -> Unit,
+    onHermes: (NavActivity) -> Unit,
+    onHide: (IslandItem) -> Unit,
+    onMore: () -> Unit,
+) {
+    val plan = rememberPillPlan(items, hermes, labels, maxWidth)
+    Row(
+        Modifier.height(PillHeight).padding(start = 7.dp, end = if (plan.rest.isEmpty()) 12.dp else 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // A new line-up rolls in (the words up, the pill springing to its new width); a ticking
+        // countdown or a renamed label just updates in place.
+        AnimatedContent(
+            targetState = plan,
+            contentKey = { it.key },
+            transitionSpec = {
+                (slideInVertically(islandSpring()) { it / 2 } + fadeIn(tween(220, delayMillis = 60)) + scaleIn(islandSpring(), initialScale = 0.92f))
+                    .togetherWith(slideOutVertically(tween(200)) { -it / 2 } + fadeOut(tween(120)) + scaleOut(tween(200), targetScale = 0.94f))
+                    .using(SizeTransform(clip = false) { _, _ -> islandSpring() })
+            },
+            label = "island_lineup",
+        ) { p ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                p.hermes?.let { h -> HermesLead(h, onClick = { onHermes(h) }) }
+                p.entries.forEachIndexed { i, e ->
+                    if (i > 0 || p.hermes != null) EntryDivider()
+                    key(IslandRanking.key(e.item)) {
+                        ItemEntry(e, onClick = { onItem(e.item) }, onLongClick = { onHide(e.item) })
+                    }
+                }
+            }
+        }
+        if (plan.rest.isNotEmpty()) {
+            Spacer(Modifier.width(8.dp))
+            Cluster(plan.rest, onClick = onMore)
+        }
     }
 }
 
 @Composable
-private fun ItemLine(
-    line: IslandLine,
-    expanded: Boolean,
-    hazeState: HazeState?,
-    onMore: () -> Unit,
+private fun EntryDivider() {
+    Box(Modifier.padding(horizontal = 10.dp).width(1.dp).height(16.dp).background(Color.White.copy(alpha = 0.14f)))
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ItemEntry(entry: PillEntry, onClick: () -> Unit, onLongClick: () -> Unit) {
+    val haptics = rememberHaptics()
+    val styles = islandTextStyles()
+    val item = entry.item
+    val tone = toneColor(item)
+    Row(
+        Modifier
+            .height(PillHeight - 8.dp)
+            .clip(CircleShape)
+            .combinedClickable(
+                role = Role.Button,
+                onLongClickLabel = "Hide for today",
+                onLongClick = { haptics.reject(); onLongClick() },
+                onClick = { haptics.tick(); onClick() },
+            )
+            .padding(end = 4.dp)
+            .semantics { contentDescription = listOf(item.title, item.sub, item.end).filter { it.isNotBlank() }.joinToString(", ") },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ToneDisc(item, tone, DiscSize)
+        Spacer(Modifier.width(EntryGap))
+        Text(
+            entry.text,
+            style = if (item.tone == "quiet") styles.quietTitle else styles.title,
+            color = titleColor(item),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = 220.dp),
+        )
+        item.ring?.let {
+            Spacer(Modifier.width(8.dp))
+            RingProgress(it)
+        }
+        if (entry.end.isNotEmpty()) {
+            Spacer(Modifier.width(EntryGap))
+            Text(entry.end, style = styles.end, color = endColor(item), maxLines = 1)
+        }
+    }
+}
+
+/** Hermes leading the pill: the scanner while he works (a mark once done), what he is on, a clock. */
+@Composable
+private fun HermesLead(activity: NavActivity, onClick: () -> Unit) {
+    val haptics = rememberHaptics()
+    val accent = activity.tone.accent()
+    Row(
+        Modifier
+            .height(PillHeight - 8.dp)
+            .clip(CircleShape)
+            .clickable(role = Role.Button, onClickLabel = "Open the chat") { haptics.tick(); onClick() }
+            .padding(start = 7.dp, end = 4.dp)
+            .semantics { contentDescription = "Hermes: ${activity.label}" },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AnimatedContent(
+            targetState = activity.tone == NavActivityTone.WORKING,
+            transitionSpec = { fadeIn() togetherWith fadeOut() },
+            label = "island_hermes_mark",
+            contentAlignment = Alignment.Center,
+        ) { working ->
+            if (working) {
+                WorkingScanner(color = accent, blockSize = 3.5.dp, gap = 1.5.dp)
+            } else {
+                Icon(activity.tone.markIcon(), contentDescription = null, tint = accent, modifier = Modifier.size(16.dp))
+            }
+        }
+        Spacer(Modifier.width(9.dp))
+        Text("Hermes", color = TextTertiary, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Spacer(Modifier.width(6.dp))
+        AnimatedContent(
+            targetState = activity.label,
+            transitionSpec = {
+                (slideInVertically { it } + fadeIn()).togetherWith(slideOutVertically { -it } + fadeOut())
+                    .using(SizeTransform(clip = false) { _, _ -> islandSpring() })
+            },
+            label = "island_hermes_label",
+            modifier = Modifier.widthIn(max = 170.dp),
+        ) { label ->
+            Text(
+                label,
+                color = if (activity.tone == NavActivityTone.NEEDS_YOU) lerp(Warning, Color.White, 0.25f) else TextPrimary,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        when {
+            activity.tone == NavActivityTone.WORKING -> ElapsedClock(activity.startedAtMs)
+            activity.tookMs != null -> Clock(formatTook(activity.tookMs))
+        }
+    }
+}
+
+/** The items waiting their turn, as overlapping discs and a count; a tap opens them all. */
+@Composable
+private fun Cluster(others: List<IslandItem>, onClick: () -> Unit) {
+    val haptics = rememberHaptics()
+    val shown = others.take(3)
+    Row(
+        Modifier
+            .height(PillHeight - 10.dp)
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.07f))
+            .clickable(role = Role.Button, onClickLabel = "Show everything") { haptics.tick(); onClick() }
+            .padding(start = 5.dp, end = if (others.size > 3) 9.dp else 5.dp)
+            .semantics { contentDescription = "${others.size} more: " + others.joinToString(", ") { it.title } },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.width(MiniDisc + (MiniDisc - 7.dp) * (shown.size - 1)).height(MiniDisc)) {
+            shown.forEachIndexed { i, item ->
+                key(IslandRanking.key(item)) {
+                    Box(
+                        Modifier
+                            .offset(x = (MiniDisc - 7.dp) * i)
+                            .size(MiniDisc)
+                            .clip(CircleShape)
+                            .background(DiscBase)
+                            .padding(1.5.dp),
+                    ) {
+                        ToneDisc(item, toneColor(item), MiniDisc - 3.dp)
+                    }
+                }
+            }
+        }
+        if (others.size > 3) {
+            Spacer(Modifier.width(5.dp))
+            Text("+${others.size - 3}", color = TextSecondary, fontSize = 11.5.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+        }
+    }
+}
+
+// ── The card ────────────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ExpandedCard(
+    items: List<IslandItem>,
+    hermes: NavActivity?,
+    onHermes: (NavActivity) -> Unit,
     onItem: (IslandItem) -> Unit,
     onHide: (IslandItem) -> Unit,
+    onClose: () -> Unit,
 ) {
     val haptics = rememberHaptics()
     val styles = islandTextStyles()
-    val fit = line.fit
-    val density = LocalDensity.current
-    val cap = fit.labelCap?.let { with(density) { it.toDp() } }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(LineHeight)
-            .padding(horizontal = LinePad),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(EntryGap, Alignment.CenterHorizontally),
-    ) {
-        line.items.take(fit.shown).forEachIndexed { i, item ->
-            // Keyed, so an entry keeps its state when the ranking moves it.
-            key(IslandRanking.key(item)) {
-                IslandEntry(
-                    item = item,
-                    fold = fit.folds[i],
-                    label = line.labels[i],
-                    end = if (fit.folds[i] == IslandFold.DETAIL) item.end else line.ends[i],
-                    labelCap = cap,
-                    styles = styles,
-                    hazeState = hazeState,
-                    onClick = { haptics.tick(); onItem(item) },
-                    onLongClick = { haptics.reject(); onHide(item) },
-                    // Each item's share of the line is its own width: spare room spreads by size.
-                    modifier = Modifier.weight(line.natural.getOrElse(i) { 1f }.coerceAtLeast(1f)),
-                )
-            }
+    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose)
+                .padding(start = 18.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("RIGHT NOW", color = TextTertiary, fontSize = 10.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.9.sp, modifier = Modifier.weight(1f))
+            Icon(AppIcons.ChevronUp, contentDescription = "Fold", tint = TextTertiary, modifier = Modifier.size(16.dp))
         }
-        if (fit.hidden > 0) {
-            val rest = line.items.drop(fit.shown)
-            Box(
-                modifier = Modifier
-                    .height(EntryHeight)
-                    .clip(CircleShape)
-                    .background(if (expanded) Color.White.copy(alpha = 0.10f) else Color.Transparent)
-                    .clickable(role = Role.Button, onClickLabel = if (expanded) "Hide the rest" else "Show the rest") {
-                        haptics.tick()
-                        onMore()
-                    }
-                    .padding(horizontal = OverflowPad)
-                    .semantics { contentDescription = "${fit.hidden} more: " + rest.joinToString(", ") { it.title } },
-                contentAlignment = Alignment.Center,
+        hermes?.let { h ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .height(RowHeight)
+                    .padding(horizontal = 6.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .clickable { haptics.tick(); onHermes(h) }
+                    .padding(horizontal = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("+${fit.hidden}", style = styles.end, color = if (expanded) TextPrimary else TextSecondary, maxLines = 1)
+                HermesLead(h, onClick = { onHermes(h) })
             }
         }
-    }
-}
-
-/** What waits behind "+N": a row each, with its whole title, detail and countdown. */
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun MoreList(items: List<IslandItem>, hazeState: HazeState?, onItem: (IslandItem) -> Unit, onHide: (IslandItem) -> Unit) {
-    val haptics = rememberHaptics()
-    val styles = islandTextStyles()
-    Column(modifier = Modifier.fillMaxWidth().padding(start = LinePad, end = LinePad, bottom = 8.dp)) {
-        items.forEach { item ->
+        items.forEachIndexed { i, item ->
             key(IslandRanking.key(item)) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(MoreRowHeight)
-                        .clip(RoundedCornerShape(MoreRowHeight / 2))
-                        .combinedClickable(
-                            role = Role.Button,
-                            onLongClickLabel = "Hide for today",
-                            onLongClick = { haptics.reject(); onHide(item) },
-                            onClick = { haptics.tick(); onItem(item) },
-                        )
-                        .padding(start = EntryStart, end = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                // Rows arrive one after another as the card opens.
+                var shown by remember { mutableStateOf(false) }
+                LaunchedEffect(Unit) {
+                    delay(30L * i)
+                    shown = true
+                }
+                AnimatedVisibility(
+                    visible = shown,
+                    enter = fadeIn(tween(200)) + expandVertically(islandSpring(), expandFrom = Alignment.Top),
+                    exit = fadeOut() + shrinkVertically(),
                 ) {
-                    ToneMark(item, toneColor(item), hazeState)
-                    Spacer(Modifier.width(10.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            item.title,
-                            style = if (item.tone == "quiet") styles.quietTitle else styles.title,
-                            color = titleColor(item),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        if (item.sub.isNotBlank()) {
-                            Text(item.sub, style = styles.sub, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(RowHeight)
+                            .padding(horizontal = 6.dp)
+                            .clip(RoundedCornerShape(18.dp))
+                            .combinedClickable(
+                                role = Role.Button,
+                                onLongClickLabel = "Hide for today",
+                                onLongClick = { haptics.reject(); onHide(item) },
+                                onClick = { haptics.tick(); onItem(item) },
+                            )
+                            .padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        ToneDisc(item, toneColor(item), 32.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                item.title,
+                                style = if (item.tone == "quiet") styles.quietTitle else styles.title,
+                                color = titleColor(item),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (item.sub.isNotBlank()) {
+                                Text(item.sub, style = styles.sub, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
                         }
-                    }
-                    item.ring?.let {
-                        Spacer(Modifier.width(8.dp))
-                        RingProgress(it)
-                    }
-                    if (item.end.isNotBlank()) {
-                        Spacer(Modifier.width(8.dp))
-                        Text(item.end, style = styles.end, color = endColor(item), maxLines = 1)
+                        item.ring?.let {
+                            Spacer(Modifier.width(8.dp))
+                            RingProgress(it)
+                        }
+                        if (item.end.isNotBlank()) {
+                            Spacer(Modifier.width(10.dp))
+                            Text(item.end, style = styles.end, color = endColor(item), maxLines = 1)
+                        }
                     }
                 }
             }
         }
     }
 }
+
+// ── Pieces ──────────────────────────────────────────────────────────────────
 
 private fun titleColor(item: IslandItem): Color = when (item.tone) {
     "needs" -> lerp(Warning, Color.White, 0.3f)
@@ -442,12 +598,7 @@ private fun titleColor(item: IslandItem): Color = when (item.tone) {
 private fun endColor(item: IslandItem): Color =
     if (item.tone == "soon" || item.tone == "needs") Warning else Color(0xFFD6D6D6)
 
-private val OverflowPad = 5.dp
-
-/** The wash over an icon's frosted disc: the island's own glass, a touch lighter so the mark reads raised. */
-private val MarkGlass = Color(0xC22E2E2E)
-
-/** The island's text styles, measured by the fit and drawn by the entries alike. */
+/** The island's text styles, measured and drawn alike. */
 @Immutable
 private data class IslandTextStyles(val title: TextStyle, val quietTitle: TextStyle, val sub: TextStyle, val end: TextStyle)
 
@@ -456,96 +607,27 @@ private fun islandTextStyles(): IslandTextStyles {
     val base = LocalTextStyle.current
     return remember(base) {
         IslandTextStyles(
-            title = base.merge(TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold)),
-            quietTitle = base.merge(TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold)),
+            title = base.merge(TextStyle(fontSize = 13.5.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.1).sp)),
+            quietTitle = base.merge(TextStyle(fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)),
             sub = base.merge(TextStyle(fontSize = 12.sp)),
-            end = base.merge(TextStyle(fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace)),
+            end = base.merge(TextStyle(fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace)),
         )
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun IslandEntry(
-    item: IslandItem,
-    fold: IslandFold,
-    label: String,
-    end: String,
-    labelCap: Dp?,
-    styles: IslandTextStyles,
-    hazeState: HazeState?,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val tone = toneColor(item)
-    Row(
-        modifier = modifier
-            .height(EntryHeight)
-            .clip(CircleShape)
-            .combinedClickable(
-                role = Role.Button,
-                onLongClickLabel = "Hide for today",
-                onLongClick = onLongClick,
-                onClick = onClick,
-            )
-            .padding(start = EntryStart, end = EntryEnd)
-            .semantics { contentDescription = listOf(item.title, item.sub, item.end).filter { it.isNotBlank() }.joinToString(", ") },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(PartGap),
-    ) {
-        ToneMark(item, tone, hazeState)
-        val labelled = fold >= IslandFold.LABEL
-        val showEnd = fold <= IslandFold.LABEL && end.isNotBlank()
-        // The words take what the slot has left, so spare room goes to them before it goes to
-        // air, and the countdown after them sits on the slot's right edge.
-        Row(
-            modifier = Modifier.weight(1f),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(PartGap),
-        ) {
-            Text(
-                if (labelled) label else item.title,
-                style = if (item.tone == "quiet") styles.quietTitle else styles.title,
-                color = titleColor(item),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = if (labelCap != null) Modifier.widthIn(max = labelCap) else Modifier.weight(1f, fill = false),
-            )
-            if (fold == IslandFold.DETAIL && item.sub.isNotBlank()) {
-                Text(
-                    item.sub,
-                    style = styles.sub,
-                    color = TextSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.widthIn(max = SubMax),
-                )
-            }
-            item.ring?.let { RingProgress(it) }
-        }
-        if (showEnd) {
-            Text(end, style = styles.end, color = endColor(item), maxLines = 1)
-        }
-    }
-}
-
 /**
- * The tinted disc with the item's icon; a live or waiting item breathes, as on the web. The
- * disc is its own plain frosted glass over an opaque base (the navbar's tab bubble does the
- * same), so the island's dot grid stops at its edge instead of showing through the tint.
+ * The tinted disc with the item's icon; a live or waiting item breathes. The pulse is read in
+ * the draw phase, so it redraws the disc each frame instead of recomposing the pill.
  */
 @Composable
-private fun ToneMark(item: IslandItem, tone: Color, hazeState: HazeState?) {
+private fun ToneDisc(item: IslandItem, tone: Color, size: Dp) {
     val pulses = (item.tone == "needs" || item.tone == "live") && !rememberReducedMotion()
-    // The State is read in the draw phase, so the pulse redraws the mark each frame instead
-    // of recomposing the island's item line for as long as something is live.
     val glow = if (pulses) {
         val t = rememberInfiniteTransition(label = "isl_pulse")
         t.animateFloat(
             initialValue = 0f,
             targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(if (item.tone == "needs") 1100 else 1200), RepeatMode.Reverse),
+            animationSpec = infiniteRepeatable(tween(if (item.tone == "needs") 1100 else 1300), RepeatMode.Reverse),
             label = "isl_pulse_a",
         )
     } else {
@@ -553,81 +635,18 @@ private fun ToneMark(item: IslandItem, tone: Color, hazeState: HazeState?) {
     }
     Box(
         modifier = Modifier
-            .size(MarkSize)
+            .size(size)
             .clip(CircleShape)
-            .frostedGlass(hazeState = hazeState, base = Background, tint = MarkGlass, blur = 16.dp)
-            .drawBehind { drawRect(tone.copy(alpha = 0.2f + 0.12f * (glow?.value ?: 0f))) },
+            // Solid, so the glass behind never muddies the tone.
+            .drawBehind { drawRect(lerp(DiscBase, tone, 0.26f + 0.16f * (glow?.value ?: 0f))) },
         contentAlignment = Alignment.Center,
     ) {
         Icon(
             islandIcon(item.icon),
             contentDescription = null,
-            tint = lerp(tone, Color.White, 0.2f),
-            modifier = Modifier.size(MarkIcon),
+            tint = lerp(tone, Color.White, 0.18f),
+            modifier = Modifier.size(size * 0.5f),
         )
-    }
-}
-
-/**
- * Hermes' line: opencode's scanner while he works (a mark once he is done), what he is on,
- * rolling to the next words as they change, and a clock on the right. The whole line opens
- * the chat.
- */
-@Composable
-private fun HermesLine(activity: NavActivity, alone: Boolean, onClick: () -> Unit) {
-    val haptics = rememberHaptics()
-    val accent = activity.tone.accent()
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(if (alone) LineHeight else HermesLineHeight)
-            .padding(start = LinePad, end = LinePad, top = if (alone) 5.dp else 0.dp, bottom = if (alone) 5.dp else 7.dp)
-            .clip(CircleShape)
-            .clickable(role = Role.Button, onClickLabel = "Open the chat") { haptics.tick(); onClick() }
-            .padding(start = 10.dp, end = 10.dp)
-            .semantics { contentDescription = "Hermes: ${activity.label}" },
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        AnimatedContent(
-            targetState = activity.tone == NavActivityTone.WORKING,
-            transitionSpec = { MacroMotion.iconSwapTransition },
-            label = "isl_hermes_mark",
-            contentAlignment = Alignment.Center,
-        ) { working ->
-            if (working) {
-                WorkingScanner(color = accent, blockSize = 3.5.dp, gap = 1.5.dp)
-            } else {
-                Icon(activity.tone.markIcon(), contentDescription = null, tint = accent, modifier = Modifier.size(15.dp))
-            }
-        }
-        Spacer(Modifier.width(9.dp))
-        Text("Hermes", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-        Spacer(Modifier.width(6.dp))
-        // Not weighted: a weighted label would count double in the island's intrinsic width.
-        AnimatedContent(
-            targetState = activity.label,
-            transitionSpec = { MacroMotion.navTabLabelSwap },
-            label = "isl_hermes_label",
-            modifier = Modifier.widthIn(max = 190.dp),
-        ) { label ->
-            Text(
-                label,
-                color = if (activity.tone == NavActivityTone.NEEDS_YOU) lerp(Warning, Color.White, 0.3f) else TextPrimary,
-                fontSize = 12.5.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        Spacer(Modifier.weight(1f).widthIn(min = 12.dp))
-        if (activity.more > 0) {
-            Clock("+${activity.more}")
-            Spacer(Modifier.width(8.dp))
-        }
-        when {
-            activity.tone == NavActivityTone.WORKING -> ElapsedClock(activity.startedAtMs)
-            activity.tookMs != null -> Clock(formatTook(activity.tookMs))
-        }
     }
 }
 
@@ -646,7 +665,7 @@ private fun ElapsedClock(startedAtMs: Long) {
 
 @Composable
 private fun Clock(text: String) {
-    Text(text, color = Color(0xFFD6D6D6), fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace, maxLines = 1)
+    Text(text, color = Color(0xFFD6D6D6), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace, maxLines = 1)
 }
 
 private fun formatTook(ms: Long): String {
@@ -664,7 +683,7 @@ private fun NavActivityTone.markIcon(): ImageVector = when (this) {
 private fun RingProgress(pct: Float) {
     Box(
         Modifier
-            .size(RingSize)
+            .size(14.dp)
             .drawBehind {
                 val w = 2.5.dp.toPx()
                 drawCircle(Color.White.copy(alpha = 0.12f), radius = (size.minDimension - w) / 2, style = Stroke(w))

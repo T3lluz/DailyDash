@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.core.content.edit
 import com.macrotracker.data.remote.AiProvider
 import com.macrotracker.data.remote.AnthropicModels
-import com.macrotracker.data.remote.OpenRouterModels
+import com.macrotracker.data.remote.AiModels
 import com.macrotracker.data.remote.TempUnit
 import com.macrotracker.data.remote.WindUnit
 import com.macrotracker.data.upcoming.DashboardCalendars
@@ -32,14 +32,6 @@ class SettingsRepository @Inject constructor(
     private val _openAiApiKey = MutableStateFlow(prefs.getString(KEY_OPENAI_API_KEY, "") ?: "")
     val openAiApiKey: StateFlow<String> = _openAiApiKey
 
-    private val _openRouterApiKey = MutableStateFlow(prefs.getString(KEY_OPENROUTER_API_KEY, "") ?: "")
-    val openRouterApiKey: StateFlow<String> = _openRouterApiKey
-
-    private val _openRouterModelId = MutableStateFlow(
-        OpenRouterModels.resolveId(prefs.getString(KEY_OPENROUTER_MODEL, null)),
-    )
-    val openRouterModelId: StateFlow<String> = _openRouterModelId
-
     private val _anthropicApiKey = MutableStateFlow(prefs.getString(KEY_ANTHROPIC_API_KEY, "") ?: "")
     val anthropicApiKey: StateFlow<String> = _anthropicApiKey
 
@@ -47,6 +39,23 @@ class SettingsRepository @Inject constructor(
         AnthropicModels.resolveId(prefs.getString(KEY_ANTHROPIC_MODEL, null)),
     )
     val anthropicModelId: StateFlow<String> = _anthropicModelId
+
+    /**
+     * The model picked for each of the other providers, by provider; blank is the
+     * provider's own default ([AiModels.defaultFor]). Claude keeps [anthropicModelId] and
+     * Hermes' model is the dashboard's (shared with the web), so neither is here.
+     */
+    private val _aiModels = MutableStateFlow(
+        listOf(AiProvider.GEMINI, AiProvider.OPENAI, AiProvider.CURSOR).associateWith { p ->
+            prefs.getString(modelKey(p), "").orEmpty()
+        },
+    )
+    val aiModels: StateFlow<Map<AiProvider, String>> = _aiModels
+
+    init {
+        // OpenRouter left in 2.0 beta 1.6; its key shouldn't outlive it on the phone.
+        if (prefs.contains("openrouter_api_key")) prefs.edit { remove("openrouter_api_key"); remove("openrouter_model") }
+    }
 
     private val _onboardingCompleted = MutableStateFlow(prefs.getBoolean(KEY_ONBOARDING_COMPLETED, false))
     val onboardingCompleted: StateFlow<Boolean> = _onboardingCompleted
@@ -182,19 +191,6 @@ class SettingsRepository @Inject constructor(
         _openAiApiKey.value = key.trim()
     }
 
-    fun saveOpenRouterApiKey(key: String) {
-        prefs.edit { putString(KEY_OPENROUTER_API_KEY, key.trim()) }
-        _openRouterApiKey.value = key.trim()
-    }
-
-    fun setOpenRouterModelId(modelId: String) {
-        val resolved = OpenRouterModels.resolveId(modelId)
-        prefs.edit { putString(KEY_OPENROUTER_MODEL, resolved) }
-        _openRouterModelId.value = resolved
-    }
-
-    fun getOpenRouterModelId(): String = _openRouterModelId.value
-
     fun saveAnthropicApiKey(key: String) {
         prefs.edit { putString(KEY_ANTHROPIC_API_KEY, key.trim()) }
         _anthropicApiKey.value = key.trim()
@@ -208,14 +204,38 @@ class SettingsRepository @Inject constructor(
 
     fun getAnthropicModelId(): String = _anthropicModelId.value
 
+    /**
+     * The model id to send to [provider]: Claude's pick, the pick for Gemini, OpenAI or
+     * Cursor (or its default), and blank for Hermes, whose model is the dashboard's.
+     */
+    fun modelFor(provider: AiProvider = getAiProvider()): String = when (provider) {
+        AiProvider.ANTHROPIC -> getAnthropicModelId()
+        AiProvider.HERMES -> ""
+        else -> _aiModels.value[provider].orEmpty().ifBlank { AiModels.defaultFor(provider) }
+    }
+
+    /** Picks [modelId] for [provider]; blank goes back to its default. */
+    fun setModel(provider: AiProvider, modelId: String) {
+        when (provider) {
+            AiProvider.ANTHROPIC -> setAnthropicModelId(modelId)
+            AiProvider.HERMES -> {}
+            else -> {
+                val id = modelId.trim()
+                prefs.edit { putString(modelKey(provider), id) }
+                _aiModels.value = _aiModels.value + (provider to id)
+            }
+        }
+    }
+
+    private fun modelKey(provider: AiProvider) = "ai_model_${provider.storageValue}"
+
     /** Saves the API key for the currently selected provider. */
     fun saveApiKeyForProvider(provider: AiProvider, key: String) {
         when (provider) {
             AiProvider.GEMINI -> saveGeminiApiKey(key)
             AiProvider.OPENAI -> saveOpenAiApiKey(key)
-            AiProvider.OPENROUTER -> saveOpenRouterApiKey(key)
             AiProvider.ANTHROPIC -> saveAnthropicApiKey(key)
-            AiProvider.HERMES -> {}
+            AiProvider.HERMES, AiProvider.CURSOR -> {}
         }
     }
 
@@ -223,17 +243,14 @@ class SettingsRepository @Inject constructor(
 
     fun getOpenAiApiKey(): String = _openAiApiKey.value
 
-    fun getOpenRouterApiKey(): String = _openRouterApiKey.value
-
     fun getAnthropicApiKey(): String = _anthropicApiKey.value
 
     fun getApiKeyForProvider(provider: AiProvider = getAiProvider()): String =
         when (provider) {
             AiProvider.GEMINI -> getGeminiApiKey()
             AiProvider.OPENAI -> getOpenAiApiKey()
-            AiProvider.OPENROUTER -> getOpenRouterApiKey()
             AiProvider.ANTHROPIC -> getAnthropicApiKey()
-            AiProvider.HERMES -> ""
+            AiProvider.HERMES, AiProvider.CURSOR -> ""
         }
 
     fun setOnboardingCompleted(completed: Boolean = true) {
@@ -388,8 +405,6 @@ class SettingsRepository @Inject constructor(
         const val KEY_AI_PROVIDER = "ai_provider"
         const val KEY_GEMINI_API_KEY = "gemini_api_key"
         const val KEY_OPENAI_API_KEY = "openai_api_key"
-        const val KEY_OPENROUTER_API_KEY = "openrouter_api_key"
-        const val KEY_OPENROUTER_MODEL = "openrouter_model"
         const val KEY_ANTHROPIC_API_KEY = "anthropic_api_key"
         const val KEY_ANTHROPIC_MODEL = "anthropic_model"
         const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"

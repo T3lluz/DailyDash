@@ -8,14 +8,17 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.logging.HttpLoggingInterceptor
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 /**
- * Shared Gemini / OpenAI / OpenRouter / Claude / Hermes HTTP helpers used by nutrition,
+ * Shared Claude / Cursor / Hermes / Gemini / OpenAI HTTP helpers used by nutrition,
  * weather, Tilesmith and widget AI features. Chat lives in [AiChatClient], which reuses
- * the Claude request builder here.
+ * the Claude request builder here. Cursor and Hermes both answer through the dashboard's
+ * OpenAI-shaped endpoint: Cursor with a `cursor:` model the dashboard runs on your plan
+ * through the Cursor CLI, Hermes with whatever model the dashboard is set to.
  * Keeps provider-specific request/response shapes in one place.
  */
 object AiApiClient {
@@ -23,15 +26,14 @@ object AiApiClient {
     private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
 
     private const val GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
-    private val GEMINI_MODELS = listOf("gemini-2.0-flash", "gemini-2.5-flash")
+
+    /** Tried after the picked Gemini model when it is gone or overloaded. */
+    private val GEMINI_FALLBACKS = listOf("gemini-2.5-flash", "gemini-2.0-flash")
 
     private const val OPENAI_URL = "https://api.openai.com/v1/chat/completions"
-    private val OPENAI_MODELS = listOf("gpt-4o-mini", "gpt-4o")
 
     /** Chat Completions' web-search models: they search before answering and take no temperature. */
     private val OPENAI_SEARCH_MODELS = listOf("gpt-4o-mini-search-preview", "gpt-4o-search-preview")
-
-    private const val OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
     const val ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
     const val ANTHROPIC_VERSION = "2023-06-01"
@@ -42,16 +44,18 @@ object AiApiClient {
         val temperature: Double = 0.2,
         val maxOutputTokens: Int = 1024,
         val jsonMode: Boolean = false,
-        /** OpenRouter model id when [AiProvider.OPENROUTER] is selected. */
-        val openRouterModelId: String? = null,
-        /** Claude model id when [AiProvider.ANTHROPIC] is selected. */
-        val anthropicModelId: String? = null,
+        /**
+         * The model to ask: a Claude, Gemini or OpenAI id, or a dashboard key such as
+         * `cursor:auto`. Blank means the provider's default; Hermes always uses the
+         * dashboard's current model.
+         */
+        val model: String? = null,
         /** True when [apiKey] is a Claude subscription OAuth access token. */
         val anthropicOAuth: Boolean = false,
         /**
          * Let the model search the web before it answers: Claude's web search tool, Gemini's
-         * Google Search grounding, OpenAI's search model, OpenRouter's web plugin. Plain text
-         * only (no [jsonMode]) on Gemini and OpenAI, which can't do both.
+         * Google Search grounding, OpenAI's search model. Plain text only (no [jsonMode]) on
+         * Gemini and OpenAI, which can't do both. Cursor and Hermes search on their own.
          */
         val webSearch: Boolean = false,
         /** Claude's `output_config.effort`; these calls are short, so `low` unless a caller needs more. */
@@ -64,44 +68,65 @@ object AiApiClient {
         val dashboardUrl: String = "",
     )
 
+    /** One call to the provider [auth] resolved, with its model, login and dashboard filled in. */
+    suspend fun generate(httpClient: OkHttpClient, auth: ResolvedAiAuth, params: GenerateParams): String =
+        generate(httpClient, auth.provider, auth.secret, params.forAuth(auth))
+
+    fun GenerateParams.forAuth(auth: ResolvedAiAuth): GenerateParams = copy(
+        model = model?.takeIf { it.isNotBlank() } ?: auth.model,
+        anthropicOAuth = auth.anthropicOAuth,
+        dashboardUrl = dashboardUrl.ifBlank { auth.dashboardUrl },
+    )
+
     suspend fun generate(
         httpClient: OkHttpClient,
         provider: AiProvider,
         apiKey: String,
         params: GenerateParams,
     ): String {
-        if (provider != AiProvider.HERMES) {
+        if (!provider.usesDashboard) {
             require(apiKey.isNotBlank()) { "API key is blank" }
         }
+        val client = longReads(httpClient)
         return when (provider) {
-            AiProvider.GEMINI -> generateGemini(httpClient, apiKey, params)
+            AiProvider.GEMINI -> generateGemini(client, apiKey, params)
             AiProvider.OPENAI -> generateOpenAiCompatible(
-                httpClient = httpClient,
+                httpClient = client,
                 apiKey = apiKey,
                 params = params,
                 url = OPENAI_URL,
-                models = if (params.webSearch) OPENAI_SEARCH_MODELS else OPENAI_MODELS,
+                models = if (params.webSearch) OPENAI_SEARCH_MODELS else openAiModels(params.model),
                 providerLabel = "OpenAI",
             )
-            AiProvider.OPENROUTER -> {
-                val selected = OpenRouterModels.resolveId(params.openRouterModelId)
-                generateOpenAiCompatible(
-                    httpClient = httpClient,
-                    apiKey = apiKey,
-                    params = params,
-                    url = OPENROUTER_URL,
-                    models = listOf(selected),
-                    providerLabel = "OpenRouter",
-                    extraHeaders = mapOf(
-                        "HTTP-Referer" to "https://github.com/T3lluz/DailyDash",
-                        "X-Title" to "DailyDash",
-                    ),
-                )
-            }
-            AiProvider.ANTHROPIC -> generateAnthropic(httpClient, apiKey, params)
-            AiProvider.HERMES -> generateHermes(httpClient, params)
+            AiProvider.ANTHROPIC -> generateAnthropic(client, apiKey, params)
+            AiProvider.HERMES -> generateDashboard(httpClient, params, model = null)
+            AiProvider.CURSOR -> generateDashboard(httpClient, params, model = cursorModel(params.model))
         }
     }
+
+    internal fun cursorModel(picked: String?): String =
+        picked?.takeIf { it.startsWith("cursor:") } ?: AiModels.defaultFor(AiProvider.CURSOR)
+
+    private fun openAiModels(picked: String?): List<String> =
+        listOf(picked?.ifBlank { null } ?: AiModels.defaultFor(AiProvider.OPENAI), "gpt-4o-mini").distinct()
+
+    /**
+     * The shared client waits 30 s between bytes; a long answer that arrives in one piece
+     * (a Tilesmith design) can take longer than that before its first byte. Debug logging at
+     * BODY level would also hold a stream back until it ends, so it is dropped here.
+     */
+    internal fun longReads(httpClient: OkHttpClient): OkHttpClient {
+        cachedLong?.let { (base, long) -> if (base === httpClient) return long }
+        val long = httpClient.newBuilder()
+            .readTimeout(LONG_READ_TIMEOUT_S, TimeUnit.SECONDS)
+            .apply { interceptors().removeAll { it is HttpLoggingInterceptor } }
+            .build()
+        cachedLong = httpClient to long
+        return long
+    }
+
+    @Volatile
+    private var cachedLong: Pair<OkHttpClient, OkHttpClient>? = null
 
     // ── Gemini ──────────────────────────────────────────────────────────────
 
@@ -125,7 +150,8 @@ object AiApiClient {
         var lastError = ""
         var lastCode = 0
 
-        for (model in GEMINI_MODELS) {
+        val models = (listOfNotNull(params.model?.ifBlank { null }) + GEMINI_FALLBACKS).distinct()
+        for (model in models) {
             // Prefer structured JSON when requested; always try unstructured as fallback.
             val structuredOptions = if (params.jsonMode && !params.webSearch) listOf(true, false) else listOf(false)
             for (structured in structuredOptions) {
@@ -230,7 +256,7 @@ object AiApiClient {
         }
     }
 
-    // ── OpenAI-compatible (OpenAI + OpenRouter) ─────────────────────────────
+    // ── OpenAI ─────────────────────────────
 
     private suspend fun generateOpenAiCompatible(
         httpClient: OkHttpClient,
@@ -276,13 +302,12 @@ object AiApiClient {
                                 .put("content", userContent),
                         ),
                     )
-                    .put("max_tokens", params.maxOutputTokens)
                 val searchModel = model.contains("-search-")
-                if (!searchModel) body.put("temperature", params.temperature)
+                val reasoning = OpenAiModels.isReasoning(model)
+                // Reasoning models spend part of the budget thinking and take only max_completion_tokens.
+                body.put("max_completion_tokens", if (reasoning) params.maxOutputTokens * 2 else params.maxOutputTokens)
+                if (!searchModel && !reasoning) body.put("temperature", params.temperature)
                 if (searchModel) body.put("web_search_options", JSONObject())
-                if (params.webSearch && providerLabel == "OpenRouter") {
-                    body.put("plugins", JSONArray().put(JSONObject().put("id", "web").put("max_results", 4)))
-                }
 
                 if (params.jsonMode && !searchModel) {
                     body.put("response_format", JSONObject().put("type", "json_object"))
@@ -437,11 +462,11 @@ object AiApiClient {
     private const val MAX_PAUSE_CONTINUATIONS = 2
 
     /**
-     * Claude's server-side web search. The dynamic-filtering version runs on Opus 5, Sonnet 5
-     * and the 4.6+ family; Haiku 4.5 keeps the basic one.
+     * Claude's server-side web search: the dynamic-filtering version on Opus and Sonnet, the
+     * basic one on Haiku and Fable ([AnthropicModels.webSearchToolType]).
      */
     fun anthropicWebSearchTool(model: String): JSONObject = JSONObject()
-        .put("type", if (model.startsWith("claude-haiku")) "web_search_20250305" else "web_search_20260209")
+        .put("type", AnthropicModels.webSearchToolType(model))
         .put("name", "web_search")
         .put("max_uses", 4)
 
@@ -460,7 +485,7 @@ object AiApiClient {
         apiKey: String,
         params: GenerateParams,
     ): String {
-        val model = AnthropicModels.resolveId(params.anthropicModelId)
+        val model = AnthropicModels.resolveId(params.model)
 
         // Claude has no `response_format: json_object`. Structured outputs exist, but
         // the callers here already run a lenient parser over the reply (the Gemini
@@ -538,7 +563,7 @@ object AiApiClient {
                 if (isApiKeyError(code, responseBody)) {
                     throw Exception(
                         if (params.anthropicOAuth) {
-                            "Claude login expired or was rejected. Reconnect in Settings → AI."
+                            "Claude's sign-in expired or was refused. Sign in again in Settings → AI."
                         } else {
                             "Claude API key is invalid or unauthorized. Check Settings → AI."
                         },
@@ -607,7 +632,7 @@ object AiApiClient {
         responseBody
     }
 
-    // ── Hermes (t3lluz dashboard shim) ──────────────────────────────────────
+    // ── Cursor and Hermes (t3lluz dashboard shim) ──────────────────────────────────────
 
     /**
      * One-shot completion through `<dashboard>/_api/v1/chat/completions`.
@@ -615,13 +640,18 @@ object AiApiClient {
      * That is the OpenAI-shaped endpoint the dashboard already exposes for Hermes'
      * own model calls. With no live chat slot it runs as a plain completion
      * (no tools, no extra thread), which is what Tilesmith and widget lines need.
+     * [model] picks a model for this call alone (Cursor's `cursor:` ids run on the Cursor
+     * plan the dashboard is signed in to); null asks for Hermes' current one. Neither
+     * changes the dashboard's model.
      */
-    private suspend fun generateHermes(
+    private suspend fun generateDashboard(
         httpClient: OkHttpClient,
         params: GenerateParams,
+        model: String?,
     ): String {
+        val who = if (model?.startsWith("cursor:") == true) "Cursor" else "Hermes"
         if (params.base64Jpeg != null) {
-            throw Exception("Hermes on the dashboard can't see photos. Pick Gemini, OpenAI, OpenRouter or Claude for scans.")
+            throw Exception("$who on the dashboard can't see photos. Pick Claude, Gemini or OpenAI for pictures.")
         }
         val base = params.dashboardUrl.trim().trimEnd('/')
         if (base.isBlank()) {
@@ -632,7 +662,7 @@ object AiApiClient {
             .readTimeout(HERMES_READ_TIMEOUT_S, TimeUnit.SECONDS)
             .build()
 
-        val model = runCatching { fetchHermesModel(client, base) }.getOrDefault("")
+        val modelId = model ?: runCatching { fetchHermesModel(client, base) }.getOrDefault("")
         val messages = JSONArray()
         if (params.jsonMode) {
             messages.put(
@@ -643,15 +673,15 @@ object AiApiClient {
         }
         messages.put(JSONObject().put("role", "user").put("content", params.prompt))
         val body = JSONObject()
-            .put("model", model)
+            .put("model", modelId)
             .put("messages", messages)
             .put("max_tokens", params.maxOutputTokens)
             .put("temperature", params.temperature)
 
-        Log.d(TAG, "→ Hermes $model | json=${params.jsonMode}")
+        Log.d(TAG, "→ $who $modelId | json=${params.jsonMode}")
         try {
             val (code, responseBody) = doPost(client, dashboardPath(base, "/v1/chat/completions"), body.toString())
-            Log.d(TAG, "← Hermes $model | $code | ${responseBody.take(200)}")
+            Log.d(TAG, "← $who $modelId | $code | ${responseBody.take(200)}")
             if (code in 200..299) {
                 val text = extractOpenAiText(responseBody)
                 if (text.isNotBlank()) return text
@@ -660,12 +690,12 @@ object AiApiClient {
                 throw Exception("The dashboard rejected that. Check Settings → Connections.")
             }
             if (code == 429 || isRateLimitError(responseBody)) {
-                throw Exception("Hermes is busy. Wait a moment and try again.")
+                throw Exception("$who is busy. Wait a moment and try again.")
             }
             val snippet = responseBody.replace(Regex("<[^>]+>"), "").take(200).trim()
             throw Exception(
-                hermesReachError(code, snippet).ifBlank {
-                    "Hermes sent nothing back. Try again, or pick another provider in Settings → AI."
+                hermesReachError(code, snippet, who).ifBlank {
+                    "$who sent nothing back. Try again, or pick another AI in Settings → AI."
                 },
             )
         } catch (e: Exception) {
@@ -673,13 +703,14 @@ object AiApiClient {
             if (e is kotlinx.coroutines.CancellationException) throw e
             val msg = e.message.orEmpty()
             if (msg.startsWith("Hermes") ||
+                msg.startsWith("Cursor") ||
                 msg.startsWith("The dashboard") ||
                 msg.startsWith("Set your dashboard") ||
                 msg.contains("truncated")
             ) {
                 throw e
             }
-            throw Exception(hermesReachError(0, msg).ifBlank { msg }, e)
+            throw Exception(hermesReachError(0, msg, who).ifBlank { msg }, e)
         }
     }
 
@@ -713,7 +744,7 @@ object AiApiClient {
         return root.optJSONObject("hermes")?.optString("model").orEmpty()
     }
 
-    private fun hermesReachError(code: Int, snippet: String): String {
+    private fun hermesReachError(code: Int, snippet: String, who: String = "Hermes"): String {
         val lower = snippet.lowercase()
         val offline = lower.contains("failed to connect") ||
             lower.contains("unable to resolve") ||
@@ -723,11 +754,180 @@ object AiApiClient {
             lower.contains("network is unreachable")
         return when {
             offline || code == 0 ->
-                "Couldn't reach Hermes. Are you on the tailnet? Check Settings → Connections."
-            snippet.isNotBlank() -> "Hermes request failed ($code): $snippet"
-            code > 0 -> "Hermes request failed ($code)."
+                "Couldn't reach $who on the dashboard. Are you on the tailnet? Check Settings → Connections."
+            snippet.isNotBlank() -> "$who request failed ($code): $snippet"
+            code > 0 -> "$who request failed ($code)."
             else -> ""
         }
+    }
+
+    // ── Streaming (Tilesmith's live line) ───────────────────────────────────
+
+    /** A piece of a streamed answer: the model's (summarized) thinking, or its words. */
+    sealed interface StreamEvent {
+        data class Thinking(val text: String) : StreamEvent
+        data class Text(val text: String) : StreamEvent
+    }
+
+    private class StreamRejected(val code: Int) : Exception("HTTP $code")
+
+    /**
+     * [generate], streamed: [onEvent] sees the thinking and the answer as they arrive, and
+     * the whole answer comes back. Claude (with its thinking summarized), OpenAI, Cursor and
+     * Hermes stream over SSE; Gemini and web searches make one [generate] call and hand the
+     * answer over in one piece. A stream that fails before its first word is retried as a
+     * plain [generate], which has the retries and the friendly errors.
+     */
+    suspend fun stream(
+        httpClient: OkHttpClient,
+        auth: ResolvedAiAuth,
+        params: GenerateParams,
+        onEvent: (StreamEvent) -> Unit,
+    ): String {
+        val p = params.forAuth(auth)
+        val provider = auth.provider
+        if (!provider.usesDashboard) require(auth.secret.isNotBlank()) { "API key is blank" }
+        if (provider == AiProvider.GEMINI || p.webSearch) {
+            return generate(httpClient, provider, auth.secret, p).also { onEvent(StreamEvent.Text(it)) }
+        }
+        val client = longReads(httpClient)
+        val out = StringBuilder()
+        var stop = ""
+        val result = runCatching {
+            withContext(Dispatchers.IO) {
+                val request = when (provider) {
+                    AiProvider.ANTHROPIC -> anthropicStreamRequest(auth.secret, p)
+                    AiProvider.OPENAI -> openAiStreamRequest(auth.secret, p)
+                    AiProvider.HERMES -> dashboardStreamRequest(client, p, null)
+                    AiProvider.CURSOR -> dashboardStreamRequest(client, p, cursorModel(p.model))
+                    AiProvider.GEMINI -> error("not streamed")
+                }
+                val call = client.newCall(request)
+                val handle = coroutineContext[kotlinx.coroutines.Job]?.invokeOnCompletion { call.cancel() }
+                try {
+                    call.execute().use { response ->
+                        val body = response.body
+                        if (!response.isSuccessful || body == null) throw StreamRejected(response.code)
+                        val source = body.source()
+                        while (true) {
+                            val line = source.readUtf8Line() ?: break
+                            if (!line.startsWith("data:")) continue
+                            val payload = line.removePrefix("data:").trim()
+                            if (payload == "[DONE]") break
+                            if (payload.isEmpty()) continue
+                            val event = runCatching { JSONObject(payload) }.getOrNull() ?: continue
+                            event.optJSONObject("error")?.let { err ->
+                                throw Exception(err.optString("message").ifBlank { "The AI stopped unexpectedly." })
+                            }
+                            if (provider == AiProvider.ANTHROPIC) {
+                                when (event.optString("type")) {
+                                    "content_block_delta" -> {
+                                        val d = event.optJSONObject("delta") ?: continue
+                                        when (d.optString("type")) {
+                                            "text_delta" -> d.optString("text").takeIf { it.isNotEmpty() }?.let { out.append(it); onEvent(StreamEvent.Text(it)) }
+                                            "thinking_delta" -> d.optString("thinking").takeIf { it.isNotEmpty() }?.let { onEvent(StreamEvent.Thinking(it)) }
+                                        }
+                                    }
+                                    "message_delta" -> event.optJSONObject("delta")?.optString("stop_reason")?.takeIf { it.isNotBlank() }?.let { stop = it }
+                                }
+                            } else {
+                                val choice = event.optJSONArray("choices")?.optJSONObject(0) ?: continue
+                                val d = choice.optJSONObject("delta")
+                                d?.optString("content")?.takeIf { it.isNotEmpty() && it != "null" }?.let { out.append(it); onEvent(StreamEvent.Text(it)) }
+                                (d?.optString("reasoning_content")?.takeIf { it.isNotEmpty() && it != "null" }
+                                    ?: d?.optString("reasoning")?.takeIf { it.isNotEmpty() && it != "null" })
+                                    ?.let { onEvent(StreamEvent.Thinking(it)) }
+                                choice.optString("finish_reason").takeIf { it.isNotBlank() && it != "null" }?.let { stop = it }
+                            }
+                        }
+                    }
+                } finally {
+                    handle?.dispose()
+                }
+            }
+        }
+        result.exceptionOrNull()?.let { e ->
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            // Nothing arrived: one plain call, with its retries and its own wording of the error.
+            if (out.isEmpty()) return generate(httpClient, provider, auth.secret, p).also { onEvent(StreamEvent.Text(it)) }
+            throw e
+        }
+        if (stop == "max_tokens" || stop == "length") throw Exception("AI response was truncated. Try a shorter description.")
+        if (stop == "refusal") throw Exception("The AI declined that one. Try saying it another way.")
+        if (out.isBlank()) return generate(httpClient, provider, auth.secret, p).also { onEvent(StreamEvent.Text(it)) }
+        return out.toString().trim()
+    }
+
+    private fun sseRequest(url: String, body: JSONObject, headers: Map<String, String>): Request {
+        val b = Request.Builder()
+            .url(url)
+            .post(body.toString().toRequestBody(JSON_MEDIA))
+            .header("Content-Type", "application/json")
+            .header("Accept", "text/event-stream")
+        headers.forEach { (k, v) -> b.header(k, v) }
+        return b.build()
+    }
+
+    private fun anthropicStreamRequest(apiKey: String, p: GenerateParams): Request {
+        val model = AnthropicModels.resolveId(p.model)
+        val system = buildList {
+            if (p.jsonMode) add("Reply with a single raw JSON object and nothing else. No prose, no markdown fences.")
+        }.let { if (p.anthropicOAuth) ClaudeOAuth.prependRequiredSystem(it) else it }
+        val messages = JSONArray().put(JSONObject().put("role", "user").put("content", anthropicUserContent(p.prompt, p.base64Jpeg)))
+        val body = buildAnthropicBody(
+            model = model,
+            systemBlocks = system,
+            messages = messages,
+            // Thinking shares the budget; a stream can't time out, so give it room.
+            maxTokens = p.maxOutputTokens * 2,
+            temperature = p.temperature,
+            effort = p.effort,
+            stream = true,
+        )
+        // The summary is what the studio's live line shows while Claude works.
+        if (AnthropicModels.acceptsAdaptiveThinking(model)) {
+            body.put("thinking", JSONObject().put("type", "adaptive").put("display", "summarized"))
+        }
+        return sseRequest(ANTHROPIC_URL, body, anthropicHeaders(apiKey, oauth = p.anthropicOAuth))
+    }
+
+    private fun openAiStreamRequest(apiKey: String, p: GenerateParams): Request {
+        val model = openAiModels(p.model).first()
+        val reasoning = OpenAiModels.isReasoning(model)
+        val content: Any = if (p.base64Jpeg != null) {
+            JSONArray()
+                .put(JSONObject().put("type", "text").put("text", p.prompt))
+                .put(JSONObject().put("type", "image_url").put("image_url", JSONObject().put("url", "data:image/jpeg;base64,${p.base64Jpeg}")))
+        } else {
+            p.prompt
+        }
+        val body = JSONObject()
+            .put("model", model)
+            .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", content)))
+            .put("max_completion_tokens", if (reasoning) p.maxOutputTokens * 2 else p.maxOutputTokens)
+            .put("stream", true)
+        if (!reasoning) body.put("temperature", p.temperature)
+        if (p.jsonMode) body.put("response_format", JSONObject().put("type", "json_object"))
+        return sseRequest(OPENAI_URL, body, mapOf("Authorization" to "Bearer $apiKey"))
+    }
+
+    private suspend fun dashboardStreamRequest(httpClient: OkHttpClient, p: GenerateParams, model: String?): Request {
+        if (p.base64Jpeg != null) throw Exception("The dashboard's AI can't see photos. Pick Claude, Gemini or OpenAI for pictures.")
+        val base = p.dashboardUrl.trim().trimEnd('/')
+        if (base.isBlank()) throw Exception("Set your dashboard server in Settings → Connections.")
+        val modelId = model ?: runCatching { fetchHermesModel(httpClient, base) }.getOrDefault("")
+        val messages = JSONArray()
+        if (p.jsonMode) {
+            messages.put(JSONObject().put("role", "system").put("content", "Reply with a single raw JSON object and nothing else. No prose, no markdown fences."))
+        }
+        messages.put(JSONObject().put("role", "user").put("content", p.prompt))
+        val body = JSONObject()
+            .put("model", modelId)
+            .put("messages", messages)
+            .put("max_tokens", p.maxOutputTokens)
+            .put("temperature", p.temperature)
+            .put("stream", true)
+        return sseRequest(dashboardPath(base, "/v1/chat/completions"), body, emptyMap())
     }
 
     // ── Shared HTTP / errors ────────────────────────────────────────────────
@@ -775,8 +975,7 @@ object AiApiClient {
             lower.contains("invalid_api_key") ||
             lower.contains("incorrect api key") ||
             lower.contains("invalid x-api-key") ||
-            lower.contains("authentication_error") ||
-            lower.contains("user not found") // OpenRouter missing/invalid key
+            lower.contains("authentication_error")
     }
 
     fun isRateLimitError(body: String): Boolean {
@@ -792,54 +991,43 @@ object AiApiClient {
 
     fun modelLabel(
         provider: AiProvider,
-        openRouterModelId: String? = null,
-        anthropicModelId: String? = null,
+        model: String? = null,
         hermesModelId: String? = null,
     ): String = when (provider) {
-        AiProvider.GEMINI -> "gemini-2.0-flash"
-        AiProvider.OPENAI -> "gpt-4o-mini"
-        AiProvider.OPENROUTER -> OpenRouterModels.find(openRouterModelId).displayName
-        AiProvider.ANTHROPIC -> AnthropicModels.find(anthropicModelId).displayName
+        AiProvider.ANTHROPIC -> AnthropicModels.find(model).displayName
         AiProvider.HERMES -> hermesModelId?.substringAfter(':')?.replace('-', ' ')
             ?.replace('@', ' ')?.ifBlank { null } ?: "Hermes"
+        else -> AiModels.label(null, provider, model?.ifBlank { null } ?: AiModels.defaultFor(provider))
     }
 
-    fun keyHint(provider: AiProvider): String = when (provider) {
-        AiProvider.GEMINI ->
-            "Get a free key at aistudio.google.com. Uses gemini-2.0-flash (free tier)."
-        AiProvider.OPENAI ->
-            "Get a key at platform.openai.com. Uses gpt-4o-mini."
-        AiProvider.OPENROUTER ->
-            "Get a key at openrouter.ai/keys. Pick a cheap model below — costs are per 1M tokens."
-        AiProvider.ANTHROPIC ->
-            "Connect a Claude Pro, Max, Team, or Enterprise account to use your subscription. " +
-                "An API key from console.anthropic.com still works if you prefer to pay per token."
-        AiProvider.HERMES ->
-            "Uses the AI already running on your dashboard (t3lluz). Same model as Tech support. " +
-                "No key on the phone. You need to be on the tailnet. Photos still need Gemini, OpenAI or Claude."
+    /** Where to get a key, for the key field. */
+    fun keyUrl(provider: AiProvider): String? = when (provider) {
+        AiProvider.GEMINI -> "https://aistudio.google.com/apikey"
+        AiProvider.OPENAI -> "https://platform.openai.com/api-keys"
+        AiProvider.ANTHROPIC -> "https://console.anthropic.com/settings/keys"
+        else -> null
     }
 
     fun keyPlaceholder(provider: AiProvider): String = when (provider) {
-        AiProvider.GEMINI -> "Paste your Gemini API key here"
-        AiProvider.OPENAI -> "Paste your OpenAI API key here"
-        AiProvider.OPENROUTER -> "Paste your OpenRouter API key here"
-        AiProvider.ANTHROPIC -> "Optional — paste an Anthropic API key (sk-ant-…)"
-        AiProvider.HERMES -> ""
+        AiProvider.GEMINI -> "AIza…"
+        AiProvider.OPENAI -> "sk-…"
+        AiProvider.ANTHROPIC -> "sk-ant-…"
+        AiProvider.HERMES, AiProvider.CURSOR -> ""
     }
 
     /** Soft format check for the settings field (warning only). */
     fun looksLikeValidKey(provider: AiProvider, key: String): Boolean {
-        if (key.isBlank() || provider == AiProvider.HERMES) return true
+        if (key.isBlank() || provider.usesDashboard) return true
         val trimmed = key.trim()
         return when (provider) {
             AiProvider.GEMINI -> trimmed.startsWith("AIza")
-            AiProvider.OPENAI -> trimmed.startsWith("sk-") && !trimmed.startsWith("sk-or-")
-            AiProvider.OPENROUTER -> trimmed.startsWith("sk-or-")
+            AiProvider.OPENAI -> trimmed.startsWith("sk-") && !trimmed.startsWith("sk-ant-")
             AiProvider.ANTHROPIC -> trimmed.startsWith("sk-ant-")
-            AiProvider.HERMES -> true
+            AiProvider.HERMES, AiProvider.CURSOR -> true
         }
     }
 
     private const val HERMES_CONNECT_TIMEOUT_S = 8L
-    private const val HERMES_READ_TIMEOUT_S = 120L
+    private const val HERMES_READ_TIMEOUT_S = 180L
+    private const val LONG_READ_TIMEOUT_S = 180L
 }

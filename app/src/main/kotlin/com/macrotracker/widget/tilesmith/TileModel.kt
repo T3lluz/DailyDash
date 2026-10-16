@@ -234,6 +234,11 @@ data class TileDesign(
     val updatedAt: Long = createdAt,
     /** The conversation that made it, newest last, so a later comment can pick it up. */
     val chat: List<TileChatTurn> = emptyList(),
+    /**
+     * Its AI blocks (`ai.text`, `ai.list`) ask the AI on each refresh. Each design has its
+     * own switch, apart from the ready-made widgets' AI lines in Settings → Widgets.
+     */
+    val ai: Boolean = true,
 ) {
     val blocks: List<TileBlock> get() = rows.flatMap { it.cells }
 
@@ -356,6 +361,7 @@ object TileCodec {
         put("surface", d.surface.id)
         put("refresh", d.refreshMinutes)
         d.tap?.let { put("tap", it) }
+        if (!d.ai) put("ai", false)
         put("rows", JSONArray().apply { d.rows.forEach { put(rowJson(it)) } })
         put("createdAt", d.createdAt)
         put("updatedAt", d.updatedAt)
@@ -437,6 +443,7 @@ object TileCodec {
                 createdAt = o.optLong("createdAt", base?.createdAt ?: now),
                 updatedAt = o.optLong("updatedAt", now),
                 chat = chat,
+                ai = if (o.has("ai")) o.optBoolean("ai", true) else base?.ai ?: true,
             ),
         )
     }

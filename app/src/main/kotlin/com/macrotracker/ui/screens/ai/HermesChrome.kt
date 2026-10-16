@@ -79,7 +79,7 @@ import com.macrotracker.data.hermes.HermesThreadSummary
 import com.macrotracker.data.hermes.HermesTurnActivity
 import com.macrotracker.ui.components.LivePulseDot
 import com.macrotracker.ui.components.LoadingSpinner
-import com.macrotracker.ui.components.dottedGlass
+import com.macrotracker.ui.components.glass
 import com.macrotracker.ui.screens.tilesmith.TilesmithAccent
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Background
@@ -375,7 +375,7 @@ internal fun HermesThreadRail(
 }
 
 @Composable
-private fun RailHeading(label: String) {
+internal fun RailHeading(label: String) {
     Text(
         label.uppercase(),
         color = TextTertiary,
@@ -502,7 +502,7 @@ private fun ThreadRow(
 }
 
 @Composable
-private fun SearchBox(value: String, onValueChange: (String) -> Unit, hint: String, modifier: Modifier = Modifier) {
+internal fun SearchBox(value: String, onValueChange: (String) -> Unit, hint: String, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -590,7 +590,7 @@ internal fun HermesComposer(
             .padding(horizontal = 12.dp)
             .padding(top = 6.dp, bottom = bottomPad)
             .clip(ComposerShape)
-            .dottedGlass(hazeState = hazeState, shape = ComposerShape)
+            .glass(hazeState = hazeState)
             .border(1.dp, GlassHairline, ComposerShape)
             .padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
     ) {

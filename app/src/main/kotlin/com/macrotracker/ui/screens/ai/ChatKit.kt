@@ -57,7 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.macrotracker.ui.components.MarkdownText
 import com.macrotracker.ui.components.TypingDots
-import com.macrotracker.ui.components.dottedGlass
+import com.macrotracker.ui.components.glass
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.GlassHairline
@@ -531,7 +531,7 @@ fun ChatComposer(
             .padding(horizontal = 12.dp)
             .padding(top = 6.dp, bottom = bottomPad)
             .clip(ComposerShape)
-            .dottedGlass(hazeState = hazeState, shape = ComposerShape)
+            .glass(hazeState = hazeState)
             .border(1.dp, GlassHairline, ComposerShape)
             .padding(start = 4.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.Bottom,

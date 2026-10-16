@@ -210,7 +210,10 @@ fun DailyDashNavHost(
         }
 
         subScreen(SettingsRoutes.AI) { entry ->
-            AiSettingsScreen(onNavigateBack = { navController.popSubScreen(entry) })
+            AiSettingsScreen(
+                onNavigateBack = { navController.popSubScreen(entry) },
+                onOpenRoute = { navController.navigateToSubScreen(it) },
+            )
         }
 
         subScreen(SettingsRoutes.PERMISSIONS) { entry ->

@@ -64,17 +64,12 @@ class IslandShortener @Inject constructor(
                     require(!auth.isBlank) { "no AI credentials" }
                     AiApiClient.generate(
                         httpClient = httpClient,
-                        provider = provider,
-                        apiKey = auth.secret,
+                        auth = auth,
                         params = AiApiClient.GenerateParams(
                             prompt = labelPrompt(wanted),
                             temperature = 0.1,
                             maxOutputTokens = 300,
                             jsonMode = true,
-                            openRouterModelId = settings.getOpenRouterModelId(),
-                            anthropicModelId = settings.getAnthropicModelId(),
-                            anthropicOAuth = auth.anthropicOAuth,
-                            dashboardUrl = settings.dashboardServerUrl.value,
                         ),
                     )
                 }

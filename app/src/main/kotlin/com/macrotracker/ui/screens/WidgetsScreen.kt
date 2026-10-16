@@ -107,7 +107,7 @@ fun WidgetsScreen(
         placedCounts = specs.associate { it.key to WidgetStateProvider.countInstalled(context, it) }
     }
 
-    var aiEnabled by remember { mutableStateOf(WidgetAi.isEnabled(context)) }
+    val aiEnabled = remember { mutableStateMapOf<String, Boolean>().apply { WidgetAi.WIDGETS.forEach { put(it, WidgetAi.isEnabled(context, it)) } } }
     val aiAvailable = remember { WidgetAi.isAvailable(context) }
 
     // Covers widgets added/removed through the launcher picker while backgrounded;
@@ -196,13 +196,14 @@ fun WidgetsScreen(
                 letterSpacing = 0.8.sp,
                 modifier = Modifier.padding(start = 4.dp, top = 8.dp),
             )
-            AiBriefsCard(
+            AiLinesCard(
+                specs = specs.filter { it.key in WidgetAi.WIDGETS },
                 enabled = aiEnabled,
                 available = aiAvailable,
-                onToggle = { on ->
+                onToggle = { key, on ->
                     if (on) haptics.toggleOn() else haptics.toggleOff()
-                    aiEnabled = on
-                    WidgetAi.setEnabled(context, on)
+                    aiEnabled[key] = on
+                    WidgetAi.setEnabled(context, key, on)
                     WidgetRefreshWorker.enqueueImmediateRefresh(context)
                 },
             )
@@ -252,36 +253,41 @@ private fun SwapHint() {
 
 /** The one switch for every widget's AI line: they use the provider picked in Settings → AI. */
 @Composable
-private fun AiBriefsCard(enabled: Boolean, available: Boolean, onToggle: (Boolean) -> Unit) {
+private fun AiLinesCard(
+    specs: List<DashWidgetSpec>,
+    enabled: Map<String, Boolean>,
+    available: Boolean,
+    onToggle: (String, Boolean) -> Unit,
+) {
     MacroCard {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Icon(
-                imageVector = AppIcons.Sparkles,
-                contentDescription = null,
-                tint = TextSecondary,
-                modifier = Modifier.size(22.dp),
-            )
+            Icon(AppIcons.Sparkles, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(22.dp))
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "AI briefs on widgets",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = TextPrimary,
-                )
+                Text("AI lines", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
                 Text(
                     text = if (available) {
-                        "A line on each widget from your AI provider. Written only when the data changes, a few times a day at most."
+                        "A short line from your AI on the bigger sizes, one switch per widget. Tilesmith widgets have their own, in the studio."
                     } else {
-                        "Set up an AI provider in Settings → AI to get a short brief on each widget."
+                        "Pick an AI in Settings → AI for a short line on each widget."
                     },
                     fontSize = 12.sp,
                     color = TextSecondary,
                     lineHeight = 16.sp,
                 )
             }
-            Spacer(modifier = Modifier.width(8.dp))
-            Switch(checked = enabled, onCheckedChange = onToggle)
+        }
+        Spacer(Modifier.height(6.dp))
+        specs.forEach { spec ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().padding(start = 34.dp, top = 2.dp),
+            ) {
+                Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(spec.accent))
+                Spacer(Modifier.width(10.dp))
+                Text(spec.title, fontSize = 13.5.sp, color = TextPrimary, modifier = Modifier.weight(1f))
+                Switch(checked = enabled[spec.key] == true, enabled = available, onCheckedChange = { onToggle(spec.key, it) })
+            }
         }
     }
 }

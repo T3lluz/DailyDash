@@ -36,15 +36,31 @@ object TilesmithAi {
     /** What each source's availability looks like to the model; [extra] is a hint on how to use it now. */
     data class SourceState(val key: String, val ready: Boolean, val missing: String? = null, val extra: String? = null)
 
-    private const val TIMEOUT_MS = 150_000L
+    /**
+     * The studio's live line while the AI works: what it is doing ([step]) and, while it
+     * thinks, the heading of what it is thinking about ([detail]).
+     */
+    data class Progress(val step: String, val detail: String? = null)
+
+    /** A streamed answer never sits silent, so it may run longer than one that arrives whole. */
+    private const val TIMEOUT_MS = 240_000L
 
     /**
      * Drafts or revises a design. [image] is a base64 JPEG the person attached: a widget they
      * like, a screenshot, a sketch.
      */
-    suspend fun draft(context: Context, prompt: String, sources: List<SourceState>, previous: TileDesign? = null, image: String? = null): Result {
+    suspend fun draft(
+        context: Context,
+        prompt: String,
+        sources: List<SourceState>,
+        previous: TileDesign? = null,
+        image: String? = null,
+        onProgress: (Progress) -> Unit = {},
+    ): Result {
         val ask = buildPrompt(prompt, previous, sources, hasImage = image != null)
-        val raw = call(context, ask, image)
+        onProgress(Progress(if (image != null) "Looking at your picture" else if (previous == null) "Reading what you asked" else "Reading your widget"))
+        val raw = call(context, ask, image, onProgress)
+        onProgress(Progress("Checking the design"))
         val first = runCatching { parse(raw, previous) }.onFailure { if (it is CancellationException) throw it }
         val got = first.getOrNull()
         val problems = when {
@@ -54,7 +70,8 @@ object TilesmithAi {
         }
         if (problems.isEmpty()) return got!!
         // One more go with what was wrong; the better of the two answers wins.
-        val again = runCatching { parse(call(context, repairPrompt(ask, raw, problems), image), previous) }
+        onProgress(Progress("Fixing a mistake", problems.first().take(60)))
+        val again = runCatching { parse(call(context, repairPrompt(ask, raw, problems), image, onProgress), previous) }
             .onFailure { if (it is CancellationException) throw it }
             .getOrNull()
         return when {
@@ -64,33 +81,56 @@ object TilesmithAi {
         }
     }
 
-    private suspend fun call(context: Context, prompt: String, image: String?): String {
+    private suspend fun call(context: Context, prompt: String, image: String?, onProgress: (Progress) -> Unit): String {
         val ep = context.widgetEntryPoint()
         val settings = ep.settingsRepository()
         val provider = settings.getAiProvider()
         val auth = ep.aiCredentialResolver().resolve(provider)
-        require(!auth.isBlank) { "Set up an AI provider in Settings → AI first." }
-        if (image != null && provider == AiProvider.HERMES) {
-            throw IllegalStateException("Hermes can't see pictures. Pick Gemini, OpenAI, OpenRouter or Claude to build from a picture, or describe it in words.")
+        require(!auth.isBlank) { "Set up an AI in Settings → AI first." }
+        if (image != null && !provider.seesPictures) {
+            throw IllegalStateException("${provider.displayName} can't see pictures. Pick Claude, Gemini or OpenAI to build from a picture, or describe it in words.")
         }
+        val live = LiveLine(onProgress)
+        onProgress(Progress("Thinking"))
         return withTimeout(TIMEOUT_MS) {
-            AiApiClient.generate(
+            AiApiClient.stream(
                 httpClient = ep.okHttpClient(),
-                provider = provider,
-                apiKey = auth.secret,
+                auth = auth,
                 params = AiApiClient.GenerateParams(
                     prompt = prompt,
                     base64Jpeg = image,
                     temperature = 0.5,
                     maxOutputTokens = 8000,
                     jsonMode = true,
-                    openRouterModelId = settings.getOpenRouterModelId(),
-                    anthropicModelId = settings.getAnthropicModelId(),
-                    anthropicOAuth = auth.anthropicOAuth,
                     effort = "medium",
-                    dashboardUrl = settings.dashboardServerUrl.value,
                 ),
+                onEvent = live::feed,
             )
+        }
+    }
+
+    /** Turns a streamed answer into [Progress] as it arrives, calling back only when the line changes. */
+    private class LiveLine(private val onProgress: (Progress) -> Unit) {
+        private val thinking = StringBuilder()
+        private val text = StringBuilder()
+        private var last: Progress? = null
+
+        fun feed(e: AiApiClient.StreamEvent) {
+            val next = when (e) {
+                is AiApiClient.StreamEvent.Thinking -> {
+                    thinking.append(e.text)
+                    if (text.isNotEmpty()) return
+                    Progress("Thinking", TilesmithProgress.thinkingLine(thinking))
+                }
+                is AiApiClient.StreamEvent.Text -> {
+                    text.append(e.text)
+                    Progress(TilesmithProgress.describe(text) ?: return)
+                }
+            }
+            if (next != last) {
+                last = next
+                onProgress(next)
+            }
         }
     }
 

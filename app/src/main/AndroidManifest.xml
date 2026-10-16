@@ -215,7 +215,7 @@
             android:excludeFromRecents="true"
             android:taskAffinity=""
             android:label="@string/widget_settings_title"
-            android:theme="@style/Theme.DailyDash">
+            android:theme="@style/Theme.DailyDash.Sheet">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
             </intent-filter>

@@ -847,7 +847,7 @@ specific and useful at a glance. Never invent facts; when you searched the web, 
 
     private suspend fun aiLine(context: Context, design: TileDesign, b: TileBlock, values: Map<String, TileValue>): TileValue {
         if (!WidgetAi.isAvailable(context)) return TileValue.needs("Set up an AI provider in Settings → AI")
-        if (!WidgetAi.isEnabled(context)) return TileValue.needs("Turn on AI lines in Settings → Widgets")
+        if (!design.ai) return TileValue.needs("AI is off for this widget")
         val ask = b.text?.trim().orEmpty().ifEmpty { "Sum up what matters on this widget right now." }
         val others = design.blocks.filter { it !== b && it.bind != null && it.bind != "ai.text" }.mapNotNull { o ->
             val v = values[TileSources.bindingId(o) ?: return@mapNotNull null]?.takeIf { it.state == TileValueState.OK } ?: return@mapNotNull null
@@ -869,17 +869,12 @@ specific and useful at a glance. Never invent facts; when you searched the web, 
         if (auth.isBlank) return TileValue.needs("Set up an AI provider in Settings → AI")
         val text = AiApiClient.generate(
             httpClient = ep.okHttpClient(),
-            provider = provider,
-            apiKey = auth.secret,
+            auth = auth,
             params = AiApiClient.GenerateParams(
                 prompt = prompt,
                 temperature = 0.4,
                 maxOutputTokens = if (b.web) 1200 else 400,
-                openRouterModelId = settings.getOpenRouterModelId(),
-                anthropicModelId = settings.getAnthropicModelId(),
-                anthropicOAuth = auth.anthropicOAuth,
                 webSearch = b.web,
-                dashboardUrl = settings.dashboardServerUrl.value,
             ),
         )
         val clean = WidgetAi.clean(text, 220)
@@ -894,7 +889,7 @@ facts: when you searched the web, use what you found; when you can't know, say s
 
     private suspend fun aiList(context: Context, design: TileDesign, b: TileBlock, values: Map<String, TileValue>): TileValue {
         if (!WidgetAi.isAvailable(context)) return TileValue.needs("Set up an AI provider in Settings → AI")
-        if (!WidgetAi.isEnabled(context)) return TileValue.needs("Turn on AI lines in Settings → Widgets")
+        if (!design.ai) return TileValue.needs("AI is off for this widget")
         val ask = b.text?.trim().orEmpty().ifEmpty { return TileValue.error("Say what the rows should be") }
         val now = java.time.ZonedDateTime.now(zone)
         val prompt = buildString {
@@ -910,19 +905,14 @@ facts: when you searched the web, use what you found; when you can't know, say s
         if (auth.isBlank) return TileValue.needs("Set up an AI provider in Settings → AI")
         val text = AiApiClient.generate(
             httpClient = ep.okHttpClient(),
-            provider = provider,
-            apiKey = auth.secret,
+            auth = auth,
             params = AiApiClient.GenerateParams(
                 prompt = prompt,
                 temperature = 0.3,
                 maxOutputTokens = if (b.web) 2000 else 900,
-                openRouterModelId = settings.getOpenRouterModelId(),
-                anthropicModelId = settings.getAnthropicModelId(),
-                anthropicOAuth = auth.anthropicOAuth,
                 webSearch = b.web,
                 // Search and JSON mode don't mix on every provider; the rows are read leniently instead.
                 jsonMode = !b.web,
-                dashboardUrl = settings.dashboardServerUrl.value,
             ),
         )
         val rows = TileFeeds.aiRows(text, b.max ?: 6)

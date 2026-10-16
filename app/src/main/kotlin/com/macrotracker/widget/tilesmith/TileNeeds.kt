@@ -121,8 +121,8 @@ object TileNeeds {
         if (TileNeed.DASHBOARD in needs && ep.settingsRepository().dashboardServerUrl.value.isBlank()) {
             out += TileAsk(TileNeed.DASHBOARD, "Dashboard server", "Set it in Settings → Connections")
         }
-        if (TileNeed.AI in needs && !ep.aiCredentialResolver().hasCredentials()) {
-            out += TileAsk(TileNeed.AI, "An AI provider", "Pick one in Settings → AI for the AI lines")
+        if (TileNeed.AI in needs && design.ai && !ep.aiCredentialResolver().hasCredentials()) {
+            out += TileAsk(TileNeed.AI, "An AI", "Pick one in Settings → AI for this widget's AI lines")
         }
         blocks.filter { it.bind == "server.cmd" && !it.cmd.isNullOrBlank() }.distinctBy { it.server to it.cmd }.forEach { b ->
             if (!TilesmithStore.commandApproved(app, b.server, b.cmd!!)) {

@@ -91,7 +91,7 @@ internal object ServerWidgetStore {
             val profiles = context.widgetEntryPoint().serverStore().profiles.value
             ServerWidgetSnapshot(0L, profiles.map { baseCard(it, null) })
         }.getOrNull()
-        if (snap == null || WidgetAi.isEnabled(context)) return snap
+        if (snap == null || WidgetAi.isEnabled(context, "server")) return snap
         return snap.copy(servers = snap.servers.map { it.copy(brief = null) })
     }
 
@@ -361,7 +361,7 @@ internal object ServerWidgetStore {
      * one is due. Without [generate], only what is stored.
      */
     private suspend fun withBriefs(context: Context, cards: List<SrvCard>, generate: Boolean): List<SrvCard> {
-        if (!WidgetAi.isEnabled(context)) return cards.map { it.copy(brief = null) }
+        if (!WidgetAi.isEnabled(context, "server")) return cards.map { it.copy(brief = null) }
         var budget = MAX_BRIEFS
         return cards.map { c ->
             if (!c.enabled || c.state != SrvState.ONLINE || !c.hasData || budget <= 0) return@map c
