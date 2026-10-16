@@ -531,7 +531,7 @@ fun ChatComposer(
             .padding(horizontal = 12.dp)
             .padding(top = 6.dp, bottom = bottomPad)
             .clip(ComposerShape)
-            .glass(hazeState = hazeState, shape = ComposerShape)
+            .glass(hazeState = hazeState)
             .border(1.dp, GlassHairline, ComposerShape)
             .padding(start = 4.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.Bottom,

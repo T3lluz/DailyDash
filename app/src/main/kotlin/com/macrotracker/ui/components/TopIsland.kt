@@ -111,7 +111,7 @@ import kotlinx.coroutines.delay
  * close, the hour moves on), and then the words roll up while the pill springs to its new
  * width. The rest wait at its right end as small discs; a tap there opens everything as a
  * card under the status bar (a tap outside folds it back). While Hermes works he leads.
- * The same dark acrylic as the navbar (`chromeGlass`): the page shows through, blurred.
+ * The same clean frosted glass as the navbar (`chromeGlass`): the page shows through, blurred.
  */
 
 private val PillHeight = 40.dp
@@ -133,7 +133,7 @@ fun TopIsland(
     /** What Hermes is doing (the tracker's turn, or how the last one ended). */
     hermes: NavActivity? = null,
     onHermes: (NavActivity) -> Unit = {},
-    /** The page behind, for the acrylic (the navbar's glass). */
+    /** The page behind, for the frosted glass (the navbar's). */
     hazeState: HazeState?,
     onItem: (IslandItem) -> Unit,
     modifier: Modifier = Modifier,

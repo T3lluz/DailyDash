@@ -313,18 +313,18 @@ com.macrotracker/
                               the snake. ServerCharts.kt / ServerVitals.kt: 270° dials with an average notch,
                               mirrored area charts, the scrubbable history chart, stacked meters, uptime bars,
                               fact chips. DeviceCodePanel.kt: GitHub/Twitch device-code
-                              sign-in (copyable code + equal-width Open / Cancel). Glass.kt is the chrome's glass: `Modifier.glass(hazeState, shape)` blurs the page under a `hazeSource` smooth,
-                              washes it with `GlassTint` and adds a faint sheen along the top (AI composers). The navbar and the
-                              island share `Modifier.chromeGlass(hazeState, shape)`: `chromeShadow` (two layers, cast by the outline
-                              with the inside cut away, since a shadow under translucent glass shows through it), the clip,
-                              `Modifier.acrylic` (Fluent-style acrylic: a 32dp blur, a whisper of light, a dark see-through tint
-                              `GlassSpec.AcrylicTint`, a faint grain, the sheen) and `chromeOutline`, a 1dp hairline of light
-                              just inside the edge. Keep the two alike. 2.0's dotted frost (a dot grid
+                              sign-in (copyable code + equal-width Open / Cancel). Glass.kt is the chrome's glass: `Modifier.glass(hazeState)` blurs the page under a `hazeSource` smooth,
+                              washes it with one flat dark tint (`GlassSpec.ChromeTint`), as iOS drew its materials before
+                              Liquid Glass: no sheen, no grain, no gradients or fake glints (the user asked for clean frost). The
+                              navbar and the island share `Modifier.chromeGlass(hazeState, shape)`: `chromeShadow` (two layers,
+                              cast by the outline with the inside cut away, since a shadow under translucent glass shows through
+                              it), the clip, `glass` and `chromeOutline`, a faint neutral 1dp edge. The AI composers use `glass`.
+                              Keep them alike. 2.0's dotted frost (a dot grid
                               perforating the glass) is gone: it read as noise on a phone. Don't bring dots back.
                               Anything that clips (`animateContentSize`, scrolling) goes after `chromeGlass`, or it cuts the shadow off.
                               TopIsland.kt: the island, drawn by MainScreen under the status bar on Home, Health and
                               Settings (IslandViewModel; tap opens the chat, the event, the call, or Home). A pill after iOS's
-                              Dynamic Island, in the navbar's acrylic (`chromeGlass`), that shows the top items side
+                              Dynamic Island, in the navbar's frosted glass (`chromeGlass`), that shows the top items side
                               by side, as many as fit (`MAX_ON_PILL`, two), each with its whole title when there is room, else
                               its short label (`IslandShortener`) and a shorter countdown (`rememberPillPlan` picks the richest
                               look that fits). Nothing turns on a timer: the line-up changes only when the ranking does, and
