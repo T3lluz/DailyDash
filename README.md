@@ -28,7 +28,7 @@
   </p>
 </div>
 
-**Install:** grab the APK from [Releases](https://github.com/T3lluz/DailyDash/releases/latest) · turn services on in **Settings → Connections** · press and hold a Home or Health card to reorder it · make your own widgets in **Settings → Widgets & Tilesmith**. The app updates itself from Releases and shows **What's new** after each update.
+**Install:** grab the APK from [Releases](https://github.com/T3lluz/DailyDash/releases/latest) · turn services on in **Settings → Connections** · press and hold a Home or Health card to reorder it · make your own widgets in **Settings → Widgets & Tilesmith**, and allow what they need in **Settings → Permissions**. The app updates itself from Releases and shows **What's new** after each update.
 
 ## Features
 
@@ -52,7 +52,7 @@
 | <img src="docs/integrations/ai.svg" width="20" alt="" /> | **AI** | Log meals by describing them; **Tech support** chat, as **Hermes** on your server or **Sysop** on the phone | An AI provider; Hermes needs the dashboard server <sup>†</sup> |
 | <img src="docs/integrations/phone.svg" width="20" alt="" /> | **Phone hub** | The phone on your desk dashboard: battery, media, notifications (dismiss, reply); ring, torch, open URL, clipboard, volume from the desk; **Send to desk** in the share sheet | Dashboard server <sup>†</sup> |
 | <img src="docs/integrations/widgets.svg" width="20" alt="" /> | **Widgets** | Weather, calendar, F1, servers and GitHub on the home screen, each resizable | Long-press the home screen |
-| <img src="docs/integrations/ai.svg" width="20" alt="" /> | **Tilesmith** | Describe a widget and AI builds it in Material 3 Expressive, from any of your data, the web or a server command; comment to change it, one tap to add it | An AI provider (starters work without one) |
+| <img src="docs/integrations/ai.svg" width="20" alt="" /> | **Tilesmith** | Describe a widget (or show it a picture of one) and AI builds it in Material 3 Expressive: YouTube cards you swipe through, a scrolling Gmail inbox, what's playing with skip buttons, photos, birthdays, any RSS feed, JSON API or web search, a server command; comment to change it, one tap to add it | An AI provider (starters work without one); Settings → Permissions for Gmail, Tasks and the phone's extras |
 
 <sup>†</sup> The t3lluz dashboard, reached over <img src="docs/integrations/tailscale.svg" width="12" alt="" /> Tailscale and set in **Settings → Connections**.
 
@@ -87,7 +87,7 @@ It builds without keys. Add only what you need to `local.properties`:
 | `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET` | Connect Twitch: [confidential app](https://dev.twitch.tv/console) |
 | `GEMINI_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY` | Default AI keys; keys and Claude sign-in from Settings win |
 
-Connect Google (YouTube) needs no key: an Android OAuth client for `com.macrotracker` with the `app/tester.jks` SHA-1 and YouTube Data API v3 on. Steps are in [`local.properties.example`](local.properties.example).
+Connect Google (YouTube) needs no key: an Android OAuth client for `com.macrotracker` with the `app/tester.jks` SHA-1 and YouTube Data API v3 on. Gmail and Google Tasks widgets use the same client: turn on the Gmail API and the Google Tasks API, add the two read-only scopes to the consent screen and publish it. Steps are in [`local.properties.example`](local.properties.example).
 
 > [!WARNING]
 > Never commit `local.properties` or API keys. `app/tester.jks` is a shared test key, committed so sideloaded builds can update each other.

@@ -54,6 +54,7 @@ import com.macrotracker.ui.theme.NutritionCalories
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.ServerBrand
 import com.macrotracker.ui.theme.TextPrimary
+import com.macrotracker.ui.theme.Success
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.theme.chipFill
 import com.macrotracker.ui.util.rememberHaptics
@@ -79,6 +80,7 @@ fun SettingsScreen(
     onNavigateToAbout: () -> Unit = {},
     onNavigateToWidgets: () -> Unit = {},
     onNavigateToServers: () -> Unit = {},
+    onNavigateToPermissions: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
     goalsViewModel: GoalsViewModel = hiltViewModel(),
     serverViewModel: ServerViewModel = hiltViewModel(),
@@ -138,6 +140,23 @@ fun SettingsScreen(
                 status = "$connectedCount of 3 on",
                 statusTone = if (connectedCount == 3) SettingsStatusTone.GOOD else SettingsStatusTone.PLAIN,
                 onClick = onNavigateToConnections,
+            )
+            SettingsRowDivider()
+            val context = LocalContext.current
+            var allowed by remember { mutableStateOf(com.macrotracker.ui.screens.settings.permissionsSummary(context)) }
+            LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { allowed = com.macrotracker.ui.screens.settings.permissionsSummary(context) }
+            SettingsNavRow(
+                icon = AppIcons.ShieldCheck,
+                tint = Success,
+                title = "Permissions",
+                summary = "Phone access, Google and Health Connect, for the app and widgets",
+                status = if (com.macrotracker.data.google.GoogleReconnect.lapsed(context).isNotEmpty()) "Reconnect" else "${allowed.first} of ${allowed.second}",
+                statusTone = when {
+                    com.macrotracker.data.google.GoogleReconnect.lapsed(context).isNotEmpty() -> SettingsStatusTone.ATTENTION
+                    allowed.first == allowed.second -> SettingsStatusTone.GOOD
+                    else -> SettingsStatusTone.PLAIN
+                },
+                onClick = onNavigateToPermissions,
             )
             SettingsRowDivider()
             SettingsNavRow(

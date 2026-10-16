@@ -99,7 +99,7 @@ object TilesmithWidgetSpec : DashWidgetSpec {
             TileEmpty(pick)
         } else {
             key(design.first.id, design.first.updatedAt) {
-                TileRoot(design.first, design.second, preview = false, actions = actionsFor(context, design.first), widgetTap = widgetTap(context, design.first))
+                TileRoot(design.first, design.second, preview = false, actions = actionsFor(context, design.first), widgetTap = widgetTap(context, design.first, design.second))
             }
         }
     }
@@ -179,36 +179,50 @@ object TilesmithWidgetSpec : DashWidgetSpec {
     private fun open(context: Context, where: String): Action =
         openAppAction(context) { putExtra(MainActivity.EXTRA_OPEN, where) }
 
-    fun actionFor(context: Context, design: TileDesign, tap: String?): Action? {
+    fun actionFor(context: Context, design: TileDesign, tap: String?, value: TileValue? = null): Action? {
         val t = TileTap.normalize(tap) ?: return null
         return when {
             t == TileTap.APP -> openAppAction(context)
             t == TileTap.REFRESH -> refreshAction(KEY)
             t == TileTap.EDIT -> open(context, "tilesmith:${design.id}")
+            t == TileTap.OPEN -> (value?.url ?: value?.items?.firstNotNullOfOrNull { it.link })?.let { linkAction(context, it) }
             t.startsWith("app:") -> open(context, t.removePrefix("app:"))
             t.startsWith("url:") -> openUrlAction(t.removePrefix("url:"))
             else -> null
         }
     }
 
-    private fun actionsFor(context: Context, design: TileDesign) = TileActions { tap, value ->
-        when {
+    /** Opens [link] through [TileLinkActivity]: web links, contacts, photos, `package:` apps and `dailydash:` screens alike. */
+    fun linkAction(context: Context, link: String): Action =
+        actionStartActivity(
+            Intent(context, TileLinkActivity::class.java)
+                .setData(android.net.Uri.parse(link))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+
+    private fun actionsFor(context: Context, design: TileDesign) = object : TileActions {
+        override fun forTap(tap: String?, value: TileValue?): Action? = when {
             // A block waiting on a permission opens the studio, where it can be allowed.
             value?.state == TileValueState.NEEDS -> open(context, "tilesmith:${design.id}")
-            tap != null -> actionFor(context, design, tap)
+            tap != null -> actionFor(context, design, tap, value)
             else -> null
         }
+
+        override fun forLink(link: String): Action = linkAction(context, link)
+
+        override fun forMedia(cmd: String): Action = TileMediaAction.action(cmd)
     }
 
     /** The widget's own tap: what the design says, or the screen its first source belongs on. */
-    private fun widgetTap(context: Context, design: TileDesign): Action {
+    private fun widgetTap(context: Context, design: TileDesign, values: Map<String, TileValue>): Action {
         actionFor(context, design, design.tap)?.let { return it }
         val group = design.blocks.firstNotNullOfOrNull { TileSources.byKey(it.bind)?.group }
         return when (group) {
             SourceGroup.HEALTH, SourceGroup.FOOD -> open(context, "health")
             SourceGroup.SERVER -> open(context, "servers")
             SourceGroup.DASHBOARD -> open(context, "hermes")
-            else -> openAppAction(context)
+            // Mail, tasks, videos and feeds open where they live.
+            else -> design.blocks.firstNotNullOfOrNull { b -> TileSources.bindingId(b)?.let { values[it]?.url } }?.let { linkAction(context, it) } ?: openAppAction(context)
         }
     }
 }

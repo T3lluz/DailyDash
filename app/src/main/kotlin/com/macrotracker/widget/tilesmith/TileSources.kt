@@ -1,7 +1,7 @@
 package com.macrotracker.widget.tilesmith
 
 /** The kind of value a source gives, which decides the blocks it fits. */
-enum class ValueKind { NUMBER, TEXT, LIST, SERIES, TIME }
+enum class ValueKind { NUMBER, TEXT, LIST, SERIES, TIME, IMAGE }
 
 /** Something a source can't be read without; [TileNeeds] checks them and the studio asks for them. */
 enum class TileNeed(val label: String) {
@@ -15,15 +15,28 @@ enum class TileNeed(val label: String) {
     AI("An AI provider, in Settings → AI"),
     COMMAND("Your OK to run the command"),
     SITE("Your OK to read the site"),
+    GOOGLE("Google sign-in for Gmail or Tasks, in Settings → Permissions"),
+    YOUTUBE("YouTube channels to follow, on Home's YouTube card"),
+    TWITCH("Twitch, on Home's Twitch card"),
+    NOTIFICATIONS("Notification access, in Settings → Permissions"),
+    CONTACTS("Contacts access"),
+    PHOTOS("Photos access"),
+    BLUETOOTH("Bluetooth access"),
 }
 
 enum class SourceGroup(val label: String) {
     TIME("Time"),
     PHONE("Phone"),
+    MEDIA("Now playing & notifications"),
     HEALTH("Health"),
     FOOD("Food"),
     WEATHER("Weather"),
     CALENDAR("Calendar"),
+    GOOGLE("Gmail & Google Tasks"),
+    PEOPLE("Contacts"),
+    PHOTOS("Photos"),
+    VIDEO("YouTube & Twitch"),
+    UPCOMING("Coming up"),
     F1("Formula 1"),
     SERVER("Servers"),
     GITHUB("GitHub"),
@@ -74,6 +87,13 @@ object TileSources {
         TileSource("phone.alarm", "Next alarm", SourceGroup.PHONE, ValueKind.TIME, "The next alarm's time", 5, icon = "bell", sample = TileValue(text = "07:00", sub = "Tomorrow", atMs = inMinutes(16 * 60))),
         TileSource("phone.screen_time", "Screen time today", SourceGroup.PHONE, ValueKind.NUMBER, "Minutes of screen time today, text like 2h 14m", 15, setOf(TileNeed.USAGE), "phone", n("2h 14m", 134.0, 180.0, "min", "Today")),
         TileSource("phone.network", "Network", SourceGroup.PHONE, ValueKind.TEXT, "Wi-Fi, mobile data or offline", 5, icon = "wifi", sample = TileValue(text = "Wi-Fi", icon = "wifi")),
+        TileSource("phone.bluetooth", "Bluetooth devices", SourceGroup.PHONE, ValueKind.LIST, "Paired Bluetooth devices, connected ones first with their battery at the end; number is how many are connected", 5, setOf(TileNeed.BLUETOOTH), "bluetooth", TileValue(number = 2.0, items = listOf(TileItem("Pixel Buds Pro", "Connected", "80%", "#3FA266"), TileItem("Pixel Watch 3", "Connected", "64%", "#3FA266"), TileItem("Car", null, "—")))),
+        TileSource("phone.headphones", "Headphones battery", SourceGroup.PHONE, ValueKind.NUMBER, "Battery of the connected Bluetooth headphones or watch (goal 100), sub its name; query picks a device by name", 5, setOf(TileNeed.BLUETOOTH), "headphones", n("80%", 80.0, 100.0, "%", "Pixel Buds Pro", "headphones")),
+
+        // ── Now playing and notifications (notification access) ────────────
+        TileSource("media.now", "Now playing", SourceGroup.MEDIA, ValueKind.TEXT, "What is playing in any app: text the track, sub the artist, image the album art, active while it plays. A player block adds play / pause / skip", 1, setOf(TileNeed.NOTIFICATIONS), "music", TileValue(text = "Espresso", sub = "Sabrina Carpenter", icon = "music", active = true)),
+        TileSource("notify.count", "Notifications", SourceGroup.MEDIA, ValueKind.NUMBER, "Notifications waiting on the phone; query limits it to apps by name (WhatsApp, Gmail)", 2, setOf(TileNeed.NOTIFICATIONS), "bell", n(null, 5.0, null, null, "waiting", "bell")),
+        TileSource("notify.list", "Latest notifications", SourceGroup.MEDIA, ValueKind.LIST, "Newest notifications: who or what, the text, the app and time; query limits it to apps by name", 2, setOf(TileNeed.NOTIFICATIONS), "bell", list(TileItem("Ida", "Dinner at 7?", "WhatsApp · 2m", "#25D366"), TileItem("Wolt", "Your order is on its way", "Wolt · 9m"), TileItem("GitHub", "CI passed on #92", "GitHub · 20m"))),
 
         // ── Health (Health Connect) ────────────────────────────────────────
         TileSource("health.steps", "Steps", SourceGroup.HEALTH, ValueKind.NUMBER, "Steps today (goal 10,000)", 5, setOf(TileNeed.HEALTH), "steps", n(null, 7412.0, 10000.0, "steps", "2,588 to go", "steps")),
@@ -84,6 +104,9 @@ object TileSources {
         TileSource("health.heart_rate", "Heart rate", SourceGroup.HEALTH, ValueKind.NUMBER, "Average heart rate today", 5, setOf(TileNeed.HEALTH), "heart_pulse", n(null, 72.0, null, "bpm", "Average today", "heart_pulse")),
         TileSource("health.resting_hr", "Resting heart rate", SourceGroup.HEALTH, ValueKind.NUMBER, "Resting heart rate", 30, setOf(TileNeed.HEALTH), "heart", n(null, 54.0, null, "bpm", "Resting", "heart")),
         TileSource("health.sleep", "Sleep", SourceGroup.HEALTH, ValueKind.NUMBER, "Last night's sleep, number in minutes (goal 480), text like 7h 12m", 30, setOf(TileNeed.HEALTH), "sleep", n("7h 12m", 432.0, 480.0, "min", "Last night", "sleep")),
+        TileSource("health.workouts", "Workouts", SourceGroup.HEALTH, ValueKind.LIST, "Latest workouts: type, when, and duration or distance at the end", 30, setOf(TileNeed.HEALTH), "run", list(TileItem("Run", "Today 07:10", "5.2 km"), TileItem("Strength", "Yesterday", "48 min"), TileItem("Ride", "Sun", "21 km"))),
+        TileSource("health.weight", "Weight", SourceGroup.HEALTH, ValueKind.NUMBER, "Latest weight in kg, sub the change over 30 days; series is the trend", 60, setOf(TileNeed.HEALTH), "scale", TileValue(number = 78.4, unit = "kg", sub = "−0.8 in 30 days", icon = "scale", series = listOf(79.2f, 79.0f, 78.9f, 78.7f, 78.8f, 78.5f, 78.4f))),
+        TileSource("health.hrv", "Heart rate variability", SourceGroup.HEALTH, ValueKind.NUMBER, "Latest HRV (RMSSD, ms)", 60, setOf(TileNeed.HEALTH), "heart_pulse", n(null, 48.0, null, "ms", "HRV", "heart_pulse")),
         TileSource("health.spo2", "Blood oxygen", SourceGroup.HEALTH, ValueKind.NUMBER, "SpO2 percent", 30, setOf(TileNeed.HEALTH), "droplet", n(null, 97.0, 100.0, "%")),
 
         // ── Food (DailyDash's own log) ─────────────────────────────────────
@@ -108,6 +131,30 @@ object TileSources {
         TileSource("calendar.today", "Today's events", SourceGroup.CALENDAR, ValueKind.LIST, "The rest of today's events, time at the end", 2, setOf(TileNeed.CALENDAR), "calendar", list(TileItem("Design review", "Room 4", "14:30", "#6EA8FE"), TileItem("Gym", null, "17:00", "#3FA266"), TileItem("Dinner with Ida", "Lille Herbern", "19:30", "#F1B467"))),
         TileSource("calendar.upcoming", "Coming days", SourceGroup.CALENDAR, ValueKind.LIST, "The next events over the coming days, day and time at the end", 5, setOf(TileNeed.CALENDAR), "calendar", list(TileItem("Design review", null, "Today 14:30"), TileItem("Dentist", null, "Fri 09:00"), TileItem("Cabin trip", null, "Sat"))),
         TileSource("calendar.count", "Events today", SourceGroup.CALENDAR, ValueKind.NUMBER, "How many events are left today", 2, setOf(TileNeed.CALENDAR), "calendar", n(null, 3.0, null, null, "left today", "calendar")),
+
+        // ── Gmail and Google Tasks (Google sign-in; mail falls back to the dashboard) ──
+        TileSource("gmail.unread", "Unread mail", SourceGroup.GOOGLE, ValueKind.NUMBER, "Unread mail in the Gmail inbox; query narrows it with a Gmail search (from:ida, label:work)", 5, setOf(TileNeed.GOOGLE), "mail", n(null, 4.0, null, null, "unread", "mail")),
+        TileSource("gmail.inbox", "Gmail inbox", SourceGroup.GOOGLE, ValueKind.LIST, "Newest Gmail threads: sender, subject, time, unread ones marked; query is a Gmail search (is:unread, from:, label:, newer_than:2d); a tap opens the mail. Best as a list with variant scroll", 5, setOf(TileNeed.GOOGLE), "inbox", TileValue(number = 4.0, sub = "unread", icon = "inbox", items = listOf(TileItem("Ida", "Saturday?", "09:12", "#EA4335"), TileItem("Google Play", "Your order receipt", "Yesterday"), TileItem("Wolt", "Order delivered", "Wed"), TileItem("Zaptec", "Thanks for applying", "Mon")))),
+        TileSource("tasks.list", "Google Tasks", SourceGroup.GOOGLE, ValueKind.LIST, "Open Google Tasks, soonest due first, the due day at the end; query picks a list by name", 10, setOf(TileNeed.GOOGLE), "tasks", list(TileItem("Renew passport", null, "Today", "#E34671"), TileItem("Book dentist", null, "Fri"), TileItem("Buy coffee beans"))),
+        TileSource("tasks.count", "Tasks left", SourceGroup.GOOGLE, ValueKind.NUMBER, "Open Google Tasks; sub says how many are due today or overdue; query picks a list", 10, setOf(TileNeed.GOOGLE), "tasks", n(null, 6.0, null, null, "2 due today", "tasks")),
+
+        // ── Contacts ───────────────────────────────────────────────────────
+        TileSource("contacts.birthdays", "Birthdays", SourceGroup.PEOPLE, ValueKind.LIST, "Coming birthdays from your contacts: name, how old they turn, the day at the end, their photo", 360, setOf(TileNeed.CONTACTS), "cake", list(TileItem("Ida", "Turns 29", "Sat"), TileItem("Mum", null, "12 Nov"), TileItem("Jonas", "Turns 31", "3 Dec"))),
+        TileSource("contacts.favorites", "Favourite people", SourceGroup.PEOPLE, ValueKind.LIST, "Your starred contacts with their photos; a tap opens the contact to call or message", 360, setOf(TileNeed.CONTACTS), "users", list(TileItem("Ida"), TileItem("Mum"), TileItem("Jonas"))),
+
+        // ── Photos ─────────────────────────────────────────────────────────
+        TileSource("photos.random", "A photo", SourceGroup.PHOTOS, ValueKind.IMAGE, "A different photo from the phone each refresh (every sets how often, default 30 min); query names an album (Camera, Screenshots). Best in an image block", 30, setOf(TileNeed.PHOTOS), "image", TileValue(text = "Lofoten", sub = "12 Aug 2025", icon = "image")),
+        TileSource("photos.recent", "Newest photos", SourceGroup.PHOTOS, ValueKind.LIST, "Your newest photos, a tap opens one; query names an album. Best as a carousel", 30, setOf(TileNeed.PHOTOS), "image", list(TileItem("Today", null, "14:02"), TileItem("Yesterday", null, "19:40"), TileItem("Sun", null, "11:15"))),
+
+        // ── YouTube and Twitch ─────────────────────────────────────────────
+        TileSource("youtube.latest", "Latest videos", SourceGroup.VIDEO, ValueKind.LIST, "Newest uploads from the YouTube channels followed in DailyDash, or from the channels named in query (comma separated names or handles): title, channel, how long ago, thumbnail; a tap opens the video. Best as a carousel", 15, setOf(TileNeed.YOUTUBE), "youtube", list(TileItem("I built a widget maker in a weekend", "Fireship", "2h"), TileItem("F1 US GP highlights", "FORMULA 1", "5h"), TileItem("Pixel 11 review", "MKBHD", "1d"))),
+        TileSource("youtube.new", "New videos", SourceGroup.VIDEO, ValueKind.NUMBER, "How many videos the followed channels (or the ones in query) posted in the last 24 hours", 15, setOf(TileNeed.YOUTUBE), "youtube", n(null, 3.0, null, null, "new today", "youtube")),
+        TileSource("twitch.live", "Live on Twitch", SourceGroup.VIDEO, ValueKind.LIST, "Followed Twitch channels live now: name, game, viewers, stream thumbnail; a tap opens the stream. Best as a carousel or list", 5, setOf(TileNeed.TWITCH), "tv", list(TileItem("Lirik", "Elden Ring", "12k", "#9146FF"), TileItem("ThePrimeagen", "Software", "8k", "#9146FF"))),
+        TileSource("twitch.count", "Live channels", SourceGroup.VIDEO, ValueKind.NUMBER, "How many followed Twitch channels are live", 5, setOf(TileNeed.TWITCH), "tv", n(null, 2.0, null, null, "live now", "tv")),
+
+        // ── Coming up (the dashboard's timeline) ───────────────────────────
+        TileSource("upcoming.list", "Coming up", SourceGroup.UPCOMING, ValueKind.LIST, "The dashboard's Coming up: next episodes (Sonarr, Stremio), films (Radarr), F1 sessions and your events, with posters and when; best as a carousel or list", 30, setOf(TileNeed.DASHBOARD), "tv", list(TileItem("The Bear", "S04E01", "Fri"), TileItem("Dune: Part Three", "Movie", "18 Dec"), TileItem("Qualifying", "US GP", "Sat 23:00"))),
+        TileSource("upcoming.next", "Next on Coming up", SourceGroup.UPCOMING, ValueKind.TIME, "The next thing on Coming up: text the title, sub the episode or session, atMs when; for a countdown", 30, setOf(TileNeed.DASHBOARD), "tv", TileValue(text = "The Bear", sub = "S04E01", atMs = inMinutes(60 * 30))),
 
         // ── Formula 1 ──────────────────────────────────────────────────────
         TileSource("f1.next", "Next F1 session", SourceGroup.F1, ValueKind.TIME, "The next session: text like Qualifying, sub the Grand Prix, atMs its start (live while it runs)", 15, icon = "flag", sample = TileValue(text = "Qualifying", sub = "United States GP", atMs = inMinutes(60 * 26), icon = "flag")),
@@ -146,18 +193,49 @@ object TileSources {
 
         // ── Web & AI ───────────────────────────────────────────────────────
         TileSource("ai.text", "AI line", SourceGroup.WEB, ValueKind.TEXT, "Your AI answers the block's text as an ask on every refresh (default hourly); web:true lets it search the web; it also sees this widget's other values", 30, setOf(TileNeed.AI), "sparkles", TileValue(text = "Busy morning, then free after 15:00. Rain later, so take the umbrella.")),
-        TileSource("web.json", "Any web address", SourceGroup.WEB, ValueKind.TEXT, "Reads a JSON value from url at path (data.items[0].price); you allow the site first. A number becomes the value", 5, setOf(TileNeed.SITE), "globe", TileValue(text = "1 042", number = 1042.0, sub = "From the web")),
+        TileSource("ai.list", "AI rows", SourceGroup.WEB, ValueKind.LIST, "Your AI answers the block's text with up to 8 rows (title, sub, trailing, link) on every refresh (default hourly); web:true lets it search first: scores, fixtures, headlines, prices, releases, anything", 30, setOf(TileNeed.AI), "sparkles", list(TileItem("Liverpool 2–1 Arsenal", "Full time", "FT"), TileItem("Man City – Spurs", "Kick-off", "18:30"), TileItem("Brentford – Chelsea", "Tomorrow", "16:00"))),
+        TileSource("web.json", "Any web address", SourceGroup.WEB, ValueKind.TEXT, "Reads a JSON value from url at path (data.items[0].price); when path points at a list, fields maps each row's title, sub, trailing, image and link (paths inside one item) so it fills a list or carousel. You allow the site first. A number becomes the value", 5, setOf(TileNeed.SITE), "globe", TileValue(text = "1 042", number = 1042.0, sub = "From the web")),
+        TileSource("web.feed", "RSS or Atom feed", SourceGroup.WEB, ValueKind.LIST, "Any RSS or Atom feed at url (news sites, blogs, podcasts, a subreddit's .rss, https://www.youtube.com/feeds/videos.xml?channel_id=…): title, source, age, picture; a tap opens it. You allow the site first", 15, setOf(TileNeed.SITE), "rss", list(TileItem("Glance 1.3 adds snap scrolling", "Android Developers", "3h"), TileItem("Pixel Drop: October", "The Keyword", "1d"))),
+        TileSource("web.image", "Picture from the web", SourceGroup.WEB, ValueKind.IMAGE, "The image at url (a webcam, a radar map, a comic, a chart), fetched again each refresh; you allow the site first", 15, setOf(TileNeed.SITE), "image", TileValue(text = "Webcam", sub = "Live")),
     )
 
     private val byKey = all.associateBy { it.key }
 
-    fun byKey(key: String?): TileSource? = key?.let { byKey[it.trim().lowercase()] }
+    /** Names an AI (or an older design) may use for a source that has another key now. */
+    private val aliases = mapOf(
+        "dash.inbox" to "gmail.inbox",
+        "mail.inbox" to "gmail.inbox",
+        "gmail.list" to "gmail.inbox",
+        "mail.unread" to "gmail.unread",
+        "youtube.videos" to "youtube.latest",
+        "youtube.uploads" to "youtube.latest",
+        "youtube.recent" to "youtube.latest",
+        "twitch.streams" to "twitch.live",
+        "music.now" to "media.now",
+        "spotify.now" to "media.now",
+        "media.playing" to "media.now",
+        "notifications.list" to "notify.list",
+        "notifications.count" to "notify.count",
+        "rss" to "web.feed",
+        "web.rss" to "web.feed",
+        "feed.rss" to "web.feed",
+        "photos.photo" to "photos.random",
+        "tasks.open" to "tasks.list",
+        "calendar.birthdays" to "contacts.birthdays",
+        "web.list" to "ai.list",
+    )
+
+    /** The key [key] stands for: itself, or the source it is an old name of. */
+    fun canonical(key: String?): String? = key?.trim()?.lowercase()?.let { aliases[it] ?: it }
+
+    fun byKey(key: String?): TileSource? = canonical(key)?.let { byKey[it] }
 
     /** How often [b]'s source is worth reading, in minutes; AI and web lines keep to their own pace. */
     fun floorMinutes(b: TileBlock): Int {
         val src = byKey(b.bind) ?: return 15
         return when (src.key) {
-            "ai.text" -> maxOf(b.every ?: 60, if (b.web) 30 else 15)
+            "ai.text", "ai.list" -> maxOf(b.every ?: 60, if (b.web) 30 else 15)
+            "photos.random" -> maxOf(b.every ?: 30, 5)
             else -> maxOf(src.floorMinutes, b.every ?: 0)
         }
     }
@@ -170,9 +248,12 @@ object TileSources {
         val key = byKey(b.bind)?.key ?: return null
         val params = when (key) {
             "server.cmd" -> listOf(b.server, b.cmd)
-            "web.json" -> listOf(b.url, b.path)
-            "ai.text" -> listOf(b.text, b.web.toString())
+            "web.json" -> listOf(b.url, b.path, b.fields.entries.sortedBy { it.key }.joinToString(",") { "${it.key}=${it.value}" })
+            "ai.text", "ai.list" -> listOf(b.text, b.web.toString())
             "time.countdown" -> listOf(b.text)
+            "web.feed", "web.image" -> listOf(b.url)
+            "youtube.latest", "youtube.new", "gmail.unread", "gmail.inbox", "tasks.list", "tasks.count",
+            "notify.count", "notify.list", "photos.random", "photos.recent", "phone.headphones" -> listOf(b.query)
             else -> if (key.startsWith("server.")) listOf(b.server) else emptyList()
         }.map { it.orEmpty() }
         if (params.all { it.isEmpty() }) return key
@@ -183,9 +264,22 @@ object TileSources {
     fun fits(type: BlockType, kind: ValueKind): Boolean = when (type) {
         BlockType.RING, BlockType.BAR -> kind == ValueKind.NUMBER
         BlockType.CHART -> kind == ValueKind.SERIES
-        BlockType.LIST -> kind == ValueKind.LIST
+        BlockType.LIST, BlockType.CAROUSEL -> kind == ValueKind.LIST
         BlockType.COUNTDOWN -> kind == ValueKind.TIME
+        BlockType.IMAGE -> kind == ValueKind.IMAGE || kind == ValueKind.LIST || kind == ValueKind.TEXT
         BlockType.CLOCK, BlockType.DATE -> true
         else -> true
     }
+
+    /** The block types that show [source] well, best first: what the studio's block editor offers. */
+    fun typesFor(source: TileSource?): List<BlockType> = when (source?.kind) {
+        null -> listOf(BlockType.TEXT, BlockType.BADGE, BlockType.BUTTON, BlockType.CLOCK, BlockType.DATE)
+        ValueKind.NUMBER -> listOf(BlockType.METRIC, BlockType.RING, BlockType.BAR, BlockType.BADGE, BlockType.TEXT)
+        ValueKind.TEXT -> if (source.key == "media.now") listOf(BlockType.MEDIA, BlockType.METRIC, BlockType.TEXT, BlockType.IMAGE)
+            else listOf(BlockType.METRIC, BlockType.TEXT, BlockType.BADGE)
+        ValueKind.LIST -> listOf(BlockType.LIST, BlockType.CAROUSEL, BlockType.IMAGE, BlockType.METRIC)
+        ValueKind.SERIES -> listOf(BlockType.CHART, BlockType.METRIC)
+        ValueKind.TIME -> listOf(BlockType.COUNTDOWN, BlockType.METRIC, BlockType.TEXT)
+        ValueKind.IMAGE -> listOf(BlockType.IMAGE, BlockType.TEXT)
+    }.let { types -> if (source?.key == "ai.text") listOf(BlockType.AI, BlockType.TEXT) else types }
 }

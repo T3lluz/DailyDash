@@ -11,6 +11,21 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <!-- Tilesmith: birthdays and favourite people widgets. Asked for only when a widget shows them. -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <!-- Tilesmith: photo widgets. Android 14+ also lets you share only some photos. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <!-- Tilesmith: connected headphones and watches, and their battery. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <!-- Widgets keep their pace in the background: Settings → Permissions offers "Unrestricted" battery. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- Phone hub: screen time for the dashboard, only once granted in Settings → Usage access -->
     <uses-permission
         android:name="android.permission.PACKAGE_USAGE_STATS"
@@ -330,6 +345,15 @@
         <receiver
             android:name=".widget.tilesmith.TilesmithPinReceiver"
             android:exported="false" />
+
+        <!-- Tilesmith: opens a carousel card's or a row's link (a video, a mail, a contact). -->
+        <activity
+            android:name=".widget.tilesmith.TileLinkActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
 
         <!-- Phone hub: notification access mirrors notifications to the dashboard and runs

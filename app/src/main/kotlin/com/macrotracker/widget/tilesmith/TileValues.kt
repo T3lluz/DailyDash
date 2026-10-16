@@ -10,6 +10,10 @@ data class TileItem(
     val trailing: String? = null,
     /** `#RRGGBB`: a team's, a calendar's or a service's own colour for the row's mark. */
     val color: String? = null,
+    /** A picture for the row: a video's thumbnail, a poster, a contact's photo ([TileImages] reads it). */
+    val image: String? = null,
+    /** Where a tap on the row goes: a video, a mail, an article. */
+    val link: String? = null,
 )
 
 /** Whether a source could be read, and if not, why. */
@@ -35,6 +39,10 @@ data class TileValue(
     val seriesStart: String? = null,
     val seriesEnd: String? = null,
     val url: String? = null,
+    /** One picture for the value: album art, a photo, a webcam frame ([TileImages] reads it). */
+    val image: String? = null,
+    /** Whether the thing is running now: music playing, a device connected. */
+    val active: Boolean? = null,
     val state: TileValueState = TileValueState.OK,
     /** For NEEDS / ERROR / EMPTY: what to show instead ("Allow calendar"). */
     val note: String? = null,
@@ -42,6 +50,9 @@ data class TileValue(
 ) {
     /** The value as one short piece of text: [text], else the number formatted. */
     val display: String? get() = text ?: number?.let(::formatNumber)
+
+    /** The value's picture, else its first row's: an image block on a list source shows the newest. */
+    val picture: String? get() = image ?: items.firstNotNullOfOrNull { it.image }
 
     val fraction: Float?
         get() {
@@ -83,6 +94,8 @@ object TileValueCodec {
                         r.sub?.let { put("s", it) }
                         r.trailing?.let { put("e", it) }
                         r.color?.let { put("c", it) }
+                        r.image?.let { put("i", it) }
+                        r.link?.let { put("l", it) }
                     })
                 }
             })
@@ -91,6 +104,8 @@ object TileValueCodec {
         v.seriesStart?.let { put("s0", it) }
         v.seriesEnd?.let { put("s1", it) }
         v.url?.let { put("url", it) }
+        v.image?.let { put("img", it) }
+        v.active?.let { put("on", it) }
         if (v.state != TileValueState.OK) put("state", v.state.name)
         v.note?.let { put("note", it) }
         put("read", v.readAt)
@@ -112,6 +127,8 @@ object TileValueCodec {
                         r.optString("s").takeIf { r.has("s") },
                         r.optString("e").takeIf { r.has("e") },
                         r.optString("c").takeIf { r.has("c") },
+                        r.optString("i").takeIf { r.has("i") },
+                        r.optString("l").takeIf { r.has("l") },
                     )
                 }
             }
@@ -120,6 +137,8 @@ object TileValueCodec {
         seriesStart = o.optString("s0").takeIf { o.has("s0") },
         seriesEnd = o.optString("s1").takeIf { o.has("s1") },
         url = o.optString("url").takeIf { o.has("url") },
+        image = o.optString("img").takeIf { o.has("img") },
+        active = if (o.has("on")) o.optBoolean("on") else null,
         state = runCatching { TileValueState.valueOf(o.optString("state", "OK")) }.getOrDefault(TileValueState.OK),
         note = o.optString("note").takeIf { o.has("note") },
         readAt = o.optLong("read"),

@@ -79,6 +79,7 @@ import com.macrotracker.data.island.IslandRanking
 import com.macrotracker.data.dashboard.compactIslandEnd
 import com.macrotracker.data.dashboard.islandLabel
 import com.macrotracker.ui.theme.AppIcons
+import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.Primary
@@ -100,7 +101,10 @@ import kotlinx.coroutines.delay
  * the rest, which opens them as a list under the line. Nothing scrolls: when three don't
  * fit, they fold (IslandFit.kt), the detail first, then each title to its label (a word or
  * two the AI writes to fit three across, IslandShortener), then the countdowns, and only
- * then are the longest labels cut short.
+ * then are the longest labels cut short. When they fit with room to spare, each item grows
+ * by its share of the line (its title can use the room, its countdown keeps to the slot's
+ * right edge), so the line always runs edge to edge instead of bunching in the middle.
+ * Each icon sits on its own plain frosted disc, so the dot grid never shows through it.
  *
  * While Hermes works the island grows a second line under the first for him (the web puts
  * him first on its one line; a phone has no room for both side by side): the scanner,
@@ -193,6 +197,7 @@ fun TopIsland(
                         ItemLine(
                             line = line,
                             expanded = expanded,
+                            hazeState = hazeState,
                             onMore = { expanded = !expanded },
                             onItem = onItem,
                             onHide = onHide,
@@ -204,6 +209,7 @@ fun TopIsland(
                         ) {
                             MoreList(
                                 items = line.items.drop(line.fit.shown),
+                                hazeState = hazeState,
                                 onItem = { expanded = false; onItem(it) },
                                 onHide = onHide,
                             )
@@ -256,13 +262,17 @@ private class IslandHeld {
     var hermes: NavActivity? = null
 }
 
-/** The island's line worked out for one width: its items, their labels and how they fold. */
+/**
+ * The island's line worked out for one width: its items, their labels, how they fold, and
+ * each shown item's own width at its fold ([natural]), which is its share of the room left over.
+ */
 @Immutable
 private class IslandLine(
     val items: List<IslandItem>,
     val labels: List<String>,
     val ends: List<String>,
     val fit: IslandFit,
+    val natural: List<Float>,
 )
 
 @Composable
@@ -298,15 +308,16 @@ private fun rememberIslandLine(items: List<IslandItem>, labels: Map<String, Stri
                     labelText = labelText,
                 )
             }
-            fitIslandLine(
+            val fitted = fitIslandLine(
                 widths = widths,
                 available = width.toPx(),
                 gap = EntryGap.toPx(),
                 minLabel = MinLabel.toPx(),
                 maxShown = IslandRanking.MAX_SHOWN,
             ) { hidden -> (OverflowPad * 2).toPx() + text("+$hidden", styles.end) + 2f }
+            fitted to islandShares(widths, fitted)
         }
-        IslandLine(items, shown, ends, fit)
+        IslandLine(items, shown, ends, fit.first, fit.second)
     }
 }
 
@@ -314,6 +325,7 @@ private fun rememberIslandLine(items: List<IslandItem>, labels: Map<String, Stri
 private fun ItemLine(
     line: IslandLine,
     expanded: Boolean,
+    hazeState: HazeState?,
     onMore: () -> Unit,
     onItem: (IslandItem) -> Unit,
     onHide: (IslandItem) -> Unit,
@@ -337,13 +349,15 @@ private fun ItemLine(
                 IslandEntry(
                     item = item,
                     fold = fit.folds[i],
-                    first = i == 0,
                     label = line.labels[i],
                     end = if (fit.folds[i] == IslandFold.DETAIL) item.end else line.ends[i],
                     labelCap = cap,
                     styles = styles,
+                    hazeState = hazeState,
                     onClick = { haptics.tick(); onItem(item) },
                     onLongClick = { haptics.reject(); onHide(item) },
+                    // Each item's share of the line is its own width: spare room spreads by size.
+                    modifier = Modifier.weight(line.natural.getOrElse(i) { 1f }.coerceAtLeast(1f)),
                 )
             }
         }
@@ -371,7 +385,7 @@ private fun ItemLine(
 /** What waits behind "+N": a row each, with its whole title, detail and countdown. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun MoreList(items: List<IslandItem>, onItem: (IslandItem) -> Unit, onHide: (IslandItem) -> Unit) {
+private fun MoreList(items: List<IslandItem>, hazeState: HazeState?, onItem: (IslandItem) -> Unit, onHide: (IslandItem) -> Unit) {
     val haptics = rememberHaptics()
     val styles = islandTextStyles()
     Column(modifier = Modifier.fillMaxWidth().padding(start = LinePad, end = LinePad, bottom = 8.dp)) {
@@ -391,7 +405,7 @@ private fun MoreList(items: List<IslandItem>, onItem: (IslandItem) -> Unit, onHi
                         .padding(start = EntryStart, end = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    ToneMark(item, toneColor(item))
+                    ToneMark(item, toneColor(item), hazeState)
                     Spacer(Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
@@ -430,6 +444,9 @@ private fun endColor(item: IslandItem): Color =
 
 private val OverflowPad = 5.dp
 
+/** The wash over an icon's frosted disc: the island's own glass, a touch lighter so the mark reads raised. */
+private val MarkGlass = Color(0xC22E2E2E)
+
 /** The island's text styles, measured by the fit and drawn by the entries alike. */
 @Immutable
 private data class IslandTextStyles(val title: TextStyle, val quietTitle: TextStyle, val sub: TextStyle, val end: TextStyle)
@@ -452,17 +469,18 @@ private fun islandTextStyles(): IslandTextStyles {
 private fun IslandEntry(
     item: IslandItem,
     fold: IslandFold,
-    first: Boolean,
     label: String,
     end: String,
     labelCap: Dp?,
     styles: IslandTextStyles,
+    hazeState: HazeState?,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val tone = toneColor(item)
     Row(
-        modifier = Modifier
+        modifier = modifier
             .height(EntryHeight)
             .clip(CircleShape)
             .combinedClickable(
@@ -476,36 +494,49 @@ private fun IslandEntry(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(PartGap),
     ) {
-        ToneMark(item, tone)
+        ToneMark(item, tone, hazeState)
         val labelled = fold >= IslandFold.LABEL
-        Text(
-            if (labelled) label else item.title,
-            style = if (item.tone == "quiet") styles.quietTitle else styles.title,
-            color = titleColor(item),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.widthIn(max = labelCap ?: if (first && !labelled) TitleMax else TitleMaxRest),
-        )
-        if (fold == IslandFold.DETAIL && item.sub.isNotBlank()) {
+        val showEnd = fold <= IslandFold.LABEL && end.isNotBlank()
+        // The words take what the slot has left, so spare room goes to them before it goes to
+        // air, and the countdown after them sits on the slot's right edge.
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(PartGap),
+        ) {
             Text(
-                item.sub,
-                style = styles.sub,
-                color = TextSecondary,
+                if (labelled) label else item.title,
+                style = if (item.tone == "quiet") styles.quietTitle else styles.title,
+                color = titleColor(item),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = SubMax),
+                modifier = if (labelCap != null) Modifier.widthIn(max = labelCap) else Modifier.weight(1f, fill = false),
             )
+            if (fold == IslandFold.DETAIL && item.sub.isNotBlank()) {
+                Text(
+                    item.sub,
+                    style = styles.sub,
+                    color = TextSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = SubMax),
+                )
+            }
+            item.ring?.let { RingProgress(it) }
         }
-        item.ring?.let { RingProgress(it) }
-        if (fold <= IslandFold.LABEL && end.isNotBlank()) {
+        if (showEnd) {
             Text(end, style = styles.end, color = endColor(item), maxLines = 1)
         }
     }
 }
 
-/** The tinted disc with the item's icon; a live or waiting item breathes, as on the web. */
+/**
+ * The tinted disc with the item's icon; a live or waiting item breathes, as on the web. The
+ * disc is its own plain frosted glass over an opaque base (the navbar's tab bubble does the
+ * same), so the island's dot grid stops at its edge instead of showing through the tint.
+ */
 @Composable
-private fun ToneMark(item: IslandItem, tone: Color) {
+private fun ToneMark(item: IslandItem, tone: Color, hazeState: HazeState?) {
     val pulses = (item.tone == "needs" || item.tone == "live") && !rememberReducedMotion()
     // The State is read in the draw phase, so the pulse redraws the mark each frame instead
     // of recomposing the island's item line for as long as something is live.
@@ -524,6 +555,7 @@ private fun ToneMark(item: IslandItem, tone: Color) {
         modifier = Modifier
             .size(MarkSize)
             .clip(CircleShape)
+            .frostedGlass(hazeState = hazeState, base = Background, tint = MarkGlass, blur = 16.dp)
             .drawBehind { drawRect(tone.copy(alpha = 0.2f + 0.12f * (glow?.value ?: 0f))) },
         contentAlignment = Alignment.Center,
     ) {

@@ -1,6 +1,10 @@
 package com.macrotracker.ui.screens.tilesmith
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
+import android.util.Base64
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.macrotracker.data.remote.AiCredentialResolver
@@ -18,6 +22,7 @@ import com.macrotracker.widget.tilesmith.TileSurface
 import com.macrotracker.widget.tilesmith.TileValue
 import com.macrotracker.widget.tilesmith.BlockStyle
 import com.macrotracker.widget.tilesmith.BlockType
+import com.macrotracker.widget.tilesmith.TileBlock
 import com.macrotracker.widget.tilesmith.TilesmithAi
 import com.macrotracker.widget.tilesmith.TilesmithPin
 import com.macrotracker.widget.tilesmith.TilesmithStore
@@ -36,7 +41,10 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /** One line in the studio's conversation. */
-data class StudioLine(val fromUser: Boolean, val text: String, val error: Boolean = false)
+data class StudioLine(val fromUser: Boolean, val text: String, val error: Boolean = false, val picture: Bitmap? = null)
+
+/** A picture to build from (a widget you like, a screenshot, a sketch), ready to send. */
+class StudioAttachment(val jpegBase64: String, val thumb: Bitmap)
 
 data class StudioState(
     /** The design on the stage; null before the first draft lands. */
@@ -49,8 +57,12 @@ data class StudioState(
     val busyFor: String? = null,
     val asks: List<TileAsk> = emptyList(),
     val aiReady: Boolean = false,
-    /** The design before the last change, for Undo. */
-    val undo: TileDesign? = null,
+    /** The designs before the last changes, newest last, for Undo. */
+    val undo: List<TileDesign> = emptyList(),
+    /** One-tap next changes the AI offered with its last answer. */
+    val suggestions: List<String> = emptyList(),
+    /** A picture to send with the next message. */
+    val attachment: StudioAttachment? = null,
     /** Placed copies showing this design. */
     val placed: Int = 0,
     /** A pin request is up: Android's dialog is showing. */
@@ -61,8 +73,9 @@ data class StudioState(
 
 /**
  * The Tilesmith studio: a design on the stage, the conversation that shapes it, and what it
- * still needs. Every change is saved straight away (the widgets showing it redraw), so there is
- * no Save step; Undo steps back one change.
+ * still needs; with no design open, your widgets and the starters. Every change is saved
+ * straight away (the widgets showing it redraw), so there is no Save step; Undo steps back
+ * through the last [UNDO_DEPTH] changes.
  */
 @HiltViewModel
 class TilesmithViewModel @Inject constructor(
@@ -77,6 +90,10 @@ class TilesmithViewModel @Inject constructor(
 
     private var aiJob: Job? = null
     private var opened: String? = null
+
+    private companion object {
+        const val UNDO_DEPTH = 20
+    }
 
     init {
         TilesmithStore.markSeen(context)
@@ -100,7 +117,7 @@ class TilesmithViewModel @Inject constructor(
         _state.update { it.copy(aiReady = credentials.hasCredentials()) }
         val saved = TilesmithStore.design(context, designId)
         when {
-            saved != null -> show(saved, lines = saved.chat.map { StudioLine(it.fromUser, it.text) })
+            saved != null -> show(saved, lines = saved.chat.map { StudioLine(it.fromUser, it.text) }, undo = emptyList())
             starterId != null -> TileStarters.byId(starterId)?.let { s ->
                 val d = TilesmithStore.save(context, TileStarters.instantiate(s))
                 show(d, lines = listOf(StudioLine(false, "Here's ${s.title}. Tell me what to change, or add it as it is.")))
@@ -112,9 +129,34 @@ class TilesmithViewModel @Inject constructor(
         }
     }
 
-    private fun show(d: TileDesign, lines: List<StudioLine>? = null, save: Boolean = true, undo: TileDesign? = _state.value.undo) {
+    /** Opens another of your designs in place (from the studio's own list). */
+    fun switchTo(designId: String) {
+        if (_state.value.busy || _state.value.design?.id == designId) return
+        val d = TilesmithStore.design(context, designId) ?: return
+        opened = "$designId|null|null"
+        _state.update { it.copy(dropped = 0, suggestions = emptyList(), asks = emptyList(), values = emptyMap()) }
+        show(d, lines = d.chat.map { StudioLine(it.fromUser, it.text) }, undo = emptyList())
+    }
+
+    /** Back to the empty studio: your widgets, the starters and a blank composer. */
+    fun newWidget() {
+        if (_state.value.busy) return
+        opened = "new|${System.currentTimeMillis()}"
+        valuesJob?.cancel()
+        _state.update { StudioState(aiReady = credentials.hasCredentials()) }
+    }
+
+    /** Starts from a starter, from the empty studio. */
+    fun startFrom(starterId: String) {
+        val s = TileStarters.byId(starterId) ?: return
+        val d = TilesmithStore.save(context, TileStarters.instantiate(s))
+        opened = "${d.id}|null|null"
+        show(d, lines = listOf(StudioLine(false, "Here's ${s.title}. Tell me what to change, or add it as it is.")), undo = emptyList())
+    }
+
+    private fun show(d: TileDesign, lines: List<StudioLine>? = null, save: Boolean = true, undo: List<TileDesign> = _state.value.undo) {
         val design = if (save) TilesmithStore.save(context, d) else d
-        _state.update { s -> s.copy(design = design, lines = lines ?: s.lines, undo = undo) }
+        _state.update { s -> s.copy(design = design, lines = lines ?: s.lines, undo = undo.takeLast(UNDO_DEPTH)) }
         refreshPlaced()
         loadValues(design)
         recheck()
@@ -184,12 +226,13 @@ class TilesmithViewModel @Inject constructor(
             return
         }
         val current = _state.value.design?.takeIf { TilesmithStore.design(context, it.id) != null }
-        _state.update { it.copy(busy = true, busyFor = ask, lines = it.lines + StudioLine(true, ask)) }
+        val picture = _state.value.attachment
+        _state.update { it.copy(busy = true, busyFor = ask, suggestions = emptyList(), attachment = null, lines = it.lines + StudioLine(true, ask, picture = picture?.thumb)) }
         aiJob = viewModelScope.launch {
             val result = runCatching {
                 withContext(Dispatchers.IO) {
                     val sources = TileNeeds.sourceStates(context)
-                    TilesmithAi.draft(context, ask, sources, current)
+                    TilesmithAi.draft(context, ask, sources, current, picture?.jpegBase64)
                 }
             }
             result.onSuccess { r ->
@@ -201,11 +244,13 @@ class TilesmithViewModel @Inject constructor(
                     createdAt = current?.createdAt ?: now,
                     chat = chat,
                 )
-                _state.update { it.copy(busy = false, busyFor = null, lines = it.lines + StudioLine(false, reply)) }
-                show(design, undo = current)
+                _state.update { it.copy(busy = false, busyFor = null, suggestions = r.suggestions, lines = it.lines + StudioLine(false, reply)) }
+                show(design, undo = _state.value.undo + listOfNotNull(current))
             }.onFailure { e ->
+                if (e is kotlinx.coroutines.CancellationException) return@onFailure
+                // The picture goes back in the composer, so a retry doesn't need picking it again.
                 _state.update {
-                    it.copy(busy = false, busyFor = null, lines = it.lines + StudioLine(false, e.message?.take(240) ?: "That didn't work. Try again?", error = true))
+                    it.copy(busy = false, busyFor = null, attachment = it.attachment ?: picture, lines = it.lines + StudioLine(false, e.message?.take(240) ?: "That didn't work. Try again?", error = true))
                 }
             }
         }
@@ -222,15 +267,79 @@ class TilesmithViewModel @Inject constructor(
         val d = _state.value.design ?: return
         val next = change(d)
         if (next == d) return
-        show(next, undo = d)
+        show(next, undo = _state.value.undo + d)
     }
 
     fun setSize(size: TileSize) {
         val d = _state.value.design ?: return
         val (next, dropped) = TileRules.reflow(d, size)
         _state.update { it.copy(dropped = dropped) }
-        show(next, undo = d)
+        show(next, undo = _state.value.undo + d)
     }
+
+    // ── One block at a time (the Blocks list) ───────────────────────────────
+
+    /** [change] applied to the block at [index] in reading order. */
+    fun updateBlock(index: Int, change: (TileBlock) -> TileBlock) = edit { d ->
+        var i = 0
+        d.copy(rows = d.rows.map { r -> r.copy(cells = r.cells.map { b -> if (i++ == index) change(b) else b }) })
+    }
+
+    fun removeBlock(index: Int) = edit { d ->
+        if (d.blocks.size <= 1) return@edit d
+        var i = 0
+        d.copy(rows = d.rows.map { r -> r.copy(cells = r.cells.filter { i++ != index }) }.filter { it.cells.isNotEmpty() })
+    }
+
+    /** Moves the block at [index] one place earlier ([delta] -1) or later (+1) in reading order, across rows. */
+    fun moveBlock(index: Int, delta: Int) = edit { d ->
+        val flat = d.rows.flatMapIndexed { ri, r -> r.cells.map { ri to it } }.toMutableList()
+        val j = index + delta
+        if (index !in flat.indices || j !in flat.indices) return@edit d
+        val a = flat[index]
+        val b = flat[j]
+        flat[index] = a.first to b.second
+        flat[j] = b.first to a.second
+        d.copy(rows = d.rows.mapIndexed { ri, r -> r.copy(cells = flat.filter { it.first == ri }.map { it.second }) })
+    }
+
+    /** Makes the block at [index] its row's hero (wider) or one share like the rest. */
+    fun setWeight(index: Int, weight: Int) = updateBlock(index) { it.copy(weight = weight.coerceIn(1, 4)) }
+
+    // ── A picture to build from ─────────────────────────────────────────────
+
+    /** Reads the picked picture, shrinks it to a size every provider takes, and holds it for the next message. */
+    fun attach(uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val a = runCatching {
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+                var sample = 1
+                while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 1280) sample *= 2
+                val raw = context.contentResolver.openInputStream(uri)?.use {
+                    BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
+                } ?: return@runCatching null
+                val long = maxOf(raw.width, raw.height)
+                val scaled = if (long > 1024) {
+                    val f = 1024f / long
+                    Bitmap.createScaledBitmap(raw, (raw.width * f).toInt().coerceAtLeast(1), (raw.height * f).toInt().coerceAtLeast(1), true)
+                } else raw
+                val bytes = java.io.ByteArrayOutputStream().use { out ->
+                    scaled.compress(Bitmap.CompressFormat.JPEG, 82, out)
+                    out.toByteArray()
+                }
+                val tl = maxOf(scaled.width, scaled.height)
+                val thumb = Bitmap.createScaledBitmap(scaled, (scaled.width * 240f / tl).toInt().coerceAtLeast(1), (scaled.height * 240f / tl).toInt().coerceAtLeast(1), true)
+                StudioAttachment(Base64.encodeToString(bytes, Base64.NO_WRAP), thumb)
+            }.getOrNull()
+            _state.update {
+                if (a != null) it.copy(attachment = a)
+                else it.copy(lines = it.lines + StudioLine(false, "Couldn't read that picture. Try another one?", error = true))
+            }
+        }
+    }
+
+    fun clearAttachment() = _state.update { it.copy(attachment = null) }
 
     fun setPalette(p: TilePalette) = edit { it.copy(palette = p) }
 
@@ -274,8 +383,10 @@ class TilesmithViewModel @Inject constructor(
     }
 
     fun undo() {
-        val prev = _state.value.undo ?: return
-        show(prev, undo = null)
+        val stack = _state.value.undo
+        val prev = stack.lastOrNull() ?: return
+        _state.update { it.copy(dropped = 0) }
+        show(prev, undo = stack.dropLast(1))
     }
 
     // ── Approvals and the home screen ───────────────────────────────────────
@@ -307,6 +418,7 @@ class TilesmithViewModel @Inject constructor(
 
     fun delete(designId: String) {
         TilesmithStore.delete(context, designId)
+        if (_state.value.design?.id == designId) newWidget()
         viewModelScope.launch(Dispatchers.IO) { TilesmithPin.redraw(context) }
     }
 

@@ -69,13 +69,20 @@ internal object TileResolver {
     private const val GROUP_TIMEOUT_MS = 40_000L
     private const val SLACK_MS = 20_000L
 
-    /** Reads what is due for [design] (everything when [force]) and returns the full map, stored. */
-    suspend fun refresh(context: Context, design: TileDesign, force: Boolean): Map<String, TileValue> {
+    /** The sources that ask the AI; they read last, so they can see the rest. */
+    private val AI_KEYS = setOf("ai.text", "ai.list")
+
+    /**
+     * Reads what is due for [design] (everything when [force]; only the sources in [only], all
+     * of them, when it is set: the listener's "the track changed") and returns the full map, stored.
+     */
+    suspend fun refresh(context: Context, design: TileDesign, force: Boolean, only: Set<String>? = null): Map<String, TileValue> {
         val app = context.applicationContext
         val previous = TilesmithStore.values(app, design.id)
         val now = System.currentTimeMillis()
         val due = design.blocks.mapNotNull { b ->
             val id = TileSources.bindingId(b) ?: return@mapNotNull null
+            if (only != null) return@mapNotNull if (b.bind in only) id to b else null
             val prev = previous[id]
             val maxAge = TileRules.bindingMaxAgeMinutes(design, b) * 60_000L
             val stale = prev == null || prev.state != TileValueState.OK || now - prev.readAt >= maxAge - SLACK_MS
@@ -84,7 +91,7 @@ internal object TileResolver {
         if (due.isEmpty()) return previous
 
         val out = previous.toMutableMap()
-        val (ai, rest) = due.partition { it.second.bind == "ai.text" }
+        val (ai, rest) = due.partition { it.second.bind in AI_KEYS }
         rest.groupBy { TileSources.byKey(it.second.bind)?.group }.forEach { (group, items) ->
             if (group == null) return@forEach
             val read = runCatching {
@@ -101,7 +108,9 @@ internal object TileResolver {
             }
         }
         ai.forEach { (id, b) ->
-            val fresh = runCatching { withTimeoutOrNull(GROUP_TIMEOUT_MS + 20_000L) { aiLine(app, design, b, out) } }
+            val fresh = runCatching {
+                withTimeoutOrNull(GROUP_TIMEOUT_MS + 20_000L) { if (b.bind == "ai.list") aiList(app, design, b, out) else aiLine(app, design, b, out) }
+            }
                 .onFailure { if (it is CancellationException) throw it }
                 .getOrNull()
             out[id] = when {
@@ -112,8 +121,24 @@ internal object TileResolver {
         // Drop what no block reads any more.
         val live = design.blocks.mapNotNull(TileSources::bindingId).toSet()
         val kept = out.filterKeys { it in live }
-        TilesmithStore.saveValues(app, design.id, kept)
+        // The pictures the design will draw, fetched now so a render never waits on the network.
+        runCatching {
+            withTimeoutOrNull(GROUP_TIMEOUT_MS) { TileImages.prefetch(app, app.widgetEntryPoint().okHttpClient(), picturesOf(design, kept)) }
+        }.onFailure { if (it is CancellationException) throw it }
+        TilesmithStore.saveValues(app, design.id, kept, stamp = only == null)
         return kept
+    }
+
+    /** Every picture [design]'s blocks show from [values]: a carousel's cards, a list's thumbnails, an image. */
+    fun picturesOf(design: TileDesign, values: Map<String, TileValue>): List<String> = design.blocks.flatMap { b ->
+        val v = TileSources.bindingId(b)?.let { values[it] }
+        when (b.type) {
+            BlockType.IMAGE -> listOfNotNull(b.url?.takeIf { b.bind == null }, v?.picture)
+            BlockType.MEDIA -> listOfNotNull(v?.image)
+            BlockType.CAROUSEL -> v?.items.orEmpty().take(b.max ?: 10).mapNotNull { it.image }
+            BlockType.LIST -> v?.items.orEmpty().take(b.max ?: 12).mapNotNull { it.image }
+            else -> emptyList()
+        }
     }
 
     private suspend fun readGroup(
@@ -124,7 +149,9 @@ internal object TileResolver {
         force: Boolean,
     ): Map<String, TileValue> = when (group) {
         SourceGroup.TIME -> items.associate { (id, b) -> id to time(b) }
-        SourceGroup.PHONE -> withContext(Dispatchers.IO) { items.associate { (id, b) -> id to phone(context, b) } }
+        SourceGroup.PHONE -> withContext(Dispatchers.IO) {
+            items.associate { (id, b) -> id to if (b.bind == "phone.bluetooth" || b.bind == "phone.headphones") TileReaders.bluetooth(context, b) else phone(context, b) }
+        }
         SourceGroup.HEALTH -> health(context, items)
         SourceGroup.FOOD -> food(context, items)
         SourceGroup.WEATHER -> weather(context, items, force)
@@ -134,6 +161,12 @@ internal object TileResolver {
         SourceGroup.GITHUB -> github(context, items, design, force)
         SourceGroup.DASHBOARD -> dashboard(context, items)
         SourceGroup.WEB -> withContext(Dispatchers.IO) { items.associate { (id, b) -> id to web(context, b) } }
+        SourceGroup.MEDIA -> withContext(Dispatchers.IO) { TileReaders.media(context, items) }
+        SourceGroup.GOOGLE -> TileReaders.google(context, items)
+        SourceGroup.PEOPLE -> withContext(Dispatchers.IO) { TileReaders.people(context, items) }
+        SourceGroup.PHOTOS -> withContext(Dispatchers.IO) { TileReaders.photos(context, items) }
+        SourceGroup.VIDEO -> TileReaders.video(context, items)
+        SourceGroup.UPCOMING -> TileReaders.upcoming(context, items)
     }
 
     // ── Formatting ──────────────────────────────────────────────────────────
@@ -286,7 +319,13 @@ internal object TileResolver {
         "health.resting_hr" to HealthConnectRepository.RESTING_HEART_RATE_PERMISSION,
         "health.sleep" to HealthConnectRepository.SLEEP_PERMISSION,
         "health.spo2" to HealthConnectRepository.OXYGEN_SATURATION_PERMISSION,
+        "health.workouts" to HealthConnectRepository.EXERCISE_PERMISSION,
+        "health.weight" to HealthConnectRepository.WEIGHT_PERMISSION,
+        "health.hrv" to HealthConnectRepository.HRV_PERMISSION,
     )
+
+    /** Health sources [TileReaders.healthExtras] reads, outside today's stats. */
+    private val HEALTH_EXTRAS = setOf("health.workouts", "health.weight", "health.hrv")
 
     /** The Health Connect permissions [blocks] read with. */
     fun healthPermissions(blocks: List<TileBlock>): Set<String> = blocks.mapNotNull { HEALTH_PERMISSION[it.bind] }.toSet()
@@ -296,7 +335,9 @@ internal object TileResolver {
         if (!hc.isAvailable()) return items.associate { it.first to TileValue.needs("Install Health Connect") }
         val granted = runCatching { hc.getGrantedPermissions() }.getOrDefault(emptySet())
         val background = !hc.backgroundReadAvailable || HealthConnectRepository.BACKGROUND_PERMISSION in granted
-        val stats = runCatching { hc.readTodayStats() }
+        val extras = items.filter { it.second.bind in HEALTH_EXTRAS && HEALTH_PERMISSION[it.second.bind] in granted }
+        val extraValues = if (extras.isEmpty()) emptyMap() else TileReaders.healthExtras(context, extras)
+        val stats = if (items.all { it.second.bind in HEALTH_EXTRAS }) Result.failure(IllegalStateException()) else runCatching { hc.readTodayStats() }
         val week = if (items.any { it.second.bind == "health.steps_week" }) {
             runCatching {
                 val today = LocalDate.now(zone)
@@ -309,6 +350,7 @@ internal object TileResolver {
             val perm = HEALTH_PERMISSION[b.bind]
             id to when {
                 perm != null && perm !in granted -> TileValue.needs("Allow ${TileSources.byKey(b.bind)?.label?.lowercase()} in Health Connect")
+                b.bind in HEALTH_EXTRAS -> extraValues[id] ?: TileValue.error("Health Connect didn't answer")
                 stats.isFailure && !background -> TileValue.needs("Let Health Connect share in the background")
                 stats.isFailure -> TileValue.error("Health Connect didn't answer")
                 else -> {
@@ -737,27 +779,64 @@ internal object TileResolver {
     // ── Web ─────────────────────────────────────────────────────────────────
 
     private fun web(context: Context, b: TileBlock): TileValue {
-        if (b.bind != "web.json") return TileValue.error("Unknown source")
         val url = b.url ?: return TileValue.error("No address set")
         if (!TilesmithStore.siteApproved(context, url)) return TileValue.needs("Allow ${TilesmithStore.siteHost(url) ?: "the site"} in Tilesmith")
         val http = context.widgetEntryPoint().okHttpClient()
         return runCatching {
-            http.newCall(Request.Builder().url(url).header("Accept", "application/json").build()).execute().use { r ->
-                if (!r.isSuccessful) return TileValue.error("The site said ${r.code}")
-                val body = r.body?.string().orEmpty()
-                val v = JsonPath.read(JSONTokener(body).nextValue(), b.path)
-                when (v) {
-                    null, JSONObject.NULL -> TileValue.empty("Nothing at ${b.path ?: "the top"}")
-                    is Number -> TileValue(number = v.toDouble(), sub = b.label ?: TilesmithStore.siteHost(url))
-                    is JSONArray -> TileValue(items = (0 until minOf(v.length(), b.max ?: 6)).map { i -> TileItem(JsonPath.describe(v.opt(i))) }, number = v.length().toDouble())
-                    is JSONObject -> TileValue(text = JsonPath.describe(v).take(200))
-                    else -> {
-                        val s = v.toString()
-                        TileValue(text = s.take(200), number = s.trim().toDoubleOrNull())
-                    }
-                }
+            when (b.bind) {
+                "web.json" -> webJson(http, b, url)
+                "web.feed" -> webFeed(http, b, url)
+                "web.image" -> webImage(context, http, url)
+                else -> TileValue.error("Unknown source")
             }
         }.getOrElse { TileValue.error(it.message?.take(80) ?: "Couldn't read the site") }
+    }
+
+    private fun fetch(http: okhttp3.OkHttpClient, url: String, accept: String): okhttp3.Response =
+        http.newCall(
+            Request.Builder().url(url).header("Accept", accept)
+                .header("User-Agent", "Mozilla/5.0 (Linux; Android) DailyDash Tilesmith")
+                .build(),
+        ).execute()
+
+    private fun webJson(http: okhttp3.OkHttpClient, b: TileBlock, url: String): TileValue = fetch(http, url, "application/json").use { r ->
+        if (!r.isSuccessful) return TileValue.error("The site said ${r.code}")
+        val body = r.body?.string().orEmpty()
+        when (val v = JsonPath.read(JSONTokener(body).nextValue(), b.path)) {
+            null, JSONObject.NULL -> TileValue.empty("Nothing at ${b.path ?: "the top"}")
+            is Number -> TileValue(number = v.toDouble(), sub = b.label ?: TilesmithStore.siteHost(url))
+            is JSONArray -> TileValue(items = TileFeeds.jsonRows(v, b.fields, b.max ?: 10), number = v.length().toDouble())
+            is JSONObject -> TileValue(text = JsonPath.describe(v).take(200))
+            else -> {
+                val s = v.toString()
+                TileValue(text = s.take(200), number = s.trim().toDoubleOrNull())
+            }
+        }
+    }
+
+    private fun webFeed(http: okhttp3.OkHttpClient, b: TileBlock, url: String): TileValue = fetch(http, url, "application/rss+xml, application/atom+xml, application/xml, text/xml").use { r ->
+        if (!r.isSuccessful) return TileValue.error("The site said ${r.code}")
+        val feed = TileFeeds.parse(r.body?.string().orEmpty()) ?: return TileValue.error("That isn't an RSS or Atom feed")
+        if (feed.entries.isEmpty()) return TileValue(items = emptyList(), state = TileValueState.EMPTY, note = "The feed is empty")
+        val now = System.currentTimeMillis()
+        TileValue(
+            text = feed.title,
+            number = feed.entries.size.toDouble(),
+            url = feed.entries.first().link,
+            items = feed.entries.take(b.max ?: 10).map { e ->
+                TileItem(e.title, e.source, e.atMs?.let { TileReaders.ago(it, now) }, null, e.image, e.link)
+            },
+        )
+    }
+
+    /** A picture that changes at the same address (a webcam): read again each time, kept under one name. */
+    private fun webImage(context: Context, http: okhttp3.OkHttpClient, url: String): TileValue = fetch(http, url, "image/*").use { r ->
+        if (!r.isSuccessful) return TileValue.error("The site said ${r.code}")
+        val bytes = r.body?.bytes() ?: return TileValue.error("No picture there")
+        val key = "web_" + Integer.toHexString(url.hashCode())
+        TileImages.forget(context, "local:$key")
+        val src = TileImages.storeLocalBytes(context, key, bytes) ?: return TileValue.error("That isn't a picture")
+        TileValue(image = src, text = TilesmithStore.siteHost(url), url = url, icon = "image")
     }
 
     // ── AI ──────────────────────────────────────────────────────────────────
@@ -805,6 +884,49 @@ specific and useful at a glance. Never invent facts; when you searched the web, 
         )
         val clean = WidgetAi.clean(text, 220)
         return if (clean.isBlank()) TileValue.error("The AI sent nothing back") else TileValue(text = clean, icon = if (b.web) "globe" else "sparkles")
+    }
+
+    private const val AI_LIST_STYLE = """You fill the rows of a list on a phone home-screen widget.
+Answer with only JSON: {"rows": [{"title": "...", "sub": "...", "trailing": "...", "link": "https://..."}]}.
+title is at most 40 characters, sub at most 60 (optional), trailing a short value at most 10 (a time, a score,
+a price; optional), link where a tap should go (optional). Plain text, no markdown, no emoji. Never invent
+facts: when you searched the web, use what you found; when you can't know, say so in one row."""
+
+    private suspend fun aiList(context: Context, design: TileDesign, b: TileBlock, values: Map<String, TileValue>): TileValue {
+        if (!WidgetAi.isAvailable(context)) return TileValue.needs("Set up an AI provider in Settings → AI")
+        if (!WidgetAi.isEnabled(context)) return TileValue.needs("Turn on AI lines in Settings → Widgets")
+        val ask = b.text?.trim().orEmpty().ifEmpty { return TileValue.error("Say what the rows should be") }
+        val now = java.time.ZonedDateTime.now(zone)
+        val prompt = buildString {
+            append(AI_LIST_STYLE).append("\n\n")
+            append("Now: ").append(now.format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy, HH:mm z", Locale.ENGLISH))).append('\n')
+            append("At most ").append(b.max ?: 6).append(" rows.\n")
+            append("\nThe ask: ").append(ask)
+        }
+        val ep = context.widgetEntryPoint()
+        val settings = ep.settingsRepository()
+        val provider = settings.getAiProvider()
+        val auth = ep.aiCredentialResolver().resolve(provider)
+        if (auth.isBlank) return TileValue.needs("Set up an AI provider in Settings → AI")
+        val text = AiApiClient.generate(
+            httpClient = ep.okHttpClient(),
+            provider = provider,
+            apiKey = auth.secret,
+            params = AiApiClient.GenerateParams(
+                prompt = prompt,
+                temperature = 0.3,
+                maxOutputTokens = if (b.web) 2000 else 900,
+                openRouterModelId = settings.getOpenRouterModelId(),
+                anthropicModelId = settings.getAnthropicModelId(),
+                anthropicOAuth = auth.anthropicOAuth,
+                webSearch = b.web,
+                // Search and JSON mode don't mix on every provider; the rows are read leniently instead.
+                jsonMode = !b.web,
+                dashboardUrl = settings.dashboardServerUrl.value,
+            ),
+        )
+        val rows = TileFeeds.aiRows(text, b.max ?: 6)
+        return if (rows.isEmpty()) TileValue.error("The AI sent no rows") else TileValue(items = rows, number = rows.size.toDouble(), icon = if (b.web) "globe" else "sparkles")
     }
 
     /** Whether READ_CALENDAR is granted (the calendar source checks again when it reads). */

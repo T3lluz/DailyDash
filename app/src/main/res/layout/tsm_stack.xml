@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tilesmith's carousel: a StackView of cards you swipe through (a widget can't scroll sideways). Filled by TileRender's CarouselBlock. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <StackView
+        android:id="@+id/tsm_stack"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:loopViews="true" />
+
+    <TextView
+        android:id="@+id/tsm_stack_empty"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:textColor="#B3FFFFFF"
+        android:textSize="13sp"
+        android:text="@string/tsm_carousel_empty" />
+</FrameLayout>

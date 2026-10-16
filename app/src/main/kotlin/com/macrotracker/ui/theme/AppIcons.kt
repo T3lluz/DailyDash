@@ -260,6 +260,20 @@ object AppIcons {
     val Pause: ImageVector by lazy { icon("Pause") { s("M15 3 h3 a1 1 0 0 1 1 1 v16 a1 1 0 0 1 -1 1 h-3 a1 1 0 0 1 -1 -1 v-16 a1 1 0 0 1 1 -1 z"); s("M6 3 h3 a1 1 0 0 1 1 1 v16 a1 1 0 0 1 -1 1 h-3 a1 1 0 0 1 -1 -1 v-16 a1 1 0 0 1 1 -1 z") } }
     /** Tabler `heart-rate-monitor` */
     val HeartRateMonitor: ImageVector by lazy { icon("HeartRateMonitor") { s("M3 5 a1 1 0 0 1 1 -1 h16 a1 1 0 0 1 1 1 v10 a1 1 0 0 1 -1 1 h-16 a1 1 0 0 1 -1 -1 l0 -10"); s("M7 20 h10"); s("M9 16 v4"); s("M15 16 v4"); s("M7 10 h2 l2 3 l2 -6 l1 3 h3") } }
+    /** Lucide `users` */
+    val Users: ImageVector by lazy { icon("Users") { s("M16 21 v-2 a4 4 0 0 0 -4 -4 H6 a4 4 0 0 0 -4 4 v2"); s("M5 7 a4 4 0 1 0 8 0 a4 4 0 1 0 -8 0"); s("M22 21 v-2 a4 4 0 0 0 -3 -3.87"); s("M16 3.13 a4 4 0 0 1 0 7.75") } }
+    /** Lucide `bluetooth` */
+    val Bluetooth: ImageVector by lazy { icon("Bluetooth") { s("m7 7 l10 10 l-5 5 V2 l5 5 L7 17") } }
+    /** Lucide `music` */
+    val Music: ImageVector by lazy { icon("Music") { s("M9 18 V5 l12 -2 v13"); s("M3 18 a3 3 0 1 0 6 0 a3 3 0 1 0 -6 0"); s("M15 16 a3 3 0 1 0 6 0 a3 3 0 1 0 -6 0") } }
+    /** Lucide `battery` */
+    val Battery: ImageVector by lazy { icon("Battery") { s("M4 6 h12 a2 2 0 0 1 2 2 v8 a2 2 0 0 1 -2 2 h-12 a2 2 0 0 1 -2 -2 v-8 a2 2 0 0 1 2 -2 z"); s("M22 14 v-4") } }
+    /** Lucide `shield-check` */
+    val ShieldCheck: ImageVector by lazy { icon("ShieldCheck") { s("M20 13 c0 5 -3.5 7.5 -7.66 8.95 a1 1 0 0 1 -0.67 -0.01 C7.5 20.5 4 18 4 13 V6 a1 1 0 0 1 1 -1 c2 0 4.5 -1.2 6.24 -2.72 a1.17 1.17 0 0 1 1.52 0 C14.51 3.81 17 5 19 5 a1 1 0 0 1 1 1 z"); s("m9 12 l2 2 l4 -4") } }
+    /** Lucide `image-plus` */
+    val ImagePlus: ImageVector by lazy { icon("ImagePlus") { s("M16 5 h6"); s("M19 2 v6"); s("M21 11.5 V19 a2 2 0 0 1 -2 2 H5 a2 2 0 0 1 -2 -2 V5 a2 2 0 0 1 2 -2 h7.5"); s("m21 15 l-3.086 -3.086 a2 2 0 0 0 -2.828 0 L6 21"); s("M7 9 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0") } }
+    /** Lucide `list-checks` */
+    val ListChecks: ImageVector by lazy { icon("ListChecks") { s("m3 17 l2 2 l4 -4"); s("m3 7 l2 2 l4 -4"); s("M13 6 h8"); s("M13 12 h8"); s("M13 18 h8") } }
 }
 
 private val Ink = SolidColor(Color.Black)

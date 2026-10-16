@@ -179,6 +179,67 @@ object TileStarters {
                 ),
             ),
         ),
+        Starter(
+            "videos", "New videos", "The newest videos from my YouTube channels as cards I swipe through",
+            listOf("youtube", "video", "videos", "uploads", "subscriptions", "channel", "carousel", "swipe", "watch"),
+            d(
+                "New videos", TileSize.WIDE, TilePalette.RACING, TileSurface.TONAL, 15,
+                row(1, TileBlock(BlockType.CAROUSEL, bind = "youtube.latest", max = 10)),
+            ),
+        ),
+        Starter(
+            "inbox", "Inbox", "My Gmail inbox as a list I scroll, with the unread count",
+            listOf("gmail", "mail", "email", "inbox", "unread", "e-mail"),
+            d(
+                "Inbox", TileSize.LARGE, TilePalette.WALLPAPER, TileSurface.TONAL, 5,
+                row(
+                    1,
+                    TileBlock(BlockType.METRIC, weight = 2, bind = "gmail.unread", label = "Unread", icon = "mail", style = BlockStyle.PLAIN),
+                    TileBlock(BlockType.BUTTON, label = "Gmail", icon = "mail", tap = "url:https://mail.google.com/mail/u/0/", style = BlockStyle.FILLED),
+                ),
+                row(3, TileBlock(BlockType.LIST, bind = "gmail.inbox", variant = "scroll", max = 25)),
+            ),
+        ),
+        Starter(
+            "player", "Now playing", "What's playing, with the album art and play, pause and skip",
+            listOf("music", "spotify", "playing", "song", "player", "podcast", "now playing", "track", "album"),
+            d(
+                "Now playing", TileSize.WIDE, TilePalette.WALLPAPER, TileSurface.TONAL, 15,
+                row(1, TileBlock(BlockType.MEDIA, bind = "media.now")),
+            ),
+        ),
+        Starter(
+            "photo", "Photo frame", "A different photo from my phone every half hour",
+            listOf("photo", "photos", "picture", "pictures", "gallery", "frame", "memories", "camera roll"),
+            d(
+                "Photo frame", TileSize.SMALL, TilePalette.WALLPAPER, TileSurface.SOFT, 30,
+                row(1, TileBlock(BlockType.IMAGE, bind = "photos.random", every = 30)),
+            ),
+        ),
+        Starter(
+            "live", "Live now", "Who I follow on Twitch is live, as cards I swipe through",
+            listOf("twitch", "live", "stream", "streams", "streamer", "streaming"),
+            d(
+                "Live now", TileSize.WIDE, TilePalette.LAVENDER, TileSurface.TONAL, 5,
+                row(1, TileBlock(BlockType.CAROUSEL, bind = "twitch.live", max = 8)),
+            ),
+        ),
+        Starter(
+            "coming", "Coming up", "New episodes, films and F1 sessions coming up, with their posters",
+            listOf("episodes", "episode", "shows", "series", "sonarr", "radarr", "movies", "films", "coming up", "premiere"),
+            d(
+                "Coming up", TileSize.WIDE, TilePalette.BERRY, TileSurface.TONAL, 30,
+                row(1, TileBlock(BlockType.CAROUSEL, bind = "upcoming.list", max = 8)),
+            ),
+        ),
+        Starter(
+            "news", "Headlines", "The latest headlines from a news feed, with pictures, to scroll through",
+            listOf("headlines", "rss", "feed", "articles", "bbc", "nrk", "news feed", "blog"),
+            d(
+                "Headlines", TileSize.LARGE, TilePalette.OCEAN, TileSurface.TONAL, 30,
+                row(1, TileBlock(BlockType.LIST, bind = "web.feed", url = "https://feeds.bbci.co.uk/news/rss.xml", variant = "scroll", max = 20, label = "BBC News")),
+            ),
+        ),
     )
 
     fun byId(id: String?): Starter? = all.firstOrNull { it.id == id }

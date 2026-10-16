@@ -38,6 +38,7 @@ object SettingsRoutes {
     const val NUTRITION = "settings_nutrition"
     const val SERVERS = "settings_servers"
     const val ABOUT = "settings_about"
+    const val PERMISSIONS = "settings_permissions"
 }
 
 // Other pushed sub-screens
