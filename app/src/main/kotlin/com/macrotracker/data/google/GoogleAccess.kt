@@ -42,7 +42,8 @@ enum class GoogleScope(val id: String, val label: String, val detail: String, va
  * Asking ([request]) shows Google's own consent sheet once per scope; after that [token] gets
  * a fresh access token silently, from a widget refresh with the app closed. When Google wants
  * the person again (a revoked grant, a 7-day Testing-mode expiry) [token] returns null and the
- * scope reads as not granted, so the studio and Settings → Permissions offer it again.
+ * scope reads as not granted, so the studio and Settings → Permissions offer it again, and
+ * [GoogleReconnect] posts a one-tap reminder.
  *
  * Cloud Console, once: enable the Gmail API and the Google Tasks API in the project that has
  * the Android client, and add `gmail.readonly` and `tasks.readonly` under the consent screen's
@@ -116,6 +117,7 @@ class GoogleAccess @Inject constructor(
         val email = fetchEmail(token)
         if (email != null) prefs.edit { putString("email", email) }
         synchronized(tokens) { ok.forEach { tokens[it] = token to System.currentTimeMillis() } }
+        GoogleReconnect.clear(context, ok)
         return if (ok.isEmpty()) AuthorizeOutcome.Failed("Google didn't grant ${scopes.joinToString { it.label }}") else AuthorizeOutcome.Ready(token, email)
     }
 
@@ -133,7 +135,9 @@ class GoogleAccess @Inject constructor(
             }
         } ?: return null
         if (result.hasResolution() || result.accessToken == null) {
+            // Allowed before, wanted again now: Testing mode's 7 days ran out, or it was revoked.
             mark(listOf(scope), false)
+            GoogleReconnect.lapse(context, listOf(scope))
             return null
         }
         val token = result.accessToken!!
@@ -155,6 +159,8 @@ class GoogleAccess @Inject constructor(
             }
         }
         mark(scopes, false)
+        // Turned off on purpose: nothing to remind about.
+        GoogleReconnect.clear(context, scopes)
     }
 
     private suspend fun fetchEmail(token: String): String? = withContext(Dispatchers.IO) {

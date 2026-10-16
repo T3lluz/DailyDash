@@ -200,6 +200,13 @@ fun MainScreen(
             "settings" -> navController.navigateToTab(Screen.Settings.route)
             "widgets" -> navController.navigateToSubScreen(SubScreenRoutes.WIDGETS)
             "servers" -> navController.navigate(SettingsRoutes.SERVER_DASHBOARD) { launchSingleTop = true }
+            // The reconnect notification: Permissions opens Google's sheet for what lapsed.
+            "permissions", com.macrotracker.data.google.GoogleReconnect.OPEN -> {
+                if (where == com.macrotracker.data.google.GoogleReconnect.OPEN) {
+                    com.macrotracker.data.google.GoogleReconnect.pending = com.macrotracker.data.google.GoogleReconnect.lapsed(context)
+                }
+                navController.navigateToSubScreen(SettingsRoutes.PERMISSIONS)
+            }
             else -> if (where.startsWith(SubScreenRoutes.TILESMITH)) {
                 val design = where.substringAfter(':', "").ifBlank { null }
                 navController.navigateToSubScreen(SubScreenRoutes.tilesmith(designId = design))

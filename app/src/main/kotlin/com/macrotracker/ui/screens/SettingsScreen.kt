@@ -150,8 +150,12 @@ fun SettingsScreen(
                 tint = Success,
                 title = "Permissions",
                 summary = "Phone access, Google and Health Connect, for the app and widgets",
-                status = "${allowed.first} of ${allowed.second}",
-                statusTone = if (allowed.first == allowed.second) SettingsStatusTone.GOOD else SettingsStatusTone.PLAIN,
+                status = if (com.macrotracker.data.google.GoogleReconnect.lapsed(context).isNotEmpty()) "Reconnect" else "${allowed.first} of ${allowed.second}",
+                statusTone = when {
+                    com.macrotracker.data.google.GoogleReconnect.lapsed(context).isNotEmpty() -> SettingsStatusTone.ATTENTION
+                    allowed.first == allowed.second -> SettingsStatusTone.GOOD
+                    else -> SettingsStatusTone.PLAIN
+                },
                 onClick = onNavigateToPermissions,
             )
             SettingsRowDivider()

@@ -214,7 +214,11 @@ fun DailyDashNavHost(
         }
 
         subScreen(SettingsRoutes.PERMISSIONS) { entry ->
-            PermissionsSettingsScreen(onNavigateBack = { navController.popSubScreen(entry) })
+            PermissionsSettingsScreen(
+                onNavigateBack = { navController.popSubScreen(entry) },
+                onOpenRoute = { navController.navigateToSubScreen(it) },
+                onOpenTab = { navController.navigateToTab(it) },
+            )
         }
 
         subScreen(SettingsRoutes.NUTRITION) { entry ->
