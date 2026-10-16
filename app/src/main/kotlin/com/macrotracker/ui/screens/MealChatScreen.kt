@@ -110,6 +110,9 @@ import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.AiViewModel
+import com.macrotracker.ui.viewmodel.AiSetupViewModel
+import com.macrotracker.ui.components.AiPill
+import com.macrotracker.ui.components.AiPickerSheet
 import com.macrotracker.ui.viewmodel.NutritionChatMessage
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
@@ -158,8 +161,11 @@ private fun MacrosChatPane(
     onNavigateToCameraScan: () -> Unit,
     onNavigateToAiSettings: () -> Unit,
     viewModel: AiViewModel,
+    aiSetup: AiSetupViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
+    val ai by aiSetup.state.collectAsState()
+    var pickingAi by remember { mutableStateOf(false) }
     val messages by viewModel.messages.collectAsState()
     val loading by viewModel.loading.collectAsState()
     val loggedCount by viewModel.loggedCount.collectAsState()
@@ -458,14 +464,27 @@ private fun MacrosChatPane(
                 hazeState = chatHaze,
                 clearsNavPill = false,
                 leading = {
-                    MealPhotoButton(
-                        enabled = !loading,
-                        onTakePhoto = ::onTakeMealPhoto,
-                        onAddPhoto = ::onAddMealPhoto,
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        MealPhotoButton(
+                            enabled = !loading,
+                            onTakePhoto = ::onTakeMealPhoto,
+                            onAddPhoto = ::onAddMealPhoto,
+                        )
+                        // The same AI pill and sheet as Tilesmith; photos need one that sees pictures.
+                        AiPill(ai.current, onClick = { pickingAi = true }, compact = true, open = pickingAi)
+                    }
                 },
             )
         }
+    }
+
+    if (pickingAi) {
+        AiPickerSheet(
+            viewModel = aiSetup,
+            onDismiss = { pickingAi = false },
+            onManage = onNavigateToAiSettings,
+            note = "Estimates your meals. Photos need Claude, Gemini or OpenAI",
+        )
     }
 }
 

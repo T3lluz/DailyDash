@@ -17,7 +17,6 @@
     <img src="docs/integrations/claude.svg" width="22" alt="Claude" title="Claude" />&nbsp;
     <img src="docs/integrations/gemini.svg" width="22" alt="Gemini" title="Gemini" />&nbsp;
     <img src="docs/integrations/openai.svg" width="22" alt="OpenAI" title="OpenAI" />&nbsp;
-    <img src="docs/integrations/openrouter.svg" width="22" alt="OpenRouter" title="OpenRouter" />&nbsp;
     <img src="docs/integrations/f1.svg" width="22" alt="Formula 1" title="Formula 1" />&nbsp;
     <img src="docs/integrations/github.svg" width="22" alt="GitHub" title="GitHub" />&nbsp;
     <img src="docs/integrations/youtube.svg" width="22" alt="YouTube" title="YouTube" />&nbsp;
@@ -58,7 +57,7 @@
 
 **Health Connect metrics** (read-only, each with its own toggle): steps, heart rate, resting HR, SpO₂, respiratory rate, distance, floors, elevation, sleep, active and total calories, workouts from Garmin Connect, Samsung Health, Google Fit, Strava and others.
 
-**AI providers** (**Settings → AI**): <img src="docs/integrations/claude.svg" width="14" alt="" /> **Claude** by signing in with Pro, Max, Team or Enterprise, or an [API key](https://console.anthropic.com/) · <img src="docs/integrations/gemini.svg" width="14" alt="" /> **Gemini** ([free key](https://aistudio.google.com/)) · <img src="docs/integrations/openai.svg" width="14" alt="" /> **OpenAI** ([key](https://platform.openai.com/api-keys)) · <img src="docs/integrations/openrouter.svg" width="14" alt="" /> **OpenRouter** ([key](https://openrouter.ai/keys), with a priced picker of cheap models).
+**AI providers** (**Settings → AI**): <img src="docs/integrations/claude.svg" width="14" alt="" /> **Claude** by signing in with Pro, Max, Team or Enterprise, or an [API key](https://console.anthropic.com/) · <img src="docs/integrations/gemini.svg" width="14" alt="" /> **Gemini** ([free key](https://aistudio.google.com/)) · <img src="docs/integrations/openai.svg" width="14" alt="" /> **OpenAI** ([key](https://platform.openai.com/api-keys)) · **Cursor**, your Cursor plan through the dashboard (it runs the official Cursor CLI) · <img src="docs/integrations/hermes.png" width="14" alt="" /> **Hermes**, the dashboard's own model. Every picker marks how each one is let in: your account, an API key, or the dashboard.
 
 ## <img src="docs/integrations/privacy.svg" width="20" alt="" /> Privacy
 
@@ -85,7 +84,7 @@ It builds without keys. Add only what you need to `local.properties`:
 | --- | --- |
 | `GITHUB_CLIENT_ID` | Connect GitHub: [OAuth App](https://github.com/settings/developers) with Device Flow on, no secret |
 | `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET` | Connect Twitch: [confidential app](https://dev.twitch.tv/console) |
-| `GEMINI_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY` | Default AI keys; keys and Claude sign-in from Settings win |
+| `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` | Default AI keys; keys and Claude sign-in from Settings win |
 
 Connect Google (YouTube) needs no key: an Android OAuth client for `com.macrotracker` with the `app/tester.jks` SHA-1 and YouTube Data API v3 on. Gmail and Google Tasks widgets use the same client: turn on the Gmail API and the Google Tasks API, add the two read-only scopes to the consent screen and publish it. Steps are in [`local.properties.example`](local.properties.example).
 

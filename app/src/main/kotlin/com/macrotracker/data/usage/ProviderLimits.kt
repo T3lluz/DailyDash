@@ -12,8 +12,6 @@ import java.time.OffsetDateTime
  * - Claude: `GET https://api.anthropic.com/api/oauth/usage` with the subscription's OAuth
  *   token and `anthropic-beta: oauth-2025-04-20` (what Claude Code's `/usage` reads). It counts
  *   everything on the account: claude.ai, the desktop app, Claude Code on any machine.
- * - OpenRouter: `GET https://openrouter.ai/api/v1/key` with the key: what it has spent today,
- *   this week and this month, and its limit.
  *
  * Pure parsing, pinned by ProviderLimitsTest.
  */
@@ -31,19 +29,6 @@ data class MeasuredWindow(
 data class ExtraUsage(val enabled: Boolean, val used: Double, val limit: Double?, val currency: String)
 
 data class ClaudeLimits(val windows: List<MeasuredWindow>, val extra: ExtraUsage?, val readAt: Instant)
-
-data class OpenRouterKeyUsage(
-    val label: String,
-    /** Credits spent by the key, all time, in dollars. */
-    val total: Double,
-    val daily: Double?,
-    val weekly: Double?,
-    val monthly: Double?,
-    /** The key's own spending cap, when it has one. */
-    val limit: Double?,
-    val remaining: Double?,
-    val freeTier: Boolean,
-)
 
 object ProviderLimits {
 
@@ -87,20 +72,6 @@ object ProviderLimits {
             )
         }?.takeIf { it.enabled }
         return ClaudeLimits(windows, extra, now)
-    }
-
-    fun parseOpenRouterKey(o: JSONObject): OpenRouterKeyUsage? {
-        val d = o.optJSONObject("data") ?: return null
-        return OpenRouterKeyUsage(
-            label = d.optString("label"),
-            total = d.number("usage") ?: 0.0,
-            daily = d.number("usage_daily"),
-            weekly = d.number("usage_weekly"),
-            monthly = d.number("usage_monthly"),
-            limit = d.number("limit"),
-            remaining = d.number("limit_remaining"),
-            freeTier = d.optBoolean("is_free_tier"),
-        )
     }
 
     private fun JSONObject.number(key: String): Double? =

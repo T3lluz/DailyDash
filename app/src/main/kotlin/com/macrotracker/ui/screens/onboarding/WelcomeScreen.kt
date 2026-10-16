@@ -74,7 +74,7 @@ private val features = listOf(
     Feature(
         AppIcons.Sparkles,
         "AI-powered throughout",
-        "Chat with Clanker to estimate meal macros, or ask Sysop about your servers. Connect Claude or add a Gemini, OpenAI or OpenRouter key in Settings → AI.",
+        "Chat with Clanker to estimate meal macros, or ask Sysop about your servers. Sign in to Claude, use Cursor through your dashboard, or add a Gemini or OpenAI key in Settings → AI.",
     ),
 )
 

@@ -86,7 +86,6 @@ fun MainScreen(
     val aiProvider by settingsViewModel.aiProvider.collectAsState()
     val geminiApiKey by settingsViewModel.geminiApiKey.collectAsState()
     val openAiApiKey by settingsViewModel.openAiApiKey.collectAsState()
-    val openRouterApiKey by settingsViewModel.openRouterApiKey.collectAsState()
     val anthropicApiKey by settingsViewModel.anthropicApiKey.collectAsState()
     val claudeConnected by settingsViewModel.claudeConnected.collectAsState()
     val hermesReachable by settingsViewModel.hermesLastReachable.collectAsState()
@@ -97,13 +96,11 @@ fun MainScreen(
             geminiApiKey.isNotBlank() || BuildConfig.GEMINI_API_KEY.isNotBlank()
         AiProvider.OPENAI ->
             openAiApiKey.isNotBlank() || BuildConfig.OPENAI_API_KEY.isNotBlank()
-        AiProvider.OPENROUTER ->
-            openRouterApiKey.isNotBlank() || BuildConfig.OPENROUTER_API_KEY.isNotBlank()
         AiProvider.ANTHROPIC ->
             claudeConnected ||
                 anthropicApiKey.isNotBlank() ||
                 BuildConfig.ANTHROPIC_API_KEY.isNotBlank()
-        AiProvider.HERMES -> dashboardUrl.isNotBlank()
+        AiProvider.HERMES, AiProvider.CURSOR -> dashboardUrl.isNotBlank()
     }
     // Hermes runs on the dashboard server with its own model, so someone who uses only him
     // (no key on the phone) keeps the AI tab, its navbar activity and the island's chats.
@@ -400,7 +397,6 @@ private fun MainScreenScaffold(
             hermes = activity,
             onHermes = onActivityClick,
             visible = islandVisible,
-            hazeState = hazeState,
             onHide = { item -> islandVm.hide(item) },
             onItem = { item ->
                 islandVm.tapped(item)

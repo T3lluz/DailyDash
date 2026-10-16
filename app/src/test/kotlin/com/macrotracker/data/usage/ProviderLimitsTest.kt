@@ -44,16 +44,4 @@ class ProviderLimitsTest {
         assertEquals("seven_day_fable", limits.windows[1].id)
         assertNull(limits.extra)
     }
-
-    @Test
-    fun `an openrouter key reports its spend and cap`() {
-        val o = JSONObject(
-            """{"data":{"label":"sk-or-v1-abc","usage":12.5,"usage_daily":0.4,"usage_weekly":2.1,"usage_monthly":7.9,"limit":20,"limit_remaining":7.5,"is_free_tier":false}}""",
-        )
-        val r = ProviderLimits.parseOpenRouterKey(o)!!
-        assertEquals(12.5, r.total, 0.0)
-        assertEquals(7.9, r.monthly!!, 0.0)
-        assertEquals(20.0, r.limit!!, 0.0)
-        assertNull(ProviderLimits.parseOpenRouterKey(JSONObject("{}")))
-    }
 }

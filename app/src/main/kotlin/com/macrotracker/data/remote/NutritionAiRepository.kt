@@ -62,17 +62,12 @@ class NutritionAiRepository @Inject constructor(
 
         val responseText = AiApiClient.generate(
             httpClient = httpClient,
-            provider = provider,
-            apiKey = auth.secret,
+            auth = auth,
             params = AiApiClient.GenerateParams(
                 prompt = prompt,
                 temperature = 0.2,
                 maxOutputTokens = 1024,
                 jsonMode = true,
-                openRouterModelId = settings.getOpenRouterModelId(),
-                anthropicModelId = settings.getAnthropicModelId(),
-                anthropicOAuth = auth.anthropicOAuth,
-                dashboardUrl = settings.dashboardServerUrl.value,
             ),
         )
         return parseNutritionEstimate(responseText, foodQuery)
@@ -104,18 +99,13 @@ class NutritionAiRepository @Inject constructor(
 
         val responseText = AiApiClient.generate(
             httpClient = httpClient,
-            provider = provider,
-            apiKey = auth.secret,
+            auth = auth,
             params = AiApiClient.GenerateParams(
                 prompt = prompt,
                 base64Jpeg = base64Image,
                 temperature = 0.2,
                 maxOutputTokens = 1024,
                 jsonMode = true,
-                openRouterModelId = settings.getOpenRouterModelId(),
-                anthropicModelId = settings.getAnthropicModelId(),
-                anthropicOAuth = auth.anthropicOAuth,
-                dashboardUrl = settings.dashboardServerUrl.value,
             ),
         )
         return parseNutritionEstimate(responseText, "Meal photo")
@@ -140,18 +130,13 @@ class NutritionAiRepository @Inject constructor(
 
         val responseText = AiApiClient.generate(
             httpClient = httpClient,
-            provider = provider,
-            apiKey = auth.secret,
+            auth = auth,
             params = AiApiClient.GenerateParams(
                 prompt = prompt,
                 base64Jpeg = base64Image,
                 temperature = 0.2,
                 maxOutputTokens = 1024,
                 jsonMode = true,
-                openRouterModelId = settings.getOpenRouterModelId(),
-                anthropicModelId = settings.getAnthropicModelId(),
-                anthropicOAuth = auth.anthropicOAuth,
-                dashboardUrl = settings.dashboardServerUrl.value,
             ),
         )
         return parseScanResult(responseText)
@@ -166,10 +151,10 @@ class NutritionAiRepository @Inject constructor(
                 "No Gemini API key set. Go to Settings, choose Gemini, and paste your free key from aistudio.google.com."
             AiProvider.OPENAI ->
                 "No OpenAI API key set. Go to Settings, choose OpenAI, and paste your key from platform.openai.com."
-            AiProvider.OPENROUTER ->
-                "No OpenRouter API key set. Go to Settings, choose OpenRouter, and paste your key from openrouter.ai/keys."
+            AiProvider.CURSOR ->
+                "Cursor runs on your dashboard. Set the address in Settings → Connections, and be on the tailnet."
             AiProvider.ANTHROPIC ->
-                "Claude is not connected. Go to Settings → AI, choose Claude, and tap Connect Claude (or paste an API key)."
+                "Claude isn't signed in. Go to Settings → AI, tap Claude, and Sign in with Claude (or paste an API key)."
             AiProvider.HERMES ->
                 "Hermes lives on your dashboard. Set the address in Settings → Connections, and be on the tailnet."
         }

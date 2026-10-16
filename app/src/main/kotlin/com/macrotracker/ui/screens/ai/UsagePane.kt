@@ -201,7 +201,6 @@ fun UsagePane(
                         connected = state.claudeConnected,
                         note = state.claudeNote,
                         extra = state.claudeExtra,
-                        openRouter = state.openRouter,
                     )
                 }
                 item(key = "pods") { Pods(u) }
@@ -434,8 +433,7 @@ private fun UsageRow(color: Color, title: String, sub: String, share: Float, val
 
 /**
  * What is left of the plans, provider by provider: Claude's windows (exact from Anthropic when
- * this phone is signed in to Claude, else the server's estimate), Cursor's month, and the
- * OpenRouter key's spend.
+ * this phone is signed in to Claude, else the server's estimate) and Cursor's month.
  */
 @Composable
 private fun LimitsCard(
@@ -444,7 +442,6 @@ private fun LimitsCard(
     connected: Boolean,
     note: String?,
     extra: com.macrotracker.data.usage.ExtraUsage?,
-    openRouter: com.macrotracker.data.usage.OpenRouterKeyUsage?,
 ) {
     Section("Limits", AppIcons.Clock, null) {
         ProviderHead("Claude", u.claudePlan)
@@ -480,47 +477,6 @@ private fun LimitsCard(
             Spacer(Modifier.height(12.dp))
             CursorBlock(cu, compact = false)
         }
-        openRouter?.let { r ->
-            Spacer(Modifier.height(12.dp))
-            Hairline()
-            Spacer(Modifier.height(12.dp))
-            OpenRouterBlock(r)
-        }
-    }
-}
-
-/** The OpenRouter key's spend, from OpenRouter: today, the week, the month, and its cap when it has one. */
-@Composable
-private fun OpenRouterBlock(r: com.macrotracker.data.usage.OpenRouterKeyUsage) {
-    Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            ProviderHead("OpenRouter", if (r.freeTier) "Free" else r.label.takeIf { it.isNotBlank() && it.length <= 18 }.orEmpty())
-            Spacer(Modifier.weight(1f))
-            Text(
-                formatUsd(r.monthly ?: r.total) + if (r.monthly != null) " this month" else " in all",
-                fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, modifier = Modifier.padding(bottom = 8.dp),
-            )
-        }
-        val limit = r.limit
-        if (limit != null && limit > 0) {
-            val used = (r.total / limit).coerceIn(0.0, 1.0)
-            Box(
-                Modifier.padding(bottom = 6.dp).fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)).background(Color.White.copy(alpha = 0.07f)),
-            ) {
-                Box(Modifier.fillMaxWidth(used.toFloat().coerceAtLeast(0.015f)).height(8.dp).clip(RoundedCornerShape(4.dp))
-                    .background(if (used >= 0.9) Warning else Primary))
-            }
-            Text("${formatUsd(r.total)} of the key's ${formatUsd(limit)} limit" + (r.remaining?.let { " · ${formatUsd(it)} left" } ?: ""),
-                fontSize = 11.5.sp, color = TextTertiary)
-        }
-        Text(
-            listOfNotNull(
-                r.daily?.let { "today ${formatUsd(it)}" },
-                r.weekly?.let { "week ${formatUsd(it)}" },
-                "all time ${formatUsd(r.total)}",
-            ).joinToString(" · "),
-            fontSize = 11.5.sp, color = TextTertiary,
-        )
     }
 }
 

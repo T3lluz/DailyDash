@@ -3,8 +3,7 @@ package com.macrotracker.data.remote
 import java.util.Locale
 
 /**
- * Claude models offered in Settings, sorted most-capable-first (unlike the
- * OpenRouter list, which is cheapest-first — here the default *is* the top one).
+ * Claude models offered in Settings, the default first.
  *
  * Prices are Anthropic list rates (USD per 1M tokens) and may drift; they are
  * shown in Settings so the cost of a chat turn is never a surprise.
@@ -24,7 +23,7 @@ data class AnthropicModelOption(
     /**
      * Rough cost of one chat turn (~1.5k input including the system prompt and any
      * server context, ~300 output). Chat turns are far heavier than the one-shot
-     * nutrition calls, so this is deliberately not the OpenRouter estimate.
+     * nutrition calls.
      */
     val approxTurnCostLabel: String
         get() {
@@ -48,48 +47,71 @@ data class AnthropicModelOption(
 }
 
 object AnthropicModels {
-    const val DEFAULT_ID = "claude-opus-5"
+    const val DEFAULT_ID = "claude-opus-5-5"
 
     val options: List<AnthropicModelOption> = listOf(
         AnthropicModelOption(
-            id = "claude-opus-5",
-            displayName = "Claude Opus 5",
-            inputPerMillionUsd = 5.00,
-            outputPerMillionUsd = 25.00,
-            blurb = "Best reasoning — the one to use for server troubleshooting",
+            id = "claude-opus-5-5",
+            displayName = "Claude Opus 5.5",
+            inputPerMillionUsd = 4.00,
+            outputPerMillionUsd = 20.00,
+            blurb = "Best for building widgets and fixing servers",
             recommended = true,
         ),
         AnthropicModelOption(
-            id = "claude-sonnet-5",
-            displayName = "Claude Sonnet 5",
+            id = "claude-sonnet-5-5",
+            displayName = "Claude Sonnet 5.5",
             inputPerMillionUsd = 2.00,
             outputPerMillionUsd = 10.00,
-            blurb = "Most of the quality at a fraction of the cost",
+            blurb = "Fast and capable",
         ),
         AnthropicModelOption(
-            id = "claude-haiku-4-5",
-            displayName = "Claude Haiku 4.5",
-            inputPerMillionUsd = 1.00,
-            outputPerMillionUsd = 5.00,
-            blurb = "Fastest and cheapest; fine for macro estimates",
+            id = "claude-haiku-5-5",
+            displayName = "Claude Haiku 5.5",
+            inputPerMillionUsd = 0.10,
+            outputPerMillionUsd = 0.50,
+            blurb = "Fastest and cheapest; fine for food estimates",
+        ),
+        AnthropicModelOption(
+            id = "claude-fable-5-1",
+            displayName = "Claude Fable 5.1",
+            inputPerMillionUsd = 10.00,
+            outputPerMillionUsd = 50.00,
+            blurb = "Most capable, and slowest",
         ),
     )
 
-    fun find(id: String?): AnthropicModelOption =
-        options.find { it.id == id } ?: options.first { it.id == DEFAULT_ID }
+    /** Ids from earlier builds, so a saved pick carries over to its successor. */
+    private val RENAMED = mapOf(
+        "claude-opus-5" to "claude-opus-5-5",
+        "claude-sonnet-5" to "claude-sonnet-5-5",
+        "claude-haiku-4-5" to "claude-haiku-5-5",
+    )
+
+    fun find(id: String?): AnthropicModelOption {
+        val current = RENAMED[id] ?: id
+        return options.find { it.id == current } ?: options.first { it.id == DEFAULT_ID }
+    }
 
     fun resolveId(stored: String?): String = find(stored).id
 
     /**
-     * Sampling parameters were removed on Opus 5 and Sonnet 5 — sending
-     * `temperature` is a 400, not a warning. Haiku 4.5 still accepts them, so the
-     * request builder asks here rather than hardcoding the omission.
+     * Sampling parameters were removed from the current models: `temperature` is a 400 on
+     * Opus 5.5, Fable 5.1, Sonnet 5.5 and Haiku 5.5. Only Haiku 4.5 and older take it.
      */
     fun acceptsSamplingParams(modelId: String): Boolean =
-        modelId.startsWith("claude-haiku")
+        modelId.startsWith("claude-haiku-4") || modelId.startsWith("claude-3")
+
+    /** `output_config.effort` works on every current model; Haiku 4.5 rejects it. */
+    fun acceptsEffort(modelId: String): Boolean = !modelId.startsWith("claude-haiku-4") && !modelId.startsWith("claude-3")
+
+    /** Adaptive thinking (and its summarized display) on every current model; Haiku 4.5 predates it. */
+    fun acceptsAdaptiveThinking(modelId: String): Boolean = acceptsEffort(modelId)
 
     /**
-     * `output_config.effort` is an Opus/Sonnet-5-era control; older models reject it.
+     * The web search tool with dynamic filtering runs on Opus and Sonnet; Haiku and Fable
+     * keep the basic one.
      */
-    fun acceptsEffort(modelId: String): Boolean = !modelId.startsWith("claude-haiku")
+    fun webSearchToolType(modelId: String): String =
+        if (modelId.startsWith("claude-opus") || modelId.startsWith("claude-sonnet")) "web_search_20260209" else "web_search_20250305"
 }
