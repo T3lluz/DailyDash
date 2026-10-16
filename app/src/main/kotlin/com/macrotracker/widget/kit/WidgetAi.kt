@@ -17,7 +17,9 @@ import org.json.JSONObject
  * and a failed call backs off for [FAILURE_BACKOFF_MS]. Only refresh workers call
  * [brief]; renders read [cached], so drawing a widget never touches the network.
  *
- * Settings → Widgets can turn every brief off ([setEnabled]).
+ * Each ready-made widget has its own switch ([isEnabled] by widget key, in Settings → Widgets
+ * and the widget's long-press settings). Tilesmith designs don't use these: each design has
+ * its own AI switch (`TileDesign.ai`).
  */
 object WidgetAi {
     private const val TAG = "WidgetAi"
@@ -31,11 +33,22 @@ object WidgetAi {
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    fun isEnabled(context: Context): Boolean = prefs(context).getBoolean(KEY_ENABLED, true)
+    /** The ready-made widgets that write an AI line, by widget key. */
+    val WIDGETS = listOf("weather", "calendar", "f1", "server", "github")
 
-    fun setEnabled(context: Context, enabled: Boolean) {
-        prefs(context).edit().putBoolean(KEY_ENABLED, enabled).apply()
+    /** Whether [widget]'s AI line is on; until it is set on its own, the old all-widgets switch decides. */
+    fun isEnabled(context: Context, widget: String): Boolean =
+        prefs(context).let { p -> p.getBoolean("enabled_$widget", p.getBoolean(KEY_ENABLED, true)) }
+
+    fun setEnabled(context: Context, widget: String, enabled: Boolean) {
+        prefs(context).edit().putBoolean("enabled_$widget", enabled).apply()
     }
+
+    /** True when any ready-made widget has its AI line on. */
+    fun anyEnabled(context: Context): Boolean = WIDGETS.any { isEnabled(context, it) }
+
+    /** The widget a brief belongs to: `server_<id>` is the server widget's, the rest are named after theirs. */
+    private fun widgetOf(key: String): String = if (key.startsWith("server_")) "server" else key
 
     /** Whether an AI provider is set up at all (a key, a Claude session, or Hermes). */
     fun isAvailable(context: Context): Boolean = runCatching {
@@ -44,7 +57,7 @@ object WidgetAi {
 
     /** The last brief stored under [key], for renders. Null when briefs are off. */
     fun cached(context: Context, key: String): Brief? {
-        if (!isEnabled(context)) return null
+        if (!isEnabled(context, widgetOf(key))) return null
         val raw = prefs(context).getString("brief_$key", null) ?: return null
         return runCatching {
             val o = JSONObject(raw)
@@ -68,7 +81,7 @@ object WidgetAi {
         maxChars: Int = 180,
         prompt: () -> String,
     ): String? {
-        if (!isEnabled(context)) return null
+        if (!isEnabled(context, widgetOf(key))) return null
         val now = System.currentTimeMillis()
         val current = cached(context, key)
         if (current != null) {
@@ -110,16 +123,11 @@ object WidgetAi {
         require(!auth.isBlank) { "no AI credentials" }
         return AiApiClient.generate(
             httpClient = ep.okHttpClient(),
-            provider = provider,
-            apiKey = auth.secret,
+            auth = auth,
             params = AiApiClient.GenerateParams(
                 prompt = STYLE + "\n\n" + prompt,
                 temperature = 0.4,
                 maxOutputTokens = 400,
-                openRouterModelId = settings.getOpenRouterModelId(),
-                anthropicModelId = settings.getAnthropicModelId(),
-                anthropicOAuth = auth.anthropicOAuth,
-                dashboardUrl = settings.dashboardServerUrl.value,
             ),
         )
     }
