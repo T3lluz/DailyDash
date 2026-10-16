@@ -49,6 +49,17 @@ object GlassSpec {
 
     /** The light along the top edge, fading out by mid-height. */
     val Sheen: Color = Color.White.copy(alpha = 0.05f)
+
+    /** Acrylic, the island's and the navbar's: a heavy blur, dark but see-through, a faint grain. */
+    val AcrylicBlur: Dp = 32.dp
+    val AcrylicTint: Color = Color(0xFF0B0B0D).copy(alpha = 0.64f)
+
+    /** A whisper of light over the blur before the dark tint, so colours under it stay alive. */
+    val AcrylicLuminosity: Color = Color.White.copy(alpha = 0.035f)
+    const val AcrylicNoise: Float = 0.06f
+
+    /** Where blur can't run (before Android 12): the same dark, nearly opaque. */
+    val AcrylicFallback: Color = Color(0xFF0B0B0D).copy(alpha = 0.94f)
 }
 
 /** The heavy blur is sampled at this scale; at this radius it looks the same and costs a quarter. */
@@ -86,15 +97,43 @@ fun Modifier.glass(
 }
 
 /**
- * The navbar's surface in one go: a soft lift outside the shape, the glass inside it, and the
- * rim round its edge. Anything that sizes or clips the content (`animateContentSize`,
- * scrolling) goes after it, or it cuts the shadow off at the bounds.
+ * Acrylic frost, after Fluent's acrylic: the page behind blurred heavily, lifted by a whisper
+ * of light, washed with a dark see-through tint, with a faint grain and a sheen along the top.
+ * Darker than [glass], so white text reads over any page, but the page still shows through.
+ * Apply after `clip(shape)`.
+ */
+@Composable
+fun Modifier.acrylic(hazeState: HazeState?): Modifier {
+    val sheen = Modifier.drawWithCache {
+        val brush = Brush.verticalGradient(0f to GlassSpec.Sheen, 0.5f to Color.Transparent)
+        onDrawBehind { drawRect(brush) }
+    }
+    if (hazeState == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+        return this.background(GlassSpec.AcrylicFallback).then(sheen)
+    }
+    return this
+        .hazeEffect(state = hazeState) {
+            blurRadius = GlassSpec.AcrylicBlur
+            // The chrome re-blurs every frame something animates under it.
+            inputScale = HazeInputScale.Fixed(INPUT_SCALE)
+            noiseFactor = GlassSpec.AcrylicNoise
+            tints = listOf(HazeTint(GlassSpec.AcrylicLuminosity), HazeTint(GlassSpec.AcrylicTint))
+            fallbackTint = HazeTint(GlassSpec.AcrylicFallback)
+        }
+        .then(sheen)
+}
+
+/**
+ * The chrome's surface in one go, the navbar's and the island's alike: a soft lift outside
+ * the shape, acrylic inside it, and the rim round its edge. Anything that sizes or clips the
+ * content (`animateContentSize`, scrolling) goes after it, or it cuts the shadow off at the
+ * bounds.
  */
 @Composable
 fun Modifier.chromeGlass(hazeState: HazeState?, shape: Shape): Modifier = this
     .chromeShadow(shape)
     .clip(shape)
-    .glass(hazeState = hazeState, shape = shape)
+    .acrylic(hazeState)
     .chromeOutline(shape)
 
 /**

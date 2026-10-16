@@ -99,6 +99,7 @@ import com.macrotracker.ui.theme.WeatherRain
 import com.macrotracker.ui.util.LaunchedWhileResumed
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.util.rememberReducedMotion
+import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.delay
 
 /*
@@ -110,13 +111,13 @@ import kotlinx.coroutines.delay
  * close, the hour moves on), and then the words roll up while the pill springs to its new
  * width. The rest wait at its right end as small discs; a tap there opens everything as a
  * card under the status bar (a tap outside folds it back). While Hermes works he leads.
- * Solid black with a hairline rim and a soft shadow, so it reads the same over any page.
+ * The same dark acrylic as the navbar (`chromeGlass`): the page shows through, blurred.
  */
 
 private val PillHeight = 40.dp
 private val IslandTop = 6.dp
-private val IslandBlack = Color(0xFF050506)
-private val Rim = Color.White.copy(alpha = 0.09f)
+/** Under the discs, so overlapping ones keep their edge on the see-through glass. */
+private val DiscBase = Color(0xFF141416)
 private val CardCorner = 26.dp
 private val DiscSize = 26.dp
 private val MiniDisc = 20.dp
@@ -132,6 +133,8 @@ fun TopIsland(
     /** What Hermes is doing (the tracker's turn, or how the last one ended). */
     hermes: NavActivity? = null,
     onHermes: (NavActivity) -> Unit = {},
+    /** The page behind, for the acrylic (the navbar's glass). */
+    hazeState: HazeState?,
     onItem: (IslandItem) -> Unit,
     modifier: Modifier = Modifier,
     /** The AI's short labels by full title, used when a title doesn't fit (IslandViewModel.labels). */
@@ -184,11 +187,8 @@ fun TopIsland(
                 Column(
                     Modifier
                         .then(if (expanded) Modifier.fillMaxWidth() else Modifier.widthIn(min = 120.dp, max = maxWidth))
-                        .islandShadow(corner)
-                        .clip(shape)
-                        .background(IslandBlack)
-                        .border(1.dp, Rim, shape)
-                        // After the clip and rim, so the size spring never cuts the shadow.
+                        .chromeGlass(hazeState, shape)
+                        // After the chrome, so the size spring never cuts its shadow.
                         .animateContentSize(islandSpring()),
                 ) {
                     if (expanded) {
@@ -241,9 +241,6 @@ private class IslandHeld {
     var items: List<IslandItem> = emptyList()
     var hermes: NavActivity? = null
 }
-
-/** A soft two-layer shadow under the pill, drawn outside its shape only (the web's chrome shadow). */
-private fun Modifier.islandShadow(corner: Dp): Modifier = this.chromeShadow(RoundedCornerShape(corner))
 
 // ── The pill ────────────────────────────────────────────────────────────────
 
@@ -479,7 +476,7 @@ private fun Cluster(others: List<IslandItem>, onClick: () -> Unit) {
                             .offset(x = (MiniDisc - 7.dp) * i)
                             .size(MiniDisc)
                             .clip(CircleShape)
-                            .background(IslandBlack)
+                            .background(DiscBase)
                             .padding(1.5.dp),
                     ) {
                         ToneDisc(item, toneColor(item), MiniDisc - 3.dp)
@@ -640,7 +637,8 @@ private fun ToneDisc(item: IslandItem, tone: Color, size: Dp) {
         modifier = Modifier
             .size(size)
             .clip(CircleShape)
-            .drawBehind { drawRect(tone.copy(alpha = 0.22f + 0.14f * (glow?.value ?: 0f))) },
+            // Solid, so the glass behind never muddies the tone.
+            .drawBehind { drawRect(lerp(DiscBase, tone, 0.26f + 0.16f * (glow?.value ?: 0f))) },
         contentAlignment = Alignment.Center,
     ) {
         Icon(

@@ -397,6 +397,7 @@ private fun MainScreenScaffold(
             hermes = activity,
             onHermes = onActivityClick,
             visible = islandVisible,
+            hazeState = hazeState,
             onHide = { item -> islandVm.hide(item) },
             onItem = { item ->
                 islandVm.tapped(item)
