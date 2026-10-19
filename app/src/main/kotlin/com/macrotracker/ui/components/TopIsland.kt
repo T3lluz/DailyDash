@@ -289,6 +289,8 @@ fun TopIsland(
                                 items = shownItems,
                                 hermes = shownHermes,
                                 maxHeight = cardMax,
+                                // Opened from the start (the render harness), it has no entrance to stagger.
+                                staggered = !initiallyExpanded,
                                 onHermes = { expanded = false; onHermes(it) },
                                 onItem = { expanded = false; onItem(it) },
                                 onClear = hide,
@@ -693,6 +695,7 @@ private fun ExpandedCard(
     items: List<IslandItem>,
     hermes: NavActivity?,
     maxHeight: Dp,
+    staggered: Boolean,
     onHermes: (NavActivity) -> Unit,
     onItem: (IslandItem) -> Unit,
     onClear: (IslandItem) -> Unit,
@@ -751,7 +754,7 @@ private fun ExpandedCard(
                         val at = index++
                         key(row.key) {
                             // Rows arrive one after another as the card opens.
-                            var shown by remember { mutableStateOf(false) }
+                            var shown by remember { mutableStateOf(!staggered) }
                             var gone by remember { mutableStateOf(false) }
                             LaunchedEffect(Unit) {
                                 delay(30L * at)
