@@ -399,6 +399,7 @@ private fun MainScreenScaffold(
             visible = islandVisible,
             hazeState = hazeState,
             onHide = { item -> islandVm.hide(item) },
+            onUnhide = { item -> islandVm.unhide(item) },
             onItem = { item ->
                 islandVm.tapped(item)
                 val link = item.join ?: item.href

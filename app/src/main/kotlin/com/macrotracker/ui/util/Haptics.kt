@@ -84,6 +84,24 @@ class HapticHelper(
         }
     }
 
+    /* ── A drag crossing its threshold, as a swiped notification detaches on a Pixel ── */
+    fun thresholdActivate() {
+        if (Build.VERSION.SDK_INT >= 34) {
+            view.performHapticFeedback(HapticFeedbackConstants.GESTURE_THRESHOLD_ACTIVATE)
+        } else {
+            feedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        }
+    }
+
+    /* ── …and back under it ─────────────────────────────────────── */
+    fun thresholdDeactivate() {
+        if (Build.VERSION.SDK_INT >= 34) {
+            view.performHapticFeedback(HapticFeedbackConstants.GESTURE_THRESHOLD_DEACTIVATE)
+        } else {
+            feedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        }
+    }
+
     fun gestureEnd() {
         if (Build.VERSION.SDK_INT >= 34) {
             view.performHapticFeedback(HapticFeedbackConstants.GESTURE_END)
