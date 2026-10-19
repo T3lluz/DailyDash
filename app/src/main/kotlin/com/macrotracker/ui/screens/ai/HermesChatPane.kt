@@ -75,7 +75,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -363,13 +362,6 @@ fun HermesChatPane(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            0f to Color.Transparent,
-                            0.35f to Background.copy(alpha = 0.92f),
-                            1f to Background,
-                        ),
-                    )
                     .onSizeChanged { composerHeight = with(density) { it.height.toDp() } },
             ) {
                 state.notice?.let { notice ->
@@ -377,6 +369,7 @@ fun HermesChatPane(
                         modifier = Modifier
                             .padding(horizontal = 16.dp, vertical = 4.dp)
                             .clip(RoundedCornerShape(10.dp))
+                            .background(Background)
                             .background(Error.copy(alpha = 0.1f))
                             .clickable { viewModel.dismissNotice() }
                             .padding(horizontal = 12.dp, vertical = 8.dp),
@@ -392,6 +385,7 @@ fun HermesChatPane(
                         modifier = Modifier
                             .padding(horizontal = 16.dp, vertical = 4.dp)
                             .clip(RoundedCornerShape(10.dp))
+                            .background(Background)
                             .background(ServerBrand.copy(alpha = 0.10f))
                             .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,

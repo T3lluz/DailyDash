@@ -425,15 +425,6 @@ private fun MacrosChatPane(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                // Fade the conversation out under the floating bar so chips and
-                // bubbles never collide.
-                .background(
-                    Brush.verticalGradient(
-                        0f to Color.Transparent,
-                        0.35f to Background.copy(alpha = 0.92f),
-                        1f to Background,
-                    ),
-                )
                 .onSizeChanged { size ->
                     composerHeight = with(density) { size.height.toDp() }
                 },
@@ -550,7 +541,19 @@ private fun SuggestionStrip(
     refining: Boolean,
     onPick: (DishSuggestion) -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
+    // The conversation fades out under the chips so the two never collide; the composer under
+    // them is glass, with the chat showing through.
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                Brush.verticalGradient(
+                    0f to Color.Transparent,
+                    0.3f to Background.copy(alpha = 0.92f),
+                    1f to Background.copy(alpha = 0.92f),
+                ),
+            ),
+    ) {
         Text(
             title.uppercase(),
             fontSize = 10.sp,
