@@ -96,7 +96,8 @@ class ChromeShotsTest {
         PixelFontOnce.install(out)
         val activity = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
         activity.setContent { Scene(light, items, hermes, expanded) }
-        ShadowLooper.idleMainLooper(1500, TimeUnit.MILLISECONDS)
+        // The card's rows arrive one after another, so it gets longer to settle.
+        repeat(if (expanded) 8 else 1) { ShadowLooper.idleMainLooper(1500, TimeUnit.MILLISECONDS) }
         val root = activity.window.decorView
         val bmp = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
         PixelCopy.request(activity.window, Rect(0, 0, root.width, root.height), bmp, {}, Handler(Looper.getMainLooper()))
