@@ -45,6 +45,11 @@ data class IslandItem(
      * `update`, …); the server's items lead with [href], [join] or their kind instead.
      */
     val route: String? = null,
+    /**
+     * The one thing a phone-made item is about, for a tap to open it: a calendar event or a
+     * server ([com.macrotracker.data.island.IslandTarget.eventRef] / `serverRef`).
+     */
+    val ref: String? = null,
 ) {
     val isBrief: Boolean get() = kind == "brief"
 }

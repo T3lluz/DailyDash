@@ -330,7 +330,7 @@ com.macrotracker/
                               perforating the glass) is gone: it read as noise on a phone. Don't bring dots back.
                               Anything that clips (`animateContentSize`, scrolling) goes after `chromeGlass`, or it cuts the shadow off.
                               TopIsland.kt: the island, drawn by MainScreen under the status bar on Home, Health and
-                              Settings (IslandViewModel; tap opens the chat, the event, the call, or Home). A pill after iOS's
+                              Settings (IslandViewModel). A tap goes where the item is about (`IslandTarget.of`, IslandTargetTest): its Hermes chat, the phone event in the calendar app picked for events (`IslandItem.ref`), its link through AppLinks (a mail, stream, video, review), the server it is about, or else the Home card / Health section that shows its kind, scrolled into view through `CardFocus`; a calendar item's call is its own Join pill (`onJoin`, call hosts only). A pill after iOS's
                               Dynamic Island, in the navbar's frosted glass (`chromeGlass`), that shows the top items side
                               by side, as many as fit (`MAX_ON_PILL`, two), each with its whole title when there is room, else
                               its short label (`IslandShortener`) and a shorter countdown (`rememberPillPlan` picks the richest
