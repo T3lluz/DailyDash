@@ -318,8 +318,8 @@ com.macrotracker/
                               Liquid Glass: no sheen, no grain, no gradients or fake glints (the user asked for clean frost). The
                               navbar and the island share `Modifier.chromeGlass(hazeState, shape)`: `chromeShadow` (two layers,
                               cast by the outline with the inside cut away, since a shadow under translucent glass shows through
-                              it), the clip, `glass` and `chromeOutline`, a faint neutral 1dp edge. The AI composers use `glass`.
-                              Keep them alike. 2.0's dotted frost (a dot grid
+                              it), the clip, `glass` and `chromeOutline`, a faint neutral 1dp edge. The AI composers use `chromeGlass` too,
+                              with no opaque band behind them, so the chat runs under the glass. Keep them alike. 2.0's dotted frost (a dot grid
                               perforating the glass) is gone: it read as noise on a phone. Don't bring dots back.
                               Anything that clips (`animateContentSize`, scrolling) goes after `chromeGlass`, or it cuts the shadow off.
                               TopIsland.kt: the island, drawn by MainScreen under the status bar on Home, Health and
@@ -330,8 +330,16 @@ com.macrotracker/
                               look that fits). Nothing turns on a timer: the line-up changes only when the ranking does, and
                               then the words roll up and the pill springs to its new width (`islandSpring`, one spring for size,
                               corners and content); a ticking countdown updates in place (`PillPlan.key`). The rest wait at the
-                              right end as overlapping discs and a "+N"; a tap there opens the card (every item as a row,
-                              Hermes first; rows arrive one after another) over a light scrim, and a tap outside folds it. While
+                              right end as overlapping discs and a "+N"; a tap there or a pull down on the pill opens the card
+                              over a light scrim (a tap outside, the handle at its foot or a pull up folds it). The card groups
+                              items (Needs you, Now, Soon, Also; Hermes in the first two) and sizes them by need (`CardSize`:
+                              a hero for needs-you / on-now with a progress line and Join, slim rows for background lines and
+                              things to watch). A row swipes off sideways as Android 16 clears a notification (`SwipeRow`,
+                              `SwipeMagnet`, specs in `MacroMotion.IslandSwipe`: half pace while attached with the neighbours
+                              leaning, a GESTURE_THRESHOLD haptic as it detaches, their facing corners rounding, fly-off and the
+                              gap closing), hidden for the day with an Undo pill under the island (`IslandLearning.unhide`).
+                              A long press on the pill hides with the same undo. Icons move after their kind
+                              (IslandIconMotion.kt: the bell rings, mail hops, a heart beats), in the draw phase. While
                               Hermes works he leads the pill (scanner, what he is on, a clock). Ranking (IslandRankingTest): tier
                               (needs you, on now, soon, the rest), then `soonness`, the server's ambient lines after the rest and
                               something to watch after those, then learned taste per part of the day (`hourFit`). Labels

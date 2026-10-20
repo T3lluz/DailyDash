@@ -80,10 +80,22 @@ class ChromeShotsTest {
     @Test fun crowdedLine() = shot("chrome_crowded", light = true, items = crowded, hermes = working)
     @Test fun hermesOnly() = shot("chrome_hermes", light = false, items = emptyList(), hermes = working)
 
-    private fun shot(name: String, light: Boolean, items: List<IslandItem>, hermes: NavActivity?) {
+    private val card = listOf(
+        item("need", "needs", "circle-help", "Frank asks", "Keep Knaben running overnight?", "Answer"),
+        item("cal", "live", "calendar-clock", "Dinner with Sara", "until 18:00", "35 min left", ring = 42f, color = "#f83a22"),
+        item("cal", "soon", "calendar-clock", "Quarterly planning review", "14:30 · Meet", "in 25 min", color = "#7986cb"),
+        item("mail", "accent", "mail", "3 mails need you", "Sara, Tom"),
+        item("rain", "info", "cloud-rain", "Rain from 19:00"),
+        item("yt", "", "play", "2 new videos", end = "today"),
+    )
+
+    @Test @Config(qualifiers = "w411dp-h860dp-xxhdpi")
+    fun cardOpen() = shot("chrome_card", light = false, items = card, hermes = working, expanded = true)
+
+    private fun shot(name: String, light: Boolean, items: List<IslandItem>, hermes: NavActivity?, expanded: Boolean = false) {
         PixelFontOnce.install(out)
         val activity = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
-        activity.setContent { Scene(light, items, hermes) }
+        activity.setContent { Scene(light, items, hermes, expanded) }
         ShadowLooper.idleMainLooper(1500, TimeUnit.MILLISECONDS)
         val root = activity.window.decorView
         val bmp = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
@@ -103,14 +115,14 @@ private object PixelFontOnce {
 }
 
 @Composable
-private fun Scene(light: Boolean, items: List<IslandItem>, hermes: NavActivity?) {
+private fun Scene(light: Boolean, items: List<IslandItem>, hermes: NavActivity?, expanded: Boolean = false) {
     val haze = rememberHazeState()
     Box(Modifier.fillMaxSize().background(Background)) {
         Column(Modifier.fillMaxSize().hazeSource(haze)) {
             Backdrop(light, Modifier.weight(1f))
             Backdrop(!light, Modifier.weight(1f))
         }
-        TopIsland(items = items, visible = true, hermes = hermes, hazeState = haze, onItem = {}, modifier = Modifier.align(Alignment.TopCenter))
+        TopIsland(items = items, visible = true, hermes = hermes, hazeState = haze, onItem = {}, modifier = Modifier.align(Alignment.TopCenter), initiallyExpanded = expanded)
         Box(Modifier.align(Alignment.BottomCenter)) {
             PillNavigationBar(
                 items = listOf(Screen.Home, Screen.Health, Screen.AI, Screen.Settings),

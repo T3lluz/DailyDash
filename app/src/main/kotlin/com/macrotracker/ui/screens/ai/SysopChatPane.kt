@@ -27,7 +27,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -302,13 +301,6 @@ fun SysopChatPane(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(
-                        0f to Color.Transparent,
-                        0.35f to Background.copy(alpha = 0.92f),
-                        1f to Background,
-                    ),
-                )
                 .onSizeChanged { composerHeight = with(density) { it.height.toDp() } },
         ) {
             WidgetExpandSection(visible = state.messages.isEmpty() && !state.loading) {

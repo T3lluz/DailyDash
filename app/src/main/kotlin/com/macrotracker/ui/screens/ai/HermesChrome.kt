@@ -79,13 +79,12 @@ import com.macrotracker.data.hermes.HermesThreadSummary
 import com.macrotracker.data.hermes.HermesTurnActivity
 import com.macrotracker.ui.components.LivePulseDot
 import com.macrotracker.ui.components.LoadingSpinner
-import com.macrotracker.ui.components.glass
+import com.macrotracker.ui.components.chromeGlass
 import com.macrotracker.ui.screens.tilesmith.TilesmithAccent
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.Error
-import com.macrotracker.ui.theme.GlassHairline
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.OnAccent
 import com.macrotracker.ui.theme.ServerBrand
@@ -589,9 +588,8 @@ internal fun HermesComposer(
             .fillMaxWidth()
             .padding(horizontal = 12.dp)
             .padding(top = 6.dp, bottom = bottomPad)
-            .clip(ComposerShape)
-            .glass(hazeState = hazeState)
-            .border(1.dp, GlassHairline, ComposerShape)
+            // The navbar's and the island's glass: lift, blur, tint and edge alike.
+            .chromeGlass(hazeState, ComposerShape)
             .padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
     ) {
         if (attachments.isNotEmpty() || uploading) {

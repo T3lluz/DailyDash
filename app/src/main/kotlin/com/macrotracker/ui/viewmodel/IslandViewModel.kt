@@ -161,10 +161,18 @@ class IslandViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.Default) { learning.tapped(item) }
     }
 
-    /** A long press: gone for the rest of the day, and less of its kind at this hour. */
+    /** Swiped off (or a long press on the pill): gone for the rest of the day, and less of its kind at this hour. */
     fun hide(item: IslandItem) {
         viewModelScope.launch {
             withContext(Dispatchers.Default) { learning.hide(item) }
+            publish()
+        }
+    }
+
+    /** Undo of [hide]. */
+    fun unhide(item: IslandItem) {
+        viewModelScope.launch {
+            withContext(Dispatchers.Default) { learning.unhide(item) }
             publish()
         }
     }

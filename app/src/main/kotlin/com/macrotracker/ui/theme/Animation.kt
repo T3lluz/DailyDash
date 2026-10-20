@@ -272,6 +272,39 @@ object MacroMotion {
             )
     }
 
+    /**
+     * Swiping an item off the island's card, after Android 16's magnetic notification swipe:
+     * the row moves at half the finger's pace while its neighbours lean with it, then detaches
+     * (a haptic) and follows the finger; let go short and it springs home, past it and it flies.
+     */
+    object IslandSwipe {
+        /** The row's pace while still attached, and its neighbours' (one row away, two rows away). */
+        const val ATTACHED = 0.5f
+        val NEIGHBOURS = floatArrayOf(0.12f, 0.04f)
+
+        /** Finger travel that detaches the row, and the travel back under which it re-attaches. */
+        const val DETACH_DP = 96f
+        const val ATTACH_DP = 72f
+
+        /** A flick this fast (dp/s) clears the row even before it detaches. */
+        const val FLING_DP_S = 1100f
+
+        /** How long the undo stays up after a clear. */
+        const val UNDO_MS = 4_500L
+
+        /** Catching up with the finger on detach: quick, nearly no bounce. */
+        fun <T> detach() = spring<T>(dampingRatio = 0.95f, stiffness = 800f)
+
+        /** Home again when let go short, with a little give. */
+        fun <T> settle() = spring<T>(dampingRatio = 0.66f, stiffness = 520f)
+
+        /** Off the edge, carrying the flick. */
+        fun <T> fly() = spring<T>(dampingRatio = 1f, stiffness = 360f)
+
+        /** The gap closing under a cleared row. */
+        fun <T> close() = spring<T>(dampingRatio = 0.9f, stiffness = 520f)
+    }
+
     /** The navbar's activity tab rising out of the pill and settling back into it: a touch of give, no wobble. */
     fun <T> navTabSpring() = spring<T>(dampingRatio = 0.82f, stiffness = 420f)
 

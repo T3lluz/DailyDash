@@ -89,6 +89,14 @@ class IslandLearning @Inject constructor(
         save()
     }
 
+    /** Undo of [hide]: back on the island, and the count against its kind taken back. */
+    @Synchronized
+    fun unhide(item: IslandItem, at: LocalDateTime = LocalDateTime.now()) {
+        if (hidden.remove(IslandRanking.hideKey(item)) == null) return
+        counts[item.kind]?.get(DayPart.of(at.hour))?.let { it[SHOWN] = (it[SHOWN] - HIDE_WEIGHT).coerceAtLeast(0f) }
+        save()
+    }
+
     /** Items hidden today. */
     @Synchronized
     fun hiddenToday(today: LocalDate = LocalDate.now()): Set<String> {
