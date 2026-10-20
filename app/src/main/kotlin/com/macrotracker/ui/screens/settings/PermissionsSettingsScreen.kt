@@ -69,6 +69,7 @@ import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.theme.Warning
 import com.macrotracker.ui.theme.WeatherBrand
+import com.macrotracker.ui.util.LoadWhenSeen
 import com.macrotracker.ui.util.LaunchedWhileResumed
 import com.macrotracker.ui.util.findActivity
 import com.macrotracker.ui.util.rememberHaptics
@@ -224,63 +225,67 @@ fun PermissionsSettingsScreen(
             }
         }
 
-        SettingsGroup(title = "Google account", delayMs = 70) {
-            GoogleScope.entries.forEachIndexed { i, g ->
-                if (i > 0) SettingsRowDivider()
-                PermissionRow(
-                    if (g == GoogleScope.GMAIL) AppIcons.Mail else AppIcons.ListChecks,
-                    if (g == GoogleScope.GMAIL) Color(0xFFEA4335) else Color(0xFF4285F4),
-                    g.label,
-                    if (g in lapsed) "Google stopped sharing it. Tap to allow it again" else g.detail + (google.email()?.takeIf { google.granted(g) }?.let { " · $it" } ?: ""),
-                    google.granted(g),
-                    if (g in lapsed) "Reconnect" else "Connect",
-                ) {
-                    haptics.click()
-                    if (google.granted(g)) {
-                        scope.launch {
-                            google.revoke(context.findActivity(), setOf(g))
-                            tick++
+        LoadWhenSeen(placeholderHeight = 200.dp) {
+            SettingsGroup(title = "Google account", delayMs = 70) {
+                GoogleScope.entries.forEachIndexed { i, g ->
+                    if (i > 0) SettingsRowDivider()
+                    PermissionRow(
+                        if (g == GoogleScope.GMAIL) AppIcons.Mail else AppIcons.ListChecks,
+                        if (g == GoogleScope.GMAIL) Color(0xFFEA4335) else Color(0xFF4285F4),
+                        g.label,
+                        if (g in lapsed) "Google stopped sharing it. Tap to allow it again" else g.detail + (google.email()?.takeIf { google.granted(g) }?.let { " · $it" } ?: ""),
+                        google.granted(g),
+                        if (g in lapsed) "Reconnect" else "Connect",
+                    ) {
+                        haptics.click()
+                        if (google.granted(g)) {
+                            scope.launch {
+                                google.revoke(context.findActivity(), setOf(g))
+                                tick++
+                            }
+                        } else {
+                            consent(setOf(g))
                         }
-                    } else {
-                        consent(setOf(g))
                     }
                 }
-            }
-            SettingsRowDivider()
-            Row(
-                Modifier.fillMaxWidth().padding(vertical = 8.dp, horizontal = 2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(Warning.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
-                    Icon(AppIcons.Bell, null, tint = Warning, modifier = Modifier.size(20.dp))
+                SettingsRowDivider()
+                Row(
+                    Modifier.fillMaxWidth().padding(vertical = 8.dp, horizontal = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(Warning.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+                        Icon(AppIcons.Bell, null, tint = Warning, modifier = Modifier.size(20.dp))
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Remind me to reconnect", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                        Text("A notification when Google stops sharing Gmail or Tasks, one tap to allow it again", fontSize = 12.sp, color = TextSecondary, lineHeight = 16.sp)
+                    }
+                    Switch(checked = remind, onCheckedChange = { on ->
+                        haptics.tick()
+                        remind = on
+                        GoogleReconnect.setRemind(context, on)
+                    })
                 }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("Remind me to reconnect", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-                    Text("A notification when Google stops sharing Gmail or Tasks, one tap to allow it again", fontSize = 12.sp, color = TextSecondary, lineHeight = 16.sp)
-                }
-                Switch(checked = remind, onCheckedChange = { on ->
-                    haptics.tick()
-                    remind = on
-                    GoogleReconnect.setRemind(context, on)
-                })
+                Text(
+                    "Tap a connected one to disconnect it. YouTube channels come from Home's YouTube card, Twitch from its own.",
+                    fontSize = 11.sp,
+                    color = TextSecondary,
+                    lineHeight = 15.sp,
+                    modifier = Modifier.padding(start = 54.dp, top = 4.dp, bottom = 6.dp),
+                )
             }
-            Text(
-                "Tap a connected one to disconnect it. YouTube channels come from Home's YouTube card, Twitch from its own.",
-                fontSize = 11.sp,
-                color = TextSecondary,
-                lineHeight = 15.sp,
-                modifier = Modifier.padding(start = 54.dp, top = 4.dp, bottom = 6.dp),
-            )
         }
 
-        SettingsGroup(title = "Accounts and services", delayMs = 100) {
-            val services = remember(tick) { serviceRows(context) }
-            services.forEachIndexed { i, r ->
-                if (i > 0) SettingsRowDivider()
-                PermissionRow(r.icon, r.tint, r.title, r.detail, r.granted, "Set up") {
-                    haptics.click()
-                    if (r.route == "home") onOpenTab("home") else onOpenRoute(r.route)
+        LoadWhenSeen(placeholderHeight = 360.dp) {
+            SettingsGroup(title = "Accounts and services", delayMs = 100) {
+                val services = remember(tick) { serviceRows(context) }
+                services.forEachIndexed { i, r ->
+                    if (i > 0) SettingsRowDivider()
+                    PermissionRow(r.icon, r.tint, r.title, r.detail, r.granted, "Set up") {
+                        haptics.click()
+                        if (r.route == "home") onOpenTab("home") else onOpenRoute(r.route)
+                    }
                 }
             }
         }

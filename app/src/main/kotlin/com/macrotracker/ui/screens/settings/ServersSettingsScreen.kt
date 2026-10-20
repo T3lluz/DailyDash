@@ -77,6 +77,7 @@ import com.macrotracker.ui.theme.ServerWell
 import com.macrotracker.ui.theme.Surface
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
+import com.macrotracker.ui.util.LoadWhenSeen
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.ServerTestUiState
 import com.macrotracker.ui.viewmodel.ServerViewModel
@@ -326,66 +327,68 @@ fun ServersSettingsScreen(
         }
 
         // ── Live notification ────────────────────────────────────────────
-        MacroCard(delayMs = 90) {
-            CardHeader(title = "Live stats notification")
-            Text(
-                "Keeps an ongoing notification with live gauges. It stays compact; tap More on it " +
-                    "for the full panel with dials, history and every core.",
-                color = TextSecondary,
-                fontSize = 12.sp,
-                lineHeight = 17.sp,
-                modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
-            )
-            ToggleRow(
-                title = "Show live notification",
-                subtitle = if (profiles.isEmpty()) "Add a server first" else "Runs while it is switched on",
-                checked = settings.liveNotificationEnabled,
-                onCheckedChange = { enabled ->
-                    haptics.tick()
-                    if (enabled && !notificationsGranted) {
-                        requestNotifications()
-                    }
-                    viewModel.setLiveNotificationEnabled(enabled && profiles.isNotEmpty())
-                },
-            )
-            WidgetExpandSection(visible = settings.liveNotificationEnabled) {
-                Column {
-                    ToggleRow(
-                        title = "Open onto the full panel",
-                        subtitle = "Off keeps it compact until you tap More",
-                        checked = settings.liveNotificationDetailed,
-                        onCheckedChange = { haptics.tick(); viewModel.setLiveNotificationDetailed(it) },
-                    )
-                    ToggleRow(
-                        title = "Restart after reboot",
-                        subtitle = "Bring the notification back when the phone starts",
-                        checked = settings.startOnBoot,
-                        onCheckedChange = { haptics.tick(); viewModel.setStartOnBoot(it) },
-                    )
-                    if (profiles.size > 1) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        StatLabel("SERVER SHOWN")
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            profiles.forEach { profile ->
-                                val selected = settings.liveNotificationServerId == profile.id ||
-                                    (settings.liveNotificationServerId == null && profile == profiles.first())
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(if (selected) Primary.copy(alpha = 0.2f) else ServerWell)
-                                        .clickable {
-                                            haptics.tick()
-                                            viewModel.setLiveNotificationServer(profile.id)
-                                        }
-                                        .padding(horizontal = 10.dp, vertical = 6.dp),
-                                ) {
-                                    Text(
-                                        profile.label,
-                                        color = if (selected) TextPrimary else TextSecondary,
-                                        fontSize = 12.sp,
-                                        maxLines = 1,
-                                    )
+        LoadWhenSeen(placeholderHeight = 240.dp) {
+            MacroCard(delayMs = 90) {
+                CardHeader(title = "Live stats notification")
+                Text(
+                    "Keeps an ongoing notification with live gauges. It stays compact; tap More on it " +
+                        "for the full panel with dials, history and every core.",
+                    color = TextSecondary,
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
+                )
+                ToggleRow(
+                    title = "Show live notification",
+                    subtitle = if (profiles.isEmpty()) "Add a server first" else "Runs while it is switched on",
+                    checked = settings.liveNotificationEnabled,
+                    onCheckedChange = { enabled ->
+                        haptics.tick()
+                        if (enabled && !notificationsGranted) {
+                            requestNotifications()
+                        }
+                        viewModel.setLiveNotificationEnabled(enabled && profiles.isNotEmpty())
+                    },
+                )
+                WidgetExpandSection(visible = settings.liveNotificationEnabled) {
+                    Column {
+                        ToggleRow(
+                            title = "Open onto the full panel",
+                            subtitle = "Off keeps it compact until you tap More",
+                            checked = settings.liveNotificationDetailed,
+                            onCheckedChange = { haptics.tick(); viewModel.setLiveNotificationDetailed(it) },
+                        )
+                        ToggleRow(
+                            title = "Restart after reboot",
+                            subtitle = "Bring the notification back when the phone starts",
+                            checked = settings.startOnBoot,
+                            onCheckedChange = { haptics.tick(); viewModel.setStartOnBoot(it) },
+                        )
+                        if (profiles.size > 1) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            StatLabel("SERVER SHOWN")
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                profiles.forEach { profile ->
+                                    val selected = settings.liveNotificationServerId == profile.id ||
+                                        (settings.liveNotificationServerId == null && profile == profiles.first())
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(if (selected) Primary.copy(alpha = 0.2f) else ServerWell)
+                                            .clickable {
+                                                haptics.tick()
+                                                viewModel.setLiveNotificationServer(profile.id)
+                                            }
+                                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                                    ) {
+                                        Text(
+                                            profile.label,
+                                            color = if (selected) TextPrimary else TextSecondary,
+                                            fontSize = 12.sp,
+                                            maxLines = 1,
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -395,58 +398,60 @@ fun ServersSettingsScreen(
         }
 
         // ── Polling + thresholds ─────────────────────────────────────────
-        MacroCard(delayMs = 110) {
-            CardHeader(title = "Polling & thresholds")
-            Text(
-                "Each poll is one batched command over a session that stays open, so a 5-second " +
-                    "refresh costs the server almost nothing.",
-                color = TextSecondary,
-                fontSize = 12.sp,
-                lineHeight = 17.sp,
-                modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
-            )
-            StepperRow(
-                label = "Refresh while open",
-                value = "${settings.pollSeconds}s",
-                onDecrease = { viewModel.setPollSeconds((settings.pollSeconds - 1).coerceAtLeast(2)) },
-                onIncrease = { viewModel.setPollSeconds((settings.pollSeconds + 1).coerceAtMost(60)) },
-            )
-            StepperRow(
-                label = "Refresh while screen off",
-                value = "${settings.backgroundPollSeconds}s",
-                onDecrease = {
-                    viewModel.setBackgroundPollSeconds((settings.backgroundPollSeconds - 5).coerceAtLeast(5))
-                },
-                onIncrease = {
-                    viewModel.setBackgroundPollSeconds((settings.backgroundPollSeconds + 5).coerceAtMost(300))
-                },
-            )
-            HorizontalDivider(color = Border.copy(alpha = 0.35f), modifier = Modifier.padding(vertical = 10.dp))
-            ThresholdRow("CPU", settings.thresholds.cpuPercent, "%") { delta ->
-                viewModel.updateThresholds { it.copy(cpuPercent = clampPercent(it.cpuPercent + delta)) }
-            }
-            ThresholdRow("Memory", settings.thresholds.memoryPercent, "%") { delta ->
-                viewModel.updateThresholds { it.copy(memoryPercent = clampPercent(it.memoryPercent + delta)) }
-            }
-            ThresholdRow("Disk", settings.thresholds.diskPercent, "%") { delta ->
-                viewModel.updateThresholds { it.copy(diskPercent = clampPercent(it.diskPercent + delta)) }
-            }
-            ThresholdRow("Swap", settings.thresholds.swapPercent, "%") { delta ->
-                viewModel.updateThresholds { it.copy(swapPercent = clampPercent(it.swapPercent + delta)) }
-            }
-            ThresholdRow("Temperature", settings.thresholds.temperatureCelsius, "°C") { delta ->
-                viewModel.updateThresholds {
-                    it.copy(temperatureCelsius = (it.temperatureCelsius + delta).coerceIn(40, 110))
+        LoadWhenSeen(placeholderHeight = 320.dp) {
+            MacroCard(delayMs = 110) {
+                CardHeader(title = "Polling & thresholds")
+                Text(
+                    "Each poll is one batched command over a session that stays open, so a 5-second " +
+                        "refresh costs the server almost nothing.",
+                    color = TextSecondary,
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
+                )
+                StepperRow(
+                    label = "Refresh while open",
+                    value = "${settings.pollSeconds}s",
+                    onDecrease = { viewModel.setPollSeconds((settings.pollSeconds - 1).coerceAtLeast(2)) },
+                    onIncrease = { viewModel.setPollSeconds((settings.pollSeconds + 1).coerceAtMost(60)) },
+                )
+                StepperRow(
+                    label = "Refresh while screen off",
+                    value = "${settings.backgroundPollSeconds}s",
+                    onDecrease = {
+                        viewModel.setBackgroundPollSeconds((settings.backgroundPollSeconds - 5).coerceAtLeast(5))
+                    },
+                    onIncrease = {
+                        viewModel.setBackgroundPollSeconds((settings.backgroundPollSeconds + 5).coerceAtMost(300))
+                    },
+                )
+                HorizontalDivider(color = Border.copy(alpha = 0.35f), modifier = Modifier.padding(vertical = 10.dp))
+                ThresholdRow("CPU", settings.thresholds.cpuPercent, "%") { delta ->
+                    viewModel.updateThresholds { it.copy(cpuPercent = clampPercent(it.cpuPercent + delta)) }
                 }
+                ThresholdRow("Memory", settings.thresholds.memoryPercent, "%") { delta ->
+                    viewModel.updateThresholds { it.copy(memoryPercent = clampPercent(it.memoryPercent + delta)) }
+                }
+                ThresholdRow("Disk", settings.thresholds.diskPercent, "%") { delta ->
+                    viewModel.updateThresholds { it.copy(diskPercent = clampPercent(it.diskPercent + delta)) }
+                }
+                ThresholdRow("Swap", settings.thresholds.swapPercent, "%") { delta ->
+                    viewModel.updateThresholds { it.copy(swapPercent = clampPercent(it.swapPercent + delta)) }
+                }
+                ThresholdRow("Temperature", settings.thresholds.temperatureCelsius, "°C") { delta ->
+                    viewModel.updateThresholds {
+                        it.copy(temperatureCelsius = (it.temperatureCelsius + delta).coerceIn(40, 110))
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "Load is judged per core, so the same threshold works on a 2-core VPS and a " +
+                        "32-core box.",
+                    color = TextTertiary,
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp,
+                )
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                "Load is judged per core, so the same threshold works on a 2-core VPS and a " +
-                    "32-core box.",
-                color = TextTertiary,
-                fontSize = 11.sp,
-                lineHeight = 15.sp,
-            )
         }
     }
 }

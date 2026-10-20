@@ -29,8 +29,12 @@ const val TAB_TRANSITION_MS = 300L
 /** Extra buffer after tab transition before kicking off network refreshes. */
 const val HOME_RESUME_DEFER_MS = TAB_TRANSITION_MS + 80L
 
-/** Widgets activated ahead of the last on-screen one, so they inflate off-screen. */
-private const val ACTIVATION_LOOK_AHEAD = 2
+/**
+ * Widgets activated ahead of the last on-screen one: the one LazyColumn prefetches, as a
+ * RecyclerView binds the next row of a Settings page. Anything further down waits until it
+ * is scrolled to, and loads nothing before.
+ */
+private const val ACTIVATION_LOOK_AHEAD = 1
 
 fun LazyListLayoutInfo.visibleHomeWidgetIds(): Set<String> =
     visibleItemsInfo
@@ -43,7 +47,7 @@ fun LazyListLayoutInfo.visibleHomeWidgetIds(): Set<String> =
  *
  * **Sticky on purpose.** A widget that has been on screen once keeps its
  * content for the rest of the session, and widgets just below the fold are
- * activated ahead of time. Previously a widget collapsed back to a header stub
+ * activated just ahead of time. Previously a widget collapsed back to a header stub
  * the moment it left the viewport and re-inflated when it returned, so every
  * section visibly slid down as the user scrolled over it. Deflating saved
  * nothing — the data already lives in the ViewModel and LazyColumn disposes

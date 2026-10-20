@@ -1,5 +1,6 @@
 package com.macrotracker.ui.screens.settings
 
+import com.macrotracker.ui.util.LoadWhenSeen
 import com.macrotracker.ui.util.findActivity
 import com.macrotracker.data.update.prettyVersion
 import androidx.compose.animation.AnimatedVisibility
@@ -230,11 +231,14 @@ fun AboutSettingsScreen(
                             exit = MacroMotion.expandExit,
                         ) {
                             Column {
+                                // Each older update is built as it scrolls in.
                                 releaseNotes.drop(3).forEach { release ->
-                                    ReleaseNotesDropdown(
-                                        release = release,
-                                        isCurrent = release.versionCode == appUpdateViewModel.currentVersionCode,
-                                    )
+                                    LoadWhenSeen(placeholderHeight = 48.dp) {
+                                        ReleaseNotesDropdown(
+                                            release = release,
+                                            isCurrent = release.versionCode == appUpdateViewModel.currentVersionCode,
+                                        )
+                                    }
                                     Spacer(modifier = Modifier.height(8.dp))
                                 }
                             }
