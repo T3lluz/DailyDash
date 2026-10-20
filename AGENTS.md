@@ -133,6 +133,13 @@ com.macrotracker/
                               never a fresh fix. Settings: Connections → Phone hub (notification access, usage access,
                               what to share). The food log is not shared: the hub sends health, never macros.
     update/                ← GitHub Releases in-app updater (see "In-app updates")
+    links/                 ← AppLinks + OpenWithActivity: mail, calendar (incl. `content://com.android.calendar`), YouTube,
+                              Twitch and GitHub links (`LinkKind.forUrl`, LinkKindTest) ask once which app opens them (a
+                              sheet listing the service's apps, then browsers) and keep the pick (prefs `app_links`;
+                              Settings → Connections → Open links in changes it). A picked app that can't take the exact
+                              link opens on its start screen. `openUrl`, the theme's `LocalUriHandler`, widgets'
+                              `openUrlAction` / `openEventAction` (through OpenWithActivity), Tilesmith links and the phone
+                              hub all go through it, so never start a bare ACTION_VIEW for these
     health/                ← HealthConnectRepository (read-only; lazy client; PERMISSIONS companion set);
                               reads: Steps, HeartRate, RestingHeartRate, OxygenSaturation,
                               RespiratoryRate, Distance, FloorsClimbed, ActiveCaloriesBurned,
@@ -437,7 +444,7 @@ Widget order and visibility are persisted as a single colon-and-comma encoded st
 ```
 `DraggableWidgetColumn` + `WidgetEditor` read/write this via `SettingsRepository`. **`GITHUB`** is the home GitHub hub (`GitHubCard`): account-wide issues, PRs, activity, and repos for the connected GitHub user (not a single project). Connect with Device Code OAuth on the Account tab (`repo` + `read:user`).
 
-**`YOUTUBE`** and **`TWITCH`** collapsed show their videos / live streams in `MediaCarousel`; opened, both are the same shape: the newest video / biggest stream as a hero card, the rest in a `WidgetScrollBox` under it (YouTube pages with Show more). Both filter by channel with `ChannelAvatarRow` (components/ChannelAvatarRow.kt), the same row collapsed and opened: round pictures, a picked one keeps its ring while the rest fade back; tapping it again clears the filter (no caption under the row). Twitch rings live channels in scarlet `#eb0400` with a LIVE tag on the ring's lower edge, as Twitch does; YouTube orders channels by latest upload and dots anyone who posted today. A filter or tab change swaps the body with `MacroMotion.hubBodySwap` / `inCardTabSwitch`, and the collapsed glance folds away while the hub unfolds, so the card eases between heights.
+**`YOUTUBE`** and **`TWITCH`** collapsed show their videos / live streams in `MediaCarousel`; opened, both are the same shape: the newest video / biggest stream as a hero card, the rest in a `WidgetScrollBox` under it (YouTube lists every video; each row is built as it scrolls in, `LoadWhenSeen`). Both filter by channel with `ChannelAvatarRow` (components/ChannelAvatarRow.kt), the same row collapsed and opened: round pictures, a picked one keeps its ring while the rest fade back; tapping it again clears the filter (no caption under the row). Twitch rings live channels in scarlet `#eb0400` with a LIVE tag on the ring's lower edge, as Twitch does; YouTube orders channels by latest upload and dots anyone who posted today. A filter or tab change swaps the body with `MacroMotion.hubBodySwap` / `inCardTabSwitch`, and the collapsed glance folds away while the hub unfolds, so the card eases between heights.
 
 **`UPCOMING`** is Coming up (`UpcomingCard`): source chips over the strip (All, then Calendar, Sonarr, Radarr, Stremio, F1, each with the dashboard's own icon and a count; one at a time), then a Material 3 `HorizontalCenteredHeroCarousel` with `singleAdvanceFlingBehavior`, one card per entry in time order. Items are masked, not resized, so anything that grows or fades with a card reads `carouselItemDrawInfo` inside `graphicsLayer`/draw blocks (`openness()`, `followMask()`) and never in composition. Programmatic moves use `MacroMotion.carouselTravel`.
 
@@ -545,6 +552,14 @@ the background and starts it again on return; a hold that must be released (serv
 `rememberToday()` is a date that turns at midnight. Food totals follow `MacroRepository.changes` (fires on
 every log, delete and goal change) instead of throttled reloads. Health Connect reloads on return to the tab
 only after `HealthViewModel.RESUME_RELOAD_MS`; pull to refresh forces it.
+
+**Load when seen** (after Pixel's Settings: a RecyclerView binds only the rows on screen, and a slow summary
+shows a placeholder until it lands). Long pages are LazyColumns; Home activates a card (its data and full
+content) only when it scrolls in, plus the one LazyColumn prefetches (`rememberVisibleHomeWidgetIds`). In a plain
+scrolling Column (settings pages, a card's `WidgetScrollBox`) wrap what is below the first screen, or a long
+list's rows, in `LoadWhenSeen(placeholderHeight)` (ui/util/LoadWhenSeen.kt), or use `Modifier.onFirstSeen { }`
+when the content has its own skeleton (the Widgets screen's previews). Both use Compose's `onFirstVisible`;
+`WidgetScrollBox` provides its own bounds as the viewport (`LocalSeenViewport`). Once seen, it stays built.
 
 Shared helpers to use rather than re-write: `notifyIfAllowed` / `canPostNotifications` (data/Notifications.kt)
 for every notification; `findActivity()`, `openUrl(url)` (never a bare `startActivity(ACTION_VIEW)`) and
