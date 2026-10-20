@@ -2,7 +2,6 @@ package com.macrotracker.ui.components
 
 import android.content.Context
 import com.macrotracker.ui.util.LaunchedWhileResumed
-import android.content.Intent
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
@@ -72,7 +71,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.CachePolicy
@@ -87,6 +85,8 @@ import com.macrotracker.ui.theme.Surface
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.HapticHelper
+import com.macrotracker.ui.util.LoadWhenSeen
+import com.macrotracker.ui.util.openUrl
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.TwitchAuthUiState
 import com.macrotracker.ui.viewmodel.TwitchChannelSearchState
@@ -111,12 +111,6 @@ private val TwSharp = RoundedCornerShape(8.dp)
 private enum class TwHubTab(val label: String, val icon: ImageVector) {
     LIVE("Live", AppIcons.Radio),
     CHANNELS("Channels", AppIcons.List),
-}
-
-private fun openUrl(context: Context, url: String) {
-    runCatching {
-        context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
-    }
 }
 
 private fun formatViewers(count: Int): String = when {
@@ -221,7 +215,7 @@ fun TwitchCard(isVisible: Boolean = true, viewModel: TwitchViewModel = hiltViewM
                         HubHeaderAction(
                             icon = AppIcons.ExternalLink,
                             contentDescription = "Open Twitch",
-                            onClick = { openUrl(context, "https://www.twitch.tv") },
+                            onClick = { context.openUrl("https://www.twitch.tv") },
                         )
                     }
                 },
@@ -602,7 +596,7 @@ private fun CompactLiveFeed(
                 resetKey = channelId,
                 onOpen = { stream ->
                     haptics.click()
-                    openUrl(context, stream.channelUrl)
+                    context.openUrl(stream.channelUrl)
                 },
             ) { stream, look ->
                 LiveCarouselItem(stream = stream, look = look)
@@ -773,7 +767,7 @@ private fun LiveStreamFeed(
                         stream = hero,
                         onClick = {
                             haptics.click()
-                            openUrl(context, hero.channelUrl)
+                            context.openUrl(hero.channelUrl)
                         },
                     )
                     val rest = shown.drop(1)
@@ -784,13 +778,15 @@ private fun LiveStreamFeed(
                         ) {
                             rest.forEach { stream ->
                                 key(stream.userId) {
-                                    LiveStreamRow(
-                                        stream = stream,
-                                        onClick = {
-                                            haptics.click()
-                                            openUrl(context, stream.channelUrl)
-                                        },
-                                    )
+                                    LoadWhenSeen(placeholderHeight = LiveStreamRowHeight) {
+                                        LiveStreamRow(
+                                            stream = stream,
+                                            onClick = {
+                                                haptics.click()
+                                                context.openUrl(stream.channelUrl)
+                                            },
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -887,6 +883,9 @@ private fun HeroLiveCard(stream: TwitchStream, onClick: () -> Unit) {
         }
     }
 }
+
+/** A [LiveStreamRow]'s height: its 112 dp 16:9 thumbnail and the row's padding. */
+private val LiveStreamRowHeight = 79.dp
 
 @Composable
 private fun LiveStreamRow(stream: TwitchStream, onClick: () -> Unit) {

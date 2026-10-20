@@ -73,6 +73,7 @@ import com.macrotracker.ui.theme.Success
 import com.macrotracker.ui.theme.Surface
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
+import com.macrotracker.ui.util.onFirstSeen
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.widget.DashWidgetSpec
 import com.macrotracker.widget.DashWidgets
@@ -520,7 +521,10 @@ private fun LiveWidgetPreview(spec: DashWidgetSpec, cells: Pair<Int, Int>, modif
     val renders = remember(spec.key) { mutableStateMapOf<Pair<Int, Int>, RemoteViews>() }
     var shown by remember(spec.key) { mutableStateOf<Pair<Int, Int>?>(null) }
     var failed by remember { mutableStateOf(false) }
-    LaunchedEffect(spec.key, cells) {
+    // Rendered once it scrolls into view; until then it is its skeleton.
+    var seen by remember { mutableStateOf(false) }
+    LaunchedEffect(spec.key, cells, seen) {
+        if (!seen) return@LaunchedEffect
         if (renders[cells] == null) {
             // Off the main thread: the calendar's preview reads the calendar provider.
             runCatching { withContext(Dispatchers.Default) { spec.renderPreview(context, WidgetDims.cells(cells.first, cells.second)) } }
@@ -536,6 +540,7 @@ private fun LiveWidgetPreview(spec: DashWidgetSpec, cells: Pair<Int, Int>, modif
     val widgetHeight = size.height
     BoxWithConstraints(
         modifier = modifier
+            .onFirstSeen { seen = true }
             .animateContentSize(MacroMotion.slideTween())
             .aspectRatio(widgetWidth / widgetHeight),
         contentAlignment = Alignment.Center,

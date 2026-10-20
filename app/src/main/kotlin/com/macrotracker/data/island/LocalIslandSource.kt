@@ -120,10 +120,11 @@ class LocalIslandSource @Inject constructor(
             title = event.title.trim(),
             sub = listOfNotNull("until ${event.endTime.format(CLOCK)}", event.location.takeIf { it.isNotBlank() }).joinToString(" · "),
             end = "${spanText(left)} left",
-            href = event.meetingLink,
+            join = event.meetingLink?.takeIf(IslandTarget::isCallLink),
             color = hex(event.calendarColor),
             ring = done * 100f / total,
             route = "calendar",
+            ref = IslandTarget.eventRef(event.id, event.beginMillis, event.endMillis),
         )
     }
 
@@ -139,9 +140,10 @@ class LocalIslandSource @Inject constructor(
                 event.location.takeIf { it.isNotBlank() },
             ).joinToString(" · "),
             end = if (minutes <= 180) "in ${spanText(minutes)}" else event.startTime.format(CLOCK),
-            href = event.meetingLink,
+            join = event.meetingLink?.takeIf(IslandTarget::isCallLink),
             color = hex(event.calendarColor),
             route = "calendar",
+            ref = IslandTarget.eventRef(event.id, event.beginMillis, event.endMillis),
         )
     }
 
@@ -161,21 +163,24 @@ class LocalIslandSource @Inject constructor(
                 .filter { it.severity != AdvisorySeverity.INFO }
                 .maxByOrNull { it.severity.rank }
             when {
-                offline -> Triple(rt.profile.label, "Offline", AdvisorySeverity.CRITICAL.rank)
-                advisory != null -> Triple(rt.profile.label, advisory.title, advisory.severity.rank)
+                offline -> ServerAlert(rt.profile.id, rt.profile.label, "Offline", AdvisorySeverity.CRITICAL.rank)
+                advisory != null -> ServerAlert(rt.profile.id, rt.profile.label, advisory.title, advisory.severity.rank)
                 else -> null
             }
-        }.maxByOrNull { it.third } ?: return null
-        val critical = worst.third >= AdvisorySeverity.CRITICAL.rank
+        }.maxByOrNull { it.rank } ?: return null
+        val critical = worst.rank >= AdvisorySeverity.CRITICAL.rank
         return item(
             kind = "srv",
             tone = if (critical) "error" else "warn",
             icon = "server",
-            title = worst.first,
-            sub = worst.second,
+            title = worst.label,
+            sub = worst.problem,
             route = "servers",
+            ref = IslandTarget.serverRef(worst.id),
         )
     }
+
+    private data class ServerAlert(val id: String, val label: String, val problem: String, val rank: Int)
 
     private fun twitchLive(): IslandItem? {
         val live = twitch.getCachedLiveStreams().orEmpty().sortedByDescending { it.viewerCount }
@@ -208,6 +213,8 @@ class LocalIslandSource @Inject constructor(
             title = if (fresh.size == 1) fresh.first().channelTitle.ifBlank { "New video" } else "${fresh.size} new videos",
             short = if (fresh.size == 1) fresh.first().channelTitle.ifBlank { "New video" } else "${fresh.size} videos",
             sub = if (fresh.size == 1) fresh.first().title else channels.take(2).joinToString(", "),
+            // One new video opens it; several open the YouTube card.
+            href = fresh.singleOrNull()?.let { "https://www.youtube.com/watch?v=${it.videoId}" },
             route = "home",
             color = YOUTUBE_RED,
         )
@@ -333,7 +340,9 @@ class LocalIslandSource @Inject constructor(
         sub: String = "",
         end: String = "",
         href: String? = null,
+        join: String? = null,
         route: String? = null,
+        ref: String? = null,
         color: String? = null,
         ring: Float? = null,
     ) = IslandItem(
@@ -345,11 +354,12 @@ class LocalIslandSource @Inject constructor(
         end = end,
         short = short,
         href = href,
-        join = null,
+        join = join,
         color = color,
         ring = ring,
         thread = null,
         route = route,
+        ref = ref,
     )
 
     private fun grouped(n: Long) = String.format(Locale.US, "%,d", n)

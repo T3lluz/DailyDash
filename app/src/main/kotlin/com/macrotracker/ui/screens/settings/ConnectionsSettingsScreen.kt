@@ -55,6 +55,7 @@ import com.macrotracker.ui.theme.WeatherBrand
 import com.macrotracker.ui.theme.ServerBrand
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
+import com.macrotracker.ui.util.LoadWhenSeen
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.SettingsViewModel
 import com.macrotracker.ui.theme.AppIcons
@@ -342,10 +343,20 @@ fun ConnectionsSettingsScreen(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        MacroCard(delayMs = 132) {
-            PhoneHubSettingsCard()
+        // Below the first screen: built as it scrolls in, as Android's own Settings pages do.
+        LoadWhenSeen(placeholderHeight = 360.dp) {
+            MacroCard(delayMs = 132) {
+                PhoneHubSettingsCard()
+            }
         }
 
+        Spacer(modifier = Modifier.height(10.dp))
+
+        LoadWhenSeen(placeholderHeight = 280.dp) {
+            MacroCard(delayMs = 140) {
+                OpenLinksCard()
+            }
+        }
     }
 }
 

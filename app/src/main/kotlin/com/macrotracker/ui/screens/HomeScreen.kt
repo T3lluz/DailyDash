@@ -1,6 +1,7 @@
 package com.macrotracker.ui.screens
 
 import android.Manifest
+import com.macrotracker.ui.navigation.CardFocus
 import com.macrotracker.ui.util.LaunchedWhileResumed
 import com.macrotracker.ui.util.requestOrOpenSettings
 import android.content.pm.PackageManager
@@ -264,6 +265,16 @@ fun HomeScreen(
             },
             haptics = haptics,
         )
+        // An island tap about a card (the weather, the mail, F1) brings that card into view.
+        val focusCard by CardFocus.home.collectAsState()
+        LaunchedEffect(focusCard, visibleConfigs) {
+            val id = focusCard ?: return@LaunchedEffect
+            val index = visibleConfigs.indexOfFirst { it.id == id }
+            // The header is the list's first item.
+            if (index >= 0 && !isEditMode) listState.animateScrollToItem(index + 1)
+            else if (id.isEmpty()) listState.animateScrollToItem(0)
+            CardFocus.homeDone()
+        }
         val tickersPaused by remember { derivedStateOf { listState.isScrollInProgress } }
         val orderedWidgetIds = remember(visibleConfigs) { visibleConfigs.map { it.id } }
         val visibleWidgetIds = rememberVisibleHomeWidgetIds(listState, orderedWidgetIds)

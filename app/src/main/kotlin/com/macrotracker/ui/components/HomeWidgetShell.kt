@@ -30,6 +30,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,6 +49,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.LayoutBoundsHolder
+import androidx.compose.ui.layout.layoutBounds
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -59,6 +62,7 @@ import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.LastUpdatedText
+import com.macrotracker.ui.util.LocalSeenViewport
 import com.macrotracker.ui.util.LocalTickersPaused
 import com.macrotracker.ui.util.rememberHaptics
 import java.time.Instant
@@ -238,10 +242,13 @@ fun WidgetScrollBox(
     }
     val hasFill = containerColor.alpha > 0.01f
     val hasBorder = borderColor.alpha > 0.01f
+    // Rows wrapped in LoadWhenSeen are built as they scroll into this box, not the window.
+    val viewport = remember { LayoutBoundsHolder() }
     Box(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(max = maxHeight)
+            .layoutBounds(viewport)
             .clip(shape)
             .then(if (hasFill) Modifier.background(containerColor) else Modifier)
             .then(if (hasBorder) Modifier.border(0.5.dp, borderColor, shape) else Modifier)
@@ -257,14 +264,16 @@ fun WidgetScrollBox(
                 )
             },
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(scroll)
-                .padding(contentPadding),
-            verticalArrangement = verticalArrangement,
-            content = content,
-        )
+        CompositionLocalProvider(LocalSeenViewport provides viewport) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(scroll)
+                    .padding(contentPadding),
+                verticalArrangement = verticalArrangement,
+                content = content,
+            )
+        }
     }
 }
 

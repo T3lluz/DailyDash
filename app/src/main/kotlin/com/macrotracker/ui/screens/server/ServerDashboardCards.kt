@@ -1,6 +1,5 @@
 package com.macrotracker.ui.screens.server
 
-import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
@@ -37,7 +36,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.net.toUri
 import coil.compose.AsyncImage
 import coil.decode.SvgDecoder
 import coil.request.ImageRequest
@@ -56,6 +54,7 @@ import com.macrotracker.ui.theme.ServerWell
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.theme.TextTertiary
+import com.macrotracker.ui.util.openUrl
 import com.macrotracker.ui.util.rememberHaptics
 import kotlin.math.roundToInt
 
@@ -109,7 +108,7 @@ internal fun ServicesWallCard(link: DashboardLink, onAskAi: (() -> Unit)?) {
                                 modifier = Modifier.weight(1f).fillMaxHeight(),
                             ) {
                                 haptics.tick()
-                                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, service.href.toUri())) }
+                                context.openUrl(service.href)
                             }
                         }
                         // Keep the last row's tiles the same width as the rest.

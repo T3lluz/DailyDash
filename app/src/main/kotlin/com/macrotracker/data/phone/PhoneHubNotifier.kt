@@ -11,7 +11,6 @@ import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.RingtoneManager
-import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.os.VibrationEffect
@@ -19,6 +18,7 @@ import android.os.Vibrator
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.macrotracker.R
+import com.macrotracker.data.links.AppLinks
 
 /**
  * The notifications the phone hub posts itself: "your desk is ringing this phone" with
@@ -69,7 +69,7 @@ object PhoneHubNotifier {
     fun link(context: Context, url: String) {
         val open = PendingIntent.getActivity(
             context, url.hashCode(),
-            Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            AppLinks.widgetIntent(context, url),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         post(

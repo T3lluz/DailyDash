@@ -61,7 +61,7 @@ object IslandRanking {
      * live number ("6,800 steps to go", "14°"), came back as soon as it changed, so an item
      * without a link or chat of its own is hidden by its kind.
      */
-    fun hideKey(item: IslandItem): String = "${item.kind}|${item.thread ?: item.href ?: item.route ?: ""}"
+    fun hideKey(item: IslandItem): String = "${item.kind}|${item.thread ?: item.href ?: item.ref ?: item.route ?: ""}"
 
     /** The server's kind and the phone's for the same thing: weather now, a server, tonight's episode. */
     private fun family(kind: String): String? = when (kind) {

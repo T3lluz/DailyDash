@@ -1,6 +1,10 @@
 package com.macrotracker.ui.screens
 
 import android.app.Activity
+import android.content.ContentUris
+import android.content.Intent
+import android.provider.CalendarContract
+import com.macrotracker.ui.navigation.CardFocus
 import com.macrotracker.ui.util.findActivity
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -24,7 +28,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -33,6 +36,9 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.macrotracker.BuildConfig
 import com.macrotracker.data.remote.AiProvider
+import com.macrotracker.data.island.IslandTarget
+import com.macrotracker.data.links.AppLinks
+import com.macrotracker.data.links.LinkKind
 import com.macrotracker.data.server.ServerIntentRequest
 import com.macrotracker.data.update.AppUpdateNotifier
 import com.macrotracker.data.update.UpdateInstallActivity
@@ -377,7 +383,7 @@ private fun MainScreenScaffold(
                 SettingsRoutes.SERVER_DASHBOARD -> islandVm.visited("servers")
             }
         }
-        val uriHandler = LocalUriHandler.current
+        val serverViewModel: ServerViewModel = hiltViewModel()
         val islandVisible = currentRoute == Screen.Home.route || currentRoute == Screen.Health.route ||
             currentRoute == Screen.Settings.route
         CompositionLocalProvider(LocalIslandClearance provides islandClearance(islandItems, activity, islandVisible)) {
@@ -402,22 +408,39 @@ private fun MainScreenScaffold(
             onUnhide = { item -> islandVm.unhide(item) },
             onItem = { item ->
                 islandVm.tapped(item)
-                val link = item.join ?: item.href
-                when {
-                    item.kind == "need" && item.thread != null -> {
-                        islandVm.openThread(item.thread)
+                if (item.isBrief) islandVm.briefSeen()
+                when (val target = IslandTarget.of(item)) {
+                    is IslandTarget.Chat -> {
+                        islandVm.openThread(target.thread)
                         navController.navigateToTab(Screen.AI.route)
                     }
-                    item.route == "update" -> onOpenUpdate()
-                    item.route == "servers" -> navController.navigate(SettingsRoutes.SERVER_DASHBOARD) { launchSingleTop = true }
-                    item.route == "health" -> navController.navigateToTab(Screen.Health.route)
-                    link != null -> runCatching { uriHandler.openUri(link) }
-                    item.isBrief -> {
-                        islandVm.briefSeen()
+                    IslandTarget.Hermes -> navController.navigateToTab(Screen.AI.route)
+                    IslandTarget.Update -> onOpenUpdate()
+                    is IslandTarget.Servers -> {
+                        serverViewModel.focusServer(target.serverId)
+                        navController.navigate(SettingsRoutes.SERVER_DASHBOARD) { launchSingleTop = true }
+                    }
+                    is IslandTarget.Link -> AppLinks.open(context, target.url)
+                    is IslandTarget.Event -> AppLinks.open(
+                        context,
+                        LinkKind.CALENDAR,
+                        Intent(Intent.ACTION_VIEW, ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, target.id))
+                            .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, target.beginMillis)
+                            .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, target.endMillis),
+                    )
+                    is IslandTarget.HomeCard -> {
+                        CardFocus.home(target.card)
                         navController.navigateToTab(Screen.Home.route)
                     }
-                    else -> navController.navigateToTab(Screen.Home.route)
+                    is IslandTarget.HealthSection -> {
+                        CardFocus.health(target.section)
+                        navController.navigateToTab(Screen.Health.route)
+                    }
                 }
+            },
+            onJoin = { item ->
+                islandVm.tapped(item)
+                item.join?.let { AppLinks.open(context, it) }
             },
             modifier = Modifier.align(Alignment.TopCenter),
         )

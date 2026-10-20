@@ -8,6 +8,7 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.edit
+import com.macrotracker.data.links.AppLinks
 
 /** The activity behind a Compose context, through any wrappers a dialog or theme put round it. */
 tailrec fun Context.findActivity(): ComponentActivity = when (this) {
@@ -46,14 +47,9 @@ fun Context.openAppSettings() {
 private const val PERMISSION_ASKS = "permission_asks"
 
 /**
- * Opens [url] in whatever app handles it. Quietly does nothing for a blank link or when no
- * app can open it, where startActivity would throw and take the screen down.
+ * Opens [url]. Mail, calendar, YouTube, Twitch and GitHub links go to the app picked for
+ * them, asking once which one when several can ([AppLinks]); anything else goes to whatever
+ * app handles it. Quietly does nothing for a blank link or when no app can open it, where
+ * startActivity would throw and take the screen down.
  */
-fun Context.openUrl(url: String): Boolean {
-    if (url.isBlank()) return false
-    return runCatching {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-        if (this !is android.app.Activity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        startActivity(intent)
-    }.isSuccess
-}
+fun Context.openUrl(url: String): Boolean = AppLinks.open(this, url)

@@ -59,6 +59,8 @@ import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.theme.TextTertiary
 import com.macrotracker.ui.theme.contentColorOn
+import com.macrotracker.data.links.AppLinks
+import com.macrotracker.data.links.LinkKind
 import com.macrotracker.ui.util.LastUpdatedText
 import com.macrotracker.ui.util.rememberHaptics
 import kotlinx.coroutines.delay
@@ -638,11 +640,10 @@ private fun AgendaRow(event: CalendarEvent, onOpen: (CalendarEvent) -> Unit) {
     }
 }
 
-/** Opens the instance in whatever calendar app handles events. */
+/** Opens the instance in the calendar app picked for events, asking once which one. */
 internal fun openEvent(context: Context, event: CalendarEvent) {
     val intent = Intent(Intent.ACTION_VIEW, ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, event.id))
         .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, event.beginMillis)
         .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, event.endMillis)
-        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    runCatching { context.startActivity(intent) }
+    AppLinks.open(context, LinkKind.CALENDAR, intent)
 }

@@ -6,10 +6,15 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.macrotracker.data.links.AppLinks
 
 /**
  * Every role is set explicitly: Material's defaults are purple-tinted, and
@@ -96,8 +101,17 @@ private val AppTypography = Typography(
 
 @Composable
 fun DailyDashTheme(content: @Composable () -> Unit) {
+    val context = LocalContext.current
+    // Every link opened through Compose (cards, markdown) goes to the app picked for it.
+    val uriHandler = remember(context) {
+        object : UriHandler {
+            override fun openUri(uri: String) {
+                AppLinks.open(context, uri)
+            }
+        }
+    }
     // Disable stretch/glow overscroll so lists don't rubber-band at the edges.
-    CompositionLocalProvider(LocalOverscrollFactory provides null) {
+    CompositionLocalProvider(LocalOverscrollFactory provides null, LocalUriHandler provides uriHandler) {
         MaterialTheme(
             colorScheme = DarkColorScheme,
             typography = AppTypography,

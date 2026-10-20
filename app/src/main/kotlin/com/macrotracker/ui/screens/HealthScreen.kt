@@ -1,5 +1,6 @@
 package com.macrotracker.ui.screens
 
+import com.macrotracker.ui.navigation.CardFocus
 import com.macrotracker.ui.screens.health.sleepTileOf
 import com.macrotracker.ui.screens.health.buildMetricTiles
 import com.macrotracker.ui.screens.health.MetricTilesSection
@@ -303,6 +304,14 @@ fun HealthScreen(
         val index = visibleConfigs.indexOfFirst { it.id == id }
         // The header is the list's first item.
         if (index >= 0) scrollScope.launch { listState.animateScrollToItem(index + 1) }
+    }
+    // An island tap about a section (last night, steps, food) brings that section into view.
+    val focusSection by CardFocus.health.collectAsState()
+    LaunchedEffect(focusSection, visibleConfigs) {
+        val id = focusSection ?: return@LaunchedEffect
+        val index = visibleConfigs.indexOfFirst { it.id == id }
+        if (index >= 0) listState.animateScrollToItem(index + 1)
+        CardFocus.healthDone()
     }
 
     CompositionLocalProvider(LocalTickersPaused provides tickersPaused) {

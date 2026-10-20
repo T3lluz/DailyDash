@@ -96,6 +96,7 @@ import com.macrotracker.ui.theme.SurfaceChrome
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.HapticHelper
+import com.macrotracker.ui.util.LoadWhenSeen
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.ChannelSearchState
 import com.macrotracker.ui.viewmodel.YouTubeGoogleUiState
@@ -858,9 +859,6 @@ private fun VideoCarouselItem(video: YoutubeVideo, look: MediaItemLook, avatarUr
 
 // ── Open feed: the newest video on top, the rest in a scroll box under it ──────
 
-private const val YT_FIRST_PAGE = 10
-private const val YT_PAGE_SIZE = 10
-
 @Composable
 private fun rememberYoutubeThumbnailRequest(
     url: String,
@@ -906,8 +904,6 @@ private fun VideoFeed(
             val shown = remember(videos, channelId) {
                 if (channelId == null) videos else videos.filter { it.channelId == channelId }
             }
-            // Each filter pages on its own and starts from its first page.
-            var visibleCount by remember { mutableIntStateOf(YT_FIRST_PAGE) }
             val hero = shown.firstOrNull()
             if (hero == null) {
                 FeedNote(if (channelId == null) "No videos yet" else "No videos from this channel yet")
@@ -923,26 +919,20 @@ private fun VideoFeed(
                         },
                     )
                     if (rest.isNotEmpty()) {
+                        // Every video, each built (and its thumbnail fetched) as it scrolls in.
                         WidgetScrollBox(maxHeight = 360.dp) {
-                            rest.take(visibleCount).forEach { video ->
+                            rest.forEach { video ->
                                 key(video.videoId) {
-                                    VideoCard(
-                                        video = video,
-                                        onClick = {
-                                            haptics.click()
-                                            openVideo(context, video)
-                                        },
-                                    )
+                                    LoadWhenSeen(placeholderHeight = VideoCardHeight) {
+                                        VideoCard(
+                                            video = video,
+                                            onClick = {
+                                                haptics.click()
+                                                openVideo(context, video)
+                                            },
+                                        )
+                                    }
                                 }
-                            }
-                            if (rest.size > visibleCount) {
-                                ShowMoreButton(
-                                    remaining = rest.size - visibleCount,
-                                    onClick = {
-                                        haptics.tick()
-                                        visibleCount += YT_PAGE_SIZE
-                                    },
-                                )
                             }
                         }
                     }
@@ -952,49 +942,8 @@ private fun VideoFeed(
     }
 }
 
-// ── Show More button ──────────────────────────────────────────────────────────
-
-@Composable
-private fun ShowMoreButton(remaining: Int, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp, bottom = 4.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Row(
-            modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
-                .background(YtRed.copy(alpha = 0.08f))
-                .border(0.5.dp, YtRed.copy(alpha = 0.22f), RoundedCornerShape(10.dp))
-                .clickable(onClick = onClick)
-                .heightIn(min = 36.dp)
-                .padding(horizontal = 20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Icon(
-                AppIcons.ChevronDown,
-                contentDescription = null,
-                tint = YtRed.copy(alpha = 0.8f),
-                modifier = Modifier.size(16.dp),
-            )
-            Text(
-                "Show ${minOf(remaining, YT_PAGE_SIZE)} more",
-                fontSize = 12.sp,
-                color = YtRed.copy(alpha = 0.85f),
-                fontWeight = FontWeight.Medium,
-            )
-            if (remaining > YT_PAGE_SIZE) {
-                Text(
-                    "· $remaining left",
-                    fontSize = 10.sp,
-                    color = TextTertiary,
-                )
-            }
-        }
-    }
-}
+/** A [VideoCard]'s height: its 148 dp 16:9 thumbnail and the row's padding. */
+private val VideoCardHeight = 96.dp
 
 /** A video in the scroll box, laid out like YouTube's own list: thumbnail, then title, channel and age. */
 @Composable

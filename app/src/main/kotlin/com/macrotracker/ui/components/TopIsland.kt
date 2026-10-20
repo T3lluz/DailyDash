@@ -165,6 +165,8 @@ fun TopIsland(
     hazeState: HazeState?,
     onItem: (IslandItem) -> Unit,
     modifier: Modifier = Modifier,
+    /** The Join button on a calendar item with a call: the call, where the row opens the event. */
+    onJoin: (IslandItem) -> Unit = onItem,
     /** The AI's short labels by full title, used when a title doesn't fit (IslandViewModel.labels). */
     labels: Map<String, String> = emptyMap(),
     /** Swiped off the card (or a long press on the pill): hidden for the rest of the day. */
@@ -293,6 +295,7 @@ fun TopIsland(
                                 staggered = !initiallyExpanded,
                                 onHermes = { expanded = false; onHermes(it) },
                                 onItem = { expanded = false; onItem(it) },
+                                onJoin = { expanded = false; onJoin(it) },
                                 onClear = hide,
                                 onClose = { haptics.toggleOff(); expanded = false },
                             )
@@ -698,6 +701,7 @@ private fun ExpandedCard(
     staggered: Boolean,
     onHermes: (NavActivity) -> Unit,
     onItem: (IslandItem) -> Unit,
+    onJoin: (IslandItem) -> Unit,
     onClear: (IslandItem) -> Unit,
     onClose: () -> Unit,
 ) {
@@ -783,7 +787,7 @@ private fun ExpandedCard(
                                             Modifier.fillMaxWidth().height(RowHeight).padding(horizontal = 4.dp),
                                             verticalAlignment = Alignment.CenterVertically,
                                         ) { HermesLead(row.hermes, onClick = { onHermes(row.hermes) }) }
-                                        item != null -> CardItem(item, phase = (at % 6) * 0.11f, onClick = { onItem(item) })
+                                        item != null -> CardItem(item, phase = (at % 6) * 0.11f, onClick = { onItem(item) }, onJoin = { onJoin(item) })
                                     }
                                 }
                             }
@@ -856,7 +860,7 @@ private fun FoldHandle(onClose: () -> Unit) {
 
 /** An item on the card, at the size it needs. */
 @Composable
-private fun CardItem(item: IslandItem, phase: Float, onClick: () -> Unit) {
+private fun CardItem(item: IslandItem, phase: Float, onClick: () -> Unit, onJoin: () -> Unit) {
     val haptics = rememberHaptics()
     val styles = islandTextStyles()
     val tone = toneColor(item)
@@ -891,16 +895,7 @@ private fun CardItem(item: IslandItem, phase: Float, onClick: () -> Unit) {
                     if (item.end.isNotBlank()) Text(item.end, style = styles.end, color = endColor(item), maxLines = 1)
                     if (item.join != null) {
                         Spacer(Modifier.height(6.dp))
-                        Text(
-                            "Join",
-                            color = Color.Black,
-                            fontSize = 12.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .background(ServerGood)
-                                .padding(horizontal = 12.dp, vertical = 5.dp),
-                        )
+                        JoinPill(onJoin)
                     }
                 }
             }
@@ -936,6 +931,11 @@ private fun CardItem(item: IslandItem, phase: Float, onClick: () -> Unit) {
                 Spacer(Modifier.width(10.dp))
                 Text(item.end, style = styles.end, color = endColor(item), maxLines = 1)
             }
+            // A meeting soon: its call is one tap away, the row opens the event.
+            if (item.join != null) {
+                Spacer(Modifier.width(8.dp))
+                JoinPill(onJoin)
+            }
         }
         CardSize.SLIM -> Row(
             Modifier
@@ -962,6 +962,23 @@ private fun CardItem(item: IslandItem, phase: Float, onClick: () -> Unit) {
             }
         }
     }
+}
+
+/** A calendar item's call, apart from the row (which opens the event). */
+@Composable
+private fun JoinPill(onJoin: () -> Unit) {
+    val haptics = rememberHaptics()
+    Text(
+        "Join",
+        color = Color.Black,
+        fontSize = 12.5.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(ServerGood)
+            .clickable(role = Role.Button) { haptics.click(); onJoin() }
+            .padding(horizontal = 12.dp, vertical = 5.dp),
+    )
 }
 
 /** How far through the event on now, as a line under it. */
