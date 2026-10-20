@@ -10,7 +10,6 @@ import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.media.AudioManager
 import android.media.session.PlaybackState
-import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.service.notification.StatusBarNotification
@@ -19,6 +18,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
+import com.macrotracker.data.links.AppLinks
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -407,9 +407,7 @@ class PhoneHub @Inject constructor(
         // Android lets an app start a page only while it is in front; otherwise it is a notification to tap.
         return if (foreground) {
             onMain {
-                runCatching {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                }.exceptionOrNull()?.message
+                if (AppLinks.open(context, url)) null else "No app opens this link"
             }
         } else {
             PhoneHubNotifier.link(context, url)

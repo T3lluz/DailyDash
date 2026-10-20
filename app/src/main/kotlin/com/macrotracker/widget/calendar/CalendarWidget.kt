@@ -61,6 +61,7 @@ import com.macrotracker.widget.kit.WidgetFrame
 import com.macrotracker.widget.kit.cp
 import com.macrotracker.widget.kit.onAccent
 import com.macrotracker.widget.kit.openAppAction
+import com.macrotracker.widget.kit.openEventAction
 import com.macrotracker.widget.kit.openIntentAction
 import com.macrotracker.widget.kit.openUrlAction
 import com.macrotracker.widget.kit.refreshAction
@@ -1113,19 +1114,16 @@ private fun EmptyRow(item: AgendaItem.Empty) {
 
 // ── Intents ───────────────────────────────────────────────────────────────────
 
-/** The instance in whatever calendar app handles events, as the Home card opens it. */
-private fun openEventAction(e: CalEvent): Action = openIntentAction(
-    Intent(Intent.ACTION_VIEW, ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, e.id))
-        .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, e.beginMillis)
-        .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, e.endMillis),
-)
+/** The instance in the calendar app picked for events, as the Home card opens it. */
+private fun openEventAction(e: CalEvent): Action =
+    openEventAction(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, e.id), e.beginMillis, e.endMillis)
 
 /** The calendar app on [day] (`content://com.android.calendar/time/<millis>`). */
 private fun openDayAction(day: LocalDate, now: LocalDateTime): Action {
     val at = if (day == now.toLocalDate()) now.truncatedTo(ChronoUnit.HOURS) else day.atTime(9, 0)
     val builder = CalendarContract.CONTENT_URI.buildUpon().appendPath("time")
     ContentUris.appendId(builder, at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli())
-    return openIntentAction(Intent(Intent.ACTION_VIEW).setData(builder.build()))
+    return openUrlAction(builder.build().toString())
 }
 
 /** A new event on [day]: the next full hour today, 09:00 on another day, an hour long. */

@@ -17,6 +17,8 @@ import androidx.glance.action.actionParametersOf
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
 import com.macrotracker.MainActivity
+import com.macrotracker.data.links.AppLinks
+import com.macrotracker.data.links.LinkKind
 import com.macrotracker.data.phone.PhoneMedia
 import com.macrotracker.widget.kit.WidgetHaptics
 import kotlinx.coroutines.delay
@@ -31,7 +33,11 @@ class TileLinkActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val link = intent?.dataString ?: intent?.getStringExtra(EXTRA_LINK)
-        if (!link.isNullOrBlank()) runCatching { startActivity(TilesmithLinks.intentFor(this, link)) }
+        if (!link.isNullOrBlank()) {
+            // A video, a stream, a mail: in the app picked for it, asking once which one.
+            if (LinkKind.forUrl(link) != null) AppLinks.open(this, link)
+            else runCatching { startActivity(TilesmithLinks.intentFor(this, link)) }
+        }
         finish()
     }
 

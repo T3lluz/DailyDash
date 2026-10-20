@@ -19,7 +19,9 @@ import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.LocalContext
 import androidx.glance.action.Action
+import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionParametersOf
+import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
@@ -42,6 +44,8 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
+import com.macrotracker.data.links.LinkKind
+import com.macrotracker.data.links.OpenWithActivity
 import com.macrotracker.MainActivity
 import com.macrotracker.R
 import com.macrotracker.widget.RefreshWidgetAction
@@ -283,11 +287,32 @@ fun openAppAction(context: Context, configure: Intent.() -> Unit = {}): Action =
             .apply(configure),
     )
 
-/** Opens [url] in whatever handles it (browser, GitHub app, calendar app …). */
+/** Opens [url]: a mail, event, video, stream or GitHub link in the app picked for it, anything else in whatever handles it. */
 fun openUrlAction(url: String): Action =
-    actionStartActivity(
-        Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+    if (LinkKind.forUrl(url) == null) {
+        actionStartActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    } else {
+        // Mail, calendar, YouTube, Twitch and GitHub links open in the app picked for them.
+        actionStartActivity<OpenWithActivity>(actionParametersOf(OpenWithUrl to url))
+    }
+
+/** A calendar event, in the calendar app picked for events, at this instance's times. */
+fun openEventAction(eventUri: Uri, beginMillis: Long, endMillis: Long): Action =
+    actionStartActivity<OpenWithActivity>(
+        actionParametersOf(
+            OpenWithKind to LinkKind.CALENDAR.key,
+            OpenWithUrl to eventUri.toString(),
+            OpenWithBegin to beginMillis,
+            OpenWithEnd to endMillis,
+        ),
     )
+
+private val OpenWithKind = ActionParameters.Key<String>(OpenWithActivity.EXTRA_KIND)
+private val OpenWithUrl = ActionParameters.Key<String>(OpenWithActivity.EXTRA_URL)
+private val OpenWithBegin = ActionParameters.Key<Long>(OpenWithActivity.EXTRA_BEGIN)
+private val OpenWithEnd = ActionParameters.Key<Long>(OpenWithActivity.EXTRA_END)
 
 /** Fires any intent, e.g. `CalendarContract` inserts or event views. */
 fun openIntentAction(intent: Intent): Action =
