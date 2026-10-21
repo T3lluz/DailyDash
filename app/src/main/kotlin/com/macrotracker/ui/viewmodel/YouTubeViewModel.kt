@@ -1,5 +1,6 @@
 package com.macrotracker.ui.viewmodel
 
+import com.macrotracker.data.local.SettingsRepository
 import android.app.Activity
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.Flow
@@ -53,6 +54,7 @@ data class YouTubeGoogleUiState(
 class YouTubeViewModel @Inject constructor(
     private val youtubeRepository: YouTubeRepository,
     private val googleAuthClient: YouTubeGoogleAuthClient,
+    private val settings: SettingsRepository,
 ) : ViewModel() {
 
     companion object {
@@ -65,6 +67,11 @@ class YouTubeViewModel @Inject constructor(
 
     private val _channelSearchState = MutableStateFlow<ChannelSearchState>(ChannelSearchState.Idle)
     val channelSearchState: StateFlow<ChannelSearchState> = _channelSearchState
+
+    /** Starred channels: they lead the hub's channel row and can be the only ones shown. */
+    val favourites: StateFlow<Set<String>> = settings.youtubeFavourites
+
+    fun toggleFavourite(id: String) = settings.toggleYoutubeFavourite(id)
 
     private val _trackedChannels = MutableStateFlow<List<YoutubeChannel>>(emptyList())
     val trackedChannels: StateFlow<List<YoutubeChannel>> = _trackedChannels

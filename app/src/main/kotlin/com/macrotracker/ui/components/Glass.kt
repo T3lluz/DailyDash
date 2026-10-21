@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.macrotracker.ui.theme.Background
 import dev.chrisbanes.haze.HazeInputScale
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
@@ -34,6 +35,13 @@ object GlassSpec {
 
     /** The chrome's tint: dark, so white text reads over any page, but see-through. */
     val ChromeTint: Color = Color(0xFF0B0B0D).copy(alpha = 0.62f)
+
+    /**
+     * Under the blurred copy of the page. The navbar's source (the whole NavHost) is opaque, but
+     * a chat list draws on its pane's colour and records as text on clear, so without this the
+     * sharp page showed through the composer's glass with only the tint over it.
+     */
+    val Backdrop: Color = Background
 
     /** Where blur can't run (before Android 12): the same tint, nearly opaque. */
     val Fallback: Color = Color(0xFF0B0B0D).copy(alpha = 0.94f)
@@ -66,6 +74,7 @@ fun Modifier.glass(
         return this.background(GlassSpec.Fallback)
     }
     return this.hazeEffect(state = hazeState) {
+        backgroundColor = GlassSpec.Backdrop
         blurRadius = blur
         // The chrome re-blurs every frame something animates under it.
         inputScale = HazeInputScale.Fixed(INPUT_SCALE)

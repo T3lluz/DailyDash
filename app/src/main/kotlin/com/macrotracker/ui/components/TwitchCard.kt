@@ -42,6 +42,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -145,6 +146,9 @@ fun TwitchCard(isVisible: Boolean = true, viewModel: TwitchViewModel = hiltViewM
     val twitchState by viewModel.twitchState.collectAsState()
     val trackedChannels by viewModel.trackedChannels.collectAsState()
     val authState by viewModel.authState.collectAsState()
+    val favourites by viewModel.favourites.collectAsState()
+    // One finder for the glance and the open board, so a search or the star carries across.
+    val finder = rememberChannelFinderState()
     val successStreams = remember(twitchState) {
         (twitchState as? TwitchUiState.Success)?.streams.orEmpty()
     }
@@ -231,6 +235,9 @@ fun TwitchCard(isVisible: Boolean = true, viewModel: TwitchViewModel = hiltViewM
                         watching = trackedChannels,
                         selectedChannelId = selectedChannelId,
                         onChannelSelected = { pickedChannelId = it },
+                        finder = finder,
+                        favourites = favourites,
+                        onToggleFavourite = { viewModel.toggleFavourite(it) },
                         onOpenManage = {
                             expanded = true
                             selectedTabName = TwHubTab.CHANNELS.name
@@ -294,6 +301,9 @@ fun TwitchCard(isVisible: Boolean = true, viewModel: TwitchViewModel = hiltViewM
                                 authState = authState,
                                 selectedChannelId = selectedChannelId,
                                 onChannelSelected = { pickedChannelId = it },
+                                finder = finder,
+                                favourites = favourites,
+                                onToggleFavourite = { viewModel.toggleFavourite(it) },
                                 onRetry = { viewModel.loadLiveStreams(forceRefresh = true) },
                                 onOpenSearch = {
                                     haptics.tick()
@@ -311,6 +321,7 @@ fun TwitchCard(isVisible: Boolean = true, viewModel: TwitchViewModel = hiltViewM
                             TwHubTab.CHANNELS -> TwitchChannelsHub(
                                 viewModel = viewModel,
                                 trackedChannels = trackedChannels,
+                                favourites = favourites,
                                 liveUserIds = successStreams.map { it.userId }.toSet(),
                                 authState = authState,
                                 onOpenSearch = {
@@ -370,6 +381,9 @@ private fun TwitchLiveBody(
     authState: TwitchAuthUiState,
     selectedChannelId: String?,
     onChannelSelected: (String?) -> Unit,
+    finder: ChannelFinderState,
+    favourites: Set<String>,
+    onToggleFavourite: (String) -> Unit,
     onRetry: () -> Unit,
     onOpenSearch: () -> Unit,
     onConnectTwitch: () -> Unit,
@@ -406,6 +420,9 @@ private fun TwitchLiveBody(
                 streams = streams,
                 selectedChannelId = selectedChannelId,
                 onChannelSelected = onChannelSelected,
+                finder = finder,
+                favourites = favourites,
+                onToggleFavourite = onToggleFavourite,
                 haptics = haptics,
             )
         }
@@ -421,6 +438,9 @@ private fun TwitchChannelFilter(
     streams: List<TwitchStream>,
     selectedChannelId: String?,
     onChannelSelected: (String?) -> Unit,
+    finder: ChannelFinderState,
+    favourites: Set<String>,
+    onToggleFavourite: (String) -> Unit,
     bottomGap: Dp,
 ) {
     val channels = remember(streams) {
@@ -433,8 +453,9 @@ private fun TwitchChannelFilter(
             )
         }
     }
+    // One stream needs no filter; a search or the star stays up so it can be undone.
     AnimatedVisibility(
-        visible = channels.size > 1,
+        visible = channels.size > 1 || finder.narrowing || finder.searching,
         enter = MacroMotion.expandEnter,
         exit = MacroMotion.expandExit,
     ) {
@@ -444,8 +465,42 @@ private fun TwitchChannelFilter(
             onSelect = onChannelSelected,
             selectedRing = TwLive,
             markColor = TwLive,
+            finder = finder,
+            favourites = favourites,
+            onToggleFavourite = { onToggleFavourite(it.id) },
             modifier = Modifier.padding(bottom = bottomGap),
         )
+    }
+}
+
+/** What the board's filter keys on; a search's letters narrow inside it without a swap per key. */
+@Immutable
+private data class BoardView(val channelId: String?, val favouritesOnly: Boolean)
+
+/** The live board as the channel row narrows it: one channel, or the starred ones and what is typed (a name, a title, a game). */
+private fun narrowBoard(streams: List<TwitchStream>, view: BoardView, needle: String, favourites: Set<String>): List<TwitchStream> = when {
+    view.channelId != null -> streams.filter { it.userId == view.channelId }
+    !view.favouritesOnly && needle.isEmpty() -> streams
+    else -> streams.filter { stream ->
+        (!view.favouritesOnly || stream.userId in favourites) &&
+            (needle.isEmpty() || listOf(stream.userName, stream.title, stream.gameName).any { it.contains(needle, ignoreCase = true) })
+    }
+}
+
+/** A quiet line where streams would be, when the filter leaves none. */
+@Composable
+private fun TwNote(text: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(TwSharp)
+            .background(TwSurface)
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(AppIcons.Search, null, tint = TextSecondary, modifier = Modifier.size(16.dp))
+        Text(text, color = TextSecondary, fontSize = 13.sp)
     }
 }
 
@@ -501,6 +556,9 @@ private fun TwitchCollapsedGlance(
     watching: List<TwitchChannel>,
     selectedChannelId: String?,
     onChannelSelected: (String?) -> Unit,
+    finder: ChannelFinderState,
+    favourites: Set<String>,
+    onToggleFavourite: (String) -> Unit,
     onOpenManage: () -> Unit,
     onRetry: () -> Unit,
     haptics: HapticHelper,
@@ -558,6 +616,9 @@ private fun TwitchCollapsedGlance(
                     streams = streams,
                     selectedChannelId = selectedChannelId,
                     onChannelSelected = onChannelSelected,
+                    finder = finder,
+                    favourites = favourites,
+                    onToggleFavourite = onToggleFavourite,
                     haptics = haptics,
                 )
             }
@@ -573,6 +634,9 @@ private fun CompactLiveFeed(
     streams: List<TwitchStream>,
     selectedChannelId: String?,
     onChannelSelected: (String?) -> Unit,
+    finder: ChannelFinderState,
+    favourites: Set<String>,
+    onToggleFavourite: (String) -> Unit,
     haptics: HapticHelper,
 ) {
     val context = LocalContext.current
@@ -581,19 +645,25 @@ private fun CompactLiveFeed(
             streams = streams,
             selectedChannelId = selectedChannelId,
             onChannelSelected = onChannelSelected,
+            finder = finder,
+            favourites = favourites,
+            onToggleFavourite = onToggleFavourite,
             bottomGap = 10.dp,
         )
         AnimatedContent(
-            targetState = selectedChannelId,
+            targetState = BoardView(selectedChannelId, finder.favouritesOnly),
             transitionSpec = { MacroMotion.hubBodySwap },
             label = "twGlanceFilter",
-        ) { channelId ->
-            val shown = remember(streams, channelId) {
-                if (channelId == null) streams else streams.filter { it.userId == channelId }
+        ) { view ->
+            val needle = finder.needle
+            val shown = remember(streams, view, needle, favourites) { narrowBoard(streams, view, needle, favourites) }
+            if (shown.isEmpty()) {
+                TwNote(if (view.favouritesOnly && needle.isEmpty()) "None of your favourites are live" else "Nothing live matches")
+                return@AnimatedContent
             }
             MediaCarousel(
                 items = shown,
-                resetKey = channelId,
+                resetKey = view to needle,
                 onOpen = { stream ->
                     haptics.click()
                     context.openUrl(stream.channelUrl)
@@ -720,6 +790,9 @@ private fun LiveStreamFeed(
     streams: List<TwitchStream>,
     selectedChannelId: String?,
     onChannelSelected: (String?) -> Unit,
+    finder: ChannelFinderState,
+    favourites: Set<String>,
+    onToggleFavourite: (String) -> Unit,
     haptics: HapticHelper,
 ) {
     val context = LocalContext.current
@@ -728,18 +801,22 @@ private fun LiveStreamFeed(
             streams = streams,
             selectedChannelId = selectedChannelId,
             onChannelSelected = onChannelSelected,
+            finder = finder,
+            favourites = favourites,
+            onToggleFavourite = onToggleFavourite,
             bottomGap = 12.dp,
         )
         AnimatedContent(
-            targetState = selectedChannelId,
+            targetState = BoardView(selectedChannelId, finder.favouritesOnly),
             transitionSpec = { MacroMotion.hubBodySwap },
             label = "twBoardFilter",
-        ) { channelId ->
-            val shown = remember(streams, channelId) {
-                if (channelId == null) streams else streams.filter { it.userId == channelId }
-            }
+        ) { view ->
+            val needle = finder.needle
+            val shown = remember(streams, view, needle, favourites) { narrowBoard(streams, view, needle, favourites) }
             val hero = shown.firstOrNull()
-            if (hero == null) {
+            if (hero == null && (view.favouritesOnly || needle.isNotEmpty())) {
+                TwNote(if (view.favouritesOnly && needle.isEmpty()) "None of your favourites are live" else "Nothing live matches")
+            } else if (hero == null) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -985,6 +1062,7 @@ private fun LiveBadge(
 private fun TwitchChannelsHub(
     viewModel: TwitchViewModel,
     trackedChannels: List<TwitchChannel>,
+    favourites: Set<String>,
     liveUserIds: Set<String>,
     authState: TwitchAuthUiState,
     onOpenSearch: () -> Unit,
@@ -1032,56 +1110,80 @@ private fun TwitchChannelsHub(
                 color = TextSecondary,
             )
         } else {
+            // A long list is found by name; starred channels lead it, then whoever is live.
+            var filter by rememberSaveable { mutableStateOf("") }
+            val listed = remember(trackedChannels, favourites, liveUserIds, filter) {
+                val needle = filter.trim()
+                trackedChannels
+                    .filter { needle.isEmpty() || it.displayName.contains(needle, ignoreCase = true) || it.login.contains(needle, ignoreCase = true) }
+                    .sortedWith(compareBy({ if (it.userId in favourites) 0 else 1 }, { if (it.userId in liveUserIds) 0 else 1 }))
+            }
+            if (trackedChannels.size > 6) {
+                ChannelSearchField(
+                    value = filter,
+                    onValueChange = { filter = it },
+                    accent = TwPurple,
+                    placeholder = "Find in ${trackedChannels.size} channels",
+                )
+            }
+            if (listed.isEmpty()) TwNote("No channel called that")
             WidgetScrollBox(
                 maxHeight = 360.dp,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                trackedChannels.forEach { channel ->
-                    val isLive = channel.userId in liveUserIds
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(TwSharp)
-                            .background(TwSurface)
-                            .padding(10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        TwChannelFace(
-                            url = channel.profileImageUrl,
-                            name = channel.displayName,
-                            live = isLive,
-                            size = 34.dp,
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                channel.displayName,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = TextPrimary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                if (isLive) "Live now" else "Offline",
-                                fontSize = 11.sp,
-                                color = if (isLive) TwLive else TextSecondary,
-                                fontWeight = if (isLive) FontWeight.SemiBold else FontWeight.Normal,
-                            )
-                        }
-                        IconButton(
-                            onClick = {
-                                haptics.tick()
-                                viewModel.removeChannel(channel.userId)
-                            },
-                            modifier = Modifier.size(36.dp),
+                listed.forEach { channel ->
+                    key(channel.userId) {
+                        val isLive = channel.userId in liveUserIds
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(TwSharp)
+                                .background(TwSurface)
+                                .padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
-                            Icon(
-                                AppIcons.Delete,
-                                contentDescription = "Remove ${channel.displayName}",
-                                tint = TextTertiary,
-                                modifier = Modifier.size(18.dp),
+                            TwChannelFace(
+                                url = channel.profileImageUrl,
+                                name = channel.displayName,
+                                live = isLive,
+                                size = 34.dp,
                             )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    channel.displayName,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = TextPrimary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    if (isLive) "Live now" else "Offline",
+                                    fontSize = 11.sp,
+                                    color = if (isLive) TwLive else TextSecondary,
+                                    fontWeight = if (isLive) FontWeight.SemiBold else FontWeight.Normal,
+                                )
+                            }
+                            FavouriteToggle(
+                                favourite = channel.userId in favourites,
+                                name = channel.displayName,
+                                onToggle = { viewModel.toggleFavourite(channel.userId) },
+                            )
+                            IconButton(
+                                onClick = {
+                                    haptics.tick()
+                                    viewModel.removeChannel(channel.userId)
+                                },
+                                modifier = Modifier.size(36.dp),
+                            ) {
+                                Icon(
+                                    AppIcons.Delete,
+                                    contentDescription = "Remove ${channel.displayName}",
+                                    tint = TextTertiary,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
                         }
                     }
                 }

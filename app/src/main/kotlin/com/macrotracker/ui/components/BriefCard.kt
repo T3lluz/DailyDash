@@ -222,14 +222,22 @@ private fun NowRows(items: List<IslandItem>) {
     if (items.isEmpty()) return
     Column(modifier = Modifier.padding(top = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("RIGHT NOW", fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp, color = TextTertiary)
-        items.forEach { item ->
+        items.forEachIndexed { i, item ->
             val tone = toneColor(item)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier.size(30.dp).clip(CircleShape).background(tone.copy(alpha = 0.16f)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(islandIcon(item.icon), contentDescription = null, tint = tone, modifier = Modifier.size(15.dp))
+                    // The island's own marks, moving as they do there.
+                    AnimatedIslandIcon(
+                        name = item.icon,
+                        tint = tone,
+                        size = 15.dp,
+                        urgent = item.tone == "needs" || item.tone == "live" || item.tone == "soon",
+                        phase = i * 0.13f,
+                        kind = item.kind,
+                    )
                 }
                 Spacer(Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {

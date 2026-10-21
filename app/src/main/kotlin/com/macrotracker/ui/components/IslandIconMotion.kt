@@ -1,6 +1,7 @@
 package com.macrotracker.ui.components
 
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.foundation.Canvas
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -8,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.GraphicsLayerScope
@@ -22,10 +24,11 @@ import kotlin.math.exp
 import kotlin.math.sin
 
 /*
- * The island's icons move the way their thing does: the bell rings, mail hops, clouds drift,
- * a heart beats, the download arrow drops, sparkles twinkle, a flag waves. Each plays a short
- * burst and rests (continuously, and quicker, for what is live or waits on you), starting
- * the moment it lands on the island. Transforms only, read in the draw phase: no recomposition.
+ * The island's icons move the way their thing does. Most are drawn part by part
+ * (IslandGlyphs.kt: rain falls out of its cloud, the bars play, the bell's clapper swings);
+ * the rest move whole: each plays a short burst and rests (continuously, and quicker, for
+ * what is live or waits on you). What waits on you also gives a nudge every few seconds, as
+ * on the web. Read in the draw phase: no recomposition.
  */
 
 private enum class IconMotion { SWING, HOP, DRIFT, BOB, SPIN, BEAT, DROP, TWINKLE, FLASH, WAVE, PULSE, STEP, ROCK, SHAKE, NONE }
@@ -50,8 +53,9 @@ private fun motionOf(name: String): IconMotion = when (name) {
 }
 
 /**
- * [islandIcon] for [name], moving after its kind. [urgent] plays continuously and quicker;
- * otherwise a burst every few seconds. [phase] (0–1) staggers icons drawn side by side.
+ * [islandIcon] for [name], moving after its kind (and [kind], for what is playing). [urgent]
+ * plays continuously and quicker; otherwise a burst every few seconds. [phase] (0–1)
+ * staggers icons drawn side by side. [nudge] gives the mark the web's "waiting on you" shake.
  */
 @Composable
 internal fun AnimatedIslandIcon(
@@ -61,9 +65,17 @@ internal fun AnimatedIslandIcon(
     urgent: Boolean,
     phase: Float = 0f,
     modifier: Modifier = Modifier,
+    kind: String = "",
+    nudge: Boolean = false,
 ) {
+    val reduced = rememberReducedMotion()
+    val glyph = remember(kind, name) { glyphFor(kind, name) }
+    if (glyph != null) {
+        GlyphIcon(glyph, tint, size, phase, still = reduced, nudge = nudge, modifier = modifier)
+        return
+    }
     val motion = motionOf(name)
-    val still = motion == IconMotion.NONE || rememberReducedMotion()
+    val still = motion == IconMotion.NONE || reduced
     val icon = islandIcon(name)
     if (still) {
         Icon(icon, contentDescription = null, tint = tint, modifier = modifier.size(size))
@@ -90,6 +102,48 @@ internal fun AnimatedIslandIcon(
             },
     )
 }
+
+/**
+ * A mark drawn part by part ([drawIslandGlyph]) off one [GLYPH_LOOP_S] clock, read only in
+ * the draw and layer phases. [still] draws it at rest.
+ */
+@Composable
+internal fun GlyphIcon(
+    glyph: IslandGlyph,
+    tint: Color,
+    size: Dp,
+    phase: Float = 0f,
+    still: Boolean = false,
+    nudge: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
+    val scratch = remember { GlyphScratch() }
+    val clock = if (still) {
+        null
+    } else {
+        rememberInfiniteTransition(label = "island_glyph").animateFloat(
+            initialValue = 0f,
+            targetValue = GLYPH_LOOP_S,
+            animationSpec = infiniteRepeatable(tween((GLYPH_LOOP_S * 1000).toInt(), easing = LinearEasing)),
+            label = "island_glyph_t",
+        )
+    }
+    val offset = phase * GLYPH_LOOP_S
+    Canvas(
+        modifier
+            .size(size)
+            .graphicsLayer {
+                if (nudge && clock != null) rotationZ = nudgeAngle(cycle(clock.value, 3f, offset))
+            },
+    ) {
+        val t = clock?.let { (it.value + offset) % GLYPH_LOOP_S } ?: 0f
+        drawIslandGlyph(glyph, t, tint, scratch, still = clock == null)
+    }
+}
+
+/** The web's `isl-nudge`: still for most of three seconds, then a shake that dies away. */
+private fun nudgeAngle(e: Float): Float =
+    keyframes(e, 0f to 0f, 0.6f to 0f, 0.66f to -12f, 0.72f to 10f, 0.78f to -6f, 0.84f to 3f, 0.9f to 0f, 1f to 0f)
 
 /** One frame of [m] at [e] (0–1 through the burst), for an icon [s] px across. */
 private fun GraphicsLayerScope.move(m: IconMotion, e: Float, s: Float) {

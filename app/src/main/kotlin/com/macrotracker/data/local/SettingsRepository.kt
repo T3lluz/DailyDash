@@ -116,6 +116,27 @@ class SettingsRepository @Inject constructor(
         _hermesFavouriteModels.value = now
     }
 
+    /** YouTube channels starred in the hub: they lead its channel row and can be the only ones shown. */
+    private val _youtubeFavourites = MutableStateFlow(readIdSet(KEY_YOUTUBE_FAVOURITES))
+    val youtubeFavourites: StateFlow<Set<String>> = _youtubeFavourites
+
+    fun toggleYoutubeFavourite(channelId: String) = toggleId(_youtubeFavourites, KEY_YOUTUBE_FAVOURITES, channelId)
+
+    /** Twitch channels starred in the hub, by user id, as [youtubeFavourites]. */
+    private val _twitchFavourites = MutableStateFlow(readIdSet(KEY_TWITCH_FAVOURITES))
+    val twitchFavourites: StateFlow<Set<String>> = _twitchFavourites
+
+    fun toggleTwitchFavourite(userId: String) = toggleId(_twitchFavourites, KEY_TWITCH_FAVOURITES, userId)
+
+    private fun readIdSet(key: String): Set<String> =
+        prefs.getString(key, null).orEmpty().split('\n').filterTo(LinkedHashSet()) { it.isNotBlank() }
+
+    private fun toggleId(flow: MutableStateFlow<Set<String>>, key: String, id: String) {
+        val now = flow.value.let { if (id in it) it - id else it + id }
+        prefs.edit { putString(key, now.joinToString("\n")) }
+        flow.value = now
+    }
+
     /** The web dashboard's calendar switches, as it last synced them; they decide which of your events Coming up shows. */
     private val _dashboardCalendars = MutableStateFlow(readDashboardCalendars())
     val dashboardCalendars: StateFlow<DashboardCalendars> = _dashboardCalendars
@@ -420,6 +441,8 @@ class SettingsRepository @Inject constructor(
         const val KEY_HERMES_LAST_REACHABLE = "hermes_last_reachable"
         const val KEY_HERMES_PERMISSION = "hermes_permission"
         const val KEY_HERMES_FAVOURITE_MODELS = "hermes_favourite_models"
+        const val KEY_YOUTUBE_FAVOURITES = "youtube_favourite_channels"
+        const val KEY_TWITCH_FAVOURITES = "twitch_favourite_channels"
         const val KEY_DASHBOARD_CALS = "dashboard_cals"
         const val KEY_DASHBOARD_CAL_MINE = "dashboard_cal_mine"
         const val KEY_BIRTH_YEAR = "birth_year"
