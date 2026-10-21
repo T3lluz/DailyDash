@@ -3,6 +3,10 @@ package com.macrotracker.ui.components
 import android.graphics.BlurMaskFilter
 import android.os.Build
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
@@ -10,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,6 +33,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
@@ -116,45 +122,60 @@ fun PillNavigationBar(
             ) {
                 items.forEachIndexed { index, screen ->
                     val isSelected = index == selectedIndex
-                    val selectionProgress by animateFloatAsState(
+                    // Kept as a State: the icon reads it while drawing, the label in composition.
+                    val selection = animateFloatAsState(
                         targetValue = if (isSelected) 1f else 0f,
                         animationSpec = MacroMotion.bouncySpring(),
                         label = "selection_fade_$index",
                     )
+                    // Each arrival on the tab (or a tap on the one you are on) plays its icon once.
+                    var play by remember { mutableIntStateOf(0) }
+                    var arrived by remember { mutableStateOf(isSelected) }
+                    LaunchedEffect(isSelected) {
+                        if (isSelected && !arrived) play++
+                        arrived = isSelected
+                    }
+                    val press = remember { MutableInteractionSource() }
+                    val pressed by press.collectIsPressedAsState()
+                    val dip = animateFloatAsState(if (pressed) 0.86f else 1f, MacroMotion.pressSpring(), label = "nav_press_$index")
 
                     Box(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight()
                             .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
+                                interactionSource = press,
                                 indication = null,
                             ) {
                                 haptics.tick()
+                                if (isSelected) play++
                                 onItemClick(screen)
                             },
                         contentAlignment = Alignment.Center,
                     ) {
                         Column(
+                            modifier = Modifier.graphicsLayer {
+                                scaleX = dip.value
+                                scaleY = dip.value
+                            },
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center,
                         ) {
                             Box(contentAlignment = Alignment.TopEnd) {
                                 // The label under the icon already names the tab for TalkBack.
-                                Icon(
-                                    imageVector = screen.icon,
-                                    contentDescription = null,
-                                    tint = androidx.compose.ui.graphics.lerp(
-                                        TextSecondary,
-                                        TextPrimary,
-                                        selectionProgress,
-                                    ),
-                                    modifier = Modifier.size(22.dp),
+                                NavTabIcon(
+                                    screen = screen,
+                                    tint = { androidx.compose.ui.graphics.lerp(TextSecondary, TextPrimary, selection.value.coerceIn(0f, 1f)) },
+                                    play = play,
                                 )
-                                if (showSettingsUpdateBadge && screen is Screen.Settings) {
+                                androidx.compose.animation.AnimatedVisibility(
+                                    visible = showSettingsUpdateBadge && screen is Screen.Settings,
+                                    enter = scaleIn(MacroMotion.bouncySpring()) + fadeIn(),
+                                    exit = scaleOut() + fadeOut(),
+                                    modifier = Modifier.offset(x = 7.dp, y = (-5).dp),
+                                ) {
                                     Box(
                                         modifier = Modifier
-                                            .offset(x = 7.dp, y = (-5).dp)
                                             .size(15.dp)
                                             .shadow(3.dp, CircleShape)
                                             .clip(CircleShape)
@@ -180,7 +201,7 @@ fun PillNavigationBar(
                                 color = androidx.compose.ui.graphics.lerp(
                                     TextSecondary,
                                     TextPrimary,
-                                    selectionProgress,
+                                    selection.value.coerceIn(0f, 1f),
                                 ),
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.SemiBold,
