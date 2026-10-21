@@ -292,6 +292,9 @@ object MacroMotion {
         /** How long the undo stays up after a clear. */
         const val UNDO_MS = 4_500L
 
+        /** After letting go of a cleared row, how long it flies before the gap under it starts closing. */
+        const val CLOSE_AFTER_MS = 90L
+
         /** Catching up with the finger on detach: quick, nearly no bounce. */
         fun <T> detach() = spring<T>(dampingRatio = 0.95f, stiffness = 800f)
 

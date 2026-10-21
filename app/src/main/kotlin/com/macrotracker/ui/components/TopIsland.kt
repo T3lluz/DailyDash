@@ -3,8 +3,8 @@ package com.macrotracker.ui.components
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
@@ -202,7 +202,8 @@ fun TopIsland(
         }
     }
 
-    // The card keeps a cleared row until it has closed its gap; the pill drops it at once.
+    // The card keeps a cleared row while it closes its gap (and brings it back on Undo);
+    // the pill drops it at once.
     val all = islandLine(items, hermes)
     val line = all.filterNot { IslandRanking.key(it) in cleared }
     val show = visible && (line.isNotEmpty() || hermes != null)
@@ -212,7 +213,7 @@ fun TopIsland(
         held.items = all
         held.hermes = hermes
     }
-    val shownItems = if (show) line else held.items
+    val shownItems = if (show) all else held.items
     val shownHermes = if (show) hermes else held.hermes
 
     var expanded by remember { mutableStateOf(initiallyExpanded) }
@@ -222,7 +223,7 @@ fun TopIsland(
 
     Box(modifier.then(if (expanded) Modifier.fillMaxSize() else Modifier.fillMaxWidth())) {
         // Expanded: the page dims a little, and a tap anywhere outside folds the card back.
-        AnimatedVisibility(visible = expanded, enter = fadeIn(tween(180)), exit = fadeOut(tween(160))) {
+        AnimatedVisibility(visible = expanded, enter = fadeIn(tween(220)), exit = fadeOut(tween(200))) {
             Box(
                 Modifier
                     .fillMaxSize()
@@ -234,19 +235,20 @@ fun TopIsland(
             Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                // As wide as the navbar at most: the two pieces of chrome frame the page alike.
-                .padding(start = ChromeSideInset - 12.dp, end = ChromeSideInset - 12.dp, top = IslandTop),
+                // The card opens a little wider than the navbar; the pill is exactly as wide.
+                .padding(start = ChromeSideInset - CardOverhang, end = ChromeSideInset - CardOverhang, top = IslandTop),
             contentAlignment = Alignment.TopCenter,
         ) {
-            val maxWidth = maxWidth
+            val cardWidth = maxWidth
+            val pillWidth = maxWidth - CardOverhang * 2
             val cardMax = (LocalConfiguration.current.screenHeightDp * 0.66f).dp
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 AnimatedVisibility(
                     visible = show,
-                    enter = fadeIn(tween(160)) +
-                        scaleIn(islandSpring(), initialScale = 0.55f, transformOrigin = TransformOrigin(0.5f, 0f)),
-                    exit = fadeOut(tween(140)) +
-                        scaleOut(tween(180), targetScale = 0.6f, transformOrigin = TransformOrigin(0.5f, 0f)),
+                    enter = fadeIn(tween(180)) +
+                        scaleIn(islandSpring(), initialScale = 0.6f, transformOrigin = TransformOrigin(0.5f, 0f)),
+                    exit = fadeOut(tween(160)) +
+                        scaleOut(tween(200), targetScale = 0.7f, transformOrigin = TransformOrigin(0.5f, 0f)),
                 ) {
                     val corner by animateDpAsState(if (expanded) CardCorner else PillHeight / 2, islandSpring(), label = "island_corner")
                     val shape = RoundedCornerShape(corner)
@@ -260,10 +262,7 @@ fun TopIsland(
                                 scaleY = 1f + p / (size.height.coerceAtLeast(1f) * 6f)
                                 transformOrigin = TransformOrigin(0.5f, 0f)
                             }
-                            .then(if (expanded) Modifier.fillMaxWidth() else Modifier.widthIn(min = 120.dp, max = maxWidth))
                             .chromeGlass(hazeState, shape)
-                            // After the chrome, so the size spring never cuts its shadow.
-                            .animateContentSize(islandSpring())
                             .pointerInput(expanded) {
                                 if (expanded) return@pointerInput
                                 val open = with(density) { PullToOpen.toPx() }
@@ -286,30 +285,46 @@ fun TopIsland(
                                 }
                             },
                     ) {
-                        if (expanded) {
-                            ExpandedCard(
-                                items = shownItems,
-                                hermes = shownHermes,
-                                maxHeight = cardMax,
-                                // Opened from the start (the render harness), it has no entrance to stagger.
-                                staggered = !initiallyExpanded,
-                                onHermes = { expanded = false; onHermes(it) },
-                                onItem = { expanded = false; onItem(it) },
-                                onJoin = { expanded = false; onJoin(it) },
-                                onClear = hide,
-                                onClose = { haptics.toggleOff(); expanded = false },
-                            )
-                        } else {
-                            CompactPill(
-                                items = shownItems.filterNot { IslandRanking.key(it) in cleared },
-                                hermes = shownHermes,
-                                labels = labels,
-                                maxWidth = maxWidth,
-                                onItem = onItem,
-                                onHermes = onHermes,
-                                onHide = hide,
-                                onMore = { haptics.toggleOn(); expanded = true },
-                            )
+                        // Pill and card are one surface: it springs between their sizes while the
+                        // one fades into the other. Only while it does; after, it is the content's size,
+                        // so a row closing its gap is not chased by a second spring.
+                        AnimatedContent(
+                            targetState = expanded,
+                            transitionSpec = {
+                                (fadeIn(tween(220, delayMillis = 70)) togetherWith fadeOut(tween(110)))
+                                    .using(SizeTransform(clip = false) { _, _ -> islandSpring() })
+                            },
+                            contentAlignment = Alignment.TopCenter,
+                            label = "island_morph",
+                        ) { open ->
+                            if (open) {
+                                Box(Modifier.width(cardWidth)) {
+                                    ExpandedCard(
+                                        items = shownItems,
+                                        hermes = shownHermes,
+                                        isCleared = { it in cleared },
+                                        maxHeight = cardMax,
+                                        // Opened from the start (the render harness), it has no entrance to stagger.
+                                        staggered = !initiallyExpanded,
+                                        onHermes = { expanded = false; onHermes(it) },
+                                        onItem = { expanded = false; onItem(it) },
+                                        onJoin = { expanded = false; onJoin(it) },
+                                        onClear = hide,
+                                        onClose = { haptics.toggleOff(); expanded = false },
+                                    )
+                                }
+                            } else {
+                                CompactPill(
+                                    items = shownItems.filterNot { IslandRanking.key(it) in cleared },
+                                    hermes = shownHermes,
+                                    labels = labels,
+                                    width = pillWidth,
+                                    onItem = onItem,
+                                    onHermes = onHermes,
+                                    onHide = hide,
+                                    onMore = { haptics.toggleOn(); expanded = true },
+                                )
+                            }
                         }
                     }
                 }
@@ -341,8 +356,11 @@ fun TopIsland(
     }
 }
 
-/** How long a cleared row takes to close its gap on the card. */
-private const val CLOSE_GAP_MS = 340L
+/** How much wider than the navbar the opened card is, each side. */
+private val CardOverhang = 12.dp
+
+/** How long a cleared row takes to close its gap on the card, before the view-model drops it. */
+private const val CLOSE_GAP_MS = 460L
 
 /** How far a pull on the pill travels before the card opens. */
 private val PullToOpen = 28.dp
@@ -369,11 +387,17 @@ private fun UndoPill(entry: UndoEntry, hazeState: HazeState?, onUndo: () -> Unit
         Spacer(Modifier.width(10.dp))
         Text("Hidden for today", color = TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
         Spacer(Modifier.width(10.dp))
+        // The button's fill drains for as long as the undo stays up.
+        val left = remember(entry) { Animatable(1f) }
+        LaunchedEffect(entry) { left.animateTo(0f, tween(MacroMotion.IslandSwipe.UNDO_MS.toInt(), easing = LinearEasing)) }
         Row(
             Modifier
                 .height(30.dp)
                 .clip(CircleShape)
-                .background(Primary.copy(alpha = 0.16f))
+                .drawBehind {
+                    drawRect(Primary.copy(alpha = 0.1f))
+                    drawRect(Primary.copy(alpha = 0.14f), size = Size(size.width * left.value, size.height))
+                }
                 .clickable(role = Role.Button, onClick = onUndo)
                 .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -417,8 +441,10 @@ private data class PillEntry(val item: IslandItem, val text: String, val end: St
 
 /**
  * What the pill shows: Hermes when he is at work, then as many of the top items side by side
- * as fit ([MAX_ON_PILL] at most), each with its whole title when there is room, else its
- * short label and a shorter countdown; the rest wait as discs.
+ * as fit ([MAX_ON_PILL] at most). The lead keeps its whole title (that is what the pill is
+ * for: a long episode name reads in full); the second may go to its short label and a shorter
+ * countdown. When even the lead's title alone doesn't fit, it shows as much of it as there is
+ * room for. The rest wait as discs.
  */
 @Immutable
 private data class PillPlan(val hermes: NavActivity?, val entries: List<PillEntry>, val rest: List<IslandItem>) {
@@ -432,36 +458,42 @@ private const val MAX_ON_PILL = 2
 private val EntryGap = 10.dp
 private val Divider = 21.dp
 
+/** Hermes' label on the pill, when something else shares it. */
+private val HermesLabelMax = 170.dp
+
 @Composable
-private fun rememberPillPlan(items: List<IslandItem>, hermes: NavActivity?, labels: Map<String, String>, maxWidth: Dp): PillPlan {
+private fun rememberPillPlan(items: List<IslandItem>, hermes: NavActivity?, labels: Map<String, String>, width: Dp): PillPlan {
     val styles = islandTextStyles()
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    return remember(items, hermes?.label, hermes?.tone, labels, maxWidth, styles, density) {
+    return remember(items, hermes?.label, hermes?.tone, labels, width, styles, density) {
         fun w(text: String, style: TextStyle): Dp =
             if (text.isBlank()) 0.dp else with(density) { measurer.measure(text, style, maxLines = 1, softWrap = false).size.width.toDp() }
         fun entryWidth(item: IslandItem, text: String, end: String): Dp =
             DiscSize + EntryGap + w(text, if (item.tone == "quiet") styles.quietTitle else styles.title) +
                 (if (item.ring != null) 22.dp else 0.dp) + (if (end.isNotEmpty()) EntryGap + w(end, styles.end) else 0.dp) + 6.dp
-        val hermesWidth = hermes?.let { 22.dp + 9.dp + w("Hermes", styles.sub) + 6.dp + minOf(w(it.label, styles.title), 170.dp) + 10.dp + w("0:00", styles.end) + 8.dp } ?: 0.dp
+        val hermesWidth = hermes?.let { 22.dp + 9.dp + w("Hermes", styles.sub) + 6.dp + minOf(w(it.label, styles.title), HermesLabelMax) + 10.dp + w("0:00", styles.end) + 8.dp } ?: 0.dp
+        fun full(item: IslandItem) = PillEntry(item, item.title.trim(), item.end.trim())
+        fun short(item: IslandItem) = PillEntry(item, islandLabel(item, labels), compactIslandEnd(item.end))
         val most = minOf(items.size, if (hermes != null) 1 else MAX_ON_PILL)
-        // The richest way to show the most items that fits; one item always shows, cut short if it must.
         for (n in most downTo if (hermes != null) 0 else 1) {
             val rest = items.drop(n)
-            val room = maxWidth - 14.dp - clusterWidth(rest.size) - hermesWidth - Divider * (n - 1 + if (hermes != null && n > 0) 1 else 0)
+            val room = width - 14.dp - clusterWidth(rest.size) - hermesWidth - Divider * (n - 1 + if (hermes != null && n > 0) 1 else 0)
             val shown = items.take(n)
-            val looks = listOf<(Int, IslandItem) -> PillEntry>(
-                { _, it -> PillEntry(it, it.title.trim(), it.end.trim()) },
-                { i, it -> if (i == 0) PillEntry(it, it.title.trim(), it.end.trim()) else PillEntry(it, islandLabel(it, labels), compactIslandEnd(it.end)) },
-                { _, it -> PillEntry(it, islandLabel(it, labels), compactIslandEnd(it.end)) },
-            )
+            val looks = buildList<(Int, IslandItem) -> PillEntry> {
+                add { _, it -> full(it) }
+                add { i, it -> if (i == 0) full(it) else short(it) }
+                // Beside Hermes, who leads, an item may go to its label.
+                if (hermes != null) add { _, it -> short(it) }
+            }
             for (look in looks) {
                 val entries = shown.mapIndexed(look)
                 if (entries.sumOf { e -> entryWidth(e.item, e.text, e.end).value.toDouble() }.dp <= room) return@remember PillPlan(hermes, entries, rest)
             }
             if (n == 1 && hermes == null) {
+                // One item always shows: as much of its whole title as fits, and a short countdown.
                 val only = items.first()
-                return@remember PillPlan(null, listOf(PillEntry(only, islandLabel(only, labels), compactIslandEnd(only.end))), rest)
+                return@remember PillPlan(null, listOf(PillEntry(only, only.title.trim(), compactIslandEnd(only.end))), rest)
             }
         }
         PillPlan(hermes, emptyList(), items)
@@ -478,35 +510,52 @@ private fun CompactPill(
     items: List<IslandItem>,
     hermes: NavActivity?,
     labels: Map<String, String>,
-    maxWidth: Dp,
+    width: Dp,
     onItem: (IslandItem) -> Unit,
     onHermes: (NavActivity) -> Unit,
     onHide: (IslandItem) -> Unit,
     onMore: () -> Unit,
 ) {
-    val plan = rememberPillPlan(items, hermes, labels, maxWidth)
+    val plan = rememberPillPlan(items, hermes, labels, width)
     Row(
-        Modifier.height(PillHeight).padding(start = 7.dp, end = if (plan.rest.isEmpty()) 12.dp else 6.dp),
+        Modifier
+            .width(width)
+            .height(PillHeight)
+            .padding(start = 7.dp, end = if (plan.rest.isEmpty()) 12.dp else 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // A new line-up rolls in (the words up, the pill springing to its new width); a ticking
-        // countdown or a renamed label just updates in place.
+        // A new line-up rolls in (the old words up and out, the new ones up from below); a
+        // ticking countdown or a renamed label just updates in place.
         AnimatedContent(
             targetState = plan,
             contentKey = { it.key },
             transitionSpec = {
                 (slideInVertically(islandSpring()) { it / 2 } + fadeIn(tween(220, delayMillis = 60)) + scaleIn(islandSpring(), initialScale = 0.92f))
                     .togetherWith(slideOutVertically(tween(200)) { -it / 2 } + fadeOut(tween(120)) + scaleOut(tween(200), targetScale = 0.94f))
-                    .using(SizeTransform(clip = false) { _, _ -> islandSpring() })
+                    .using(SizeTransform(clip = false))
             },
+            contentAlignment = Alignment.CenterStart,
+            modifier = Modifier.weight(1f),
             label = "island_lineup",
         ) { p ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                p.hermes?.let { h -> HermesLead(h, onClick = { onHermes(h) }) }
+            // The last thing on the line takes the room that is left, so its countdown sits at the
+            // pill's right end and its title gets every bit of width there is.
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                p.hermes?.let { h ->
+                    val fill = p.entries.isEmpty()
+                    HermesLead(h, fill = fill, onClick = { onHermes(h) }, modifier = if (fill) Modifier.weight(1f) else Modifier)
+                }
                 p.entries.forEachIndexed { i, e ->
                     if (i > 0 || p.hermes != null) EntryDivider()
+                    val fill = i == p.entries.lastIndex
                     key(IslandRanking.key(e.item)) {
-                        ItemEntry(e, onClick = { onItem(e.item) }, onLongClick = { onHide(e.item) })
+                        ItemEntry(
+                            e,
+                            fill = fill,
+                            onClick = { onItem(e.item) },
+                            onLongClick = { onHide(e.item) },
+                            modifier = if (fill) Modifier.weight(1f) else Modifier,
+                        )
                     }
                 }
             }
@@ -525,14 +574,14 @@ private fun EntryDivider() {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ItemEntry(entry: PillEntry, onClick: () -> Unit, onLongClick: () -> Unit) {
+private fun ItemEntry(entry: PillEntry, fill: Boolean, onClick: () -> Unit, onLongClick: () -> Unit, modifier: Modifier = Modifier) {
     val haptics = rememberHaptics()
     val styles = islandTextStyles()
     val item = entry.item
     val tone = toneColor(item)
     val press = remember { MutableInteractionSource() }
     Row(
-        Modifier
+        modifier
             .pressScale(press)
             .height(PillHeight - 8.dp)
             .clip(CircleShape)
@@ -556,7 +605,7 @@ private fun ItemEntry(entry: PillEntry, onClick: () -> Unit, onLongClick: () -> 
             color = titleColor(item),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.widthIn(max = 220.dp),
+            modifier = Modifier.weight(1f, fill = fill),
         )
         item.ring?.let {
             Spacer(Modifier.width(8.dp))
@@ -571,12 +620,12 @@ private fun ItemEntry(entry: PillEntry, onClick: () -> Unit, onLongClick: () -> 
 
 /** Hermes leading the pill: the scanner while he works (a mark once done), what he is on, a clock. */
 @Composable
-private fun HermesLead(activity: NavActivity, onClick: () -> Unit) {
+private fun HermesLead(activity: NavActivity, onClick: () -> Unit, fill: Boolean = false, modifier: Modifier = Modifier) {
     val haptics = rememberHaptics()
     val accent = activity.tone.accent()
     val press = remember { MutableInteractionSource() }
     Row(
-        Modifier
+        modifier
             .pressScale(press)
             .height(PillHeight - 8.dp)
             .clip(CircleShape)
@@ -607,7 +656,7 @@ private fun HermesLead(activity: NavActivity, onClick: () -> Unit) {
                     .using(SizeTransform(clip = false) { _, _ -> islandSpring() })
             },
             label = "island_hermes_label",
-            modifier = Modifier.widthIn(max = 170.dp),
+            modifier = if (fill) Modifier.weight(1f) else Modifier.widthIn(max = HermesLabelMax),
         ) { label ->
             Text(
                 label,
@@ -689,14 +738,16 @@ private fun sizeOf(item: IslandItem): CardSize = when {
     else -> CardSize.ROW
 }
 
-/** One row of the card: Hermes (who can't be swiped off) or an item. */
+/** One row of the card: Hermes (who can't be swiped off) or an item, and its place on the card. */
 @Immutable
-private data class CardRow(val key: String, val item: IslandItem?, val hermes: NavActivity?)
+private data class CardRow(val key: String, val item: IslandItem?, val hermes: NavActivity?, val at: Int)
 
 @Composable
 private fun ExpandedCard(
     items: List<IslandItem>,
     hermes: NavActivity?,
+    /** Swiped off and waiting for the view-model: the row closes its gap, or comes back on Undo. */
+    isCleared: (String) -> Boolean,
     maxHeight: Dp,
     staggered: Boolean,
     onHermes: (NavActivity) -> Unit,
@@ -708,10 +759,11 @@ private fun ExpandedCard(
     val density = LocalDensity.current
     val groups = remember(items, hermes) {
         val byGroup = items.groupBy(::groupOf)
+        var at = 0
         CardGroup.entries.mapNotNull { g ->
             val rows = buildList {
-                if (hermes != null && g == hermesGroup(hermes)) add(CardRow("hermes", null, hermes))
-                byGroup[g].orEmpty().forEach { add(CardRow(IslandRanking.key(it), it, null)) }
+                if (hermes != null && g == hermesGroup(hermes)) add(CardRow("hermes", null, hermes, at++))
+                byGroup[g].orEmpty().forEach { add(CardRow(IslandRanking.key(it), it, null, at++)) }
             }
             if (rows.isEmpty()) null else g to rows
         }
@@ -750,54 +802,116 @@ private fun ExpandedCard(
                 .verticalScroll(rememberScrollState())
                 .padding(start = 8.dp, end = 8.dp, top = 8.dp),
         ) {
-            var index = 0
             groups.forEach { (group, rows) ->
-                if (groups.size > 1) GroupLabel(group)
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    rows.forEachIndexed { i, row ->
-                        val at = index++
-                        key(row.key) {
-                            // Rows arrive one after another as the card opens.
-                            var shown by remember { mutableStateOf(!staggered) }
-                            var gone by remember { mutableStateOf(false) }
-                            LaunchedEffect(Unit) {
-                                delay(30L * at)
-                                shown = true
-                            }
-                            AnimatedVisibility(
-                                visible = shown && !gone,
-                                enter = fadeIn(tween(200)) + expandVertically(islandSpring(), expandFrom = Alignment.Top),
-                                exit = fadeOut(tween(120)) + shrinkVertically(MacroMotion.IslandSwipe.close(), shrinkTowards = Alignment.Top),
-                            ) {
-                                val item = row.item
-                                SwipeRow(
-                                    index = at,
-                                    magnet = magnet,
-                                    first = i == 0,
-                                    last = i == rows.lastIndex,
-                                    swipeable = item != null,
-                                    tint = item?.let { cardTint(it) } ?: RowBase,
-                                    onCleared = {
-                                        gone = true
-                                        item?.let(onClear)
-                                    },
-                                ) {
-                                    when {
-                                        row.hermes != null -> Row(
-                                            Modifier.fillMaxWidth().height(RowHeight).padding(horizontal = 4.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                        ) { HermesLead(row.hermes, onClick = { onHermes(row.hermes) }) }
-                                        item != null -> CardItem(item, phase = (at % 6) * 0.11f, onClick = { onItem(item) }, onJoin = { onJoin(item) })
+                key(group) {
+                    val left = rows.filter { it.item == null || !isCleared(it.key) }
+                    // A group whose last row was swiped off folds away with it.
+                    AnimatedVisibility(
+                        visible = left.isNotEmpty(),
+                        enter = fadeIn(tween(200)) + expandVertically(MacroMotion.IslandSwipe.close(), expandFrom = Alignment.Top),
+                        exit = fadeOut(tween(160)) + shrinkVertically(MacroMotion.IslandSwipe.close(), shrinkTowards = Alignment.Top),
+                    ) {
+                        Column(Modifier.fillMaxWidth()) {
+                            if (groups.size > 1) GroupLabel(group, entrance = rememberEntrance(staggered, rows.first().at))
+                            // Rows slide off inside the group's own rounded edge, never over the card's margin.
+                            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(CornerLarge))) {
+                                rows.forEach { row ->
+                                    key(row.key) {
+                                        CardRowSlot(
+                                            row = row,
+                                            cleared = row.item != null && isCleared(row.key),
+                                            first = row.key == left.firstOrNull()?.key,
+                                            last = row.key == left.lastOrNull()?.key,
+                                            staggered = staggered,
+                                            magnet = magnet,
+                                            onHermes = onHermes,
+                                            onItem = onItem,
+                                            onJoin = onJoin,
+                                            onClear = onClear,
+                                        )
                                     }
                                 }
                             }
+                            Spacer(Modifier.height(8.dp))
                         }
                     }
                 }
-                Spacer(Modifier.height(8.dp))
             }
         }
         FoldHandle(onClose)
+    }
+}
+
+/** How a row (or a group's label) arrives as the card opens: faded and lifted, one after another. */
+@Composable
+private fun rememberEntrance(staggered: Boolean, at: Int): Animatable<Float, *> {
+    val entrance = remember { Animatable(if (staggered) 0f else 1f) }
+    LaunchedEffect(Unit) {
+        if (entrance.value < 1f) {
+            delay(ENTRANCE_STEP_MS * at.coerceAtMost(8))
+            entrance.animateTo(1f, MacroMotion.IslandSwipe.settle())
+        }
+    }
+    return entrance
+}
+
+/** Between one row's entrance and the next. */
+private const val ENTRANCE_STEP_MS = 32L
+
+private fun Modifier.entrance(e: Animatable<Float, *>): Modifier = graphicsLayer {
+    val v = e.value
+    alpha = v.coerceIn(0f, 1f)
+    translationY = (1f - v) * -10.dp.toPx()
+    val s = 0.96f + 0.04f * v
+    scaleX = s
+    scaleY = s
+    transformOrigin = TransformOrigin(0.5f, 0f)
+}
+
+@Composable
+private fun CardRowSlot(
+    row: CardRow,
+    cleared: Boolean,
+    first: Boolean,
+    last: Boolean,
+    staggered: Boolean,
+    magnet: SwipeMagnet,
+    onHermes: (NavActivity) -> Unit,
+    onItem: (IslandItem) -> Unit,
+    onJoin: (IslandItem) -> Unit,
+    onClear: (IslandItem) -> Unit,
+) {
+    val entrance = rememberEntrance(staggered, row.at)
+    // The hair of space above a row eases away when it becomes its group's first.
+    val gap by animateDpAsState(if (first) 0.dp else 2.dp, MacroMotion.IslandSwipe.close(), label = "row_gap")
+    val item = row.item
+    // The gap closes under a cleared row (and opens again on Undo); the space between rows
+    // goes with it, so nothing jumps when the view-model drops the item.
+    AnimatedVisibility(
+        visible = !cleared,
+        enter = fadeIn(tween(220, delayMillis = 80)) + expandVertically(MacroMotion.IslandSwipe.close(), expandFrom = Alignment.Top),
+        exit = fadeOut(tween(140)) + shrinkVertically(MacroMotion.IslandSwipe.close(), shrinkTowards = Alignment.Top),
+    ) {
+        Box(Modifier.fillMaxWidth().padding(top = gap).entrance(entrance)) {
+            SwipeRow(
+                index = row.at,
+                magnet = magnet,
+                first = first,
+                last = last,
+                swipeable = item != null,
+                cleared = cleared,
+                tint = item?.let { cardTint(it) } ?: RowBase,
+                onCleared = { item?.let(onClear) },
+            ) {
+                when {
+                    row.hermes != null -> Row(
+                        Modifier.fillMaxWidth().height(RowHeight).padding(horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) { HermesLead(row.hermes, onClick = { onHermes(row.hermes) }) }
+                    item != null -> CardItem(item, phase = (row.at % 6) * 0.11f, onClick = { onItem(item) }, onJoin = { onJoin(item) })
+                }
+            }
+        }
     }
 }
 
@@ -814,7 +928,7 @@ private fun cardTint(item: IslandItem): Color = when (sizeOf(item)) {
 }
 
 @Composable
-private fun GroupLabel(group: CardGroup) {
+private fun GroupLabel(group: CardGroup, entrance: Animatable<Float, *>) {
     val tint = when (group) {
         CardGroup.NEEDS -> Warning
         CardGroup.NOW -> ServerGood
@@ -826,7 +940,7 @@ private fun GroupLabel(group: CardGroup) {
         fontSize = 10.5.sp,
         fontWeight = FontWeight.Bold,
         letterSpacing = 0.9.sp,
-        modifier = Modifier.padding(start = 10.dp, top = 2.dp, bottom = 6.dp),
+        modifier = Modifier.entrance(entrance).padding(start = 10.dp, top = 2.dp, bottom = 6.dp),
     )
 }
 
@@ -1043,6 +1157,7 @@ private fun SwipeRow(
     first: Boolean,
     last: Boolean,
     swipeable: Boolean,
+    cleared: Boolean,
     tint: Color,
     onCleared: () -> Unit,
     content: @Composable () -> Unit,
@@ -1063,9 +1178,21 @@ private fun SwipeRow(
     val attachPx = with(density) { spec.ATTACH_DP.dp.toPx() }
     val small = with(density) { CornerSmall.toPx() }
     val large = with(density) { CornerLarge.toPx() }
+    // A row that becomes the first or last of its group (a neighbour swiped off) rounds into it.
+    val topRound = animateFloatAsState(if (first) 1f else 0f, spec.settle(), label = "row_top")
+    val bottomRound = animateFloatAsState(if (last) 1f else 0f, spec.settle(), label = "row_bottom")
 
     fun rowX(): Float = if (dragging) finger.floatValue * (spec.ATTACHED + (1f - spec.ATTACHED) * blend.value) else settle.value
     fun roundness(): Float = (abs(rowX()) / (detachPx * spec.ATTACHED)).coerceIn(0f, 1f)
+
+    // Undone while it was still on its way out: home again.
+    LaunchedEffect(cleared) {
+        if (!cleared && settle.value != 0f) {
+            magnet.release(index)
+            launch { blend.animateTo(0f, spec.settle()) }
+            settle.animateTo(0f, spec.settle())
+        }
+    }
 
     val draggable = if (!swipeable) Modifier else Modifier.draggable(
         orientation = Orientation.Horizontal,
@@ -1103,9 +1230,11 @@ private fun SwipeRow(
                 if (blend.value < 0.5f) haptics.thresholdActivate()
                 val dir = if (x != 0f) sign(x) else sign(velocity)
                 scope.launch { blend.animateTo(1f, spec.detach()) }
-                settle.animateTo(dir * width * 1.2f, spec.fly(), initialVelocity = velocity)
-                // Still the magnet's while its gap closes, so the rows either side keep their
-                // rounded corners until they meet; it lets go when the row leaves the card.
+                scope.launch { settle.animateTo(dir * width * 1.1f, spec.fly(), initialVelocity = velocity) }
+                // The gap starts closing while the row is still on its way out, as the shade does.
+                // It stays the magnet's until it leaves the card, so the rows either side keep
+                // their rounded corners until they meet.
+                delay(spec.CLOSE_AFTER_MS)
                 onCleared()
             } else {
                 scope.launch { blend.animateTo(0f, spec.settle()) }
@@ -1122,22 +1251,57 @@ private fun SwipeRow(
         Modifier
             .fillMaxWidth()
             .onSizeChanged { width = it.width.toFloat().coerceAtLeast(1f) }
-            .graphicsLayer {
-                val own = magnet.active == index
-                val x = if (own) rowX() else magnet.offsetFor(index)
-                translationX = x
-                val r = if (own) roundness() else 0f
-                val top = small + (large - small) * maxOf(r, if (first) 1f else magnet.roundnessOf(index - 1))
-                val bottom = small + (large - small) * maxOf(r, if (last) 1f else magnet.roundnessOf(index + 1))
-                shape = RoundedCornerShape(topStart = top, topEnd = top, bottomEnd = bottom, bottomStart = bottom)
-                clip = true
-                // Fades as it leaves, as a notification does.
-                alpha = 1f - ((abs(x) / width - 0.35f) / 0.65f).coerceIn(0f, 1f)
-            }
-            .background(tint)
             .then(draggable),
     ) {
-        content()
+        if (swipeable) {
+            // What a swipe does, in the space the row leaves behind it.
+            HideHint(
+                alignment = Alignment.CenterStart,
+                alpha = { if (magnet.active == index) hintAlpha(rowX(), detachPx) else 0f },
+                modifier = Modifier.matchParentSize(),
+            )
+            HideHint(
+                alignment = Alignment.CenterEnd,
+                alpha = { if (magnet.active == index) hintAlpha(-rowX(), detachPx) else 0f },
+                modifier = Modifier.matchParentSize(),
+            )
+        }
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .graphicsLayer {
+                    val own = magnet.active == index
+                    val x = if (own) rowX() else magnet.offsetFor(index)
+                    translationX = x
+                    val r = if (own) roundness() else 0f
+                    val top = small + (large - small) * maxOf(r, topRound.value, magnet.roundnessOf(index - 1))
+                    val bottom = small + (large - small) * maxOf(r, bottomRound.value, magnet.roundnessOf(index + 1))
+                    shape = RoundedCornerShape(topStart = top, topEnd = top, bottomEnd = bottom, bottomStart = bottom)
+                    clip = true
+                    // Lifts a touch as it comes away, and fades as it leaves, as a notification does.
+                    val lift = if (own) blend.value else 0f
+                    scaleX = 1f - 0.03f * lift
+                    scaleY = 1f - 0.03f * lift
+                    alpha = 1f - ((abs(x) / width - 0.2f) / 0.6f).coerceIn(0f, 1f)
+                }
+                .background(tint),
+        ) {
+            content()
+        }
+    }
+}
+
+/** How much of the hide hint shows once the row has moved [x] px its way. */
+private fun hintAlpha(x: Float, detachPx: Float): Float = ((x - detachPx * 0.15f) / (detachPx * 0.5f)).coerceIn(0f, 1f)
+
+/** "Hide", with its icon, where the swiped row was; it says what letting go will do. */
+@Composable
+private fun HideHint(alignment: Alignment, alpha: () -> Float, modifier: Modifier = Modifier) {
+    Box(modifier.graphicsLayer { this.alpha = alpha() }.padding(horizontal = 18.dp), contentAlignment = alignment) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Icon(AppIcons.EyeOff, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(15.dp))
+            Text("Hide", color = TextSecondary, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        }
     }
 }
 
@@ -1212,6 +1376,8 @@ private fun ToneDisc(item: IslandItem, tone: Color, size: Dp, phase: Float = 0f,
                 size = size * 0.5f,
                 urgent = item.tone == "needs" || item.tone == "live" || item.tone == "soon",
                 phase = phase,
+                kind = item.kind,
+                nudge = item.tone == "needs",
             )
         }
     }

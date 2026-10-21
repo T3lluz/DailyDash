@@ -80,6 +80,13 @@ class ChromeShotsTest {
     @Test fun crowdedLine() = shot("chrome_crowded", light = true, items = crowded, hermes = working)
     @Test fun hermesOnly() = shot("chrome_hermes", light = false, items = emptyList(), hermes = working)
 
+    private val playing = listOf(
+        item("play:jellyfin", "live", "play", "The Expanse S03E06 · Immolation", "Fredde on Living room TV", "23:10 left"),
+        item("rain", "info", "cloud-rain", "Rain from 19:00"),
+    )
+    @Test fun playingLine() = shot("chrome_playing", light = false, items = playing.take(1), hermes = null)
+    @Test fun playingPair() = shot("chrome_playing_pair", light = true, items = playing, hermes = null)
+
     private val card = listOf(
         item("need", "needs", "circle-help", "Frank asks", "Keep Knaben running overnight?", "Answer"),
         item("cal", "live", "calendar-clock", "Dinner with Sara", "until 18:00", "35 min left", ring = 42f, color = "#f83a22"),
