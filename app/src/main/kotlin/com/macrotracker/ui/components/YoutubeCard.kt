@@ -53,6 +53,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -145,6 +146,9 @@ fun YoutubeCard(viewModel: YouTubeViewModel = hiltViewModel()) {
     val youtubeState by viewModel.youtubeState.collectAsState()
     val trackedChannels by viewModel.trackedChannels.collectAsState()
     val googleState by viewModel.googleState.collectAsState()
+    val favourites by viewModel.favourites.collectAsState()
+    // One finder for the glance and the open hub, so a search or the star carries across.
+    val finder = rememberChannelFinderState()
     val successVideos = remember(youtubeState) {
         (youtubeState as? YouTubeUiState.Success)?.videos.orEmpty()
     }
@@ -252,6 +256,9 @@ fun YoutubeCard(viewModel: YouTubeViewModel = hiltViewModel()) {
                         trackedChannels = trackedChannels,
                         selectedChannelId = selectedChannelId,
                         onChannelSelected = { pickedChannelId = it },
+                        finder = finder,
+                        favourites = favourites,
+                        onToggleFavourite = { viewModel.toggleFavourite(it) },
                         onOpenManage = {
                             expanded = true
                             selectedTabName = YtHubTab.CHANNELS.name
@@ -318,6 +325,9 @@ fun YoutubeCard(viewModel: YouTubeViewModel = hiltViewModel()) {
                                 googleState = googleState,
                                 selectedChannelId = selectedChannelId,
                                 onChannelSelected = { pickedChannelId = it },
+                                finder = finder,
+                                favourites = favourites,
+                                onToggleFavourite = { viewModel.toggleFavourite(it) },
                                 onRetry = { viewModel.loadLatestVideos(forceRefresh = true) },
                                 onOpenSearch = {
                                     haptics.click()
@@ -333,6 +343,7 @@ fun YoutubeCard(viewModel: YouTubeViewModel = hiltViewModel()) {
                                 YoutubeChannelsHub(
                                     viewModel = viewModel,
                                     trackedChannels = trackedChannels,
+                                    favourites = favourites,
                                     googleState = googleState,
                                     activity = activity,
                                     onOpenSearch = {
@@ -383,6 +394,9 @@ private fun YoutubeCollapsedGlance(
     trackedChannels: List<YoutubeChannel>,
     selectedChannelId: String?,
     onChannelSelected: (String?) -> Unit,
+    finder: ChannelFinderState,
+    favourites: Set<String>,
+    onToggleFavourite: (String) -> Unit,
     onOpenManage: () -> Unit,
     onRetry: () -> Unit,
     haptics: HapticHelper,
@@ -438,6 +452,9 @@ private fun YoutubeCollapsedGlance(
                 trackedChannels = trackedChannels,
                 selectedChannelId = selectedChannelId,
                 onChannelSelected = onChannelSelected,
+                finder = finder,
+                favourites = favourites,
+                onToggleFavourite = onToggleFavourite,
                 haptics = haptics,
             )
         }
@@ -451,6 +468,7 @@ private fun YoutubeCollapsedGlance(
 private fun YoutubeChannelsHub(
     viewModel: YouTubeViewModel,
     trackedChannels: List<YoutubeChannel>,
+    favourites: Set<String>,
     googleState: YouTubeGoogleUiState,
     activity: ComponentActivity,
     onOpenSearch: () -> Unit,
@@ -532,20 +550,43 @@ private fun YoutubeChannelsHub(
                 compact = true,
             )
         } else {
-            WidgetScrollBox(
-                maxHeight = 360.dp,
-            ) {
-                trackedChannels.forEach { channel ->
-                    key(channel.channelId) {
-                        ChannelListRow(
-                            channel = channel,
-                            isTracked = true,
-                            justAdded = recentlyAdded.contains(channel.channelId),
-                            onToggle = {
-                                haptics.reject()
-                                viewModel.removeChannel(channel.channelId)
-                            },
-                        )
+            // A long list is found by name; starred channels lead it.
+            var filter by rememberSaveable { mutableStateOf("") }
+            val listed = remember(trackedChannels, favourites, filter) {
+                val needle = filter.trim()
+                trackedChannels
+                    .filter { needle.isEmpty() || it.title.contains(needle, ignoreCase = true) }
+                    .sortedBy { if (it.channelId in favourites) 0 else 1 }
+            }
+            if (trackedChannels.size > 6) {
+                ChannelSearchField(
+                    value = filter,
+                    onValueChange = { filter = it },
+                    accent = YtRed,
+                    placeholder = "Find in ${trackedChannels.size} channels",
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+            }
+            if (listed.isEmpty()) {
+                FeedNote("No channel called that")
+            } else {
+                WidgetScrollBox(
+                    maxHeight = 360.dp,
+                ) {
+                    listed.forEach { channel ->
+                        key(channel.channelId) {
+                            ChannelListRow(
+                                channel = channel,
+                                isTracked = true,
+                                justAdded = recentlyAdded.contains(channel.channelId),
+                                onToggle = {
+                                    haptics.reject()
+                                    viewModel.removeChannel(channel.channelId)
+                                },
+                                favourite = channel.channelId in favourites,
+                                onToggleFavourite = { viewModel.toggleFavourite(channel.channelId) },
+                            )
+                        }
                     }
                 }
             }
@@ -564,6 +605,9 @@ private fun YoutubeFeedBody(
     googleState: YouTubeGoogleUiState,
     selectedChannelId: String?,
     onChannelSelected: (String?) -> Unit,
+    finder: ChannelFinderState,
+    favourites: Set<String>,
+    onToggleFavourite: (String) -> Unit,
     onRetry: () -> Unit,
     onOpenSearch: () -> Unit,
     onConnectGoogle: () -> Unit,
@@ -597,6 +641,9 @@ private fun YoutubeFeedBody(
                 trackedChannels = trackedChannels,
                 selectedChannelId = selectedChannelId,
                 onChannelSelected = onChannelSelected,
+                finder = finder,
+                favourites = favourites,
+                onToggleFavourite = onToggleFavourite,
                 haptics = haptics,
             )
         }
@@ -608,6 +655,26 @@ private fun YoutubeFeedBody(
 private fun publishedAt(video: YoutubeVideo): Instant? = runCatching { Instant.parse(video.publishedAt) }.getOrNull()
 
 private fun newCutoff(): Instant = Instant.now().minus(24, ChronoUnit.HOURS)
+
+/** What the feed's filter keys on; a search's letters narrow inside it without a swap per key. */
+@Immutable
+private data class FeedView(val channelId: String?, val favouritesOnly: Boolean)
+
+/** The feed as the channel row narrows it: one channel, or the starred ones and what is typed (a channel or a title). */
+private fun narrowFeed(videos: List<YoutubeVideo>, view: FeedView, needle: String, favourites: Set<String>): List<YoutubeVideo> = when {
+    view.channelId != null -> videos.filter { it.channelId == view.channelId }
+    !view.favouritesOnly && needle.isEmpty() -> videos
+    else -> videos.filter { video ->
+        (!view.favouritesOnly || video.channelId in favourites) &&
+            (needle.isEmpty() || video.channelTitle.contains(needle, ignoreCase = true) || video.title.contains(needle, ignoreCase = true))
+    }
+}
+
+private fun emptyFeedNote(view: FeedView, needle: String): String = when {
+    view.channelId != null -> "No videos from this channel yet"
+    view.favouritesOnly || needle.isNotEmpty() -> "Nothing matches"
+    else -> "No videos yet"
+}
 
 private fun openVideo(context: Context, video: YoutubeVideo) {
     runCatching {
@@ -626,6 +693,9 @@ private fun YoutubeChannelFilter(
     trackedChannels: List<YoutubeChannel>,
     selectedChannelId: String?,
     onChannelSelected: (String?) -> Unit,
+    finder: ChannelFinderState,
+    favourites: Set<String>,
+    onToggleFavourite: (String) -> Unit,
     bottomGap: Dp,
 ) {
     val channels = remember(videos, trackedChannels) {
@@ -655,6 +725,9 @@ private fun YoutubeChannelFilter(
         onSelect = onChannelSelected,
         selectedRing = YtRed,
         markColor = YtRed,
+        finder = finder,
+        favourites = favourites,
+        onToggleFavourite = { onToggleFavourite(it.id) },
         modifier = Modifier.padding(bottom = bottomGap),
     )
 }
@@ -684,6 +757,9 @@ private fun CompactVideoFeed(
     trackedChannels: List<YoutubeChannel>,
     selectedChannelId: String?,
     onChannelSelected: (String?) -> Unit,
+    finder: ChannelFinderState,
+    favourites: Set<String>,
+    onToggleFavourite: (String) -> Unit,
     haptics: HapticHelper,
 ) {
     val context = LocalContext.current
@@ -697,23 +773,25 @@ private fun CompactVideoFeed(
             trackedChannels = trackedChannels,
             selectedChannelId = selectedChannelId,
             onChannelSelected = onChannelSelected,
+            finder = finder,
+            favourites = favourites,
+            onToggleFavourite = onToggleFavourite,
             bottomGap = 10.dp,
         )
         AnimatedContent(
-            targetState = selectedChannelId,
+            targetState = FeedView(selectedChannelId, finder.favouritesOnly),
             transitionSpec = { MacroMotion.hubBodySwap },
             label = "ytGlanceFilter",
-        ) { channelId ->
-            val shown = remember(videos, channelId) {
-                if (channelId == null) videos else videos.filter { it.channelId == channelId }
-            }
+        ) { view ->
+            val needle = finder.needle
+            val shown = remember(videos, view, needle, favourites) { narrowFeed(videos, view, needle, favourites) }
             if (shown.isEmpty()) {
-                FeedNote("No videos from this channel yet")
+                FeedNote(emptyFeedNote(view, needle))
             } else {
                 CompactVideoStrip(
                     videos = shown,
                     channels = trackedChannels,
-                    resetKey = channelId,
+                    resetKey = view to needle,
                     onVideoClick = { video ->
                         haptics.click()
                         openVideo(context, video)
@@ -883,6 +961,9 @@ private fun VideoFeed(
     trackedChannels: List<YoutubeChannel>,
     selectedChannelId: String?,
     onChannelSelected: (String?) -> Unit,
+    finder: ChannelFinderState,
+    favourites: Set<String>,
+    onToggleFavourite: (String) -> Unit,
     haptics: HapticHelper,
 ) {
     val context = LocalContext.current
@@ -894,19 +975,21 @@ private fun VideoFeed(
             trackedChannels = trackedChannels,
             selectedChannelId = selectedChannelId,
             onChannelSelected = onChannelSelected,
+            finder = finder,
+            favourites = favourites,
+            onToggleFavourite = onToggleFavourite,
             bottomGap = 12.dp,
         )
         AnimatedContent(
-            targetState = selectedChannelId,
+            targetState = FeedView(selectedChannelId, finder.favouritesOnly),
             transitionSpec = { MacroMotion.hubBodySwap },
             label = "ytFeedFilter",
-        ) { channelId ->
-            val shown = remember(videos, channelId) {
-                if (channelId == null) videos else videos.filter { it.channelId == channelId }
-            }
+        ) { view ->
+            val needle = finder.needle
+            val shown = remember(videos, view, needle, favourites) { narrowFeed(videos, view, needle, favourites) }
             val hero = shown.firstOrNull()
             if (hero == null) {
-                FeedNote(if (channelId == null) "No videos yet" else "No videos from this channel yet")
+                FeedNote(emptyFeedNote(view, needle))
             } else {
                 val rest = shown.drop(1)
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1801,6 +1884,9 @@ private fun ChannelListRow(
     justAdded: Boolean,
     onToggle: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Shown as a star before the remove button when given (the Channels tab). */
+    favourite: Boolean? = null,
+    onToggleFavourite: () -> Unit = {},
 ) {
     val buttonBg by animateColorAsState(
         targetValue = when {
@@ -1838,6 +1924,10 @@ private fun ChannelListRow(
             }
         }
         Spacer(Modifier.width(8.dp))
+        if (favourite != null) {
+            FavouriteToggle(favourite = favourite, name = channel.title, onToggle = onToggleFavourite)
+            Spacer(Modifier.width(2.dp))
+        }
         // Animated add/check/remove button
         Box(
             modifier = Modifier

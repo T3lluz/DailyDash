@@ -292,7 +292,10 @@ com.macrotracker/
                               (HermesActivityViewModel's `navActivity`) is the island's second line; the
                               navbar is a plain pill whose selected tab is a raised key that stretches
                               between tabs as it moves (`SelectionBubble`, two springs, drawn in the draw
-                              phase). NavActivityTab.kt holds `NavActivity` and its tones. WorkingScanner.kt is
+                              phase). Its icons act out their tab once on arrival or a tap on the current tab
+                              (NavTabIcon.kt: the house squashes and its door swings up, the heart beats while
+                              its line draws the pulse, the sparkle spins a quarter, the gear turns two teeth),
+                              drawn with the island's `GlyphPen`, ending where they began. NavActivityTab.kt holds `NavActivity` and its tones. WorkingScanner.kt is
                               opencode's Knight Rider scanner (KnightRiderTest pins it to opencode's
                               frames). ScreenHeader.kt: tab
                               `ScreenHeader`, pushed-screen `SubScreenHeader`, `TabContentBottomPadding`,
@@ -326,27 +329,43 @@ com.macrotracker/
                               navbar and the island share `Modifier.chromeGlass(hazeState, shape)`: `chromeShadow` (two layers,
                               cast by the outline with the inside cut away, since a shadow under translucent glass shows through
                               it), the clip, `glass` and `chromeOutline`, a faint neutral 1dp edge. The AI composers use `chromeGlass` too,
-                              with no opaque band behind them, so the chat runs under the glass. Keep them alike. 2.0's dotted frost (a dot grid
+                              with no opaque band behind them, so the chat runs under the glass. Keep them alike. `glass` fills
+                              `GlassSpec.Backdrop` (the page colour) under the blurred copy: a chat list draws on its pane's
+                              colour, not its own, so its haze source records text on clear and the sharp chat showed through. 2.0's dotted frost (a dot grid
                               perforating the glass) is gone: it read as noise on a phone. Don't bring dots back.
                               Anything that clips (`animateContentSize`, scrolling) goes after `chromeGlass`, or it cuts the shadow off.
                               TopIsland.kt: the island, drawn by MainScreen under the status bar on Home, Health and
                               Settings (IslandViewModel). A tap goes where the item is about (`IslandTarget.of`, IslandTargetTest): its Hermes chat, the phone event in the calendar app picked for events (`IslandItem.ref`), its link through AppLinks (a mail, stream, video, review), the server it is about, or else the Home card / Health section that shows its kind, scrolled into view through `CardFocus`; a calendar item's call is its own Join pill (`onJoin`, call hosts only). A pill after iOS's
-                              Dynamic Island, in the navbar's frosted glass (`chromeGlass`), that shows the top items side
-                              by side, as many as fit (`MAX_ON_PILL`, two), each with its whole title when there is room, else
-                              its short label (`IslandShortener`) and a shorter countdown (`rememberPillPlan` picks the richest
-                              look that fits). Nothing turns on a timer: the line-up changes only when the ranking does, and
-                              then the words roll up and the pill springs to its new width (`islandSpring`, one spring for size,
-                              corners and content); a ticking countdown updates in place (`PillPlan.key`). The rest wait at the
+                              Dynamic Island, in the navbar's frosted glass (`chromeGlass`), exactly the navbar's width (the card
+                              opens `CardOverhang` wider), that shows the top items side by side, as many as fit (`MAX_ON_PILL`,
+                              two). The lead keeps its whole title (a long episode name reads in full); a second may go to its
+                              short label (`IslandShortener`) and a shorter countdown; when the lead alone doesn't fit it shows as
+                              much of its title as there is room for (`rememberPillPlan`). The last entry fills the pill, so its
+                              countdown sits at the right end. Nothing turns on a timer: the line-up changes only when the
+                              ranking does, and then the words roll up; a ticking countdown updates in place (`PillPlan.key`).
+                              Pill and card are one surface: an `AnimatedContent` on `expanded` springs between their sizes
+                              (`islandSpring`) while one fades into the other, and only then, so a row closing its gap is not
+                              chased by a second size spring. The rest wait at the
                               right end as overlapping discs and a "+N"; a tap there or a pull down on the pill opens the card
                               over a light scrim (a tap outside, the handle at its foot or a pull up folds it). The card groups
                               items (Needs you, Now, Soon, Also; Hermes in the first two) and sizes them by need (`CardSize`:
                               a hero for needs-you / on-now with a progress line and Join, slim rows for background lines and
-                              things to watch). A row swipes off sideways as Android 16 clears a notification (`SwipeRow`,
-                              `SwipeMagnet`, specs in `MacroMotion.IslandSwipe`: half pace while attached with the neighbours
-                              leaning, a GESTURE_THRESHOLD haptic as it detaches, their facing corners rounding, fly-off and the
-                              gap closing), hidden for the day with an Undo pill under the island (`IslandLearning.unhide`).
-                              A long press on the pill hides with the same undo. Icons move after their kind
-                              (IslandIconMotion.kt: the bell rings, mail hops, a heart beats), in the draw phase. While
+                              things to watch); rows fade and drop in one after another as it opens (`rememberEntrance`). A row
+                              swipes off sideways as Android 16 clears a notification (`SwipeRow`, `SwipeMagnet`, specs in
+                              `MacroMotion.IslandSwipe`: half pace while attached with the neighbours leaning, a
+                              GESTURE_THRESHOLD haptic as it detaches, their facing corners rounding, a "Hide" hint in the
+                              space it leaves, fly-off with the gap starting to close `CLOSE_AFTER_MS` in), inside its group's
+                              rounded clip so it never crosses the card's margin, hidden for the day with an Undo pill under the
+                              island whose fill drains while it stays up (`IslandLearning.unhide`). The card is handed every item
+                              plus `isCleared`, not the filtered line: a cleared row must stay composed to collapse (and to come
+                              back on Undo); the view-model drops it after `CLOSE_GAP_MS`. A long press on the pill hides with
+                              the same undo. Icons are drawn part by part after the web island's marks (IslandGlyphs.kt,
+                              `glyphFor`: rain falls out of its cloud, an equaliser for what is playing, the download arrow
+                              drops into its tray, the sun's rays turn, the moon rocks while its star twinkles, an eye blinks,
+                              a flag waves, the bell's clapper swings behind it, the heart beats as its trace runs), off one
+                              12 s clock whose every loop divides it, in the draw phase; `GlyphShotsTest` draws them all
+                              into `glyphs.png`. Icons without parts keep IslandIconMotion's whole-icon motions. What needs
+                              you also gets the web's nudge. While
                               Hermes works he leads the pill (scanner, what he is on, a clock). Ranking (IslandRankingTest): tier
                               (needs you, on now, soon, the rest), then `soonness`, the server's ambient lines after the rest and
                               something to watch after those, then learned taste per part of the day (`hourFit`). Labels
@@ -444,7 +463,7 @@ Widget order and visibility are persisted as a single colon-and-comma encoded st
 ```
 `DraggableWidgetColumn` + `WidgetEditor` read/write this via `SettingsRepository`. **`GITHUB`** is the home GitHub hub (`GitHubCard`): account-wide issues, PRs, activity, and repos for the connected GitHub user (not a single project). Connect with Device Code OAuth on the Account tab (`repo` + `read:user`).
 
-**`YOUTUBE`** and **`TWITCH`** collapsed show their videos / live streams in `MediaCarousel`; opened, both are the same shape: the newest video / biggest stream as a hero card, the rest in a `WidgetScrollBox` under it (YouTube lists every video; each row is built as it scrolls in, `LoadWhenSeen`). Both filter by channel with `ChannelAvatarRow` (components/ChannelAvatarRow.kt), the same row collapsed and opened: round pictures, a picked one keeps its ring while the rest fade back; tapping it again clears the filter (no caption under the row). Twitch rings live channels in scarlet `#eb0400` with a LIVE tag on the ring's lower edge, as Twitch does; YouTube orders channels by latest upload and dots anyone who posted today. A filter or tab change swaps the body with `MacroMotion.hubBodySwap` / `inCardTabSwitch`, and the collapsed glance folds away while the hub unfolds, so the card eases between heights.
+**`YOUTUBE`** and **`TWITCH`** collapsed show their videos / live streams in `MediaCarousel`; opened, both are the same shape: the newest video / biggest stream as a hero card, the rest in a `WidgetScrollBox` under it (YouTube lists every video; each row is built as it scrolls in, `LoadWhenSeen`). Both filter by channel with `ChannelAvatarRow` (components/ChannelAvatarRow.kt), the same row collapsed and opened: round pictures, a picked one keeps its ring while the rest fade back; tapping it again clears the filter (no caption under the row). The row leads with a search button and, once anything is starred, a star (`ChannelFinderState`, components/ChannelFinder.kt, one per card so the glance and the open hub share it): the search opens a field over the row that narrows the pictures and the feed (YouTube by channel or title, Twitch by channel, title or game), the star keeps only favourites. A long press on a picture stars it; starred channels lead the row with a star badge. Favourites are `SettingsRepository.youtubeFavourites` / `twitchFavourites` (ids), through each view-model's `favourites` / `toggleFavourite`. The Channels tabs list favourites first with a star toggle per row, and a find field once there are more than six. Twitch rings live channels in scarlet `#eb0400` with a LIVE tag on the ring's lower edge, as Twitch does; YouTube orders channels by latest upload and dots anyone who posted today. A filter or tab change swaps the body with `MacroMotion.hubBodySwap` / `inCardTabSwitch`, and the collapsed glance folds away while the hub unfolds, so the card eases between heights.
 
 **`UPCOMING`** is Coming up (`UpcomingCard`): source chips over the strip (All, then Calendar, Sonarr, Radarr, Stremio, F1, each with the dashboard's own icon and a count; one at a time), then a Material 3 `HorizontalCenteredHeroCarousel` with `singleAdvanceFlingBehavior`, one card per entry in time order. Items are masked, not resized, so anything that grows or fades with a card reads `carouselItemDrawInfo` inside `graphicsLayer`/draw blocks (`openness()`, `followMask()`) and never in composition. Programmatic moves use `MacroMotion.carouselTravel`.
 

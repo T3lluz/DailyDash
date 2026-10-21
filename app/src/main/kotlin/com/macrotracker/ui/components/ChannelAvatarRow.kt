@@ -1,11 +1,19 @@
 package com.macrotracker.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -51,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.Surface
@@ -173,6 +182,11 @@ fun LiveTag(color: Color, modifier: Modifier = Modifier) {
  * picture per channel. Tapping one keeps its ring and fades the rest back; tapping it
  * again shows every channel. The ring says which one is picked, so nothing is written
  * under the row. Fires its own haptics.
+ *
+ * With a [finder], the row starts with a search button (a field opens over the row and
+ * narrows it to what is typed) and, once anything is starred, a star that keeps only the
+ * [favourites]. Starred channels lead the row with a star on their picture; a long press on
+ * a picture stars it or takes the star off ([onToggleFavourite]).
  */
 @Composable
 fun ChannelAvatarRow(
@@ -183,15 +197,24 @@ fun ChannelAvatarRow(
     markColor: Color,
     modifier: Modifier = Modifier,
     leading: (@Composable () -> Unit)? = null,
+    finder: ChannelFinderState? = null,
+    favourites: Set<String> = emptySet(),
+    onToggleFavourite: ((ChannelAvatar) -> Unit)? = null,
 ) {
     val haptics = rememberHaptics()
     val listState = rememberLazyListState()
-    val leadingCount = if (leading != null) 1 else 0
+    val tools = finder != null
+    val leadingCount = (if (leading != null) 1 else 0) + (if (tools) 1 else 0)
+    val needle = finder?.needle.orEmpty()
+    val favouritesOnly = finder?.favouritesOnly == true
+    val shown = remember(channels, favourites, needle, favouritesOnly, selectedId) {
+        channels.favouritesFirst(favourites).filter { it.id == selectedId || finder?.keeps(it.id, it.name, favourites) != false }
+    }
 
     // Bring a picked channel into view, e.g. when the card opens on a filter picked while closed.
     var placed by remember { mutableStateOf(false) }
     LaunchedEffect(selectedId) {
-        val index = channels.indexOfFirst { it.id == selectedId }
+        val index = shown.indexOfFirst { it.id == selectedId }
         if (index >= 0) {
             val target = index + leadingCount
             val info = listState.layoutInfo
@@ -206,8 +229,26 @@ fun ChannelAvatarRow(
         }
         placed = true
     }
+    // A new search starts the row from its head, where the matches are.
+    LaunchedEffect(needle, favouritesOnly) { if (placed && selectedId == null) listState.animateScrollToItem(0) }
 
     Column(modifier = modifier.fillMaxWidth()) {
+        if (finder != null) {
+            AnimatedVisibility(
+                visible = finder.searching,
+                enter = MacroMotion.expandEnter,
+                exit = MacroMotion.expandExit,
+            ) {
+                ChannelSearchField(
+                    value = finder.query,
+                    onValueChange = { finder.query = it },
+                    accent = selectedRing,
+                    autoFocus = true,
+                    onClose = { finder.closeSearch() },
+                    modifier = Modifier.padding(bottom = 10.dp),
+                )
+            }
+        }
         LazyRow(
             state = listState,
             modifier = Modifier
@@ -216,6 +257,46 @@ fun ChannelAvatarRow(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (finder != null) {
+                item(key = "finder") {
+                    Row(
+                        modifier = Modifier.padding(end = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        FinderChip(
+                            icon = AppIcons.Search,
+                            label = if (finder.searching) "Close search" else "Find a channel",
+                            active = finder.searching || needle.isNotEmpty(),
+                            accent = selectedRing,
+                            size = RingBox,
+                            onClick = {
+                                haptics.tick()
+                                if (finder.searching) finder.closeSearch() else finder.searching = true
+                            },
+                        )
+                        AnimatedVisibility(
+                            visible = favourites.isNotEmpty() || favouritesOnly,
+                            enter = fadeIn() + scaleIn(MacroMotion.bouncySpring()) + expandHorizontally(),
+                            exit = fadeOut() + scaleOut() + shrinkHorizontally(),
+                        ) {
+                            FinderChip(
+                                icon = AppIcons.Star,
+                                activeIcon = AppIcons.StarFilled,
+                                activeTint = FavouriteStar,
+                                label = if (favouritesOnly) "Show every channel" else "Show favourites only",
+                                active = favouritesOnly,
+                                accent = FavouriteStar,
+                                size = RingBox,
+                                onClick = {
+                                    if (favouritesOnly) haptics.toggleOff() else haptics.toggleOn()
+                                    finder.favouritesOnly = !favouritesOnly
+                                },
+                            )
+                        }
+                    }
+                }
+            }
             if (leading != null) {
                 item(key = "leading") {
                     Box(
@@ -229,16 +310,35 @@ fun ChannelAvatarRow(
                     ) { leading() }
                 }
             }
-            items(channels, key = { it.id }) { channel ->
+            if (shown.isEmpty() && finder?.narrowing == true) {
+                item(key = "none") {
+                    Text(
+                        if (favouritesOnly && needle.isEmpty()) "No favourites here" else "No channels match",
+                        color = TextSecondary,
+                        fontSize = 12.sp,
+                        modifier = Modifier
+                            .animateItem(fadeInSpec = MacroMotion.fadeTween(), placementSpec = null, fadeOutSpec = MacroMotion.fadeTween())
+                            .padding(horizontal = 8.dp),
+                    )
+                }
+            }
+            items(shown, key = { it.id }) { channel ->
                 ChannelChip(
                     channel = channel,
                     selected = channel.id == selectedId,
                     dimmed = selectedId != null && channel.id != selectedId,
+                    favourite = channel.id in favourites,
                     selectedRing = selectedRing,
                     markColor = markColor,
                     onClick = {
                         haptics.tick()
                         onSelect(if (channel.id == selectedId) null else channel.id)
+                    },
+                    onLongClick = onToggleFavourite?.let { toggle ->
+                        {
+                            if (channel.id in favourites) haptics.toggleOff() else haptics.toggleOn()
+                            toggle(channel)
+                        }
                     },
                     modifier = Modifier.animateItem(
                         fadeInSpec = MacroMotion.fadeTween(),
@@ -251,14 +351,20 @@ fun ChannelAvatarRow(
     }
 }
 
+/** A picture with its ring, the size every chip in the row takes. */
+private val RingBox = AvatarSize + (RingSelected + RingGap) * 2
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ChannelChip(
     channel: ChannelAvatar,
     selected: Boolean,
     dimmed: Boolean,
+    favourite: Boolean,
     selectedRing: Color,
     markColor: Color,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val interaction = remember { MutableInteractionSource() }
@@ -297,7 +403,7 @@ private fun ChannelChip(
         animationSpec = MacroMotion.pressSpring(),
         label = "channelChipRingWidth",
     )
-    val ringBox = AvatarSize + (RingSelected + RingGap) * 2
+    val ringBox = RingBox
 
     Box(
         modifier = modifier
@@ -309,11 +415,13 @@ private fun ChannelChip(
                 this.alpha = alpha.value
             }
             .semantics { this.selected = selected }
-            .clickable(
+            .combinedClickable(
                 interactionSource = interaction,
                 indication = null,
                 role = Role.Button,
                 onClickLabel = if (selected) "Show every channel" else "Show only ${channel.name}",
+                onLongClickLabel = if (onLongClick == null) null else if (favourite) "Remove from favourites" else "Add to favourites",
+                onLongClick = onLongClick,
                 onClick = onClick,
             ),
     ) {
@@ -340,5 +448,10 @@ private fun ChannelChip(
             )
             ChannelMark.None -> Unit
         }
+        FavouriteBadge(
+            visible = favourite,
+            background = Surface,
+            modifier = Modifier.align(Alignment.TopStart),
+        )
     }
 }

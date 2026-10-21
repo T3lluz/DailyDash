@@ -1,5 +1,6 @@
 package com.macrotracker.ui.viewmodel
 
+import com.macrotracker.data.local.SettingsRepository
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -51,6 +52,7 @@ data class TwitchAuthUiState(
 class TwitchViewModel @Inject constructor(
     private val twitchRepository: TwitchRepository,
     private val authClient: TwitchAuthClient,
+    private val settings: SettingsRepository,
 ) : ViewModel() {
 
     companion object {
@@ -64,6 +66,11 @@ class TwitchViewModel @Inject constructor(
 
     private val _channelSearchState = MutableStateFlow<TwitchChannelSearchState>(TwitchChannelSearchState.Idle)
     val channelSearchState: StateFlow<TwitchChannelSearchState> = _channelSearchState
+
+    /** Starred channels: they lead the hub's channel row and can be the only ones shown. */
+    val favourites: StateFlow<Set<String>> = settings.twitchFavourites
+
+    fun toggleFavourite(id: String) = settings.toggleTwitchFavourite(id)
 
     private val _trackedChannels = MutableStateFlow<List<TwitchChannel>>(emptyList())
     val trackedChannels: StateFlow<List<TwitchChannel>> = _trackedChannels
