@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -57,6 +58,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
@@ -97,16 +99,26 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.macrotracker.data.dashboard.IslandFact
 import com.macrotracker.data.dashboard.IslandItem
-import com.macrotracker.data.dashboard.compactIslandEnd
+import com.macrotracker.data.dashboard.IslandRich
+import com.macrotracker.data.dashboard.islandFactPhrase
+import com.macrotracker.data.dashboard.islandKindName
+import com.macrotracker.data.dashboard.islandRichKey
+import com.macrotracker.data.dashboard.islandSolo
+import com.macrotracker.data.dashboard.hasIslandLabel
 import com.macrotracker.data.dashboard.islandLabel
 import com.macrotracker.data.island.IslandRanking
 import com.macrotracker.ui.theme.AppIcons
@@ -143,6 +155,21 @@ import kotlin.math.sign
  */
 
 private val PillHeight = 40.dp
+/** The pill: always two lines, an item's title over its second line. */
+private val IslandHeight = 56.dp
+/** The largest font scale the pill follows; past it two lines no longer fit [IslandHeight]. */
+private const val MAX_FONT_SCALE = 1.3f
+/** The solo disc's box; the margin around it, (56 − 40) / 2, is the pill's left margin too. */
+private val SoloBox = 40.dp
+private val SoloPadStart = 8.dp
+/** Text and numbers stay clear of the pill's round end: its radius less the disc's margin. */
+private val SoloPadEnd = 18.dp
+/** Between the left side and the right. */
+private val SoloSplit = 16.dp
+/** Between two numbers on the right. */
+private val FactGap = 14.dp
+/** The least of the title kept when the right side asks for room. */
+private val SoloTitleMin = 112.dp
 private val IslandTop = 6.dp
 /** Under the discs, so overlapping ones keep their edge on the see-through glass. */
 private val DiscBase = Color(0xFF141416)
@@ -169,6 +196,8 @@ fun TopIsland(
     onJoin: (IslandItem) -> Unit = onItem,
     /** The AI's short labels by full title, used when a title doesn't fit (IslandViewModel.labels). */
     labels: Map<String, String> = emptyMap(),
+    /** The AI's fuller title and detail line by full title, for one item alone (IslandViewModel.rich). */
+    rich: Map<String, IslandRich> = emptyMap(),
     /** Swiped off the card (or a long press on the pill): hidden for the rest of the day. */
     onHide: (IslandItem) -> Unit = {},
     /** Undo of [onHide]. */
@@ -250,7 +279,8 @@ fun TopIsland(
                     exit = fadeOut(tween(160)) +
                         scaleOut(tween(200), targetScale = 0.7f, transformOrigin = TransformOrigin(0.5f, 0f)),
                 ) {
-                    val corner by animateDpAsState(if (expanded) CardCorner else PillHeight / 2, islandSpring(), label = "island_corner")
+                    val onPill = shownItems.filterNot { IslandRanking.key(it) in cleared }
+                    val corner by animateDpAsState(if (expanded) CardCorner else IslandHeight / 2, islandSpring(), label = "island_corner")
                     val shape = RoundedCornerShape(corner)
                     val density = LocalDensity.current
                     Column(
@@ -314,16 +344,25 @@ fun TopIsland(
                                     )
                                 }
                             } else {
+                                // The pill's height is fixed, so its words stop growing at 1.3× the
+                                // system font, where two lines still fit with room around them.
+                                val outer = LocalDensity.current
+                                // Only past the cap, so Android 14's own non-linear scaling stays under it.
+                                val capped = if (outer.fontScale > MAX_FONT_SCALE) Density(outer.density, MAX_FONT_SCALE) else outer
+                                CompositionLocalProvider(LocalDensity provides capped) {
                                 CompactPill(
-                                    items = shownItems.filterNot { IslandRanking.key(it) in cleared },
+                                    items = onPill,
                                     hermes = shownHermes,
                                     labels = labels,
+                                    rich = rich,
                                     width = pillWidth,
                                     onItem = onItem,
+                                    onJoin = onJoin,
                                     onHermes = onHermes,
                                     onHide = hide,
                                     onMore = { haptics.toggleOn(); expanded = true },
                                 )
+                                }
                             }
                         }
                     }
@@ -416,13 +455,14 @@ private fun islandLine(items: List<IslandItem>, hermes: NavActivity?): List<Isla
 /**
  * How far down from the status bar the island reaches, plus a hair of air, or nothing when it
  * is hidden. Tab headers keep at least this much room above them ([LocalIslandClearance]).
- * The pill is always one line; the card opens over the page.
+ * The pill is always [IslandHeight] tall; the card opens over the page.
  */
 fun islandClearance(items: List<IslandItem>, hermes: NavActivity?, visible: Boolean): Dp {
     if (!visible) return 0.dp
     if (islandLine(items, hermes).isEmpty() && hermes == null) return 0.dp
-    return IslandTop + PillHeight + 2.dp
+    return IslandTop + IslandHeight + 2.dp
 }
+
 
 /** [islandClearance] for the tab screens under the island; MainScreen provides it. */
 val LocalIslandClearance = compositionLocalOf { 0.dp }
@@ -435,93 +475,200 @@ private class IslandHeld {
 
 // ── The pill ────────────────────────────────────────────────────────────────
 
-/** One item on the pill, with the words it shows there. */
-@Immutable
-private data class PillEntry(val item: IslandItem, val text: String, val end: String)
-
 /**
- * What the pill shows: Hermes when he is at work, then as many of the top items side by side
- * as fit ([MAX_ON_PILL] at most). The lead keeps its whole title (that is what the pill is
- * for: a long episode name reads in full); the second may go to its short label and a shorter
- * countdown. When even the lead's title alone doesn't fit, it shows as much of it as there is
- * room for. The rest wait as discs.
+ * An item in a cell of the pill: its [title] (whole when it fits the cell, else its label)
+ * over a second line: its live number first, in its tone ([lead], "35m left"), then what
+ * else there is to say ([rest], "Olivia").
  */
 @Immutable
-private data class PillPlan(val hermes: NavActivity?, val entries: List<PillEntry>, val rest: List<IslandItem>) {
+private data class PillEntry(
+    val item: IslandItem,
+    val title: String,
+    val lead: String,
+    val rest: String,
+    val leadIsAction: Boolean = false,
+    /** The lead is the item's countdown, drawn in its tone; another number stays plain. */
+    val leadIsEnd: Boolean = false,
+)
+
+/**
+ * One item alone on the pill. Left: [title] over [detail]. Right: [facts] in columns of one
+ * width ([factWidth]), value over label as Android 17's metric-style Live Updates show them,
+ * then its [action] ("Answer") or Join; with none of those, a [chip] saying where a tap goes.
+ */
+@Immutable
+private data class SoloPlan(
+    val item: IslandItem,
+    val title: String,
+    val detail: String,
+    val facts: List<IslandFact>,
+    val factWidth: Dp,
+    val action: String,
+    val join: Boolean,
+    val chip: String,
+    /** The first number is the item's countdown, drawn in its tone. */
+    val leadIsEnd: Boolean = false,
+)
+
+/**
+ * What the pill shows, always on two lines. Two things side by side, in cells of one width
+ * (Hermes at work is one of them, and leads), each a disc with a title over a second line;
+ * the rest wait at the right end as overlapping discs and a count. One thing alone is split
+ * the way iOS splits one Live Activity ([solo], or Hermes on his own): what it is on the
+ * left, its numbers on the right.
+ */
+@Immutable
+private data class PillPlan(
+    val hermes: NavActivity?,
+    val entries: List<PillEntry>,
+    val rest: List<IslandItem>,
+    val solo: SoloPlan? = null,
+    /** Hermes' title in his cell, fitted to it ([fitTitle]). */
+    val hermesTitle: String? = null,
+) {
     /** Changes only when what is shown (or its order) changes, not when a countdown ticks. */
-    val key: String = (listOfNotNull(hermes?.let { "hermes" }) + entries.map { IslandRanking.key(it.item) }).joinToString("|")
+    val key: String = (listOfNotNull(hermes?.let { "hermes" }, solo?.let { "solo:" + IslandRanking.key(it.item) }) + entries.map { IslandRanking.key(it.item) })
+        .joinToString("|")
+
+    /** Hermes alone on the pill: his own split layout. */
+    val hermesAlone: Boolean get() = hermes != null && entries.isEmpty() && solo == null
 }
 
-/** At most this many items with words on the pill; two read well on a phone. */
+/** Cells on the pill, Hermes counted; two read well on a phone. */
 private const val MAX_ON_PILL = 2
 
-private val EntryGap = 10.dp
-private val Divider = 21.dp
+/** Between two cells: a gap, no line; each cell's disc already marks where it starts. */
+private val Divider = 12.dp
 
-/** Hermes' label on the pill, when something else shares it. */
+/** Hermes' label on a card row, beside his clock. */
 private val HermesLabelMax = 170.dp
 
 @Composable
-private fun rememberPillPlan(items: List<IslandItem>, hermes: NavActivity?, labels: Map<String, String>, width: Dp): PillPlan {
+private fun rememberPillPlan(
+    items: List<IslandItem>,
+    hermes: NavActivity?,
+    labels: Map<String, String>,
+    rich: Map<String, IslandRich>,
+    width: Dp,
+): PillPlan {
     val styles = islandTextStyles()
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    return remember(items, hermes?.label, hermes?.tone, labels, width, styles, density) {
+    // Keyed on the whole activity (nothing in it ticks): a new turn with the same words still
+    // brings its own clock and chat.
+    return remember(items, hermes, labels, rich, width, styles, density) {
         fun w(text: String, style: TextStyle): Dp =
             if (text.isBlank()) 0.dp else with(density) { measurer.measure(text, style, maxLines = 1, softWrap = false).size.width.toDp() }
-        fun entryWidth(item: IslandItem, text: String, end: String): Dp =
-            DiscSize + EntryGap + w(text, if (item.tone == "quiet") styles.quietTitle else styles.title) +
-                (if (item.ring != null) 22.dp else 0.dp) + (if (end.isNotEmpty()) EntryGap + w(end, styles.end) else 0.dp) + 6.dp
-        val hermesWidth = hermes?.let { 22.dp + 9.dp + w("Hermes", styles.sub) + 6.dp + minOf(w(it.label, styles.title), HermesLabelMax) + 10.dp + w("0:00", styles.end) + 8.dp } ?: 0.dp
-        fun full(item: IslandItem) = PillEntry(item, item.title.trim(), item.end.trim())
-        fun short(item: IslandItem) = PillEntry(item, islandLabel(item, labels), compactIslandEnd(item.end))
-        val most = minOf(items.size, if (hermes != null) 1 else MAX_ON_PILL)
-        for (n in most downTo if (hermes != null) 0 else 1) {
-            val rest = items.drop(n)
-            val room = width - 14.dp - clusterWidth(rest.size) - hermesWidth - Divider * (n - 1 + if (hermes != null && n > 0) 1 else 0)
-            val shown = items.take(n)
-            val looks = buildList<(Int, IslandItem) -> PillEntry> {
-                add { _, it -> full(it) }
-                add { i, it -> if (i == 0) full(it) else short(it) }
-                // Beside Hermes, who leads, an item may go to its label.
-                if (hermes != null) add { _, it -> short(it) }
+
+        if (hermes == null && items.size == 1) {
+            val only = items.first()
+            val solo = islandSolo(only)
+            val words = rich[islandRichKey(only)]
+            val title = words?.title?.takeIf { it.isNotBlank() } ?: only.title.trim()
+            val room = width - SoloPadStart - SoloPadEnd
+            val left = SoloBox + 12.dp + minOf(w(title, styles.leadTitle), SoloTitleMin) + SoloSplit
+            fun col(fs: List<IslandFact>): Dp =
+                fs.maxOfOrNull { maxOf(w(it.value, styles.factValue), w(it.label, styles.factLabel)) }?.coerceAtLeast(30.dp) ?: 0.dp
+            fun factsWidth(fs: List<IslandFact>): Dp = if (fs.isEmpty()) 0.dp else col(fs) * fs.size + FactGap * (fs.size - 1)
+            val actionWidth = if (solo.action.isNotEmpty()) w(solo.action, styles.chip) + 26.dp else 0.dp
+            val joinWidth = if (only.join != null) w("Join", styles.chip) + 26.dp else 0.dp
+            val buttons = actionWidth + joinWidth + (if (actionWidth > 0.dp && joinWidth > 0.dp) 8.dp else 0.dp)
+            fun trailing(fs: List<IslandFact>): Dp = factsWidth(fs) + buttons + (if (fs.isNotEmpty() && buttons > 0.dp) 12.dp else 0.dp)
+            // The right side gives up its last numbers before the title gets too short to read.
+            var facts = solo.facts
+            while (facts.isNotEmpty() && left + trailing(facts) > room) facts = facts.dropLast(1)
+            val kind = islandKindName(only.kind)
+            // The item's own detail is live (this week's room, this mail's sender); the AI's line,
+            // written once per title, only fills in when the item has none.
+            val detail = solo.detail.ifEmpty { words?.detail?.takeIf { it.isNotBlank() } ?: if (facts.isNotEmpty() || buttons > 0.dp) kind else "" }
+            // Nothing for the right: a chip saying where a tap goes, so that side is never bare.
+            val chip = when {
+                facts.isNotEmpty() || buttons > 0.dp -> ""
+                kind.isNotEmpty() && !detail.contains(kind, ignoreCase = true) -> kind
+                else -> "Open"
             }
-            for (look in looks) {
-                val entries = shown.mapIndexed(look)
-                if (entries.sumOf { e -> entryWidth(e.item, e.text, e.end).value.toDouble() }.dp <= room) return@remember PillPlan(hermes, entries, rest)
-            }
-            if (n == 1 && hermes == null) {
-                // One item always shows: as much of its whole title as fits, and a short countdown.
-                val only = items.first()
-                return@remember PillPlan(null, listOf(PillEntry(only, only.title.trim(), compactIslandEnd(only.end))), rest)
-            }
+            return@remember PillPlan(
+                null,
+                emptyList(),
+                emptyList(),
+                SoloPlan(only, title, detail, facts, col(facts), solo.action, only.join != null, chip, leadIsEnd = solo.leadIsEnd && facts.isNotEmpty()),
+            )
         }
-        PillPlan(hermes, emptyList(), items)
+
+        val shown = items.take(MAX_ON_PILL - if (hermes != null) 1 else 0)
+        val rest = items.drop(shown.size)
+        val cells = shown.size + if (hermes != null) 1 else 0
+        val room = width - CellPadStart - (if (rest.isEmpty()) CellPadEnd else ClusterPad) - clusterWidth(rest.size) - Divider * (cells - 1).coerceAtLeast(0)
+        val textRoom = room / cells.coerceAtLeast(1) - CellDisc - CellGap - 6.dp
+        val entries = shown.map { item ->
+            val full = item.title.trim()
+            // The whole title when it fits its cell; else the label, when it names the thing
+            // (never a lone first word like "The"); else the title, cut where the cell ends.
+            val title = if (w(full, styles.cellTitle) <= textRoom || !hasIslandLabel(item, labels)) full else islandLabel(item, labels)
+            val solo = islandSolo(item)
+            val first = solo.facts.firstOrNull()
+            val lead = first?.let(::islandFactPhrase) ?: solo.action
+            val detail = solo.detail.ifEmpty { if (lead.isEmpty()) islandKindName(item.kind) else "" }
+            // Beside a number, the detail shows whole or not at all: a cut "· Oli…" says nothing.
+            val rest2 = if (lead.isEmpty() || w(lead, styles.detailLead) + w(" · $detail", styles.detail) <= textRoom) detail else ""
+            PillEntry(item, title, lead, rest2, leadIsAction = first == null && lead.isNotEmpty(), leadIsEnd = solo.leadIsEnd)
+        }
+        // Hermes' words can't go to a label; cut long ones at a word, not mid-word ("Running…").
+        val hermesTitle = hermes?.label?.let { fitTitle(it, textRoom) { t -> w(t, styles.cellTitle) } }
+        PillPlan(hermes, entries, rest, hermesTitle = hermesTitle)
     }
 }
 
-private fun clusterWidth(count: Int): Dp = when (count) {
-    0 -> 0.dp
-    else -> 8.dp + 10.dp + MiniDisc + (MiniDisc - 7.dp) * (minOf(count, 3) - 1) + (if (count > 3) 26.dp else 0.dp)
+/** [text] whole when it fits [room], else its leading words that do, with an ellipsis. */
+private inline fun fitTitle(text: String, room: Dp, width: (String) -> Dp): String {
+    if (width(text) <= room) return text
+    val words = text.split(' ')
+    for (n in words.size - 1 downTo 1) {
+        val cut = words.take(n).joinToString(" ") + "…"
+        if (width(cut) <= room) return cut
+    }
+    return text
 }
+
+/** The two-cell pill: a cell's disc sits as far from the pill's edge as from its top. */
+private val CellDisc = 36.dp
+private val CellGap = 10.dp
+private val CellPadStart = 10.dp
+private val CellPadEnd = 14.dp
+
+private fun clusterWidth(count: Int): Dp = if (count == 0) 0.dp else 8.dp + ClusterSize
+
+/** The circle the rest wait in, as far from the pill's end as from its top and bottom. */
+private val ClusterSize = 36.dp
+private val ClusterPad = (IslandHeight - ClusterSize) / 2
 
 @Composable
 private fun CompactPill(
     items: List<IslandItem>,
     hermes: NavActivity?,
     labels: Map<String, String>,
+    rich: Map<String, IslandRich>,
     width: Dp,
     onItem: (IslandItem) -> Unit,
+    onJoin: (IslandItem) -> Unit,
     onHermes: (NavActivity) -> Unit,
     onHide: (IslandItem) -> Unit,
     onMore: () -> Unit,
 ) {
-    val plan = rememberPillPlan(items, hermes, labels, width)
+    val plan = rememberPillPlan(items, hermes, labels, rich, width)
+    val alone = plan.solo != null || plan.hermesAlone
     Row(
         Modifier
             .width(width)
-            .height(PillHeight)
-            .padding(start = 7.dp, end = if (plan.rest.isEmpty()) 12.dp else 6.dp),
+            .height(IslandHeight)
+            .padding(
+                start = if (alone) SoloPadStart else CellPadStart,
+                end = when {
+                    alone -> 0.dp
+                    plan.rest.isEmpty() -> CellPadEnd
+                    else -> ClusterPad
+                },
+            ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // A new line-up rolls in (the old words up and out, the new ones up from below); a
@@ -538,24 +685,30 @@ private fun CompactPill(
             modifier = Modifier.weight(1f),
             label = "island_lineup",
         ) { p ->
-            // The last thing on the line takes the room that is left, so its countdown sits at the
-            // pill's right end and its title gets every bit of width there is.
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                p.hermes?.let { h ->
-                    val fill = p.entries.isEmpty()
-                    HermesLead(h, fill = fill, onClick = { onHermes(h) }, modifier = if (fill) Modifier.weight(1f) else Modifier)
-                }
-                p.entries.forEachIndexed { i, e ->
-                    if (i > 0 || p.hermes != null) EntryDivider()
-                    val fill = i == p.entries.lastIndex
-                    key(IslandRanking.key(e.item)) {
-                        ItemEntry(
-                            e,
-                            fill = fill,
-                            onClick = { onItem(e.item) },
-                            onLongClick = { onHide(e.item) },
-                            modifier = if (fill) Modifier.weight(1f) else Modifier,
+            when {
+                p.solo != null -> {
+                    // The plan's own item: while it rolls out, `items` may already be another (or none).
+                    val item = p.solo.item
+                    key(IslandRanking.key(item)) {
+                        SoloEntry(
+                            item,
+                            p.solo,
+                            onClick = { onItem(item) },
+                            onJoin = { onJoin(item) },
+                            onLongClick = { onHide(item) },
+                            modifier = Modifier.fillMaxWidth(),
                         )
+                    }
+                }
+                p.hermesAlone -> p.hermes?.let { h -> HermesSolo(h, onClick = { onHermes(h) }, modifier = Modifier.fillMaxWidth()) }
+                // Cells of one width, so the discs, titles and second lines line up the same in each.
+                else -> Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    p.hermes?.let { h -> HermesCell(h, p.hermesTitle ?: h.label, onClick = { onHermes(h) }, modifier = Modifier.weight(1f)) }
+                    p.entries.forEachIndexed { i, e ->
+                        if (i > 0 || p.hermes != null) EntryDivider()
+                        key(IslandRanking.key(e.item)) {
+                            ItemCell(e, onClick = { onItem(e.item) }, onLongClick = { onHide(e.item) }, modifier = Modifier.weight(1f))
+                        }
                     }
                 }
             }
@@ -569,52 +722,308 @@ private fun CompactPill(
 
 @Composable
 private fun EntryDivider() {
-    Box(Modifier.padding(horizontal = 10.dp).width(1.dp).height(16.dp).background(Color.White.copy(alpha = 0.14f)))
+    Spacer(Modifier.width(Divider))
 }
 
+/** The press, tap and long press every entry on the pill shares. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ItemEntry(entry: PillEntry, fill: Boolean, onClick: () -> Unit, onLongClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun Modifier.pillEntry(item: IslandItem, press: MutableInteractionSource, onClick: () -> Unit, onLongClick: () -> Unit): Modifier {
     val haptics = rememberHaptics()
+    return pressScale(press)
+        .clip(CircleShape)
+        .combinedClickable(
+            interactionSource = press,
+            indication = LocalIndication.current,
+            role = Role.Button,
+            onLongClickLabel = "Hide for today",
+            onLongClick = { haptics.reject(); onLongClick() },
+            onClick = { haptics.tick(); onClick() },
+        )
+        .semantics { contentDescription = listOf(item.title, item.sub, item.end).filter { it.isNotBlank() }.joinToString(", ") }
+}
+
+/** A cell's two lines: the title, then the live number in its tone and the rest after a dot. */
+@Composable
+private fun CellLines(title: String, titleColor: Color, lead: String, leadColor: Color, rest: String, modifier: Modifier = Modifier) {
     val styles = islandTextStyles()
+    Column(modifier, verticalArrangement = Arrangement.Center) {
+        Text(title, style = styles.cellTitle, color = titleColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        val line = remember(lead, rest, leadColor) {
+            buildAnnotatedString {
+                if (lead.isNotEmpty()) withStyle(SpanStyle(color = leadColor, fontWeight = FontWeight.SemiBold)) { append(lead) }
+                if (lead.isNotEmpty() && rest.isNotEmpty()) append(" · ")
+                append(rest)
+            }
+        }
+        if (line.isNotEmpty()) Text(line, style = styles.detail, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** One of two items side by side: its disc (progress as a ring around it) and its two lines. */
+@Composable
+private fun ItemCell(entry: PillEntry, onClick: () -> Unit, onLongClick: () -> Unit, modifier: Modifier = Modifier) {
     val item = entry.item
     val tone = toneColor(item)
     val press = remember { MutableInteractionSource() }
     Row(
         modifier
-            .pressScale(press)
-            .height(PillHeight - 8.dp)
-            .clip(CircleShape)
-            .combinedClickable(
-                interactionSource = press,
-                indication = LocalIndication.current,
-                role = Role.Button,
-                onLongClickLabel = "Hide for today",
-                onLongClick = { haptics.reject(); onLongClick() },
-                onClick = { haptics.tick(); onClick() },
-            )
-            .padding(end = 4.dp)
-            .semantics { contentDescription = listOf(item.title, item.sub, item.end).filter { it.isNotBlank() }.joinToString(", ") },
+            .fillMaxHeight()
+            .pillEntry(item, press, onClick, onLongClick)
+            .padding(end = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ToneDisc(item, tone, DiscSize)
-        Spacer(Modifier.width(EntryGap))
-        Text(
-            entry.text,
-            style = if (item.tone == "quiet") styles.quietTitle else styles.title,
-            color = titleColor(item),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = fill),
+        RingDisc(item, tone, CellDisc)
+        Spacer(Modifier.width(CellGap))
+        CellLines(
+            title = entry.title,
+            titleColor = titleColor(item),
+            lead = entry.lead,
+            leadColor = when {
+                entry.leadIsAction -> lerp(tone, Color.White, 0.25f)
+                entry.leadIsEnd -> endColor(item)
+                else -> TextPrimary
+            },
+            rest = entry.rest,
+            modifier = Modifier.weight(1f),
         )
-        item.ring?.let {
-            Spacer(Modifier.width(8.dp))
-            RingProgress(it)
+    }
+}
+
+/** Hermes as one of the pill's cells, alike to an item: his disc, what he is on, his clock. */
+@Composable
+private fun HermesCell(activity: NavActivity, title: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val haptics = rememberHaptics()
+    val press = remember { MutableInteractionSource() }
+    Row(
+        modifier
+            .fillMaxHeight()
+            .pressScale(press)
+            .clip(CircleShape)
+            .clickable(interactionSource = press, indication = LocalIndication.current, role = Role.Button, onClickLabel = "Open the chat") { haptics.tick(); onClick() }
+            .padding(end = 6.dp)
+            .semantics { contentDescription = "Hermes: ${activity.label}" },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        HermesDisc(activity, CellDisc)
+        Spacer(Modifier.width(CellGap))
+        val (lead, rest) = hermesLine(activity)
+        CellLines(
+            title = title,
+            titleColor = hermesTitleColor(activity),
+            lead = lead,
+            leadColor = activity.tone.accent(),
+            rest = rest,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+/**
+ * Hermes' second line, as an item's: his number first in his tone (the clock, ticking while he
+ * works; how long it took once done) or his state, then his name.
+ */
+@Composable
+private fun hermesLine(activity: NavActivity): Pair<String, String> = when {
+    activity.tone == NavActivityTone.WORKING -> rememberElapsed(activity.startedAtMs) to "Hermes"
+    activity.tone == NavActivityTone.NEEDS_YOU -> "Needs you" to "Hermes"
+    activity.tone == NavActivityTone.FAILED -> "Failed" to "Hermes"
+    activity.tookMs != null -> formatTook(activity.tookMs) to "Hermes"
+    else -> "" to "Hermes"
+}
+
+private fun hermesTitleColor(activity: NavActivity): Color =
+    if (activity.tone == NavActivityTone.NEEDS_YOU) lerp(Warning, Color.White, 0.25f) else TextPrimary
+
+/** Hermes' disc, tinted like an item's: the scanner while he works, a mark once he is done. */
+@Composable
+private fun HermesDisc(activity: NavActivity, size: Dp) {
+    val accent = activity.tone.accent()
+    Box(
+        Modifier.size(size).clip(CircleShape).drawBehind { drawRect(lerp(DiscBase, accent, 0.26f)) },
+        contentAlignment = Alignment.Center,
+    ) {
+        AnimatedContent(
+            targetState = activity.tone == NavActivityTone.WORKING,
+            transitionSpec = { fadeIn() togetherWith fadeOut() },
+            label = "island_hermes_disc",
+            contentAlignment = Alignment.Center,
+        ) { working ->
+            if (working) {
+                WorkingScanner(color = lerp(accent, Color.White, 0.18f), blockSize = (size.value / 12f).dp, gap = 1.dp)
+            } else {
+                Icon(activity.tone.markIcon(), contentDescription = null, tint = lerp(accent, Color.White, 0.18f), modifier = Modifier.size(size * 0.5f))
+            }
         }
-        if (entry.end.isNotEmpty()) {
-            Spacer(Modifier.width(EntryGap))
-            Text(entry.end, style = styles.end, color = endColor(item), maxLines = 1)
+    }
+}
+
+/** Hermes alone on the pill, split as an item alone is: what he is on, left; his clock, right. */
+@Composable
+private fun HermesSolo(activity: NavActivity, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val haptics = rememberHaptics()
+    val styles = islandTextStyles()
+    val press = remember { MutableInteractionSource() }
+    Row(
+        modifier
+            .fillMaxHeight()
+            .pressScale(press)
+            .clip(CircleShape)
+            .clickable(interactionSource = press, indication = LocalIndication.current, role = Role.Button, onClickLabel = "Open the chat") { haptics.tick(); onClick() }
+            .padding(end = SoloPadEnd)
+            .semantics { contentDescription = "Hermes: ${activity.label}" },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        HermesDisc(activity, SoloBox)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+            AnimatedContent(
+                targetState = activity.label,
+                transitionSpec = {
+                    (slideInVertically { it } + fadeIn()).togetherWith(slideOutVertically { -it } + fadeOut())
+                        .using(SizeTransform(clip = false) { _, _ -> islandSpring() })
+                },
+                label = "island_hermes_label",
+            ) { label ->
+                Text(label, style = styles.leadTitle, color = hermesTitleColor(activity), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Text("Hermes", style = styles.detail, color = TextSecondary, maxLines = 1)
         }
+        Spacer(Modifier.width(SoloSplit))
+        when {
+            activity.tone == NavActivityTone.WORKING ->
+                FactColumn(IslandFact(rememberElapsed(activity.startedAtMs), "working"), width = null, color = activity.tone.accent())
+            activity.tone == NavActivityTone.NEEDS_YOU -> ActionChip("Answer", Warning)
+            activity.tone == NavActivityTone.FAILED -> ActionChip("Failed", Error)
+            activity.tookMs != null -> FactColumn(IslandFact(formatTook(activity.tookMs), "took"), width = null, color = TextPrimary)
+            else -> KindChip("Open")
+        }
+    }
+}
+
+/**
+ * The one thing on the pill, split as iOS splits one Live Activity: what it is on the left
+ * (the disc, with its progress as a ring around it; the title over the detail), what it
+ * stands at on the right (its numbers in columns of one width, value over label), with even
+ * margins: the disc sits as far from the pill's edge as from its top and bottom.
+ */
+@Composable
+private fun SoloEntry(item: IslandItem, solo: SoloPlan, onClick: () -> Unit, onJoin: () -> Unit, onLongClick: () -> Unit, modifier: Modifier = Modifier) {
+    val styles = islandTextStyles()
+    val tone = toneColor(item)
+    val press = remember { MutableInteractionSource() }
+    Row(
+        modifier
+            .fillMaxHeight()
+            .pillEntry(item, press, onClick, onLongClick)
+            .padding(end = SoloPadEnd),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RingDisc(item, tone, SoloBox)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+            Text(solo.title, style = styles.leadTitle, color = titleColor(item), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (solo.detail.isNotEmpty()) {
+                Text(solo.detail, style = styles.detail, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        Spacer(Modifier.width(SoloSplit))
+        solo.facts.forEachIndexed { i, fact ->
+            if (i > 0) Spacer(Modifier.width(FactGap))
+            FactColumn(fact, width = solo.factWidth, color = if (i == 0 && solo.leadIsEnd) endColor(item) else TextPrimary)
+        }
+        if (solo.facts.isNotEmpty() && (solo.action.isNotEmpty() || solo.join)) Spacer(Modifier.width(12.dp))
+        if (solo.action.isNotEmpty()) ActionChip(solo.action, tone)
+        if (solo.action.isNotEmpty() && solo.join) Spacer(Modifier.width(8.dp))
+        if (solo.join) JoinPill(onJoin)
+        if (solo.chip.isNotEmpty()) KindChip(solo.chip)
+    }
+}
+
+/** An item's disc at [box], with its progress as a ring around it when it has one. */
+@Composable
+private fun RingDisc(item: IslandItem, tone: Color, box: Dp) {
+    val ring = item.ring
+    Box(Modifier.size(box), contentAlignment = Alignment.Center) {
+        if (ring != null) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .drawBehind {
+                        val stroke = 2.5.dp.toPx()
+                        val inset = stroke / 2
+                        drawCircle(Color.White.copy(alpha = 0.12f), radius = size.minDimension / 2 - inset, style = Stroke(stroke))
+                        drawArc(
+                            color = lerp(tone, Color.White, 0.1f),
+                            startAngle = -90f,
+                            sweepAngle = 360f * (ring.coerceIn(0f, 100f) / 100f),
+                            useCenter = false,
+                            topLeft = Offset(inset, inset),
+                            size = Size(size.width - stroke, size.height - stroke),
+                            style = Stroke(stroke, cap = StrokeCap.Round),
+                        )
+                    },
+            )
+            ToneDisc(item, tone, box - 9.dp)
+        } else {
+            ToneDisc(item, tone, box)
+        }
+    }
+}
+
+/** One number on the right of the solo pill: the value, big, over what it is. A new value rolls in. */
+@Composable
+private fun FactColumn(fact: IslandFact, width: Dp?, color: Color) {
+    val styles = islandTextStyles()
+    // A planned width keeps a row of numbers even; null sizes to the value (Hermes' clock).
+    // Even columns, but a minimum, never a cap: the digits roll one by one and set a hair wider
+    // than the planner's whole-string measure, which a fixed width would clip ("18:0").
+    // Hermes' clock (no planned width) keeps room for "00:00" at this font size, so 9:59 -> 10:00
+    // doesn't shift the title.
+    val clockRoom = if (width == null) {
+        val measurer = rememberTextMeasurer()
+        val density = LocalDensity.current
+        remember(styles, density) { with(density) { measurer.measure("00:00", styles.factValue).size.width.toDp() } }
+    } else {
+        0.dp
+    }
+    Column(Modifier.widthIn(min = width ?: clockRoom), horizontalAlignment = Alignment.CenterHorizontally) {
+        // Only the digits that change roll (a ticking clock moves one digit a second, clipped).
+        RollingText(fact.value, style = styles.factValue, color = color)
+        if (fact.label.isNotEmpty()) {
+            Text(fact.label, style = styles.factLabel, color = TextSecondary, maxLines = 1, softWrap = false)
+        }
+    }
+}
+
+/** What to do about the item ("Answer", "Review"), in its tone; the tap is the pill's own. */
+@Composable
+private fun ActionChip(text: String, tone: Color) {
+    Text(
+        text,
+        style = islandTextStyles().chip,
+        color = lerp(tone, Color.White, 0.25f),
+        maxLines = 1,
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(tone.copy(alpha = 0.18f))
+            .padding(horizontal = 13.dp, vertical = 6.dp),
+    )
+}
+
+/** Where a tap goes ("Calendar", "Mail"), when the item has no numbers to show. */
+@Composable
+private fun KindChip(text: String) {
+    Row(
+        Modifier
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.08f))
+            .padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, style = islandTextStyles().chip, color = TextSecondary, maxLines = 1)
+        Spacer(Modifier.width(2.dp))
+        Icon(AppIcons.ChevronRight, contentDescription = null, tint = TextTertiary, modifier = Modifier.size(16.dp))
     }
 }
 
@@ -675,41 +1084,41 @@ private fun HermesLead(activity: NavActivity, onClick: () -> Unit, fill: Boolean
     }
 }
 
-/** The items waiting their turn, as overlapping discs and a count; a tap opens them all. */
+/**
+ * The items waiting their turn, in one circle at the pill's right end: the next one's disc,
+ * with a "+N" badge on its edge when more wait behind it. A tap opens them all.
+ */
 @Composable
 private fun Cluster(others: List<IslandItem>, onClick: () -> Unit) {
-    val shown = others.take(3)
+    val next = others.first()
     val press = remember { MutableInteractionSource() }
-    Row(
+    Box(
         Modifier
             .pressScale(press)
-            .height(PillHeight - 10.dp)
-            .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.07f))
-            .clickable(interactionSource = press, indication = LocalIndication.current, role = Role.Button, onClickLabel = "Show everything") { onClick() }
-            .padding(start = 5.dp, end = if (others.size > 3) 9.dp else 5.dp)
+            .size(ClusterSize)
+            // Unclipped, so the badge can sit on the edge; the press scale is the feedback.
+            .clickable(interactionSource = press, indication = null, role = Role.Button, onClickLabel = "Show everything") { onClick() }
             .semantics { contentDescription = "${others.size} more: " + others.joinToString(", ") { it.title } },
-        verticalAlignment = Alignment.CenterVertically,
+        contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.width(MiniDisc + (MiniDisc - 7.dp) * (shown.size - 1)).height(MiniDisc)) {
-            shown.forEachIndexed { i, item ->
-                key(IslandRanking.key(item)) {
-                    Box(
-                        Modifier
-                            .offset(x = (MiniDisc - 7.dp) * i)
-                            .size(MiniDisc)
-                            .clip(CircleShape)
-                            .background(DiscBase)
-                            .padding(1.5.dp),
-                    ) {
-                        ToneDisc(item, toneColor(item), MiniDisc - 3.dp, still = true)
-                    }
-                }
-            }
+        key(IslandRanking.key(next)) {
+            ToneDisc(next, toneColor(next), ClusterSize, still = true)
         }
-        if (others.size > 3) {
-            Spacer(Modifier.width(5.dp))
-            Text("+${others.size - 3}", color = TextSecondary, fontSize = 11.5.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+        if (others.size > 1) {
+            Text(
+                "+${others.size - 1}",
+                color = TextPrimary,
+                fontSize = 9.5.sp,
+                lineHeight = 10.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .offset(x = 3.dp, y = 2.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF2A2A2E))
+                    .padding(horizontal = 4.dp, vertical = 1.dp),
+            )
         }
     }
 }
@@ -1323,7 +1732,23 @@ private fun endColor(item: IslandItem): Color =
 
 /** The island's text styles, measured and drawn alike. */
 @Immutable
-private data class IslandTextStyles(val title: TextStyle, val quietTitle: TextStyle, val sub: TextStyle, val end: TextStyle, val heroTitle: TextStyle)
+private data class IslandTextStyles(
+    val title: TextStyle,
+    val quietTitle: TextStyle,
+    val sub: TextStyle,
+    val end: TextStyle,
+    val heroTitle: TextStyle,
+    /** The solo pill: its title a size up, the detail under it, its numbers and labels, its chips. */
+    val leadTitle: TextStyle,
+    /** A cell's title when two share the pill. */
+    val cellTitle: TextStyle,
+    val detail: TextStyle,
+    /** The number at the start of a cell's second line: [detail], a weight up. */
+    val detailLead: TextStyle,
+    val factValue: TextStyle,
+    val factLabel: TextStyle,
+    val chip: TextStyle,
+)
 
 @Composable
 private fun islandTextStyles(): IslandTextStyles {
@@ -1335,6 +1760,14 @@ private fun islandTextStyles(): IslandTextStyles {
             sub = base.merge(TextStyle(fontSize = 12.sp)),
             end = base.merge(TextStyle(fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace)),
             heroTitle = base.merge(TextStyle(fontSize = 15.sp, lineHeight = 19.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.15).sp)),
+            leadTitle = base.merge(TextStyle(fontSize = 16.sp, lineHeight = 20.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.2).sp)),
+            cellTitle = base.merge(TextStyle(fontSize = 14.5.sp, lineHeight = 18.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.15).sp)),
+            detail = base.merge(TextStyle(fontSize = 12.5.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium)),
+            detailLead = base.merge(TextStyle(fontSize = 12.5.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold)),
+            // Tabular figures, so a ticking value keeps its width.
+            factValue = base.merge(TextStyle(fontSize = 16.sp, lineHeight = 19.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum", letterSpacing = (-0.2).sp)),
+            factLabel = base.merge(TextStyle(fontSize = 10.5.sp, lineHeight = 13.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.2.sp)),
+            chip = base.merge(TextStyle(fontSize = 12.5.sp, fontWeight = FontWeight.Bold)),
         )
     }
 }
@@ -1396,6 +1829,12 @@ private fun Modifier.pressScale(source: MutableInteractionSource): Modifier {
 
 @Composable
 private fun ElapsedClock(startedAtMs: Long) {
+    Clock(rememberElapsed(startedAtMs))
+}
+
+/** How long since [startedAtMs], "1:23", ticking each second. */
+@Composable
+private fun rememberElapsed(startedAtMs: Long): String {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(startedAtMs) {
         while (true) {
@@ -1404,7 +1843,8 @@ private fun ElapsedClock(startedAtMs: Long) {
         }
     }
     val seconds = ((now - startedAtMs) / 1000).coerceAtLeast(0)
-    Clock("${seconds / 60}:${"%02d".format(seconds % 60)}")
+    return if (seconds < 3600) "${seconds / 60}:${"%02d".format(seconds % 60)}"
+    else "${seconds / 3600}:${"%02d".format(seconds / 60 % 60)}:${"%02d".format(seconds % 60)}"
 }
 
 @Composable

@@ -87,6 +87,12 @@ class ChromeShotsTest {
     @Test fun playingLine() = shot("chrome_playing", light = false, items = playing.take(1), hermes = null)
     @Test fun playingPair() = shot("chrome_playing_pair", light = true, items = playing, hermes = null)
 
+    // One thing with no detail of its own: the tall pill names its kind on the second line.
+    @Test fun singlePlain() = shot("chrome_single_plain", light = true, items = items.drop(1).take(1), hermes = null)
+    // Two short things: two cells, each with its countdown at its own right end.
+    @Test fun pair() = shot("chrome_pair", light = false, items = listOf(items[0], crowded[2]), hermes = null)
+    @Test fun pairPlain() = shot("chrome_pair_plain", light = true, items = items.drop(1), hermes = null)
+
     private val card = listOf(
         item("need", "needs", "circle-help", "Frank asks", "Keep Knaben running overnight?", "Answer"),
         item("cal", "live", "calendar-clock", "Dinner with Sara", "until 18:00", "35 min left", ring = 42f, color = "#f83a22"),

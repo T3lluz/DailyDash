@@ -337,16 +337,25 @@ com.macrotracker/
                               TopIsland.kt: the island, drawn by MainScreen under the status bar on Home, Health and
                               Settings (IslandViewModel). A tap goes where the item is about (`IslandTarget.of`, IslandTargetTest): its Hermes chat, the phone event in the calendar app picked for events (`IslandItem.ref`), its link through AppLinks (a mail, stream, video, review), the server it is about, or else the Home card / Health section that shows its kind, scrolled into view through `CardFocus`; a calendar item's call is its own Join pill (`onJoin`, call hosts only). A pill after iOS's
                               Dynamic Island, in the navbar's frosted glass (`chromeGlass`), exactly the navbar's width (the card
-                              opens `CardOverhang` wider), that shows the top items side by side, as many as fit (`MAX_ON_PILL`,
-                              two). The lead keeps its whole title (a long episode name reads in full); a second may go to its
-                              short label (`IslandShortener`) and a shorter countdown; when the lead alone doesn't fit it shows as
-                              much of its title as there is room for (`rememberPillPlan`). The last entry fills the pill, so its
-                              countdown sits at the right end. Nothing turns on a timer: the line-up changes only when the
-                              ranking does, and then the words roll up; a ticking countdown updates in place (`PillPlan.key`).
+                              opens `CardOverhang` wider), always two lines tall (`IslandHeight`, 56dp). Two things share it side by
+                              side in cells of one width (`MAX_ON_PILL`, Hermes counted): a disc (progress as a ring around it,
+                              `RingDisc`), the title (whole when it fits, else its label when `hasIslandLabel`, never a lone
+                              first word like "The"), and a second line with its live number in its tone, then its detail
+                              ("35m left · Olivia"). Hermes at work is a cell like any item (`HermesCell`: the scanner in his
+                              disc, what he is on, "1:23 · Hermes"). One thing alone is split as iOS splits one Live
+                              Activity (`SoloEntry`, `HermesSolo`): what it is on the left (title over detail; the AI's fuller
+                              title and detail line, `IslandRich`, when there are some), its numbers on the right in columns of
+                              one width, value over label, after Android 17's metric-style Live Updates (`islandSolo` in
+                              IslandFacts.kt, IslandFactsTest: countdown, "until 18:00", "CPU 48%", "7° / 4°"), or its action
+                              ("Answer"), Join, or a chip naming where a tap goes, so that side is never bare. The AI's words
+                              come from `IslandShortener.enrich` (cached by `islandRichKey`: the title plus the detail's digit-free
+                              parts, so nothing that ticks makes a new call; never for live-number kinds); Hermes and
+                              Cursor get `AGENT_TIMEOUT_MS`, since a dashboard turn is slow. The plan is `rememberPillPlan`.
+                              Nothing turns on a timer: the line-up changes only when the ranking does, and then the words roll up; a ticking countdown updates in place (`PillPlan.key`).
                               Pill and card are one surface: an `AnimatedContent` on `expanded` springs between their sizes
                               (`islandSpring`) while one fades into the other, and only then, so a row closing its gap is not
                               chased by a second size spring. The rest wait at the
-                              right end as overlapping discs and a "+N"; a tap there or a pull down on the pill opens the card
+                              right end in one circle (`Cluster`: the next one's disc, a "+N" badge on its edge); a tap there or a pull down on the pill opens the card
                               over a light scrim (a tap outside, the handle at its foot or a pull up folds it). The card groups
                               items (Needs you, Now, Soon, Also; Hermes in the first two) and sizes them by need (`CardSize`:
                               a hero for needs-you / on-now with a progress line and Join, slim rows for background lines and
@@ -365,12 +374,11 @@ com.macrotracker/
                               a flag waves, the bell's clapper swings behind it, the heart beats as its trace runs), off one
                               12 s clock whose every loop divides it, in the draw phase; `GlyphShotsTest` draws them all
                               into `glyphs.png`. Icons without parts keep IslandIconMotion's whole-icon motions. What needs
-                              you also gets the web's nudge. While
-                              Hermes works he leads the pill (scanner, what he is on, a clock). Ranking (IslandRankingTest): tier
+                              you also gets the web's nudge. While Hermes works he is the pill's first cell. Ranking (IslandRankingTest): tier
                               (needs you, on now, soon, the rest), then `soonness`, the server's ambient lines after the rest and
                               something to watch after those, then learned taste per part of the day (`hourFit`). Labels
-                              (`islandLabel`, IslandLabelTest) and `compactIslandEnd` as before. The pill is always one line, so
-                              `islandClearance` → `LocalIslandClearance` is its height; the card opens over the page.
+                              (`islandLabel`, IslandLabelTest) and `compactIslandEnd` as before. `islandClearance` →
+                              `LocalIslandClearance` is the pill's height; the card opens over the page.
                               MailCard.kt: Home's `MAIL` (MailViewModel: optimistic actions laid over the server's
                               copy until it agrees, undo for archive, "Ask Hermes" starts a chat on the server).
     theme/                 ← Color, Theme, Animation (MacroMotion object — single source for all specs),

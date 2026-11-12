@@ -50,6 +50,14 @@ class IslandLabelTest {
         assertEquals("Supercali…", islandLabel(item("cal", "Supercalifragilistic"), emptyMap()))
     }
 
+    @Test fun `only a real label lets the lead go short`() {
+        val show = item("play:jellyfin", "The Expanse S03E06 · Immolation")
+        assertFalse(hasIslandLabel(show, emptyMap()))
+        assertTrue(hasIslandLabel(show, mapOf("The Expanse S03E06 · Immolation" to "Expanse")))
+        assertTrue(hasIslandLabel(item("cal", "Dinner"), emptyMap()))
+        assertTrue(hasIslandLabel(item("brief", "Morning briefing", "Briefing"), emptyMap()))
+    }
+
     @Test fun `the provider's answer is read by number`() {
         val titles = listOf("Dinner with Sara at Olivia", "Quarterly planning review")
         val got = parseIslandLabels("```json\n{\"1\": \"Dinner\", \"2\": \"Planning\"}\n```", titles)
@@ -76,6 +84,7 @@ class IslandLabelTest {
         assertEquals("2h", compactIslandEnd("in 2 h"))
         assertEquals("1h20", compactIslandEnd("1 h 20 min left"))
         assertEquals("16:30", compactIslandEnd("16:30"))
+        assertEquals("23:10", compactIslandEnd("23:10 left"))
         assertEquals("3", compactIslandEnd("3 waiting"))
         assertEquals("1.2K", compactIslandEnd("1.2K"))
         assertEquals("", compactIslandEnd("Answer"))

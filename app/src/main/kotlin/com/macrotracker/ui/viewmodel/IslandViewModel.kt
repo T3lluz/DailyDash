@@ -8,7 +8,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.macrotracker.data.dashboard.DashboardRepository
 import com.macrotracker.data.dashboard.IslandItem
+import com.macrotracker.data.dashboard.IslandRich
 import com.macrotracker.data.dashboard.IslandShortener
+import com.macrotracker.data.dashboard.wantsAiRich
 import com.macrotracker.data.dashboard.wantsAiLabel
 import com.macrotracker.data.hermes.HermesActivityTracker
 import com.macrotracker.data.hermes.HermesLiveFeed
@@ -73,9 +75,14 @@ class IslandViewModel @Inject constructor(
     private val _labels = MutableStateFlow(shortener.cached())
     val labels: StateFlow<Map<String, String>> = _labels
 
+    /** The AI's fuller title and detail line by full title, for one item alone on the island. */
+    private val _rich = MutableStateFlow(shortener.cachedRich())
+    val rich: StateFlow<Map<String, IslandRich>> = _rich
+
     private var job: Job? = null
     private var localJob: Job? = null
     private var shortJob: Job? = null
+    private var richJob: Job? = null
 
     init {
         // The last line is read from disk off the main thread (this is built in the first frame).
@@ -200,9 +207,14 @@ class IslandViewModel @Inject constructor(
         // Free-text titles only (events, chats, shows): items whose title is a live number
         // ("6,800 steps to go") label themselves, or every change would be an AI call.
         val asked = items.filter(::wantsAiLabel)
-        if (asked.isEmpty() || shortJob?.isActive == true) return
-        shortJob = viewModelScope.launch {
-            shortener.shorten(asked)?.let { _labels.value = it }
+        // The top few may end up alone on the island: they get a fuller title and a detail line.
+        val enriched = items.take(RICH_TOP).filter(::wantsAiRich)
+        // Two jobs, so a slow provider writing one never holds up the other.
+        if (asked.isNotEmpty() && shortJob?.isActive != true) {
+            shortJob = viewModelScope.launch { shortener.shorten(asked)?.let { _labels.value = it } }
+        }
+        if (enriched.isNotEmpty() && richJob?.isActive != true) {
+            richJob = viewModelScope.launch { shortener.enrich(enriched)?.let { _rich.value = it } }
         }
     }
 
@@ -224,6 +236,9 @@ class IslandViewModel @Inject constructor(
         const val SERVER_STALE_MS = 2 * 60 * 60_000L
 
         const val KEY_BRIEF_SEEN = "brief_seen"
+
+        /** How many of the top items get the AI's fuller words (only these can be alone on the pill soon). */
+        const val RICH_TOP = 4
         /** What the island is made of: mail and calendar, the briefing, chats, the stats file, settings. */
         val LIVE_CHANNELS = setOf("today", "brief", "threads", "stats", "sync")
     }
