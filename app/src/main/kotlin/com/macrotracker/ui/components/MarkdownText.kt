@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -21,6 +22,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,6 +57,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Background
@@ -65,6 +69,7 @@ import com.macrotracker.ui.theme.ServerWarn
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.theme.TextTertiary
+import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 
 /**
@@ -95,10 +100,12 @@ fun MarkdownText(
     Column(modifier = modifier.fillMaxWidth()) {
         blocks.forEachIndexed { index, block ->
             val last = index == blocks.lastIndex
+            // Sections get air above their heading and sit close to it below, as a page is set.
             val top = when {
                 index == 0 -> 0.dp
-                block is MdBlock.Heading -> 12.dp
-                else -> 8.dp
+                block is MdBlock.Heading -> if (block.level <= 2) 18.dp else 14.dp
+                blocks[index - 1] is MdBlock.Heading -> 6.dp
+                else -> 10.dp
             }
             Box(Modifier.padding(top = top)) {
                 MdBlockView(block, look, cursor = streaming && last)
@@ -109,6 +116,28 @@ fun MarkdownText(
 }
 
 private const val CURSOR = "▌"
+
+/**
+ * What a chat lets its text do beyond opening links (T3 Code's file chips and pictures): a
+ * server path written as `code` opens in the file viewer at its line, and a picture on a
+ * line of its own is drawn and opens full screen. Text outside a chat provides none, and
+ * both stay as they were: plain code, and a link.
+ */
+class MarkdownActions(
+    val openPath: ((path: String, line: Int) -> Unit)? = null,
+    val openImage: ((url: String, alt: String) -> Unit)? = null,
+)
+
+val LocalMarkdownActions = compositionLocalOf<MarkdownActions?> { null }
+
+/** A paragraph that is one picture and nothing else. */
+private val LONE_IMAGE = Regex("""^!\[([^\]\n]*)]\((https?://\S+?)\)$""")
+
+private val CodeComment = TextTertiary
+private val CodeString = Color(0xFFA6D189)
+private val CodeNumber = Color(0xFFE5C890)
+private val CodeKeyword = Color(0xFFCBA6F7)
+private val CodeKey = Color(0xFF8CAAEE)
 
 private data class MdLook(
     val color: Color,
@@ -132,10 +161,28 @@ private fun MdBlockView(block: MdBlock, look: MdLook, cursor: Boolean) {
             },
             weight = FontWeight.Bold,
         )
-        is MdBlock.Paragraph -> InlineText(
+        is MdBlock.Paragraph -> {
+            val openImage = LocalMarkdownActions.current?.openImage
+            val picture = if (openImage != null && block.lines.size == 1) LONE_IMAGE.matchEntire(block.lines[0].trim()) else null
+            if (picture != null) {
+                val (alt, src) = picture.destructured
+                AsyncImage(
+                    model = src,
+                    contentDescription = alt.ifBlank { "Picture" },
+                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                    alignment = Alignment.CenterStart,
+                    modifier = Modifier
+                        .heightIn(max = 280.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable(onClickLabel = "Open the picture") { openImage?.invoke(src, alt) },
+                )
+            } else {
+                InlineText(
             text = block.lines.joinToString(if (look.breaks) "\n" else " ") + if (cursor) CURSOR else "",
             look = look,
         )
+            }
+        }
         is MdBlock.ListBlock -> MdList(block, look, cursor)
         is MdBlock.Quote -> MdQuote(block, look, cursor)
         is MdBlock.Table -> Column {
@@ -163,7 +210,12 @@ private fun InlineText(
     weight: FontWeight? = null,
     align: TextAlign = TextAlign.Start,
 ) {
-    val annotated = remember(text, color, look.linkColor) { inlineMarkdown(text, color, look.linkColor) }
+    // the newest handler is called, but the text is only rebuilt when there starts or stops being one
+    val openPath by rememberUpdatedState(LocalMarkdownActions.current?.openPath)
+    val paths = openPath != null
+    val annotated = remember(text, color, look.linkColor, paths) {
+        inlineMarkdown(text, color, look.linkColor, if (paths) ({ path, line -> openPath?.invoke(path, line) }) else null)
+    }
     Text(
         text = annotated,
         modifier = modifier,
@@ -289,7 +341,11 @@ private fun MdTable(block: MdBlock.Table, look: MdLook) {
     val minCol = with(density) { MinColumnWidth.roundToPx() }
     val headerFill = Color.White.copy(alpha = 0.06f)
     val stripe = Color.White.copy(alpha = 0.025f)
-    // As wide as the table, up to the bubble; wider than that, it scrolls.
+    val floorCol = with(density) { WrapColumnFloor.roundToPx() }
+    // As wide as the table, up to the room there is: long cells wrap to fit it, and only a table
+    // that cannot fit even so scrolls sideways.
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+    val room = constraints.maxWidth
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(10.dp))
@@ -333,10 +389,11 @@ private fun MdTable(block: MdBlock.Table, look: MdLook) {
             },
         ) { measurables, _ ->
             val rowCount = measurables.size / cols
-            val widths = IntArray(cols) { c ->
+            val natural = IntArray(cols) { c ->
                 (0 until rowCount).maxOf { r -> measurables[r * cols + c].maxIntrinsicWidth(Constraints.Infinity) }
                     .coerceIn(minCol, maxCol)
             }
+            val widths = fitColumns(natural, room, floorCol) ?: natural
             val placeables = measurables.mapIndexed { i, m -> m.measure(Constraints.fixedWidth(widths[i % cols])) }
             val heights = IntArray(rowCount) { r -> (0 until cols).maxOf { c -> placeables[r * cols + c].height } }
             val colX = IntArray(cols + 1).also { x -> for (c in 0 until cols) x[c + 1] = x[c] + widths[c] }
@@ -348,7 +405,36 @@ private fun MdTable(block: MdBlock.Table, look: MdLook) {
             }
         }
     }
+    }
 }
+
+/**
+ * Column widths that fit [room]: a column no wider than an equal share keeps its width, and
+ * the wide ones share what is left, wrapping their text. Null when that would squeeze a
+ * column under [floor], which is when the table scrolls instead.
+ */
+internal fun fitColumns(natural: IntArray, room: Int, floor: Int): IntArray? {
+    if (natural.sum() <= room) return natural
+    val out = natural.copyOf()
+    val open = natural.indices.sortedBy { natural[it] }.toMutableList()
+    var left = room
+    while (open.isNotEmpty()) {
+        val share = left / open.size
+        val narrowest = open.first()
+        if (natural[narrowest] <= share) {
+            left -= natural[narrowest]
+            open.removeAt(0)
+        } else {
+            if (share < floor) return null
+            open.forEach { out[it] = share }
+            break
+        }
+    }
+    return out
+}
+
+/** A column that wraps keeps at least this much, or the table scrolls. */
+private val WrapColumnFloor: Dp = 84.dp
 
 private val MaxColumnWidth: Dp = 220.dp
 private val MinColumnWidth: Dp = 44.dp
@@ -412,8 +498,25 @@ private fun CodeBlock(info: String, code: String, fontSize: TextUnit, cursor: Bo
     val label = info.substringBefore(' ').ifBlank { if (isDiff) "diff" else "text" }
     val plus = if (isDiff) rows.count { it.startsWith("+") && !it.startsWith("+++") } else 0
     val minus = if (isDiff) rows.count { it.startsWith("-") && !it.startsWith("---") } else 0
-    val body = remember(shown, isDiff, cursor) {
+    val body = remember(shown, isDiff, cursor, info) {
         buildAnnotatedString {
+            if (!isDiff) {
+                // by what each stretch is: comments, strings, numbers, keywords, keys
+                val text = shown.joinToString("\n")
+                append(text)
+                CodeHighlight.spans(text, info).forEach { span ->
+                    val style = when (span.tone) {
+                        CodeHighlight.Tone.COMMENT -> SpanStyle(color = CodeComment, fontStyle = FontStyle.Italic)
+                        CodeHighlight.Tone.STRING -> SpanStyle(color = CodeString)
+                        CodeHighlight.Tone.NUMBER -> SpanStyle(color = CodeNumber)
+                        CodeHighlight.Tone.KEYWORD -> SpanStyle(color = CodeKeyword)
+                        CodeHighlight.Tone.KEY -> SpanStyle(color = CodeKey)
+                    }
+                    addStyle(style, span.start, span.end)
+                }
+                if (cursor) append(CURSOR)
+                return@buildAnnotatedString
+            }
             shown.forEachIndexed { i, line ->
                 if (i > 0) append('\n')
                 val tint = when {
@@ -513,22 +616,62 @@ private val InlineToken = Regex(
         """(?<![\w*])\*(?![\s*])([^*\n]+?)(?<!\s)\*(?![\w*])""", // 10 italic
         """(?<![\w_])_(?![\s_])([^_\n]+?)(?<!\s)_(?![\w_])""", // 11 italic
         """(https?://[^\s<]+[^\s<.,;:!?)\]'"])""", // 12 bare URL
+        """\\([\\`*_{}\[\]()#+\-.!|~<>])""", // 13 a backslash escape: the character itself
+        """<(https?://[^\s<>]+)>""", // 14 an autolink
     ).joinToString("|"),
 )
 
-internal fun inlineMarkdown(text: String, color: Color, linkColor: Color): AnnotatedString = buildAnnotatedString {
+private val LineBreakTag = Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE)
+private val Entity = Regex("""&(#x[0-9a-fA-F]{1,6}|#\d{1,7}|[a-zA-Z]{2,8});""")
+private val NamedEntities = mapOf(
+    "amp" to "&", "lt" to "<", "gt" to ">", "quot" to "\"", "apos" to "'", "nbsp" to "\u00A0", "mdash" to "—", "ndash" to "–",
+    "hellip" to "…", "rarr" to "→", "larr" to "←", "times" to "×", "deg" to "°", "middot" to "·", "bull" to "•", "copy" to "©",
+    "le" to "≤", "ge" to "≥", "ne" to "≠", "check" to "✓",
+)
+
+/** Plain text between marks: `<br>` is a line break and an HTML entity is its character, as a browser reads them. */
+internal fun plainInline(text: String): String {
+    if ('&' !in text && '<' !in text) return text
+    return Entity.replace(LineBreakTag.replace(text, "\n")) { m ->
+        val name = m.groupValues[1]
+        when {
+            name.startsWith("#x") || name.startsWith("#X") -> name.drop(2).toIntOrNull(16)?.let(::codePoint)
+            name.startsWith("#") -> name.drop(1).toIntOrNull()?.let(::codePoint)
+            else -> NamedEntities[name]
+        } ?: m.value
+    }
+}
+
+private fun codePoint(code: Int): String? = if (code in 1..0x10FFFF) String(Character.toChars(code)) else null
+
+internal fun inlineMarkdown(
+    text: String,
+    color: Color,
+    linkColor: Color,
+    openPath: ((String, Int) -> Unit)? = null,
+): AnnotatedString = buildAnnotatedString {
     val links = TextLinkStyles(
         style = SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline, fontWeight = FontWeight.Medium),
     )
     fun AnnotatedString.Builder.walk(s: String) {
         var cursor = 0
         for (m in InlineToken.findAll(s)) {
-            if (m.range.first > cursor) append(s.substring(cursor, m.range.first))
+            if (m.range.first > cursor) append(plainInline(s.substring(cursor, m.range.first)))
             val g = m.groups
             when {
-                g[1] != null -> withStyle(
-                    SpanStyle(fontFamily = FontFamily.Monospace, color = TextPrimary, background = color.copy(alpha = 0.12f)),
-                ) { append(g[1]!!.value) }
+                g[1] != null -> {
+                    val code = g[1]!!.value
+                    // a touch smaller: monospace runs wide and tall beside the text face
+                    val mono = SpanStyle(fontFamily = FontFamily.Monospace, fontSize = 0.92.em, color = TextPrimary, background = color.copy(alpha = 0.12f))
+                    // a path on the server opens in the file viewer, at its line when it names one
+                    val path = if (openPath != null) ServerPath.parse(code) else null
+                    if (path != null && openPath != null) {
+                        val style = TextLinkStyles(style = mono.copy(color = linkColor))
+                        withLink(LinkAnnotation.Clickable("path", style) { openPath(path.first, path.second) }) { append(code) }
+                    } else {
+                        withStyle(mono) { append(code) }
+                    }
+                }
                 g[3] != null -> withLink(LinkAnnotation.Url(g[3]!!.value, links)) { append(g[2]!!.value.ifBlank { "image" }) }
                 g[5] != null -> withLink(LinkAnnotation.Url(g[5]!!.value, links)) { walk(g[4]!!.value) }
                 g[6] != null -> withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic)) { walk(g[6]!!.value) }
@@ -541,10 +684,15 @@ internal fun inlineMarkdown(text: String, color: Color, linkColor: Color): Annot
                     val url = g[12]!!.value
                     withLink(LinkAnnotation.Url(url, links)) { append(urlLabel(url)) }
                 }
+                g[13] != null -> append(g[13]!!.value)
+                g[14] != null -> {
+                    val url = g[14]!!.value
+                    withLink(LinkAnnotation.Url(url, links)) { append(urlLabel(url)) }
+                }
             }
             cursor = m.range.last + 1
         }
-        if (cursor < s.length) append(s.substring(cursor))
+        if (cursor < s.length) append(plainInline(s.substring(cursor)))
     }
     withStyle(SpanStyle(color = color)) { walk(text) }
 }
