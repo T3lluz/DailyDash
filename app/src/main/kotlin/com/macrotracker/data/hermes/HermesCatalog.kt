@@ -18,16 +18,6 @@ object HermesCatalog {
         "high" to "High", "xhigh" to "Extra", "max" to "Max",
     )
 
-    val EFFORT_NOTE = mapOf(
-        "off" to "No reasoning at all. Fastest, shallowest",
-        "min" to "A moment's thought",
-        "low" to "A little thought before it answers",
-        "med" to "The everyday middle",
-        "high" to "Thinks properly. The usual default",
-        "xhigh" to "Thinks harder, and takes longer",
-        "max" to "As deep as this model goes",
-    )
-
     /** What Hermes' own brain gets when no CLI supplies modes. */
     val KIND_FALLBACK = listOf(
         HermesMode("plan", "Plan", "read", "reads, does not change", "Read-only. Looks around and reports. A change is described, not applied."),
@@ -125,6 +115,103 @@ object HermesCatalog {
             window = windowOf(m, status?.window ?: 0),
         )
     }
+
+    // ── the picker (the web's modelPicker) ──
+
+    /** A provider's tab: the newest version of each line, the older ones behind a fold. */
+    data class PickerTab(
+        val shown: List<Family>,
+        val older: List<Family>,
+        /** OpenCode's billed families, kept out until searched for. */
+        val hiddenPaid: Int,
+    )
+
+    /** The providers, in the order the web lists its tabs. */
+    fun groups(families: List<Family>): List<String> =
+        families.map { it.group }.distinct().sortedWith(compareBy<String> { groupRank(it) }.thenBy { it })
+
+    /** `Opus 5.5` → (`Opus`, [5, 5]); a name with no version is its own line. */
+    private fun line(label: String): Pair<String, List<Int>?> {
+        val m = Regex("""^(.*?)\s+v?(\d+(?:\.\d+)*)$""").find(label.replace(Regex("""[\s-]+free$""", RegexOption.IGNORE_CASE), ""))
+            ?: return label to null
+        return m.groupValues[1] to m.groupValues[2].split('.').map { it.toIntOrNull() ?: 0 }
+    }
+
+    private fun newer(a: List<Int>, b: List<Int>): Boolean {
+        for (k in 0 until maxOf(a.size, b.size)) {
+            val d = a.getOrElse(k) { 0 } - b.getOrElse(k) { 0 }
+            if (d != 0) return d > 0
+        }
+        return false
+    }
+
+    /**
+     * What a provider's tab lists: the newest version of each line (Opus 5.5 over 5 and 4.8),
+     * strongest line first, version-less aliases after the versions; older versions apart,
+     * except the one in use, which always shows.
+     */
+    fun pickerTab(families: List<Family>, group: String): PickerTab {
+        val mine = families.filter { it.group == group }
+        val open = mine.filter { !it.hidden || it.current }
+        val best = HashMap<String, List<Int>>()
+        for (f in open) {
+            val (name, ver) = line(f.label)
+            if (ver != null && (best[name] == null || newer(ver, best.getValue(name)))) best[name] = ver
+        }
+        fun isOld(f: Family): Boolean {
+            val (name, ver) = line(f.label)
+            return ver != null && best[name]?.let { newer(it, ver) } == true && !f.current
+        }
+        fun strength(f: Family): Int {
+            val n = f.label.lowercase()
+            return listOf("opus", "fable", "sonnet", "haiku").indexOfFirst { it in n }.let { if (it < 0) 4 else it }
+        }
+        val order = Comparator<Family> { a, b ->
+            val va = line(a.label).second
+            val vb = line(b.label).second
+            when {
+                (va == null) != (vb == null) -> if (va == null) 1 else -1
+                strength(a) != strength(b) -> strength(a) - strength(b)
+                va != null && vb != null && newer(va, vb) -> -1
+                va != null && vb != null && newer(vb, va) -> 1
+                else -> 0
+            }
+        }
+        return PickerTab(
+            shown = open.filter { !isOld(it) }.sortedWith(order),
+            older = open.filter { isOld(it) }.sortedWith(order),
+            hiddenPaid = mine.count { it.hidden && !it.current },
+        )
+    }
+
+    /**
+     * A family's depth stops, shallow to deep. The row with no depth is no stop of its own:
+     * it takes the medium slot when there is no medium, else it shows as "default" there.
+     */
+    fun effortStops(mods: Modifiers): List<String> {
+        val list = mods.efforts.toMutableList()
+        if (mods.hasBase && list.isNotEmpty() && "med" !in list) {
+            val at = list.indexOfFirst { EFFORTS.indexOf(it) > EFFORTS.indexOf("med") }
+            list.add(if (at < 0) list.size else at, "")
+        }
+        return list
+    }
+
+    /** Where the slider stands for [effort]: its stop, else medium, else the middle. */
+    fun stopIndex(stops: List<String>, effort: String): Int {
+        val i = stops.indexOf(effort)
+        if (i >= 0) return i
+        val m = stops.indexOf("med")
+        return if (m >= 0) m else (stops.size - 1) / 2
+    }
+
+    val EFFORT_SHORT = mapOf("off" to "off", "min" to "min", "low" to "low", "med" to "med", "high" to "high", "xhigh" to "xhigh", "max" to "max", "" to "med")
+
+    val EFFORT_HINT = mapOf(
+        "off" to "no thinking, fastest", "min" to "barely thinks, very fast", "low" to "light thinking, quick",
+        "med" to "balanced", "high" to "slower, more thorough", "xhigh" to "slow, digs deep", "max" to "slowest, spends the most",
+        "" to "the model's own setting",
+    )
 
     /** The last window asked for when this family has it, otherwise the model's own default. */
     fun windowOf(m: HermesModelOption?, preferred: Int): Int {

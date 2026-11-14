@@ -49,7 +49,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -59,8 +58,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -75,7 +72,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
@@ -176,7 +172,7 @@ fun HermesChatPane(
     var draft by rememberSaveable { mutableStateOf("") }
     var forceFollow by remember { mutableStateOf(true) }
     var composerHeight by remember { mutableStateOf(0.dp) }
-    var sheet by remember { mutableStateOf<HermesSheet?>(null) }
+    var modelSheet by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<HermesThreadSummary?>(null) }
     var confirmClear by remember { mutableStateOf<HermesThreadSummary?>(null) }
     var confirmDelete by remember { mutableStateOf<HermesThreadSummary?>(null) }
@@ -230,7 +226,7 @@ fun HermesChatPane(
         val body = text.trim()
         if (body.isEmpty() && state.attachments.isEmpty()) return
         // The picker is a sheet here, so its command opens it.
-        if (body.lowercase() == "/model") { draft = ""; sheet = HermesSheet.MODEL; return }
+        if (body.lowercase() == "/model") { draft = ""; modelSheet = true; return }
         // "/plan check the disk": the chat goes to Plan, and the rest is asked in it.
         val word = body.removePrefix("/").substringBefore(' ').lowercase()
         if (body.startsWith("/") && word in ModeCommands) {
@@ -287,6 +283,7 @@ fun HermesChatPane(
                     onOpenConsole = onOpenConsole,
                     onOpenUsage = onOpenUsage,
                     onOpenTilesmith = onOpenTilesmith,
+                    usage = usageState.usage,
                 )
                 // The chat on screen is read as it moves, so it never gets its own dot.
                 LaunchedEffect(state.threadId, current?.updatedMs) { viewModel.markSeen(state.threadId) }
@@ -412,7 +409,7 @@ fun HermesChatPane(
                         onPick = { entry ->
                             haptics.tick()
                             when {
-                                entry.local && entry.name == "model" -> { draft = ""; sheet = HermesSheet.MODEL }
+                                entry.local && entry.name == "model" -> { draft = ""; modelSheet = true }
                                 entry.local && entry.name in ModeCommands -> {
                                     draft = ""
                                     viewModel.setModeKind(ModeCommands.getValue(entry.name))
@@ -460,10 +457,10 @@ fun HermesChatPane(
                     onAttach = { attachLauncher.launch("*/*") },
                     onRemoveAttachment = viewModel::removeAttachment,
                     onClearMode = { viewModel.setModeKind("write") },
-                    onPickModel = { sheet = HermesSheet.MODEL },
+                    onPickModel = { modelSheet = true },
                     hazeState = chatHaze,
                     usage = {
-                        ComposerUsageRing(
+                        ComposerUsageMeter(
                             usage = usageState,
                             model = state.currentModel,
                             chat = current,
@@ -510,28 +507,18 @@ fun HermesChatPane(
         }
     }
 
-    sheet?.let { which ->
-        HermesPickerSheet(
-            sheet = which,
+    if (modelSheet) {
+        HermesModelSheet(
             status = state.status,
+            switching = state.switchingModel,
             favourites = favouriteModels,
             onToggleFavourite = viewModel::toggleFavourite,
-            onDismiss = { sheet = null },
-            onPickFamily = { family ->
-                haptics.tick()
-                sheet = null
-                viewModel.pickFamily(family)
-            },
-            onPickEffort = { effort ->
-                haptics.tick()
-                viewModel.setEffort(effort)
-            },
+            onDismiss = { modelSheet = false },
+            onPickFamily = viewModel::pickFamily,
+            onPickEffort = viewModel::setEffort,
             onToggleThink = { haptics.tick(); viewModel.toggleThink() },
             onToggleFast = { haptics.tick(); viewModel.toggleFast() },
-            onPickWindow = { tokens ->
-                haptics.tick()
-                viewModel.setWindow(tokens)
-            },
+            onPickWindow = { tokens -> haptics.tick(); viewModel.setWindow(tokens) },
         )
     }
     renaming?.let { thread ->

@@ -84,6 +84,7 @@ fun AIScreen(
                 onNavigateToAiSettings = onNavigateToAiSettings,
                 onOpenConsole = onOpenConsole,
                 onOpenTilesmith = onOpenTilesmith,
+                onOpenUsage = onOpenUsage,
                 onUseHermes = {
                     sysopForHandoff = false
                     hermesViewModel.setUsesHermes(true)

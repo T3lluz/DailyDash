@@ -1,13 +1,11 @@
 package com.macrotracker.widget.tilesmith
 
-import android.Manifest
 import android.app.AlarmManager
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.BatteryManager
@@ -16,7 +14,6 @@ import android.os.Environment
 import android.os.StatFs
 import android.text.format.DateFormat
 import android.util.Log
-import androidx.core.content.ContextCompat
 import com.macrotracker.data.health.HealthConnectRepository
 import com.macrotracker.data.phone.PhoneExtras
 import com.macrotracker.data.remote.AiApiClient
@@ -759,7 +756,7 @@ internal object TileResolver {
                 } ?: TileValue.error("Couldn't read the mail")
                 "dash.claude", "dash.claude_week" -> usage?.let { u ->
                     val weekly = b.bind == "dash.claude_week"
-                    val win = u.limits.filter { it.usedPercent != null }.let { l ->
+                    val win = u.limit("claude")?.windows.orEmpty().filter { it.usedPercent != null }.let { l ->
                         if (weekly) l.maxByOrNull { it.minutes ?: 0 } else l.minByOrNull { it.minutes ?: Int.MAX_VALUE }
                     }
                     win?.let { lw ->
@@ -918,10 +915,6 @@ facts: when you searched the web, use what you found; when you can't know, say s
         val rows = TileFeeds.aiRows(text, b.max ?: 6)
         return if (rows.isEmpty()) TileValue.error("The AI sent no rows") else TileValue(items = rows, number = rows.size.toDouble(), icon = if (b.web) "globe" else "sparkles")
     }
-
-    /** Whether READ_CALENDAR is granted (the calendar source checks again when it reads). */
-    fun calendarGranted(context: Context): Boolean =
-        ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
 }
 
 /**

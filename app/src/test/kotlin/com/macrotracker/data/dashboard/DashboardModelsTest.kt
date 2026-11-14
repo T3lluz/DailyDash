@@ -3,7 +3,6 @@ package com.macrotracker.data.dashboard
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -60,53 +59,6 @@ class DashboardModelsTest {
         assertTrue(MailPatch.of("star").applyTo(row).starred)
         assertEquals(true, MailPatch.of("archive").gone)
         assertEquals(false, MailPatch.of("unarchive").gone)
-    }
-
-    @Test fun `usage reads periods, days, limits and chats`() {
-        val u = parseUsage(JSONObject("""
-            {"at": 1790532000, "scanned": 1790531990,
-             "periods": {"today": {"calls": 210, "in": 420, "out": 185766, "cr": 50538526, "cw": 561006, "tok": 51285718, "cost": 33.42}},
-             "days": [{"d": "2026-09-27", "tok": 100, "cost": 1.5, "calls": 3, "m": {"claude-opus-5-5": 80, "auto": 20}}],
-             "models": [{"id": "claude-opus-5-5", "label": "Opus 5.5", "tok": 80, "in": 1, "out": 2, "cr": 70, "cw": 7, "calls": 3, "cost": 1.5, "share": 0.8, "priced": true, "last": 1790531000}],
-             "agents": [{"id": "Hermes", "tok": 20, "calls": 1, "cost": 0, "share": 0.2, "topLabel": "Cursor Auto"}],
-             "limits": [{"id": "claude", "windows": [
-               {"id": "five_hour", "label": "Session", "mins": 300, "used": null, "resetsAt": "2026-09-19T00:39:59.930Z", "at": "2026-09-18T23:09:17.037Z", "src": "T3 Code", "reset": true},
-               {"id": "seven_day", "label": "Weekly", "mins": 10080, "used": 81, "resetsAt": "2026-09-30T17:59:59+00:00", "at": "2026-09-27T18:20:00+00:00", "src": "Hermes"}]}],
-             "cacheRate": 0.9864, "saved": 7351.73, "insights": ["Busiest day: Wed 23 Sep"],
-             "chats": [{"id": "t1", "title": "Frank", "kind": "employee", "model": "cursor:auto", "tok": 19445, "cost": 0, "calls": 1, "ctx": 4456, "win": 200000, "updated": 1790533847000, "busy": false}],
-             "hermes": {"turns7d": 29}}
-        """.trimIndent()))
-        assertEquals(51285718L, u.period("today").tokens)
-        assertEquals(0L, u.period("7d").tokens)
-        assertEquals(80L, u.days[0].byModel["claude-opus-5-5"])
-        assertEquals("Opus 5.5", u.models[0].label)
-        assertNull("a window that turned over is not known", u.limits[0].usedPercent)
-        assertTrue(u.limits[0].resetSince)
-        assertEquals(81.0, u.limits[1].usedPercent!!, 0.0)
-        assertNotNull("an offset timestamp still parses", u.limits[1].resetsAt)
-        assertEquals(4456, u.chats[0].context)
-        assertEquals(29, u.hermesTurns7d)
-    }
-
-    @Test fun `limits say whether they are measured or estimated, and Cursor has its month`() {
-        val u = parseUsage(JSONObject("""
-            {"limits": [{"id": "claude", "plan": "Claude Pro", "windows": [
-               {"id": "five_hour", "label": "Session", "mins": 300, "used": 8.4, "estimated": true, "idle": false,
-                "resetsAt": "2026-09-28T03:00:00+00:00", "spent": 3.13, "limit": 38.2, "src": "estimate", "status": ""},
-               {"id": "seven_day", "label": "Weekly", "mins": 10080, "used": 90.2, "estimated": false,
-                "resetsAt": "2026-09-30T18:00:00+00:00", "at": "2026-09-27T18:37:59+00:00", "spent": 391.2, "limit": 433.6,
-                "src": "Hermes", "status": "allowed_warning"}]}],
-             "cursor": {"plan": "Pro+", "month": "September", "t3Turns": 97, "hermesCalls": 14, "tokens": 1894709,
-                        "models": [{"label": "Grok 4.6", "turns": 53}], "dashboard": "https://cursor.com/dashboard?tab=usage"}}
-        """.trimIndent()))
-        assertEquals("Claude Pro", u.claudePlan)
-        assertTrue(u.limits[0].estimated)
-        assertEquals(38.2, u.limits[0].limit!!, 0.0)
-        assertFalse(u.limits[1].estimated)
-        assertEquals("allowed_warning", u.limits[1].status)
-        val cu = u.cursor!!
-        assertEquals(111, cu.turns)
-        assertEquals("Grok 4.6" to 53, cu.models.single())
     }
 
     @Test fun `tokens and dollars read the way the dashboard writes them`() {

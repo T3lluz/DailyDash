@@ -35,7 +35,7 @@ fun HermesModelSelector(
     val state by viewModel.state.collectAsState()
     val favouriteModels by viewModel.favouriteModels.collectAsState()
     val haptics = rememberHaptics()
-    var sheet by remember { mutableStateOf<HermesSheet?>(null) }
+    var modelSheet by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { viewModel.refresh(quiet = true) }
 
     Column(modifier = modifier) {
@@ -44,7 +44,7 @@ fun HermesModelSelector(
             fallback = state.status?.modelLabel,
             switching = state.switchingModel,
             modifiers = HermesCatalog.modifiers(state.status),
-            onClick = { haptics.tick(); sheet = HermesSheet.MODEL },
+            onClick = { haptics.tick(); modelSheet = true },
         )
         if (showStatus && state.reach == HermesReach.DOWN) {
             Spacer(Modifier.height(8.dp))
@@ -60,28 +60,18 @@ fun HermesModelSelector(
         }
     }
 
-    sheet?.let { which ->
-        HermesPickerSheet(
-            sheet = which,
+    if (modelSheet) {
+        HermesModelSheet(
             status = state.status,
+            switching = state.switchingModel,
             favourites = favouriteModels,
             onToggleFavourite = viewModel::toggleFavourite,
-            onDismiss = { sheet = null },
-            onPickFamily = { family ->
-                haptics.tick()
-                sheet = null
-                viewModel.pickFamily(family)
-            },
-            onPickEffort = { effort ->
-                haptics.tick()
-                viewModel.setEffort(effort)
-            },
+            onDismiss = { modelSheet = false },
+            onPickFamily = viewModel::pickFamily,
+            onPickEffort = viewModel::setEffort,
             onToggleThink = { haptics.tick(); viewModel.toggleThink() },
             onToggleFast = { haptics.tick(); viewModel.toggleFast() },
-            onPickWindow = { tokens ->
-                haptics.tick()
-                viewModel.setWindow(tokens)
-            },
+            onPickWindow = { tokens -> haptics.tick(); viewModel.setWindow(tokens) },
         )
     }
 }

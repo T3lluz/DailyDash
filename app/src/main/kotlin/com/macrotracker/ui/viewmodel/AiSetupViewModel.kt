@@ -134,7 +134,7 @@ class AiSetupViewModel @Inject constructor(
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
-            val plan = runCatching { dashboard.cachedUsage()?.cursor?.plan }.getOrNull()?.takeIf { it.isNotBlank() }
+            val plan = runCatching { dashboard.cachedUsage()?.limit("cursor")?.plan }.getOrNull()?.takeIf { it.isNotBlank() }
             extra.value = extra.value.copy(cursorPlan = plan)
         }
     }

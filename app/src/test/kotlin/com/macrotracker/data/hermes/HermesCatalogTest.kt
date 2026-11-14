@@ -82,4 +82,41 @@ class HermesCatalogTest {
         assertEquals("1M", HermesCatalog.ctxLabel(1_000_000))
         assertEquals("", HermesCatalog.ctxLabel(0))
     }
+
+    private fun family(label: String, group: String = "Claude", current: Boolean = false, hidden: Boolean = false) =
+        HermesCatalog.Family(key = "$group:$label", label = label, group = group, note = null, current = current, hidden = hidden, members = emptyList())
+
+    @Test
+    fun `a tab lists the newest version of each line, strongest first, older ones apart`() {
+        val families = listOf(
+            family("Claude Haiku 5.5"), family("Claude Opus 5"), family("Claude Opus 5.5"), family("Claude Opus"),
+            family("Claude Fable 5.2"), family("Claude Opus 4.8"), family("Codex 5.3", group = "Cursor"),
+        )
+        val tab = HermesCatalog.pickerTab(families, "Claude")
+        assertEquals(listOf("Claude Opus 5.5", "Claude Fable 5.2", "Claude Haiku 5.5", "Claude Opus"), tab.shown.map { it.label })
+        assertEquals(listOf("Claude Opus 5", "Claude Opus 4.8"), tab.older.map { it.label })
+        assertEquals(listOf("Claude", "Cursor"), HermesCatalog.groups(families))
+    }
+
+    @Test
+    fun `an older version in use stays on show, and paid OpenCode rows wait for a search`() {
+        val claude = listOf(family("Claude Opus 5.5"), family("Claude Opus 5", current = true))
+        assertEquals(listOf("Claude Opus 5.5", "Claude Opus 5"), HermesCatalog.pickerTab(claude, "Claude").shown.map { it.label })
+        val open = listOf(family("Big Pickle", "OpenCode"), family("Kimi K2.5", "OpenCode", hidden = true), family("GLM 5", "OpenCode", hidden = true))
+        val tab = HermesCatalog.pickerTab(open, "OpenCode")
+        assertEquals(listOf("Big Pickle"), tab.shown.map { it.label })
+        assertEquals(2, tab.hiddenPaid)
+    }
+
+    @Test
+    fun `the depth slider's stops run shallow to deep, the plain row standing in for medium`() {
+        val claude = HermesCatalog.modifiers(status.copy(models = status.models.map { it.copy(current = it.id == "claude:opus") }))
+        val stops = HermesCatalog.effortStops(claude)
+        assertEquals(listOf("", "high", "max"), stops)
+        assertEquals(0, HermesCatalog.stopIndex(stops, ""))
+        assertEquals(2, HermesCatalog.stopIndex(stops, "max"))
+        // Codex has low and high and a plain row: the plain one sits between them
+        assertEquals(listOf("low", "", "high"), HermesCatalog.effortStops(HermesCatalog.modifiers(status)))
+        assertEquals("an effort the family lacks falls to the middle", 1, HermesCatalog.stopIndex(listOf("low", "med", "high"), "max"))
+    }
 }

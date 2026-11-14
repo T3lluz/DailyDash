@@ -173,6 +173,7 @@ fun DailyDashNavHost(
                 onNavigateToWidgets = { navController.navigateToSubScreen(SubScreenRoutes.WIDGETS) },
                 onNavigateToServers = { navController.navigateToSubScreen(SettingsRoutes.SERVERS) },
                 onNavigateToPermissions = { navController.navigateToSubScreen(SettingsRoutes.PERMISSIONS) },
+                onNavigateToUsage = { navController.navigateToSubScreen(SubScreenRoutes.USAGE) },
             )
         }
 

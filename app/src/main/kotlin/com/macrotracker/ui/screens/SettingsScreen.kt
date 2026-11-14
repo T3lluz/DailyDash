@@ -63,6 +63,7 @@ import com.macrotracker.ui.viewmodel.ServerViewModel
 import com.macrotracker.ui.viewmodel.SettingsViewModel
 import com.macrotracker.ui.viewmodel.GoalsViewModel
 import com.macrotracker.widget.tilesmith.TilesmithStore
+import com.macrotracker.ui.util.LaunchedWhileResumed
 
 /** The AI row's tint: the same lilac the widgets' AI line uses. */
 private val AiTint = Color(0xFFB4A7F5)
@@ -81,7 +82,9 @@ fun SettingsScreen(
     onNavigateToWidgets: () -> Unit = {},
     onNavigateToServers: () -> Unit = {},
     onNavigateToPermissions: () -> Unit = {},
+    onNavigateToUsage: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
+    usageViewModel: com.macrotracker.ui.viewmodel.UsageViewModel = hiltViewModel(),
     goalsViewModel: GoalsViewModel = hiltViewModel(),
     serverViewModel: ServerViewModel = hiltViewModel(),
 ) {
@@ -167,6 +170,21 @@ fun SettingsScreen(
                 status = if (aiReady) aiProvider.displayName else "Set up",
                 statusTone = if (aiReady) SettingsStatusTone.PLAIN else SettingsStatusTone.ATTENTION,
                 onClick = onNavigateToAi,
+            )
+            SettingsRowDivider()
+            // What is left of the plans, one tap from here; the status is the plan in use.
+            val usage by usageViewModel.state.collectAsState()
+            LaunchedWhileResumed(usageViewModel) { usageViewModel.load() }
+            val plan = remember(usage.usage) { usage.usage?.let { com.macrotracker.data.dashboard.usageFocus(it) } }
+            val used = plan?.top?.usedPercent
+            SettingsNavRow(
+                icon = AppIcons.Gauge,
+                tint = Primary,
+                title = "AI usage",
+                summary = "Limits, cost, tokens and the schedule",
+                status = if (plan != null && used != null) "${plan.label} ${Math.round(used)}%" else null,
+                statusTone = if ((used ?: 0.0) >= 85) SettingsStatusTone.ATTENTION else SettingsStatusTone.PLAIN,
+                onClick = onNavigateToUsage,
             )
             SettingsRowDivider()
             val online = runtimes.values.count { it.isOnline }

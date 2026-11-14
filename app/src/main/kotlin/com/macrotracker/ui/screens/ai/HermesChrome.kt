@@ -2,8 +2,6 @@ package com.macrotracker.ui.screens.ai
 
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -24,7 +22,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -39,18 +36,13 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,16 +65,13 @@ import com.macrotracker.data.hermes.HermesCatalog
 import com.macrotracker.data.hermes.HermesCommand
 import com.macrotracker.data.hermes.HermesMode
 import com.macrotracker.data.hermes.HermesModelOption
-import com.macrotracker.data.hermes.HermesPermission
 import com.macrotracker.data.hermes.HermesStatus
 import com.macrotracker.data.hermes.HermesThreadSummary
 import com.macrotracker.data.hermes.HermesTurnActivity
 import com.macrotracker.ui.components.LivePulseDot
 import com.macrotracker.ui.components.LoadingSpinner
 import com.macrotracker.ui.components.chromeGlass
-import com.macrotracker.ui.screens.tilesmith.TilesmithAccent
 import com.macrotracker.ui.theme.AppIcons
-import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.MacroMotion
@@ -101,6 +90,7 @@ import com.macrotracker.ui.util.rememberHaptics
 import dev.chrisbanes.haze.HazeState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import com.macrotracker.ui.util.agoShort
 
 /*
  * The frame around a Hermes conversation, shaped like the t3lluz dashboard's panel without
@@ -121,21 +111,6 @@ internal fun modeIcon(kind: String): ImageVector = when (kind) {
     "read" -> AppIcons.Eye
     "write" -> AppIcons.Bolt
     else -> AppIcons.Key
-}
-
-internal fun permissionOf(mode: HermesMode): HermesPermission = mode.permission
-
-/** `12m`, `3h`, `2d`: how long ago a thread last moved. */
-internal fun ago(ms: Long): String {
-    if (ms <= 0) return ""
-    val s = ((System.currentTimeMillis() - ms) / 1000).coerceAtLeast(0)
-    return when {
-        s < 60 -> "now"
-        s < 3600 -> "${s / 60}m"
-        s < 86_400 -> "${s / 3600}h"
-        s < 7 * 86_400 -> "${s / 86_400}d"
-        else -> "${s / (7 * 86_400)}w"
-    }
 }
 
 // ── Header ──────────────────────────────────────────────────────────────────
@@ -159,6 +134,8 @@ internal fun HermesHeader(
     onOpenConsole: () -> Unit,
     onOpenUsage: () -> Unit,
     onOpenTilesmith: () -> Unit = {},
+    /** What the header's usage square fills with; null draws a plain chart icon. */
+    usage: com.macrotracker.data.dashboard.UsageSnapshot? = null,
 ) {
     val haptics = rememberHaptics()
     var menuOpen by remember { mutableStateOf(false) }
@@ -210,10 +187,8 @@ internal fun HermesHeader(
                 Text(status, color = TextTertiary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        // Tilesmith: describe a widget and the AI builds it.
-        IconButton(onClick = { haptics.tick(); onOpenTilesmith() }) {
-            Icon(AppIcons.Blocks, contentDescription = "Tilesmith widget maker", tint = TilesmithAccent, modifier = Modifier.size(20.dp))
-        }
+        // Usage, one tap away: the square fills with the plan in use.
+        UsageButton(usage, onOpenUsage)
         IconButton(onClick = { haptics.tick(); onOpenConsole() }) {
             Icon(AppIcons.SquareTerminal, contentDescription = "Console", tint = TextSecondary, modifier = Modifier.size(20.dp))
         }
@@ -236,7 +211,8 @@ internal fun HermesHeader(
                     MenuRow("Delete this chat", AppIcons.Delete, danger = true) { menuOpen = false; onDelete() }
                     HorizontalDivider(color = Border)
                 }
-                MenuRow("Usage and schedule", AppIcons.ChartColumn) { menuOpen = false; onOpenUsage() }
+                MenuRow("Schedule and usage", AppIcons.CalendarPlus) { menuOpen = false; onOpenUsage() }
+                MenuRow("Tilesmith widget maker", AppIcons.Blocks) { menuOpen = false; onOpenTilesmith() }
                 if (onUsePhoneAi != null) {
                     MenuRow("Use this phone's AI instead", AppIcons.Bot) { menuOpen = false; onUsePhoneAi() }
                 }
@@ -464,7 +440,7 @@ private fun ThreadRow(
                 }
             }
             Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(horizontal = 4.dp)) {
-                Text(ago(thread.updatedMs), color = TextTertiary, fontSize = 11.sp)
+                Text(agoShort(thread.updatedMs), color = TextTertiary, fontSize = 11.sp)
                 // What the chat has used and how full it is, as the web's rail tags say.
                 val meta = listOfNotNull(
                     thread.tokens.takeIf { it > 0 }?.let { com.macrotracker.data.dashboard.formatTokens(it) },
@@ -565,7 +541,7 @@ internal fun HermesComposer(
     onClearMode: () -> Unit,
     onPickModel: () -> Unit,
     hazeState: HazeState?,
-    /** The usage ring, beside send (ComposerUsageRing). */
+    /** The usage square, beside send (ComposerUsageMeter). */
     usage: (@Composable () -> Unit)? = null,
 ) {
     val bottomPad = composerBottomGap()
@@ -879,258 +855,6 @@ internal fun SlashPalette(entries: List<SlashEntry>, onPick: (SlashEntry) -> Uni
             }
         }
     }
-}
-
-// ── Pickers ─────────────────────────────────────────────────────────────────
-
-internal enum class HermesSheet { MODEL }
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-internal fun HermesPickerSheet(
-    sheet: HermesSheet,
-    status: HermesStatus?,
-    favourites: List<String>,
-    onToggleFavourite: (String) -> Unit,
-    onDismiss: () -> Unit,
-    onPickFamily: (HermesCatalog.Family) -> Unit,
-    onPickEffort: (String) -> Unit,
-    onToggleThink: () -> Unit,
-    onToggleFast: () -> Unit,
-    onPickWindow: (Int) -> Unit,
-) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = Surface) {
-        Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 8.dp)) {
-            when (sheet) {
-                HermesSheet.MODEL -> ModelList(status, favourites, onToggleFavourite, onPickFamily) {
-                    DepthQuick(status, onPickEffort, onToggleThink, onToggleFast, onPickWindow)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-internal fun SheetTitle(title: String, subtitle: String? = null) {
-    Column(Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp)) {
-        Text(title, color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        if (subtitle != null) Text(subtitle, color = TextTertiary, fontSize = 12.sp, lineHeight = 16.sp)
-    }
-}
-
-@Composable
-private fun OptionRow(
-    selected: Boolean,
-    icon: ImageVector?,
-    iconTint: Color,
-    label: String,
-    note: String?,
-    onClick: () -> Unit,
-    leading: (@Composable () -> Unit)? = null,
-    trailing: (@Composable () -> Unit)? = null,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) ServerBrand.copy(alpha = 0.10f) else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        when {
-            leading != null -> leading()
-            icon != null -> Box(
-                Modifier.size(32.dp).clip(CircleShape).background(iconTint.copy(alpha = 0.14f)),
-                contentAlignment = Alignment.Center,
-            ) { Icon(icon, null, tint = iconTint, modifier = Modifier.size(16.dp)) }
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(label, color = TextPrimary, fontSize = 14.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium)
-            if (!note.isNullOrBlank()) Text(note, color = TextTertiary, fontSize = 12.sp, lineHeight = 16.sp)
-        }
-        if (trailing != null) {
-            trailing()
-        } else if (selected) {
-            Icon(AppIcons.Check, null, tint = ServerBrand, modifier = Modifier.size(18.dp))
-        }
-    }
-}
-
-@Composable
-private fun ModelList(
-    status: HermesStatus?,
-    favourites: List<String>,
-    onToggleFavourite: (String) -> Unit,
-    onPick: (HermesCatalog.Family) -> Unit,
-    header: @Composable () -> Unit = {},
-) {
-    var query by remember { mutableStateOf("") }
-    val families = remember(status) { HermesCatalog.families(status) }
-    val q = query.trim().lowercase()
-    // Starred families head the list in the order they were starred, and leave their group
-    // so nothing shows twice; a search lists every match where it lives.
-    val starred = remember(families, favourites, q) {
-        if (q.isNotEmpty()) emptyList() else favourites.mapNotNull { key -> families.firstOrNull { it.key == key } }
-    }
-    val shown = remember(families, q, starred) {
-        families.filter { f ->
-            if (q.isEmpty()) !f.hidden && f !in starred
-            else "${f.label} ${f.note.orEmpty()} ${f.key} ${f.group}".lowercase().contains(q)
-        }
-    }
-    val hidden = families.count { it.hidden }
-    SheetTitle("Model")
-    LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp)) {
-        item(key = "depth") { header() }
-        item(key = "search") {
-            SearchBox(value = query, onValueChange = { query = it }, hint = "Find a model\u2026", modifier = Modifier.padding(horizontal = 16.dp))
-            Spacer(Modifier.height(6.dp))
-        }
-        if (starred.isNotEmpty()) {
-            item(key = "g-favourites") { RailHeading("Favourites") }
-            starred.forEach { f ->
-                item(key = "fav-${f.key}") {
-                    ModelRow(f, starred = true, onPick = onPick, onToggleFavourite = onToggleFavourite)
-                }
-            }
-        }
-        var group: String? = null
-        shown.forEachIndexed { i, f ->
-            if (f.group != group) {
-                group = f.group
-                val heading = f.group
-                item(key = "g-$i-$heading") { RailHeading(heading) }
-            }
-            item(key = "f-$i-${f.key}") {
-                ModelRow(f, starred = f.key in favourites, onPick = onPick, onToggleFavourite = onToggleFavourite)
-            }
-        }
-        if (shown.isEmpty()) {
-            item(key = "none") {
-                Text(
-                    if (q.isEmpty()) "No models to show." else "Nothing matches.",
-                    color = TextTertiary,
-                    fontSize = 13.sp,
-                    modifier = Modifier.padding(20.dp),
-                )
-            }
-        }
-    }
-}
-
-/** The model's maker as its logo (ModelLogo), by the web's matching rules. */
-@Composable
-internal fun BrandMark(group: String, family: String, size: androidx.compose.ui.unit.Dp = 32.dp) {
-    ModelLogo(ModelBrands.brandOf(family, group), size)
-}
-
-/** A family in the picker: its logo, name and what it offers, a tick when on, and a star to keep it on top. */
-@Composable
-private fun ModelRow(
-    f: HermesCatalog.Family,
-    starred: Boolean,
-    onPick: (HermesCatalog.Family) -> Unit,
-    onToggleFavourite: (String) -> Unit,
-) {
-    val haptics = rememberHaptics()
-    OptionRow(
-        selected = f.current,
-        icon = null,
-        iconTint = TextSecondary,
-        label = f.label,
-        note = f.note,
-        onClick = { onPick(f) },
-        leading = { BrandMark(f.group, f.key) },
-        trailing = {
-            if (f.current) Icon(AppIcons.Check, null, tint = ServerBrand, modifier = Modifier.size(18.dp))
-            IconButton(onClick = { haptics.tick(); onToggleFavourite(f.key) }, modifier = Modifier.size(36.dp)) {
-                Icon(
-                    if (starred) AppIcons.StarFilled else AppIcons.Star,
-                    contentDescription = if (starred) "Remove from favourites" else "Add to favourites",
-                    tint = if (starred) ServerWarn else TextTertiary,
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-        },
-    )
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun DepthQuick(
-    status: HermesStatus?,
-    onPickEffort: (String) -> Unit,
-    onToggleThink: () -> Unit,
-    onToggleFast: () -> Unit,
-    onPickWindow: (Int) -> Unit,
-) {
-    val mods = HermesCatalog.modifiers(status)
-    val cur = mods.current ?: return
-    if (!mods.any) return
-    Column(modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 12.dp)) {
-        Text(
-            "DEPTH",
-            color = TextTertiary,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 0.8.sp,
-        )
-        Spacer(Modifier.height(8.dp))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            if (mods.efforts.size > 1) {
-                if (mods.hasBase) DepthChip("Auto", null, cur.effort.isBlank()) { onPickEffort("") }
-                mods.efforts.forEach { e ->
-                    DepthChip(HermesCatalog.EFFORT_LABEL[e] ?: e, null, cur.effort == e) { onPickEffort(e) }
-                }
-            }
-            if (mods.fast) DepthChip("Fast", AppIcons.Bolt, cur.fast, onToggleFast)
-            if (mods.think) DepthChip("Thinking", AppIcons.Sparkles, cur.think, onToggleThink)
-            if (mods.contexts.size > 1) {
-                mods.contexts.forEach { n ->
-                    DepthChip("${HermesCatalog.ctxLabel(n)} context", AppIcons.Blocks, n == mods.window) { onPickWindow(n) }
-                }
-            }
-        }
-        Spacer(Modifier.height(12.dp))
-        HorizontalDivider(color = Border)
-    }
-}
-
-@Composable
-private fun DepthChip(label: String, icon: ImageVector?, selected: Boolean, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(if (selected) ServerBrand.copy(alpha = 0.16f) else ServerWell)
-            .border(1.dp, if (selected) ServerBrand.copy(alpha = 0.55f) else Border, RoundedCornerShape(999.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 7.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (icon != null) {
-            Icon(icon, null, tint = if (selected) ServerBrand else TextSecondary, modifier = Modifier.size(13.dp))
-            Spacer(Modifier.width(5.dp))
-        }
-        Text(label, color = if (selected) TextPrimary else TextSecondary, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
-    }
-}
-
-@Composable
-private fun ToggleSwitch(checked: Boolean, onToggle: () -> Unit) {
-    Switch(
-        checked = checked,
-        onCheckedChange = { onToggle() },
-        colors = SwitchDefaults.colors(
-            checkedThumbColor = Background,
-            checkedTrackColor = ServerBrand,
-            uncheckedThumbColor = TextSecondary,
-            uncheckedTrackColor = Background,
-        ),
-    )
 }
 
 // ── Rename ──────────────────────────────────────────────────────────────────

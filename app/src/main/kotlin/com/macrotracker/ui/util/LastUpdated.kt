@@ -97,3 +97,42 @@ fun LastUpdatedText(
         )
     }
 }
+
+/** An age as a list row carries it: "now", "5m", "3h", "2d", "3w". Blank for a time that was never set. */
+fun agoShort(ms: Long, now: Long = System.currentTimeMillis()): String {
+    if (ms <= 0) return ""
+    val s = ((now - ms) / 1000).coerceAtLeast(0)
+    return when {
+        s < 60 -> "now"
+        s < 3600 -> "${s / 60}m"
+        s < 86_400 -> "${s / 3600}h"
+        s < 7 * 86_400 -> "${s / 86_400}d"
+        else -> "${s / (7 * 86_400)}w"
+    }
+}
+
+/** An age in a sentence: "just now", "5 min ago", "3 h ago", "2 days ago". Blank for a time that was never set. */
+fun agoWords(ms: Long, now: Long = System.currentTimeMillis()): String {
+    if (ms <= 0) return ""
+    val m = ((now - ms) / 60_000).coerceAtLeast(0)
+    return when {
+        m < 1 -> "just now"
+        m < 60 -> "$m min ago"
+        m < 24 * 60 -> "${m / 60} h ago"
+        else -> "${m / (24 * 60)} day${if (m / (24 * 60) == 1L) "" else "s"} ago"
+    }
+}
+
+/** Whether this phone shows the time on a 24-hour clock. */
+@Composable
+fun rememberClock24(): Boolean {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    return remember(context) { android.text.format.DateFormat.is24HourFormat(context) }
+}
+
+/** The time of day as this phone shows it: 17:05, or 5:05 PM. */
+@Composable
+fun rememberClockFormatter(): java.time.format.DateTimeFormatter {
+    val h24 = rememberClock24()
+    return remember(h24) { java.time.format.DateTimeFormatter.ofPattern(if (h24) "HH:mm" else "h:mm a", java.util.Locale.getDefault()) }
+}

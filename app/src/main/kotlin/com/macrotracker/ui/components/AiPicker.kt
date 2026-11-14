@@ -6,12 +6,17 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -48,6 +53,7 @@ import com.macrotracker.data.remote.AiAccess
 import com.macrotracker.data.remote.AiModel
 import com.macrotracker.data.remote.AiProvider
 import com.macrotracker.ui.screens.ai.ModelLogo
+import com.macrotracker.ui.screens.ai.PickerTab
 import com.macrotracker.ui.screens.ai.RailHeading
 import com.macrotracker.ui.screens.ai.SearchBox
 import com.macrotracker.ui.theme.AppIcons
@@ -203,7 +209,7 @@ fun AiPickerSheet(
     }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = Surface) {
-        Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 8.dp)) {
+        Column(Modifier.fillMaxWidth().fillMaxHeight(0.8f).navigationBarsPadding().imePadding()) {
             AiModelList(
                 state = state,
                 note = note,
@@ -220,7 +226,7 @@ fun AiPickerSheet(
 }
 
 @Composable
-private fun AiModelList(
+private fun ColumnScope.AiModelList(
     state: AiUiState,
     note: String?,
     onPick: (AiProvider, String?) -> Unit,
@@ -228,104 +234,107 @@ private fun AiModelList(
 ) {
     var query by remember { mutableStateOf("") }
     val q = query.trim().lowercase()
-    val ready = state.providers.filter { it.ready }
-    val later = state.providers.filterNot { it.ready }
-    Column(Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp)) {
-        Text("AI", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-        Text(note ?: "Used for Tilesmith, food estimates, widget lines and chat", color = TextTertiary, fontSize = 12.sp, lineHeight = 16.sp)
+    // The tabs: the ones that work first, in their own order, then the ones still to set up.
+    // Where there is nowhere to set one up from (Settings → AI is already this page's parent),
+    // only the ones that work are listed.
+    val providers = remember(state.providers, onManage == null) {
+        state.providers.filter { it.ready || onManage != null }.sortedBy { !it.ready }
     }
-    LazyColumn(Modifier.fillMaxWidth().heightIn(max = 620.dp)) {
-        item(key = "search") {
-            SearchBox(value = query, onValueChange = { query = it }, hint = "Find a model…", modifier = Modifier.padding(horizontal = 16.dp))
-            Spacer(Modifier.height(4.dp))
+    var tab by rememberSaveable { mutableStateOf(state.selected) }
+    val haptics = rememberHaptics()
+    SearchBox(value = query, onValueChange = { query = it }, hint = "Search all models", modifier = Modifier.padding(horizontal = 16.dp))
+    if (q.isEmpty()) {
+        val scroll = rememberScrollState()
+        Row(
+            Modifier.padding(top = 10.dp).fillMaxWidth().horizontalEdgeFade(scroll).horizontalScroll(scroll).padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            providers.forEach { p ->
+                PickerTab(
+                    p.provider.displayName, selected = p.provider == tab, picked = p.provider == state.selected,
+                    onClick = { haptics.tick(); tab = p.provider }, dim = !p.ready,
+                ) { AiProviderLogo(p.provider, 22.dp) }
+            }
         }
-        ready.forEach { p ->
-            val models = modelsFor(state, p.provider)
-            val shown = if (q.isEmpty()) models else models.filter { "${it.name} ${it.id} ${p.provider.displayName}".lowercase().contains(q) }
-            if (q.isNotEmpty() && shown.isEmpty()) return@forEach
-            item(key = "h-${p.provider}") { ProviderHeading(p, inUse = p.provider == state.selected) }
-            if (p.provider == AiProvider.HERMES) {
-                item(key = "m-hermes") {
-                    ModelOption(
-                        logo = AiProvider.HERMES,
-                        title = p.modelLabel,
-                        note = "Change it in the AI tab; the web uses it too",
-                        selected = state.selected == AiProvider.HERMES,
-                        onClick = { onPick(AiProvider.HERMES, null) },
-                    )
-                }
-            } else {
-                shown.forEach { m ->
-                    item(key = "m-${p.provider}-${m.id}") {
-                        ModelOption(
-                            logo = p.provider,
-                            title = m.name,
-                            note = m.note,
-                            selected = state.selected == p.provider && p.model == m.id,
-                            onClick = { onPick(p.provider, m.id) },
-                        )
-                    }
-                }
-                if (p.provider in state.loadingModels && q.isEmpty()) {
+    }
+    Text(
+        note ?: "Used for Tilesmith, food estimates, widget lines and chat",
+        color = TextTertiary, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 4.dp),
+    )
+    @Composable
+    fun option(p: AiProviderStatus, m: AiModel) = ModelOption(
+        logo = p.provider, title = m.name, note = m.note,
+        selected = state.selected == p.provider && p.model == m.id,
+        onClick = { onPick(p.provider, m.id) },
+    )
+    LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
+        if (q.isNotEmpty()) {
+            var any = false
+            providers.filter { it.ready && it.provider != AiProvider.HERMES }.forEach { p ->
+                val hits = modelsFor(state, p.provider).filter { "${it.name} ${it.id} ${p.provider.displayName}".lowercase().contains(q) }
+                if (hits.isEmpty()) return@forEach
+                any = true
+                item(key = "h-${p.provider}") { RailHeading(p.provider.displayName) }
+                hits.forEach { m -> item(key = "m-${p.provider}-${m.id}") { option(p, m) } }
+            }
+            if (!any) item(key = "none") { Text("No match", color = TextTertiary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp)) }
+            return@LazyColumn
+        }
+        val p = providers.firstOrNull { it.provider == tab } ?: return@LazyColumn
+        item(key = "how-${p.provider}") {
+            Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                AiAccessBadge(p.access, label = if (p.ready) p.access.label else "Set up")
+                Spacer(Modifier.width(8.dp))
+                Text(p.detail, color = TextTertiary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            }
+        }
+        when {
+            !p.ready -> item(key = "setup-${p.provider}") {
+                ModelOption(
+                    logo = p.provider, title = "Set up ${p.provider.displayName}", note = null,
+                    selected = false, dim = true, onClick = { onManage?.invoke() },
+                )
+            }
+            p.provider == AiProvider.HERMES -> item(key = "m-hermes") {
+                ModelOption(
+                    logo = AiProvider.HERMES,
+                    title = p.modelLabel,
+                    note = "Change it in the AI tab; the web uses it too",
+                    selected = state.selected == AiProvider.HERMES,
+                    onClick = { onPick(AiProvider.HERMES, null) },
+                )
+            }
+            else -> {
+                modelsFor(state, p.provider).forEach { m -> item(key = "m-${p.provider}-${m.id}") { option(p, m) } }
+                if (p.provider in state.loadingModels) {
                     item(key = "l-${p.provider}") {
                         Text("Loading ${p.provider.displayName}'s models…", color = TextTertiary, fontSize = 12.sp, modifier = Modifier.padding(start = 64.dp, top = 2.dp, bottom = 6.dp))
                     }
                 }
             }
         }
-        if (q.isEmpty() && later.isNotEmpty()) {
-            item(key = "later") { RailHeading("Set up") }
-            later.forEach { p ->
-                item(key = "s-${p.provider}") {
-                    ModelOption(
-                        logo = p.provider,
-                        title = p.provider.displayName,
-                        note = p.detail,
-                        selected = false,
-                        dim = true,
-                        onClick = { onManage?.invoke() },
-                    )
-                }
-            }
-        }
-        if (onManage != null) {
-            item(key = "manage") {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 10.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .border(1.dp, Border, RoundedCornerShape(14.dp))
-                        .clickable(onClick = onManage)
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(AppIcons.Settings, null, tint = TextSecondary, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Text("Sign-ins, keys and models", color = TextPrimary, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    Icon(AppIcons.ChevronRight, null, tint = TextTertiary, modifier = Modifier.size(16.dp))
-                }
-            }
+    }
+    if (onManage != null) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .border(1.dp, Border, RoundedCornerShape(14.dp))
+                .clickable(onClick = onManage)
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(AppIcons.Settings, null, tint = TextSecondary, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(10.dp))
+            Text("Sign-ins, keys and models", color = TextPrimary, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Icon(AppIcons.ChevronRight, null, tint = TextTertiary, modifier = Modifier.size(16.dp))
         }
     }
 }
 
 /** A provider's models for the pickers; Claude's own list, the others' last read list. */
 fun modelsFor(state: AiUiState, provider: AiProvider): List<AiModel> = state.models[provider].orEmpty()
-
-@Composable
-private fun ProviderHeading(p: AiProviderStatus, inUse: Boolean) {
-    Row(
-        Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(p.provider.displayName.uppercase(), color = TextTertiary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
-        Spacer(Modifier.width(8.dp))
-        AiAccessBadge(p.access)
-        Spacer(Modifier.weight(1f))
-        if (inUse) Text("In use", color = ServerBrand, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-    }
-}
 
 @Composable
 private fun ModelOption(logo: AiProvider, title: String, note: String?, selected: Boolean, onClick: () -> Unit, dim: Boolean = false) {

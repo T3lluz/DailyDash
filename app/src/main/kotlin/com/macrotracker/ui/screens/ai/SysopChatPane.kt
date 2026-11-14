@@ -27,7 +27,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
@@ -75,7 +74,11 @@ fun SysopChatPane(
     onUseHermes: (() -> Unit)? = null,
     onOpenConsole: (() -> Unit)? = null,
     onOpenTilesmith: (() -> Unit)? = null,
+    onOpenUsage: (() -> Unit)? = null,
+    usageViewModel: com.macrotracker.ui.viewmodel.UsageViewModel = androidx.hilt.navigation.compose.hiltViewModel(),
 ) {
+    val usageState by usageViewModel.state.collectAsState()
+    com.macrotracker.ui.util.LaunchedWhileResumed(usageViewModel) { usageViewModel.load() }
     val bot = ChatBot.SYSOP
     val state by viewModel.state(bot).collectAsState()
     val haptics = rememberHaptics()
@@ -129,6 +132,7 @@ fun SysopChatPane(
                         Icon(AppIcons.Blocks, contentDescription = "Tilesmith widget maker", tint = TilesmithAccent, modifier = Modifier.size(19.dp))
                     }
                 }
+                if (onOpenUsage != null) UsageButton(usage = usageState.usage, onClick = onOpenUsage, modifier = Modifier.size(36.dp))
                 if (onOpenConsole != null) {
                     IconButton(onClick = { haptics.tick(); onOpenConsole() }, modifier = Modifier.size(36.dp)) {
                         Icon(AppIcons.SquareTerminal, contentDescription = "Console", tint = TextSecondary, modifier = Modifier.size(19.dp))
