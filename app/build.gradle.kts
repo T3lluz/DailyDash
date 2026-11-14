@@ -128,6 +128,8 @@ dependencies {
     implementation(libs.lifecycle.viewmodel.compose)
     implementation(libs.lifecycle.process)
     implementation(libs.core.ktx)
+    // A VT100/xterm emulator and the code that draws its screen; the console feeds it the server's shell.
+    implementation("com.termux.termux-app:terminal-view:0.118.0")
     implementation(libs.browser)
 
     // Room
