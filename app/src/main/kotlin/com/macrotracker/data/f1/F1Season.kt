@@ -157,21 +157,34 @@ object F1Season {
     }
 
     /**
-     * [now] decides what is still to run: a race or sprint counts until it is over, so the
-     * evening after the finale says who won, not that a round is left.
+     * What is left is counted from the standings themselves: [standingsRound] is the last
+     * round their points include, so a race is still to win until the table has it, however
+     * long ago it finished. Naming a champion from points that lack tonight's race would be
+     * wrong. Without that round (an older cache), or for a round the table already shows
+     * before its race has run, the clock decides: a race or sprint counts until it is over.
+     * No schedule means no answer, not a champion.
      */
-    fun titleRace(drivers: List<SeasonDriverStanding>, schedule: List<RaceScheduleEntry>, now: Instant = Instant.now()): TitleRace? {
+    fun titleRace(
+        drivers: List<SeasonDriverStanding>,
+        schedule: List<RaceScheduleEntry>,
+        standingsRound: Int? = null,
+        now: Instant = Instant.now(),
+    ): TitleRace? {
         val top = drivers.firstOrNull() ?: return null
+        if (schedule.isEmpty()) return null
         val today = now.atZone(ZoneOffset.UTC).toLocalDate()
         // with a start time, until the session is over; with only a date, through that day
-        fun toRun(date: String?, time: String?, label: String): Boolean {
+        fun ahead(date: String?, time: String?, label: String): Boolean {
             if (date.isNullOrBlank()) return false
             val at = instant(date, time)
             return if (at != null) !Session(label, at).over(now)
             else runCatching { !LocalDate.parse(date).isBefore(today) }.getOrDefault(false)
         }
-        val left = schedule.filter { toRun(it.raceDate, it.raceTime, "Race") }
-        val sprintsLeft = schedule.count { toRun(it.sprintDate, it.sprintTime, "Sprint") }
+        fun notCounted(round: Int) = standingsRound != null && round > standingsRound
+        val left = schedule.filter { notCounted(it.round) || ahead(it.raceDate, it.raceTime, "Race") }
+        val sprintsLeft = schedule.count {
+            !it.sprintDate.isNullOrBlank() && if (standingsRound != null) notCounted(it.round) else ahead(it.sprintDate, it.sprintTime, "Sprint")
+        }
         val pool = left.size * 25 + sprintsLeft * 8
         return TitleRace(
             roundsLeft = left.size,

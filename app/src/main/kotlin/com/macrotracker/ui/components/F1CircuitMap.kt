@@ -70,6 +70,9 @@ enum class CircuitMapWeight(
 
     /** Small, on a Coming up card. */
     MINI(kerb = 5.dp, bed = 1.dp, line = 1.6.dp, car = 3.6.dp, kerbAlpha = 0.07f, bedAlpha = 0.16f),
+
+    /** The F1 card's glance: a bold white track the marque line fills. No kerb and no car. */
+    BOLD(kerb = 0.dp, bed = 5.dp, line = 5.dp, car = 0.dp, kerbAlpha = 0f, bedAlpha = 0.92f),
 }
 
 /** How a map moves. */
@@ -85,6 +88,12 @@ enum class CircuitMotion {
      * fully away so it paints again next time — the web's `data-replay` backdrop.
      */
     BACKDROP,
+
+    /**
+     * The line fills the track from the start line, holds, then the track clears behind it
+     * the same way and it fills again, for as long as it is on screen. No car.
+     */
+    FILL,
 }
 
 private enum class PaintPhase { WET, PAINTING, PAINTED }
@@ -140,7 +149,7 @@ fun F1CircuitMap(
                 .collect { visible ->
                     if (!visible) return@collect
                     delay(
-                        if (motion == CircuitMotion.BACKDROP) {
+                        if (motion == CircuitMotion.BACKDROP || motion == CircuitMotion.FILL) {
                             MacroMotion.CircuitPaint.DELAY_REPLAY_MS
                         } else {
                             MacroMotion.CircuitPaint.DELAY_ONCE_MS
@@ -153,7 +162,7 @@ fun F1CircuitMap(
                 }
         }
         // A replaying backdrop goes back to wet only once it is wholly gone.
-        if (motion == CircuitMotion.BACKDROP) {
+        if (motion == CircuitMotion.BACKDROP || motion == CircuitMotion.FILL) {
             LaunchedEffect(outline.id) {
                 snapshotFlow { onScreen.value <= 0f }
                     .distinctUntilChanged()
@@ -163,7 +172,7 @@ fun F1CircuitMap(
         // Frames only while something moves and someone can see it. The clock is wall
         // time, so a paint that scrolls away picks up where it would have been.
         val visibleNow by remember { derivedStateOf { onScreen.value > 0f } }
-        val lapping = motion == CircuitMotion.BACKDROP && phase == PaintPhase.PAINTED
+        val lapping = (motion == CircuitMotion.BACKDROP || motion == CircuitMotion.FILL) && phase == PaintPhase.PAINTED
         val ticking = resumed && visibleNow && (phase == PaintPhase.PAINTING || lapping)
         LaunchedEffect(ticking) {
             if (!ticking) return@LaunchedEffect
@@ -224,10 +233,33 @@ fun F1CircuitMap(
                 val bedColor = Tarmac.copy(alpha = weight.bedAlpha)
 
                 onDrawBehind {
-                    drawPath(path, kerbColor, style = kerbStroke)
+                    if (weight.kerb > 0.dp) drawPath(path, kerbColor, style = kerbStroke)
                     drawPath(path, bedColor, style = bedStroke)
                     if (length <= 0f) {
                         drawPath(path, F1MarqueRed, style = lineStroke)
+                        return@onDrawBehind
+                    }
+                    // The filling line: once the first fill is done it holds, clears from the
+                    // start line, pauses on the bare track and fills again, all off one clock.
+                    if (motion == CircuitMotion.FILL && phase == PaintPhase.PAINTED && paintStart >= 0 && !reduced) {
+                        val spec = MacroMotion.CircuitPaint
+                        val cycle = spec.FILL_HOLD_MS + paintMs + spec.FILL_BARE_MS + paintMs
+                        val t = (now - paintStart - paintMs).coerceAtLeast(0L) % cycle
+                        val clearing = t - spec.FILL_HOLD_MS
+                        val filling = clearing - paintMs - spec.FILL_BARE_MS
+                        val (from, to) = when {
+                            t < spec.FILL_HOLD_MS -> 0f to 1f
+                            clearing < paintMs -> spec.Easing.transform(clearing.toFloat() / paintMs) to 1f
+                            filling < 0 -> 0f to 0f
+                            else -> 0f to spec.Easing.transform(filling.toFloat() / paintMs)
+                        }
+                        if (to - from >= 1f) {
+                            drawPath(path, F1MarqueRed, style = lineStroke)
+                        } else if (to > from) {
+                            segment.reset()
+                            measure.getSegment(from * length, to * length, segment, true)
+                            drawPath(segment, F1MarqueRed, style = lineStroke)
+                        }
                         return@onDrawBehind
                     }
 
@@ -264,7 +296,7 @@ fun F1CircuitMap(
                             else -> length to 1f
                         }
                     }
-                    if (car != null && car.second > 0f) {
+                    if (car != null && car.second > 0f && carRadius > 0f) {
                         val at = measure.getPosition(car.first.coerceIn(0f, length))
                         if (at.isFinite()) {
                             drawCircle(

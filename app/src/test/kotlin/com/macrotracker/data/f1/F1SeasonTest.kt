@@ -60,37 +60,53 @@ class F1SeasonTest {
 
     private fun driver(name: String, points: Double) = SeasonDriverStanding(0, points, 0, name, name.take(3).uppercase(), "Team", "FFFFFF")
 
+    private val season = listOf(race(20, "2026-11-08"), race(21, "2026-11-22"), race(22, "2026-11-29", sprint = "2026-11-28"), race(23, "2026-12-06"))
+
     @Test fun `what is left is 25 a race and 8 a sprint, and it says who is still in it`() {
         val now = Instant.parse("2026-11-13T12:00:00Z")
-        val schedule = listOf(race(20, "2026-11-08"), race(21, "2026-11-22"), race(22, "2026-11-29", sprint = "2026-11-28"), race(23, "2026-12-06"))
-        val open = F1Season.titleRace(listOf(driver("Kimi Antonelli", 390.0), driver("Max Verstappen", 310.0), driver("George Russell", 262.0)), schedule, now)!!
+        val open = F1Season.titleRace(listOf(driver("Kimi Antonelli", 390.0), driver("Max Verstappen", 310.0), driver("George Russell", 262.0)), season, 20, now)!!
         assertEquals(3, open.roundsLeft)
         assertEquals(83, open.pool)
         assertEquals(2, open.alive)
         assertFalse(open.decided)
         assertEquals("3 rounds left, 83 points to play for. 2 can still win it.", F1Season.titleLine(open))
 
-        val won = F1Season.titleRace(listOf(driver("Kimi Antonelli", 390.0), driver("Max Verstappen", 279.0)), schedule, now)!!
+        val won = F1Season.titleRace(listOf(driver("Kimi Antonelli", 390.0), driver("Max Verstappen", 279.0)), season, 20, now)!!
         assertTrue(won.decided)
         assertEquals("Antonelli is champion with 3 rounds to go: 111 ahead, 83 left to win.", F1Season.titleLine(won))
-        assertNull(F1Season.titleRace(emptyList(), schedule, now))
+        assertNull(F1Season.titleRace(emptyList(), season, 20, now))
+        assertNull("no schedule is no answer, not a champion", F1Season.titleRace(listOf(driver("Kimi Antonelli", 390.0)), emptyList(), 20, now))
     }
 
-    @Test fun `a race counts as left until it is over, not until midnight`() {
+    @Test fun `a race stays to be won until the standings include it`() {
+        val drivers = listOf(driver("Kimi Antonelli", 390.0), driver("Max Verstappen", 380.0))
+        // the finale ended hours ago, but the table still stops at round 22: nobody is champion yet
+        val evening = Instant.parse("2026-12-06T20:00:00Z")
+        val waiting = F1Season.titleRace(drivers, season, 22, evening)!!
+        assertEquals(1, waiting.roundsLeft)
+        assertEquals(25, waiting.pool)
+        assertFalse(waiting.decided)
+        // once the table has round 23, it is settled
+        val settled = F1Season.titleRace(drivers, season, 23, evening)!!
+        assertEquals(0, settled.roundsLeft)
+        assertEquals("Antonelli is champion.", F1Season.titleLine(settled))
+        // a sprint's eight points count until its round is in the table, run or not
+        assertEquals(58, F1Season.titleRace(drivers, season, 21, Instant.parse("2026-11-28T22:00:00Z"))!!.pool)
+        assertEquals(25, F1Season.titleRace(drivers, season, 22, Instant.parse("2026-11-30T00:00:00Z"))!!.pool)
+    }
+
+    @Test fun `without the standings' round the clock decides, a race counting until it is over`() {
         val schedule = listOf(race(22, "2026-11-29", sprint = "2026-11-28"), race(23, "2026-12-06"))
         val drivers = listOf(driver("Kimi Antonelli", 390.0), driver("Max Verstappen", 380.0))
         // the sprint has run, its race has not
-        assertEquals(50, F1Season.titleRace(drivers, schedule, Instant.parse("2026-11-28T22:00:00Z"))!!.pool)
+        assertEquals(50, F1Season.titleRace(drivers, schedule, now = Instant.parse("2026-11-28T22:00:00Z"))!!.pool)
         // the finale is on: still one round to play for
-        assertEquals(1, F1Season.titleRace(drivers, schedule, Instant.parse("2026-12-06T05:00:00Z"))!!.roundsLeft)
-        // that evening it is over, though the date has not turned
-        val over = F1Season.titleRace(drivers, schedule, Instant.parse("2026-12-06T20:00:00Z"))!!
-        assertEquals(0, over.roundsLeft)
-        assertEquals("Antonelli is champion.", F1Season.titleLine(over))
+        assertEquals(1, F1Season.titleRace(drivers, schedule, now = Instant.parse("2026-12-06T05:00:00Z"))!!.roundsLeft)
+        assertEquals(0, F1Season.titleRace(drivers, schedule, now = Instant.parse("2026-12-06T20:00:00Z"))!!.roundsLeft)
         // a race with no start time yet counts through its day
         val untimed = listOf(race(23, "2026-12-06").copy(raceTime = null))
-        assertEquals(1, F1Season.titleRace(drivers, untimed, Instant.parse("2026-12-06T20:00:00Z"))!!.roundsLeft)
-        assertEquals(0, F1Season.titleRace(drivers, untimed, Instant.parse("2026-12-07T01:00:00Z"))!!.roundsLeft)
+        assertEquals(1, F1Season.titleRace(drivers, untimed, now = Instant.parse("2026-12-06T20:00:00Z"))!!.roundsLeft)
+        assertEquals(0, F1Season.titleRace(drivers, untimed, now = Instant.parse("2026-12-07T01:00:00Z"))!!.roundsLeft)
     }
 
     @Test fun `a weekend's sessions come in the order they run, without the ones that have no time`() {

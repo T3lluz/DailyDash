@@ -152,6 +152,10 @@ object MacroMotion {
         const val LAP_DIM_AT = 0.08f
         const val LAP_ALPHA = 0.5f
 
+        /** The filling line (the F1 glance): how long it stays whole, and how long the track stays bare. */
+        const val FILL_HOLD_MS = 2_200L
+        const val FILL_BARE_MS = 700L
+
         /** Share of the map that has to be on screen before a lap is started. */
         const val VISIBLE_TO_PAINT = 0.15f
 
@@ -308,6 +312,9 @@ object MacroMotion {
     }
 
     /** The navbar's activity tab rising out of the pill and settling back into it: a touch of give, no wobble. */
+    /** The band of light across a word that is happening (ShimmerText): one pass every 1.6 s. */
+    fun shimmerSpec(): InfiniteRepeatableSpec<Float> = infiniteRepeatable(tween(1600, easing = LinearEasing), RepeatMode.Restart)
+
     fun <T> navTabSpring() = spring<T>(dampingRatio = 0.82f, stiffness = 420f)
 
     private const val CAROUSEL_TRAVEL_MIN_MS = 300
