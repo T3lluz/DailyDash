@@ -39,7 +39,7 @@ import com.macrotracker.ui.components.WorkingScanner
 import com.macrotracker.ui.components.chromeGlass
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.MacroMotion
-import com.macrotracker.ui.theme.ServerBrand
+import com.macrotracker.ui.theme.AiAccent
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextTertiary
 import com.macrotracker.ui.util.LaunchedWhileResumed
@@ -145,7 +145,7 @@ private fun WorkingPill(live: HermesLive, hazeState: HazeState?) {
             .clearAndSetSemantics { contentDescription = "Hermes: $label" },
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        WorkingScanner(color = ServerBrand, blockSize = 4.dp, gap = 2.dp)
+        WorkingScanner(color = AiAccent, blockSize = 4.dp, gap = 2.dp)
         Spacer(Modifier.width(10.dp))
         ShimmerText(label, TextPrimary, 12.5.sp, Modifier.weight(1f, fill = false), FontWeight.Medium)
         Spacer(Modifier.width(10.dp))

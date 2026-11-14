@@ -140,7 +140,7 @@ import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.OnAccent
-import com.macrotracker.ui.theme.ServerBrand
+import com.macrotracker.ui.theme.AiAccent
 import com.macrotracker.ui.theme.ServerCritical
 import com.macrotracker.ui.theme.ServerGood
 import com.macrotracker.ui.theme.ServerWarn
@@ -160,7 +160,7 @@ import kotlinx.coroutines.delay
 
 val HermesIdentity = BotIdentity(
     name = "Hermes",
-    accent = ServerBrand,
+    accent = AiAccent,
     avatarRes = R.drawable.ic_hermes,
     composerHint = "Ask Hermes about the server…",
 )
@@ -696,7 +696,7 @@ fun HermesChatPane(
                     (state.reach == HermesReach.CHECKING || state.reach == HermesReach.UNKNOWN) && state.status == null -> Box(
                         Modifier.weight(1f).fillMaxWidth(),
                         contentAlignment = Alignment.Center,
-                    ) { LoadingSpinner(color = ServerBrand) }
+                    ) { LoadingSpinner(color = AiAccent) }
                     else -> ChatList(
                         state = listState,
                         modifier = Modifier
@@ -714,7 +714,7 @@ fun HermesChatPane(
                         if (state.loadingThread) {
                             item(key = "loading") {
                                 Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                                    LoadingSpinner(color = ServerBrand)
+                                    LoadingSpinner(color = AiAccent)
                                 }
                             }
                         }
@@ -1212,9 +1212,9 @@ private fun HermesUnreachable(
         Text(message, color = TextSecondary, fontSize = 13.sp, lineHeight = 18.sp)
         Spacer(Modifier.height(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PillButton(icon = AppIcons.Refresh, label = "Try again", accent = ServerBrand, emphasized = true, onClick = onRetry)
+            PillButton(icon = AppIcons.Refresh, label = "Try again", accent = AiAccent, emphasized = true, onClick = onRetry)
             if (onUsePhoneAi != null) {
-                PillButton(icon = AppIcons.Bot, label = "Use phone AI", onClick = onUsePhoneAi)
+                PillButton(icon = AppIcons.Bot, label = "Use phone AI", accent = TextSecondary, onClick = onUsePhoneAi)
             }
         }
     }
@@ -1417,7 +1417,7 @@ private fun AssistantTurn(item: HermesItem.Assistant, last: Boolean, idle: Boole
                     fontSize = 15.sp,
                     lineHeight = 22.sp,
                     color = TextPrimary,
-                    linkColor = ServerBrand,
+                    linkColor = AiAccent,
                     breaks = true,
                     modifier = Modifier.padding(top = 2.dp),
                 )
@@ -1434,10 +1434,10 @@ private fun AssistantTurn(item: HermesItem.Assistant, last: Boolean, idle: Boole
                     .padding(start = 14.dp, end = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(AppIcons.ListChecks, null, tint = ServerBrand, modifier = Modifier.size(16.dp))
+                Icon(AppIcons.ListChecks, null, tint = AiAccent, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(8.dp))
                 Text("Plan ready", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                PillButton(icon = AppIcons.Play, label = "Implement", accent = ServerBrand, emphasized = true, onClick = actions.onImplement)
+                PillButton(icon = AppIcons.Play, label = "Implement", accent = AiAccent, emphasized = true, onClick = actions.onImplement)
             }
         }
         if (item.changes.isNotEmpty()) {
@@ -1584,7 +1584,7 @@ private fun NoteEntry(text: String) {
         fontSize = 12.5.sp,
         lineHeight = 18.sp,
         color = TextSecondary,
-        linkColor = ServerBrand,
+        linkColor = AiAccent,
         breaks = true,
     )
 }
@@ -1641,7 +1641,7 @@ private fun ToolEntry(tool: HermesTool) {
 private fun ToolStatusDot(tool: HermesTool) {
     val color = when {
         tool.failed -> ServerCritical
-        tool.running -> ServerBrand
+        tool.running -> AiAccent
         else -> ServerGood
     }
     Box(
@@ -1714,7 +1714,7 @@ private fun ChangesCard(changes: List<HermesFileChange>, onOpenFile: (HermesFile
             HorizontalDivider(color = Border, thickness = 1.dp)
             Text(
                 "Show ${changes.size - CHANGES_SHOWN} more",
-                color = ServerBrand,
+                color = AiAccent,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
@@ -1766,7 +1766,7 @@ private fun FileChangeRow(change: HermesFileChange, onOpenFile: (HermesFileChang
             Column(Modifier.padding(start = 10.dp, end = 10.dp, bottom = 10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     if (change.status.lowercase() !in setOf("deleted", "del", "removed", "d") && !change.reverted) {
-                        PillButton(icon = AppIcons.File, label = "Open file", onClick = { onOpenFile(change) })
+                        PillButton(icon = AppIcons.File, label = "Open file", accent = TextSecondary, onClick = { onOpenFile(change) })
                     }
                     if (change.reverted) {
                         Text("Put back", color = TextTertiary, fontSize = 12.sp, modifier = Modifier.padding(vertical = 10.dp))
@@ -1795,7 +1795,7 @@ private fun ChangeStatusBadge(status: String) {
     val (letter, color) = when (status.lowercase()) {
         "added", "new", "a" -> "A" to ServerGood
         "deleted", "removed", "d" -> "D" to ServerCritical
-        "renamed", "r" -> "R" to ServerBrand
+        "renamed", "r" -> "R" to AiAccent
         else -> "M" to ServerWarn
     }
     Box(
@@ -1822,7 +1822,7 @@ private fun DiffBlock(diff: String) {
                 val tint = when {
                     added -> ServerGood
                     removed -> ServerCritical
-                    line.startsWith("@@") -> ServerBrand
+                    line.startsWith("@@") -> AiAccent
                     line.startsWith("+++") || line.startsWith("---") -> TextTertiary
                     else -> null
                 }
@@ -2044,7 +2044,7 @@ private fun ApprovalRow(
         Spacer(Modifier.height(8.dp))
         when {
             running -> Row(verticalAlignment = Alignment.CenterVertically) {
-                LoadingSpinner(color = ServerBrand)
+                LoadingSpinner(color = AiAccent)
                 Spacer(Modifier.width(8.dp))
                 Text("running…", color = TextSecondary, fontSize = 12.sp)
             }
@@ -2185,7 +2185,7 @@ private fun LiveTurn(live: HermesLive) {
                 fontSize = 15.sp,
                 lineHeight = 22.sp,
                 color = TextPrimary,
-                linkColor = ServerBrand,
+                linkColor = AiAccent,
                 breaks = true,
                 streaming = true,
             )

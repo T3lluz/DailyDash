@@ -68,7 +68,7 @@ import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.SelectedFill
-import com.macrotracker.ui.theme.ServerBrand
+import com.macrotracker.ui.theme.AiAccent
 import com.macrotracker.ui.theme.ServerWarn
 import com.macrotracker.ui.theme.Success
 import com.macrotracker.ui.theme.Surface
@@ -264,7 +264,7 @@ private fun FamilyRow(
             .fillMaxWidth()
             .padding(horizontal = 8.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(if (f.current) ServerBrand.copy(alpha = 0.10f) else Color.Transparent)
+            .background(if (f.current) AiAccent.copy(alpha = 0.10f) else Color.Transparent)
             .clickable(onClick = onPick)
             .padding(start = 12.dp, top = 7.dp, bottom = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -276,7 +276,7 @@ private fun FamilyRow(
             val note = listOfNotNull(f.group.takeIf { showGroup }, f.note).joinToString(" · ")
             if (note.isNotBlank()) Text(note, color = TextTertiary, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        if (f.current) Icon(AppIcons.Check, "In use", tint = ServerBrand, modifier = Modifier.size(18.dp))
+        if (f.current) Icon(AppIcons.Check, "In use", tint = AiAccent, modifier = Modifier.size(18.dp))
         IconButton(onClick = onToggleFavourite, modifier = Modifier.size(40.dp)) {
             Icon(
                 if (starred) AppIcons.StarFilled else AppIcons.Star,
@@ -310,7 +310,7 @@ private fun ModelOptions(
     Column(Modifier.fillMaxWidth().background(Background.copy(alpha = 0.35f)).padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (switching) {
-                Box(Modifier.size(26.dp), contentAlignment = Alignment.Center) { LoadingSpinner(color = ServerBrand, size = 14.dp) }
+                Box(Modifier.size(26.dp), contentAlignment = Alignment.Center) { LoadingSpinner(color = AiAccent, size = 14.dp) }
             } else {
                 BrandMark(current?.group.orEmpty(), current?.key.orEmpty(), size = 26.dp)
             }
@@ -325,7 +325,7 @@ private fun ModelOptions(
                     color = TextTertiary, fontSize = 12.sp, maxLines = 1,
                 )
             }
-            PillButton(icon = AppIcons.Check, label = "Done", accent = ServerBrand, onClick = onDone)
+            PillButton(icon = AppIcons.Check, label = "Done", accent = AiAccent, onClick = onDone)
         }
         if (cur != null) {
             if (stops.size > 1) {
@@ -386,9 +386,9 @@ private fun OptionSwitch(label: String, checked: Boolean, enabled: Boolean, onTo
             onCheckedChange = null,
             enabled = enabled,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = Background, checkedTrackColor = ServerBrand,
+                checkedThumbColor = Background, checkedTrackColor = AiAccent,
                 uncheckedThumbColor = TextSecondary, uncheckedTrackColor = Background, uncheckedBorderColor = Border,
-                disabledCheckedTrackColor = ServerBrand.copy(alpha = 0.35f), disabledCheckedThumbColor = Background,
+                disabledCheckedTrackColor = AiAccent.copy(alpha = 0.35f), disabledCheckedThumbColor = Background,
                 disabledUncheckedThumbColor = TextTertiary, disabledUncheckedTrackColor = Background, disabledUncheckedBorderColor = Border,
             ),
             modifier = Modifier.height(32.dp),
@@ -479,7 +479,7 @@ private fun EffortSlider(stops: List<String>, effort: String, onPick: (String) -
                             when {
                                 i > shown -> Color.White.copy(alpha = 0.08f)
                                 isDefault -> TextTertiary
-                                else -> ServerBrand.copy(alpha = if (i == shown) 1f else 0.55f)
+                                else -> AiAccent.copy(alpha = if (i == shown) 1f else 0.55f)
                             },
                         ),
                 )

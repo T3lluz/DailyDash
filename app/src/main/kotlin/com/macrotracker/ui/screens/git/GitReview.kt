@@ -62,7 +62,7 @@ import com.macrotracker.ui.components.chromeGlass
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
-import com.macrotracker.ui.theme.ServerBrand
+import com.macrotracker.ui.theme.AiAccent
 import com.macrotracker.ui.theme.ServerCritical
 import com.macrotracker.ui.theme.ServerGood
 import com.macrotracker.ui.theme.ServerWarn
@@ -169,7 +169,7 @@ fun ReviewScreen(
             }
             val d = parsed.value
             when {
-                parsed.loading -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { LoadingSpinner(color = ServerBrand) }
+                parsed.loading -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { LoadingSpinner(color = AiAccent) }
                 parsed.error != null -> Note(AppIcons.Warning, parsed.error!!, Modifier.weight(1f))
                 d == null || (d.hunks.isEmpty() && !d.binary) -> Note(AppIcons.Code, "Nothing to show for this file.", Modifier.weight(1f))
                 d.binary -> Note(AppIcons.File, "A binary file. Nothing to read here.", Modifier.weight(1f))
@@ -249,7 +249,7 @@ fun ReviewScreen(
                     Row(
                         modifier = Modifier
                             .clip(RoundedCornerShape(50))
-                            .background(ServerBrand)
+                            .background(AiAccent)
                             .clickable { haptics.click(); onSendToHermes(viewModel.reviewPrompt(context.ifBlank { title })) }
                             .padding(horizontal = 16.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -282,7 +282,7 @@ internal fun StatusBadge(letter: Char, modifier: Modifier = Modifier) {
     val (color, label) = when (letter.uppercaseChar()) {
         'A' -> ServerGood to "A"
         'D' -> ServerCritical to "D"
-        'R', 'C' -> ServerBrand to "R"
+        'R', 'C' -> AiAccent to "R"
         'U' -> ServerWarn to "!"
         '?' -> TextSecondary to "U"
         else -> ServerWarn to "M"
@@ -388,7 +388,7 @@ private fun CommentWriter(onAdd: (String) -> Unit, onCancel: () -> Unit) {
             value = text,
             onValueChange = { text = it },
             textStyle = TextStyle(color = TextPrimary, fontSize = 14.sp, lineHeight = 20.sp),
-            cursorBrush = SolidColor(ServerBrand),
+            cursorBrush = SolidColor(AiAccent),
             modifier = Modifier.fillMaxWidth().focusRequester(focus),
             minLines = 2,
             decorationBox = { inner ->
@@ -405,7 +405,7 @@ private fun CommentWriter(onAdd: (String) -> Unit, onCancel: () -> Unit) {
                 fontSize = 13.sp, fontWeight = FontWeight.Bold,
                 modifier = Modifier
                     .clip(RoundedCornerShape(50))
-                    .background(if (text.isBlank()) Color.White.copy(alpha = 0.06f) else ServerBrand)
+                    .background(if (text.isBlank()) Color.White.copy(alpha = 0.06f) else AiAccent)
                     .clickable(enabled = text.isNotBlank()) { onAdd(text.trim()) }
                     .padding(horizontal = 14.dp, vertical = 7.dp),
             )

@@ -337,6 +337,8 @@ com.macrotracker/
                              turn carries them to Hermes as its memory, `fork_ctx`), Name it again (`/retitle`), Share chat, a failed turn
                              (`fail` on the summary) as a red Failed row, a "Needs your answer" pill in the dock while a question or approval is
                              out of sight, a launcher "New chat" shortcut and `dailydash://ask?prompt=` (fills the box, never sends).
+                             The AI tab's accent is `AiAccent` (a saturated orange, Color.kt), used by the Hermes*, Chat*, git/ files in place of the app's pastel `ServerBrand`;
+                             the rest of the app keeps its own.
                              The chat panel is a card floating clear of the screen's edges, all four corners round (`ModalDrawerSheet` with margins), and the navbar slides down
                              out of the way while it is open (`ChatPanelState`, read by MainScreen's nav `AnimatedVisibility`).
                              Send (`SendControl` in HermesChrome.kt) is T3 Code's: an arrow when idle; while Hermes works with text typed it says Steer

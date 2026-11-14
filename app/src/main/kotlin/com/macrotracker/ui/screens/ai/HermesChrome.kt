@@ -88,7 +88,7 @@ import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.OnAccent
-import com.macrotracker.ui.theme.ServerBrand
+import com.macrotracker.ui.theme.AiAccent
 import com.macrotracker.ui.theme.ServerCritical
 import com.macrotracker.ui.theme.ServerGood
 import com.macrotracker.ui.theme.ServerWarn
@@ -111,7 +111,7 @@ import com.macrotracker.ui.util.agoShort
 
 internal fun modeColor(kind: String): Color = when (kind) {
     "chat" -> TextSecondary
-    "read" -> ServerBrand
+    "read" -> AiAccent
     "write" -> ServerCritical
     else -> ServerWarn
 }
@@ -205,7 +205,7 @@ internal fun HermesHeader(
                 // the model and mode are the chat's details: a tap opens them
                 modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(enabled = hasThread) { haptics.tick(); onOpenInfo() },
             ) {
-                ChatStatusDot(active = working, accent = ServerBrand)
+                ChatStatusDot(active = working, accent = AiAccent)
                 Spacer(Modifier.width(6.dp))
                 if (hasThread && brand.isNotBlank()) {
                     ModelLogo(brand, 16.dp)
@@ -295,7 +295,7 @@ internal fun SearchBox(
             onValueChange = onValueChange,
             singleLine = true,
             textStyle = TextStyle(color = TextPrimary, fontSize = 14.sp),
-            cursorBrush = SolidColor(ServerBrand),
+            cursorBrush = SolidColor(AiAccent),
             modifier = Modifier.weight(1f).then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier),
             decorationBox = { inner ->
                 if (value.isEmpty()) Text(hint, color = TextTertiary, fontSize = 14.sp)
@@ -362,7 +362,7 @@ internal fun HermesComposer(
     val sendBackground by animateColorAsState(
         targetValue = when {
             showStop -> ServerCritical
-            canSend -> ServerBrand
+            canSend -> AiAccent
             else -> Border
         },
         animationSpec = MacroMotion.colorTween(),
@@ -413,7 +413,7 @@ internal fun HermesComposer(
                 attachments.forEach { a ->
                     AttachmentChip(a, onRemove = { onRemoveAttachment(a.id) })
                 }
-                if (uploading) LoadingSpinner(color = ServerBrand, size = 16.dp)
+                if (uploading) LoadingSpinner(color = AiAccent, size = 16.dp)
             }
         }
         // One field in both shapes, so folding never drops the cursor or the keyboard.
@@ -439,7 +439,7 @@ internal fun HermesComposer(
                     }
                     .then(if (open) Modifier.heightIn(min = 52.dp).padding(horizontal = 10.dp, vertical = 8.dp) else Modifier.padding(horizontal = 4.dp)),
                 textStyle = TextStyle(color = TextPrimary, fontSize = 15.sp, lineHeight = 21.sp),
-                cursorBrush = SolidColor(ServerBrand),
+                cursorBrush = SolidColor(AiAccent),
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                 minLines = if (open) 2 else 1,
                 maxLines = if (open) 8 else 1,
@@ -543,7 +543,7 @@ internal fun ModelPill(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (switching) {
-            Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) { LoadingSpinner(color = ServerBrand, size = 13.dp) }
+            Box(Modifier.size(22.dp), contentAlignment = Alignment.Center) { LoadingSpinner(color = AiAccent, size = 13.dp) }
         } else {
             BrandMark(model?.group.orEmpty(), model?.family ?: model?.id.orEmpty(), size = 22.dp)
         }
@@ -568,7 +568,7 @@ internal fun ModelPill(
         }
         if (cur?.think == true && modifiers.think && !switching) {
             Spacer(Modifier.width(4.dp))
-            Icon(AppIcons.Sparkles, contentDescription = null, tint = ServerBrand, modifier = Modifier.size(12.dp))
+            Icon(AppIcons.Sparkles, contentDescription = null, tint = AiAccent, modifier = Modifier.size(12.dp))
         }
         Spacer(Modifier.width(3.dp))
         Icon(AppIcons.ChevronDown, null, tint = TextTertiary, modifier = Modifier.size(12.dp))
@@ -697,7 +697,7 @@ internal fun SlashPalette(entries: List<SlashEntry>, onPick: (SlashEntry) -> Uni
                         .padding(horizontal = 14.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("/${e.name}", color = ServerBrand, fontSize = 13.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold)
+                    Text("/${e.name}", color = AiAccent, fontSize = 13.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold)
                     if (e.args.isNotBlank()) {
                         Spacer(Modifier.width(6.dp))
                         Text(e.args, color = TextTertiary, fontSize = 11.sp, fontFamily = FontFamily.Monospace, maxLines = 1)
@@ -725,17 +725,17 @@ internal fun RenameThreadDialog(current: String, onDismiss: () -> Unit, onRename
                 onValueChange = { text = it.take(120) },
                 singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = ServerBrand,
+                    focusedBorderColor = AiAccent,
                     unfocusedBorderColor = Border,
                     focusedTextColor = TextPrimary,
                     unfocusedTextColor = TextPrimary,
-                    cursorColor = ServerBrand,
+                    cursorColor = AiAccent,
                 ),
             )
         },
         confirmButton = {
             TextButton(onClick = { onRename(text) }, enabled = text.isNotBlank()) {
-                Text("Rename", color = if (text.isNotBlank()) ServerBrand else TextTertiary)
+                Text("Rename", color = if (text.isNotBlank()) AiAccent else TextTertiary)
             }
         },
         dismissButton = {

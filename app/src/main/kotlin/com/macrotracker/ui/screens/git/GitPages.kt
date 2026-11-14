@@ -55,7 +55,7 @@ import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.OnAccent
-import com.macrotracker.ui.theme.ServerBrand
+import com.macrotracker.ui.theme.AiAccent
 import com.macrotracker.ui.theme.ServerCritical
 import com.macrotracker.ui.theme.ServerGood
 import com.macrotracker.ui.theme.ServerWarn
@@ -124,7 +124,7 @@ internal fun CommitPage(page: GitPage.Commit, vm: GitViewModel, onBack: () -> Un
     val info = load.value
     DetailFrame("Commit ${page.hash.take(7)}", info?.author ?: "", onBack) {
         when {
-            info == null && load.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingSpinner(color = ServerBrand) }
+            info == null && load.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingSpinner(color = AiAccent) }
             info == null -> Note(AppIcons.Warning, load.error ?: "Could not read it.")
             else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 item {
@@ -134,7 +134,7 @@ internal fun CommitPage(page: GitPage.Commit, vm: GitViewModel, onBack: () -> Un
                         val body = lines.drop(1).joinToString("\n").trim()
                         if (body.isNotBlank()) Text(body, color = TextSecondary, fontSize = 13.5.sp, lineHeight = 20.sp, modifier = Modifier.padding(top = 10.dp))
                         Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Pill(info.hash.take(7), ServerBrand, false)
+                            Pill(info.hash.take(7), AiAccent, false)
                             Text("${info.author} · ${agoShort(info.atMs)}", color = TextTertiary, fontSize = 12.sp)
                         }
                     }
@@ -158,7 +158,7 @@ internal fun ComparePage(base: String, vm: GitViewModel, onBack: () -> Unit, onO
     val st = vm.ui.collectAsState().value.status.value
     DetailFrame("${st?.branch.orEmpty()} vs $base", "What this branch adds", onBack) {
         when {
-            cmp == null && load.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingSpinner(color = ServerBrand) }
+            cmp == null && load.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingSpinner(color = AiAccent) }
             cmp == null -> Note(AppIcons.Warning, load.error ?: "Could not compare.")
             cmp.files.isEmpty() && cmp.commits.isEmpty() -> Note(AppIcons.Check, "Nothing here that $base does not have.")
             else -> {
@@ -185,7 +185,7 @@ internal fun ComparePage(base: String, vm: GitViewModel, onBack: () -> Unit, onO
 @Composable
 private fun SmallCommit(c: GitCommit) {
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(TileDark).padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(c.short, color = ServerBrand, fontSize = 11.5.sp, fontFamily = Mono, fontWeight = FontWeight.SemiBold)
+        Text(c.short, color = AiAccent, fontSize = 11.5.sp, fontFamily = Mono, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.width(10.dp))
         Text(c.subject, color = TextPrimary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         Text(agoShort(c.atMs), color = TextTertiary, fontSize = 11.sp, modifier = Modifier.padding(start = 8.dp))
@@ -206,7 +206,7 @@ internal fun PrPage(number: Int, vm: GitViewModel, onBack: () -> Unit, onAskHerm
     var requesting by remember { mutableStateOf(false) }
     DetailFrame("#$number", d?.pr?.title.orEmpty(), onBack) {
         when {
-            d == null && load.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingSpinner(color = ServerBrand) }
+            d == null && load.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingSpinner(color = AiAccent) }
             d == null -> Note(AppIcons.Warning, load.error ?: "Could not read it.")
             else -> {
                 val (label, tone) = prTone(d.pr)
@@ -227,7 +227,7 @@ internal fun PrPage(number: Int, vm: GitViewModel, onBack: () -> Unit, onAskHerm
                                 }
                                 Text(d.pr.title, color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold, lineHeight = 24.sp, modifier = Modifier.padding(top = 10.dp))
                                 Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Text(d.pr.head, color = ServerBrand, fontSize = 12.sp, fontFamily = Mono, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                                    Text(d.pr.head, color = AiAccent, fontSize = 12.sp, fontFamily = Mono, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                                     Text("  →  ${d.pr.base}", color = TextTertiary, fontSize = 12.sp, fontFamily = Mono)
                                 }
                                 Text("${d.pr.author} · updated ${agoIso(d.pr.updated)} ago · +${d.pr.additions} −${d.pr.deletions} in ${d.pr.changedFiles} files", color = TextTertiary, fontSize = 11.5.sp, modifier = Modifier.padding(top = 6.dp))
@@ -274,7 +274,7 @@ internal fun PrPage(number: Int, vm: GitViewModel, onBack: () -> Unit, onAskHerm
                         }
                         if (d.body.isNotBlank()) {
                             item { Heading("Description") }
-                            item { Box(Modifier.fillMaxWidth().clip(Card).background(TileDark).padding(14.dp)) { MarkdownText(d.body, color = TextSecondary, fontSize = 13.5.sp, linkColor = ServerBrand) } }
+                            item { Box(Modifier.fillMaxWidth().clip(Card).background(TileDark).padding(14.dp)) { MarkdownText(d.body, color = TextSecondary, fontSize = 13.5.sp, linkColor = AiAccent) } }
                         }
                         item { Heading("Files changed", d.files.size) }
                         items(d.files, key = { "f-${it.path}" }) { f -> ChangedFileRow(f) { onOpen(GitPage.Review("PR #$number", d.pr.title.take(50), review, d.files.indexOf(f))) } }
@@ -305,7 +305,7 @@ internal fun PrPage(number: Int, vm: GitViewModel, onBack: () -> Unit, onAskHerm
                             items(d.commits.size, key = { "k$it" }) { i ->
                                 val (h, s) = d.commits[i]
                                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(TileDark).padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Text(h, color = ServerBrand, fontSize = 11.5.sp, fontFamily = Mono, fontWeight = FontWeight.SemiBold); Spacer(Modifier.width(10.dp))
+                                    Text(h, color = AiAccent, fontSize = 11.5.sp, fontFamily = Mono, fontWeight = FontWeight.SemiBold); Spacer(Modifier.width(10.dp))
                                     Text(s, color = TextPrimary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                             }
@@ -315,12 +315,12 @@ internal fun PrPage(number: Int, vm: GitViewModel, onBack: () -> Unit, onAskHerm
                         Column(Modifier.fillMaxWidth().background(TileDark).navigationBarsPadding().imePadding().padding(horizontal = 14.dp, vertical = 10.dp)) {
                             BasicTextField(
                                 value = comment, onValueChange = { comment = it },
-                                textStyle = TextStyle(color = TextPrimary, fontSize = 14.sp, lineHeight = 20.sp), cursorBrush = SolidColor(ServerBrand), maxLines = 4,
+                                textStyle = TextStyle(color = TextPrimary, fontSize = 14.sp, lineHeight = 20.sp), cursorBrush = SolidColor(AiAccent), maxLines = 4,
                                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Background).padding(horizontal = 14.dp, vertical = 11.dp),
                                 decorationBox = { inner -> if (comment.isEmpty()) Text("Comment, or the words for a review", color = TextTertiary, fontSize = 14.sp); inner() },
                             )
                             Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                ActionPill("Comment", AppIcons.Chat, comment.isNotBlank() && ui.busy == null, ServerBrand, Modifier.weight(1f)) { haptics.click(); vm.prAction("comment", number, "body" to comment.trim()); comment = "" }
+                                ActionPill("Comment", AppIcons.Chat, comment.isNotBlank() && ui.busy == null, AiAccent, Modifier.weight(1f)) { haptics.click(); vm.prAction("comment", number, "body" to comment.trim()); comment = "" }
                                 ActionPill("Approve", AppIcons.Check, ui.busy == null, ServerGood, Modifier.weight(1f)) { haptics.click(); vm.prAction("review", number, "kind" to "approve", "body" to comment.trim()); comment = "" }
                                 ActionPill("Changes", AppIcons.Warning, comment.isNotBlank() && ui.busy == null, ServerWarn, Modifier.weight(1f)) { requesting = true }
                                 ActionPill("Merge", AppIcons.GitFork, ui.busy == null && d.pr.mergeState != "DIRTY", Color(0xFFB48EAD), Modifier.weight(1f)) { merging = true }
@@ -332,7 +332,7 @@ internal fun PrPage(number: Int, vm: GitViewModel, onBack: () -> Unit, onAskHerm
                     onDismissRequest = { merging = false }, containerColor = Surface,
                     title = { Text("Merge #$number?", color = TextPrimary) },
                     text = { Text("${d.pr.head} goes into ${d.pr.base}${if (d.checks().bad > 0) ". ${d.pr.checks.bad} checks are failing" else ""}. This is on GitHub straight away.", color = TextSecondary, fontSize = 14.sp, lineHeight = 20.sp) },
-                    confirmButton = { TextButton(onClick = { haptics.confirm(); merging = false; vm.prAction("merge", number, "how" to "squash") }) { Text("Squash and merge", color = ServerBrand) } },
+                    confirmButton = { TextButton(onClick = { haptics.confirm(); merging = false; vm.prAction("merge", number, "how" to "squash") }) { Text("Squash and merge", color = AiAccent) } },
                     dismissButton = { TextButton(onClick = { merging = false }) { Text("Not yet", color = TextSecondary) } },
                 )
                 if (requesting) AlertDialog(

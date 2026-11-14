@@ -36,7 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Border
-import com.macrotracker.ui.theme.ServerBrand
+import com.macrotracker.ui.theme.AiAccent
 import com.macrotracker.ui.theme.ServerCritical
 import com.macrotracker.ui.theme.ServerGood
 import com.macrotracker.ui.theme.ServerWarn
@@ -59,11 +59,11 @@ private data class Starter(val title: String, val sub: String, val icon: ImageVe
 
 private val Starters = listOf(
     Starter("Health check", "CPU, memory, disks, temps", AppIcons.HeartPulse, ServerGood, "Give the server a health check"),
-    Starter("Memory hogs", "What is using the most", AppIcons.Cpu, ServerBrand, "What is using the most memory?"),
+    Starter("Memory hogs", "What is using the most", AppIcons.Cpu, AiAccent, "What is using the most memory?"),
     Starter("Failed services", "Units and containers", AppIcons.Siren, ServerCritical, "Any failed services or unhealthy containers?"),
     Starter("Disk space", "What is filling the disk", AppIcons.HardDrive, ServerWarn, "What is filling up the disk?"),
     Starter("Git", "Changes, branches, PRs", AppIcons.GitFork, Violet, null, goes = 1),
-    Starter("Files", "Browse the server", AppIcons.Folder, ServerBrand, null, goes = 2),
+    Starter("Files", "Browse the server", AppIcons.Folder, AiAccent, null, goes = 2),
 )
 
 @Composable

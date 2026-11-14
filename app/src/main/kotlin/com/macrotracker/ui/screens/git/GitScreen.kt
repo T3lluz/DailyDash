@@ -81,7 +81,7 @@ import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.OnAccent
-import com.macrotracker.ui.theme.ServerBrand
+import com.macrotracker.ui.theme.AiAccent
 import com.macrotracker.ui.theme.ServerCritical
 import com.macrotracker.ui.theme.ServerGood
 import com.macrotracker.ui.theme.ServerWarn
@@ -232,7 +232,7 @@ private fun GitMain(
 
         val body: @Composable () -> Unit = {
             when {
-                ui.status.loading && st == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingSpinner(color = ServerBrand) }
+                ui.status.loading && st == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingSpinner(color = AiAccent) }
                 st == null -> Note(AppIcons.Warning, ui.status.error ?: ui.reposError ?: "Could not read this repo.", Modifier.fillMaxWidth())
                 else -> Column(Modifier.fillMaxSize()) {
                     BranchHero(st, ui.busy, vm)
@@ -322,14 +322,14 @@ private fun BranchHero(st: GitStatus, busy: String?, vm: GitViewModel) {
         }
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Pill(if (st.ahead > 0) "↑ ${st.ahead} to push" else "Up to date", if (st.ahead > 0) ServerBrand else TextSecondary, false)
+            Pill(if (st.ahead > 0) "↑ ${st.ahead} to push" else "Up to date", if (st.ahead > 0) AiAccent else TextSecondary, false)
             if (st.behind > 0) Pill("↓ ${st.behind} to pull", ServerWarn, false)
             if (st.stashes > 0) Pill("${st.stashes} stashed", TextSecondary, false)
         }
         if (st.lastShort.isNotBlank()) {
             Spacer(Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(st.lastShort, color = ServerBrand, fontSize = 11.5.sp, fontFamily = Mono, fontWeight = FontWeight.SemiBold)
+                Text(st.lastShort, color = AiAccent, fontSize = 11.5.sp, fontFamily = Mono, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.width(8.dp))
                 Text(st.lastSubject, color = TextSecondary, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(8.dp))
@@ -370,13 +370,13 @@ private fun SyncButton(label: String, icon: ImageVector, running: Boolean, accen
     Row(
         modifier
             .clip(RoundedCornerShape(14.dp))
-            .background(if (accent) ServerBrand else Color.White.copy(alpha = 0.08f))
+            .background(if (accent) AiAccent else Color.White.copy(alpha = 0.08f))
             .clickable(enabled = enabled) { haptics.click(); onClick() }
             .padding(vertical = 11.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (running) LoadingSpinner(color = if (accent) OnAccent else ServerBrand, size = 14.dp)
+        if (running) LoadingSpinner(color = if (accent) OnAccent else AiAccent, size = 14.dp)
         else Icon(icon, null, tint = if (accent) OnAccent else TextSecondary, modifier = Modifier.size(15.dp))
         Spacer(Modifier.width(7.dp))
         Text(label, color = if (accent) OnAccent else TextPrimary, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
@@ -449,7 +449,7 @@ private fun ChangesTab(st: GitStatus, busy: String?, vm: GitViewModel, stack: Mu
                             Text("  ${rows.size}", color = TextTertiary, fontSize = 11.sp)
                             Spacer(Modifier.weight(1f))
                             Text(
-                                action, color = ServerBrand, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold,
+                                action, color = AiAccent, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.clip(RoundedCornerShape(50)).clickable(enabled = busy == null) { haptics.click(); onAll() }.padding(horizontal = 10.dp, vertical = 5.dp),
                             )
                         }
@@ -482,7 +482,7 @@ private fun ChangesTab(st: GitStatus, busy: String?, vm: GitViewModel, stack: Mu
                     value = message,
                     onValueChange = { message = it },
                     textStyle = TextStyle(color = TextPrimary, fontSize = 14.sp, lineHeight = 20.sp),
-                    cursorBrush = SolidColor(ServerBrand),
+                    cursorBrush = SolidColor(AiAccent),
                     maxLines = 4,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -501,7 +501,7 @@ private fun ChangesTab(st: GitStatus, busy: String?, vm: GitViewModel, stack: Mu
                     Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(14.dp))
-                        .background(if (can) ServerBrand else Color.White.copy(alpha = 0.07f))
+                        .background(if (can) AiAccent else Color.White.copy(alpha = 0.07f))
                         .clickable(enabled = can) {
                             haptics.confirm()
                             vm.commit(message.trim(), all = nothingStaged)
@@ -556,7 +556,7 @@ private fun FileRow(f: GitFile, stagedSide: Boolean, onOpen: () -> Unit, onToggl
         if (f.minus > 0) Text(" −${f.minus}", color = ServerCritical, fontSize = 11.5.sp, fontFamily = Mono, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.width(2.dp))
         IconButton(onClick = onToggle, modifier = Modifier.size(38.dp)) {
-            Icon(if (stagedSide) AppIcons.Close else AppIcons.AddCircle, if (stagedSide) "Unstage" else "Stage", tint = if (stagedSide) TextSecondary else ServerBrand, modifier = Modifier.size(20.dp))
+            Icon(if (stagedSide) AppIcons.Close else AppIcons.AddCircle, if (stagedSide) "Unstage" else "Stage", tint = if (stagedSide) TextSecondary else AiAccent, modifier = Modifier.size(20.dp))
         }
         Box {
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, modifier = Modifier.background(Surface)) {
@@ -585,19 +585,19 @@ private fun CommitRow(c: GitCommit, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick).padding(vertical = 10.dp, horizontal = 4.dp)) {
         // a rail with a node, as a graph draws it
         Box(Modifier.width(22.dp).height(46.dp), contentAlignment = Alignment.TopCenter) {
-            Box(Modifier.padding(top = 6.dp).size(8.dp).clip(CircleShape).background(if (c.refs.any { it.startsWith("HEAD") }) ServerBrand else TextTertiary))
+            Box(Modifier.padding(top = 6.dp).size(8.dp).clip(CircleShape).background(if (c.refs.any { it.startsWith("HEAD") }) AiAccent else TextTertiary))
         }
         Column(Modifier.weight(1f).padding(start = 6.dp)) {
             Text(c.subject, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Row(Modifier.padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(c.short, color = ServerBrand, fontSize = 11.5.sp, fontFamily = Mono)
+                Text(c.short, color = AiAccent, fontSize = 11.5.sp, fontFamily = Mono)
                 Text("  ·  ${c.author}  ·  ${agoShort(c.atMs)}", color = TextTertiary, fontSize = 11.5.sp, maxLines = 1)
             }
             if (c.refs.isNotEmpty()) {
                 Row(Modifier.padding(top = 6.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     c.refs.take(4).forEach { r ->
                         val tag = r.startsWith("tag:")
-                        Pill(r.removePrefix("HEAD -> ").removePrefix("tag: "), if (tag) ServerWarn else if (r.startsWith("HEAD")) ServerBrand else TextSecondary, true)
+                        Pill(r.removePrefix("HEAD -> ").removePrefix("tag: "), if (tag) ServerWarn else if (r.startsWith("HEAD")) AiAccent else TextSecondary, true)
                     }
                 }
             }
@@ -609,7 +609,7 @@ private fun CommitRow(c: GitCommit, onClick: () -> Unit) {
 private fun <T> LoadList(load: Load<List<T>>, empty: String, content: @Composable (List<T>) -> Unit) {
     when {
         load.value != null && load.value.isNotEmpty() -> content(load.value)
-        load.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingSpinner(color = ServerBrand) }
+        load.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingSpinner(color = AiAccent) }
         load.error != null -> Note(AppIcons.Warning, load.error, Modifier.fillMaxWidth())
         load.value != null -> Note(AppIcons.Inbox, empty, Modifier.fillMaxWidth())
         else -> Box(Modifier.fillMaxSize())
@@ -627,12 +627,12 @@ private fun BranchesTab(st: GitStatus, busy: String?, vm: GitViewModel, stack: M
     val b = branches.value
     Column(Modifier.fillMaxSize()) {
         when {
-            b == null && branches.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingSpinner(color = ServerBrand) }
+            b == null && branches.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingSpinner(color = AiAccent) }
             b == null -> Note(AppIcons.Warning, branches.error ?: "No branches.", Modifier.fillMaxWidth())
             else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 item(key = "actions") {
                     Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ActionCard("Review vs ${b.base}", "What this branch adds", AppIcons.Eye, ServerBrand, Modifier.weight(1f)) {
+                        ActionCard("Review vs ${b.base}", "What this branch adds", AppIcons.Eye, AiAccent, Modifier.weight(1f)) {
                             haptics.click(); vm.loadCompare(b.base); stack += GitPage.Compare(b.base)
                         }
                         ActionCard("New branch", "From ${st.branch}", AppIcons.AddCircle, ServerGood, Modifier.weight(1f)) { haptics.tick(); creating = true }
@@ -654,7 +654,7 @@ private fun BranchesTab(st: GitStatus, busy: String?, vm: GitViewModel, stack: M
             containerColor = Surface,
             title = { Text("Switch to ${br.name}?", color = TextPrimary) },
             text = { Text(if (st.files.isEmpty()) "Your working tree is clean." else "${st.files.size} changed files come with you, or git refuses if they would be overwritten.", color = TextSecondary, fontSize = 14.sp, lineHeight = 20.sp) },
-            confirmButton = { TextButton(onClick = { haptics.click(); vm.checkout(br.name); switching = null }) { Text("Switch", color = ServerBrand) } },
+            confirmButton = { TextButton(onClick = { haptics.click(); vm.checkout(br.name); switching = null }) { Text("Switch", color = AiAccent) } },
             dismissButton = { TextButton(onClick = { switching = null }) { Text("Stay", color = TextSecondary) } },
         )
     }
@@ -714,10 +714,10 @@ internal fun NameDialog(title: String, hint: String, action: String, onDismiss: 
             OutlinedTextField(
                 value = text, onValueChange = { text = it.filter { c -> !c.isWhitespace() }.take(100) }, singleLine = true,
                 label = { Text(hint, color = TextTertiary) },
-                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ServerBrand, unfocusedBorderColor = Border, focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary, cursorColor = ServerBrand),
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AiAccent, unfocusedBorderColor = Border, focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary, cursorColor = AiAccent),
             )
         },
-        confirmButton = { TextButton(onClick = { onDone(text) }, enabled = text.isNotBlank()) { Text(action, color = if (text.isNotBlank()) ServerBrand else TextTertiary) } },
+        confirmButton = { TextButton(onClick = { onDone(text) }, enabled = text.isNotBlank()) { Text(action, color = if (text.isNotBlank()) AiAccent else TextTertiary) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = TextSecondary) } },
     )
 }
@@ -741,7 +741,7 @@ private fun PrsTab(st: GitStatus, vm: GitViewModel, stack: MutableList<GitPage>)
             Spacer(Modifier.weight(1f))
             if (st.ahead > 0 || st.upstream.isNotBlank()) {
                 Row(
-                    Modifier.clip(RoundedCornerShape(50)).background(ServerBrand).clickable { haptics.click(); vm.createPr() }.padding(horizontal = 12.dp, vertical = 7.dp),
+                    Modifier.clip(RoundedCornerShape(50)).background(AiAccent).clickable { haptics.click(); vm.createPr() }.padding(horizontal = 12.dp, vertical = 7.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(AppIcons.AddCircle, null, tint = OnAccent, modifier = Modifier.size(14.dp))
@@ -779,7 +779,7 @@ private fun PrCard(p: GitPr, onClick: () -> Unit) {
         }
         Text(p.title, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, lineHeight = 20.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
         Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(p.head, color = ServerBrand, fontSize = 11.5.sp, fontFamily = Mono, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            Text(p.head, color = AiAccent, fontSize = 11.5.sp, fontFamily = Mono, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             Text("  →  ${p.base}", color = TextTertiary, fontSize = 11.5.sp, fontFamily = Mono, maxLines = 1)
         }
         Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

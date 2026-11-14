@@ -39,7 +39,7 @@ import com.macrotracker.data.hermes.HermesThreadSummary
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.Error
-import com.macrotracker.ui.theme.ServerBrand
+import com.macrotracker.ui.theme.AiAccent
 import com.macrotracker.ui.theme.ServerCritical
 import com.macrotracker.ui.theme.ServerWarn
 import com.macrotracker.ui.theme.Surface
@@ -187,7 +187,7 @@ internal fun ChatInfoSheet(
                                 .fillMaxWidth(fraction.coerceAtLeast(0.02f))
                                 .height(6.dp)
                                 .clip(RoundedCornerShape(50))
-                                .background(if (fraction >= 0.85f) ServerCritical else if (fraction >= 0.6f) ServerWarn else ServerBrand),
+                                .background(if (fraction >= 0.85f) ServerCritical else if (fraction >= 0.6f) ServerWarn else AiAccent),
                         )
                     }
                     Spacer(Modifier.height(14.dp))
@@ -225,7 +225,7 @@ internal fun ChatInfoSheet(
                             Text(m.label, color = if (on) TextPrimary else TextSecondary, fontSize = 14.5.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal)
                             if (m.desc.isNotBlank()) Text(m.desc, color = TextTertiary, fontSize = 11.5.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
-                        if (on) Icon(AppIcons.Check, null, tint = ServerBrand, modifier = Modifier.size(16.dp))
+                        if (on) Icon(AppIcons.Check, null, tint = AiAccent, modifier = Modifier.size(16.dp))
                     }
                 }
             }

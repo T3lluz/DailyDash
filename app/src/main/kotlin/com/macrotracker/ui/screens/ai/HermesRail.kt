@@ -86,8 +86,7 @@ import com.macrotracker.data.hermes.HermesTurnActivity
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.MacroMotion
-import com.macrotracker.ui.theme.Primary
-import com.macrotracker.ui.theme.ServerBrand
+import com.macrotracker.ui.theme.AiAccent
 import com.macrotracker.ui.theme.ServerWarn
 import com.macrotracker.ui.theme.Surface
 import com.macrotracker.ui.theme.TileDark
@@ -283,12 +282,12 @@ internal fun HermesThreadRail(
                 Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .background(ServerBrand.copy(alpha = 0.16f))
+                    .background(AiAccent.copy(alpha = 0.16f))
                     .clickable { onNewChat() }
                     .semantics { contentDescription = "New chat" },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(AppIcons.NewChat, null, tint = ServerBrand, modifier = Modifier.size(19.dp))
+                Icon(AppIcons.NewChat, null, tint = AiAccent, modifier = Modifier.size(19.dp))
             }
         }
         Spacer(Modifier.height(12.dp))
@@ -341,7 +340,7 @@ internal fun HermesThreadRail(
             fun section(label: String, rows: List<HermesThreadSummary>, movable: Boolean = false) {
                 if (rows.isEmpty()) return
                 if (label.isNotBlank()) item(key = "h-$label") {
-                    RailSection(label, rows.size, when (label) { "Active" -> ServerBrand; "Pinned" -> ServerWarn; "Staff" -> Primary; else -> TextTertiary })
+                    RailSection(label, rows.size, when (label) { "Active" -> AiAccent; "Pinned" -> ServerWarn; "Staff" -> AiAccent; else -> TextTertiary })
                 }
                 items(rows, key = { "t-${it.id}" }) { t ->
                     ThreadRow(
@@ -488,7 +487,7 @@ internal fun HermesThreadRail(
                     .clip(RoundedCornerShape(50))
                     .clickable { shownNote?.undo?.invoke(); note = null }
                     .padding(horizontal = 12.dp, vertical = 8.dp),
-            ) { Text("Undo", color = ServerBrand, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
+            ) { Text("Undo", color = AiAccent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
         }
     }
     }
@@ -544,8 +543,8 @@ private fun FoldRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label
 private enum class RailState(val label: String, val tone: Color) {
     NEEDS_INPUT("Needs input", ServerWarn),
     FAILED("Failed", Error),
-    WORKING("Working", ServerBrand),
-    DONE("Done", Primary),
+    WORKING("Working", AiAccent),
+    DONE("Done", AiAccent),
 }
 
 /**
@@ -621,7 +620,7 @@ private fun ThreadRow(
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(if (toPin) ServerBrand.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.10f))
+                    .background(if (toPin) AiAccent.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.10f))
                     .padding(horizontal = 18.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = if (toPin) Arrangement.Start else Arrangement.End,
@@ -629,13 +628,13 @@ private fun ThreadRow(
                 Icon(
                     if (toPin) AppIcons.Star else AppIcons.CheckCircle,
                     contentDescription = null,
-                    tint = if (toPin) ServerBrand else TextPrimary,
+                    tint = if (toPin) AiAccent else TextPrimary,
                     modifier = Modifier.size(18.dp),
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
                     when { !toPin && archived -> "Unsettle"; !toPin -> "Settle"; thread.pinned -> "Unpin"; else -> "Pin" },
-                    color = if (toPin) ServerBrand else TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                    color = if (toPin) AiAccent else TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                 )
             }
         },
@@ -667,7 +666,7 @@ private fun ThreadRow(
                         )
                         if (thread.scheduled != null) {
                             Spacer(Modifier.width(6.dp))
-                            Icon(AppIcons.Repeat, "Runs on a schedule", tint = Primary, modifier = Modifier.size(12.dp))
+                            Icon(AppIcons.Repeat, "Runs on a schedule", tint = AiAccent, modifier = Modifier.size(12.dp))
                         }
                         if (thread.pinned && !thread.isStaff) {
                             Spacer(Modifier.width(6.dp))
@@ -779,7 +778,7 @@ private fun RowModelLine(model: RailModel?, modeTag: String?, tokens: Long, modi
         }
         if (modeTag != null) {
             Text("  ·  ", color = TextTertiary, fontSize = 11.5.sp)
-            Text(modeTag, color = ServerBrand, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            Text(modeTag, color = AiAccent, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
         }
         if (tokens > 0) {
             Text("  ·  ${tokenLabel(tokens)} tok", color = TextTertiary, fontSize = 11.5.sp, maxLines = 1)
@@ -822,7 +821,7 @@ private fun HitExcerpt(hit: HermesChatHit?) {
             hit.ranges.forEach { r ->
                 val start = r.first.coerceIn(0, hit.snippet.length)
                 val end = (r.last + 1).coerceIn(start, hit.snippet.length)
-                if (end > start) addStyle(SpanStyle(color = ServerBrand, fontWeight = FontWeight.SemiBold), start, end)
+                if (end > start) addStyle(SpanStyle(color = AiAccent, fontWeight = FontWeight.SemiBold), start, end)
             }
         }
     }
@@ -866,7 +865,7 @@ private fun RowChips(model: String?, modeTag: String?, tokens: Long, context: Fl
     if (model == null && modeTag == null && tokens <= 0 && context == null) return
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         if (model != null) Tag(model, TextSecondary, Modifier.weight(1f, fill = false))
-        if (modeTag != null) Tag(modeTag, ServerBrand, accent = true)
+        if (modeTag != null) Tag(modeTag, AiAccent, accent = true)
         context?.takeIf { it >= 0.5f }?.let { Tag("${(it * 100).toInt()}% full", if (it >= 0.85f) Error else ServerWarn, accent = true) }
         if (tokens > 0) Tag("${tokenLabel(tokens)} tok", TextTertiary)
     }

@@ -25,6 +25,9 @@ val SurfaceChrome = Color(0xFF141414)
 
 /** A tile set into a page or a panel: darker than what it sits on, with no outline. */
 val TileDark = Color(0xFF111111)
+
+/** The AI tab's accent: a saturated orange, in place of the app's pastel blue. */
+val AiAccent = Color(0xFFF28C3C)
 val Primary = Color(0xFF81A1C1)
 val PrimaryVariant = Color(0xFF6B8AA8)
 val OnAccent = Color(0xFF14181D)

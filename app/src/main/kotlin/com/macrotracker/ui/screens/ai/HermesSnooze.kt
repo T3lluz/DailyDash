@@ -35,7 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Border
-import com.macrotracker.ui.theme.ServerBrand
+import com.macrotracker.ui.theme.AiAccent
 import com.macrotracker.ui.theme.Surface
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
@@ -138,11 +138,11 @@ internal fun SnoozeDialog(title: String, onPick: (Long) -> Unit, onDismiss: () -
                         label = { Text("For how long", color = TextTertiary) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = ServerBrand,
+                            focusedBorderColor = AiAccent,
                             unfocusedBorderColor = Border,
                             focusedTextColor = TextPrimary,
                             unfocusedTextColor = TextPrimary,
-                            cursorColor = ServerBrand,
+                            cursorColor = AiAccent,
                         ),
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -152,13 +152,13 @@ internal fun SnoozeDialog(title: String, onPick: (Long) -> Unit, onDismiss: () -
                             Box(
                                 Modifier
                                     .clip(RoundedCornerShape(50))
-                                    .background(if (unit == i) ServerBrand.copy(alpha = 0.18f) else androidx.compose.ui.graphics.Color.White.copy(alpha = 0.07f))
+                                    .background(if (unit == i) AiAccent.copy(alpha = 0.18f) else androidx.compose.ui.graphics.Color.White.copy(alpha = 0.07f))
                                     .clickable { unit = i }
                                     .padding(horizontal = 12.dp, vertical = 7.dp),
                             ) {
                                 Text(
                                     name,
-                                    color = if (unit == i) ServerBrand else TextSecondary,
+                                    color = if (unit == i) AiAccent else TextSecondary,
                                     fontSize = 12.5.sp,
                                     fontWeight = if (unit == i) FontWeight.SemiBold else FontWeight.Normal,
                                 )
@@ -174,7 +174,7 @@ internal fun SnoozeDialog(title: String, onPick: (Long) -> Unit, onDismiss: () -
                 TextButton(
                     onClick = { onPick(System.currentTimeMillis() + n * units[unit].second) },
                     enabled = n > 0,
-                ) { Text("Snooze", color = if (n > 0) ServerBrand else TextTertiary) }
+                ) { Text("Snooze", color = if (n > 0) AiAccent else TextTertiary) }
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = TextSecondary) } },

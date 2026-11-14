@@ -51,7 +51,7 @@ import com.macrotracker.data.hermes.HermesPreview
 import com.macrotracker.ui.components.LoadingSpinner
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Border
-import com.macrotracker.ui.theme.ServerBrand
+import com.macrotracker.ui.theme.AiAccent
 import com.macrotracker.ui.theme.ServerWarn
 import com.macrotracker.ui.theme.Surface
 import com.macrotracker.ui.theme.SurfaceChrome
@@ -145,14 +145,14 @@ internal fun ServerFilesSheet(
                         }
                     }
                     IconButton(onClick = { haptics.click(); onMention(shown.path); onDismiss() }) {
-                        Icon(AppIcons.Chat, "Ask about this", tint = ServerBrand, modifier = Modifier.size(20.dp))
+                        Icon(AppIcons.Chat, "Ask about this", tint = AiAccent, modifier = Modifier.size(20.dp))
                     }
                 }
             }
             HorizontalDivider(color = Border)
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when (shown) {
-                    null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingSpinner(color = ServerBrand) }
+                    null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingSpinner(color = AiAccent) }
                     is HermesPreview.Failed -> Note(AppIcons.Lock, shown.error)
                     is HermesPreview.Binary -> Note(AppIcons.File, "Binary file, ${sizeLabel(shown.bytes)}. Nothing to show here.")
                     is HermesPreview.Image -> FileImage(shown)
@@ -199,7 +199,7 @@ private fun FolderList(folder: HermesPreview.Folder, onOpen: (HermesPreview.Fold
                     .padding(horizontal = 20.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(if (e.dir) AppIcons.Folder else AppIcons.File, null, tint = if (e.dir) ServerBrand else TextSecondary, modifier = Modifier.size(18.dp))
+                Icon(if (e.dir) AppIcons.Folder else AppIcons.File, null, tint = if (e.dir) AiAccent else TextSecondary, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(14.dp))
                 Text(e.name, color = TextPrimary, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 if (!e.dir) Text(sizeLabel(e.bytes), color = TextTertiary, fontSize = 11.sp)
