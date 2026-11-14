@@ -114,6 +114,40 @@ class HermesClient @Inject constructor(
         send("POST", "/ai/threads/${enc(id)}/clear", JSONObject())
     }
 
+    /**
+     * Cuts a chat back to just before one of your messages, on the bridge and in Hermes' memory,
+     * for edit-and-resend and retry. [ts] names the message; [last] takes the newest of yours when
+     * the bubble was drawn before the bridge stamped it. Files the cut turns changed stay changed.
+     */
+    suspend fun rewind(id: String, ts: Long, last: Boolean = false): HermesRewound = withContext(Dispatchers.IO) {
+        val o = JSONObject(send("POST", "/ai/threads/${enc(id)}/rewind", JSONObject().put("ts", ts).put("last", last)))
+        val atts = o.optJSONArray("atts")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it)?.let(::parseAttachment) } }.orEmpty()
+        val thread = o.optJSONObject("thread")?.let { t ->
+            HermesThread(summary = parseSummary(t), items = parseItems(t.optJSONArray("msgs") ?: JSONArray()))
+        }
+        HermesRewound(o.optString("text"), atts, thread)
+    }
+
+    /** Puts a file back the way [change] found it; throws a [HermesException] with code 409 when it was edited again since. */
+    suspend fun revert(threadId: String, change: HermesFileChange, force: Boolean = false): Unit = withContext(Dispatchers.IO) {
+        send(
+            "POST", "/ai/revert",
+            JSONObject().put("thread", threadId).put("path", change.path).put("ck", change.ck).put("ah", change.ah).put("force", force),
+        )
+    }
+
+    /** A path on the server: a file's text or picture, or a folder's entries. [from]..[to] are 1-based lines to mark. */
+    suspend fun preview(path: String, from: Int = 0, to: Int = 0): HermesPreview = withContext(Dispatchers.IO) {
+        val q = "?path=${enc(path)}" + if (from > 0) "&from=$from&to=${maxOf(from, to)}" else ""
+        val raw = try {
+            get("/ai/preview$q")
+        } catch (e: HermesException) {
+            // the bridge answers 403 / 404 with the reason in the body, which send() already unwrapped
+            return@withContext HermesPreview.Failed(path, e.message ?: "Could not open it")
+        }
+        parsePreview(JSONObject(raw))
+    }
+
     /** The slash commands Hermes answers itself; the page keeps a few of its own. */
     suspend fun commands(): List<HermesCommand> = withContext(Dispatchers.IO) {
         val arr = JSONObject(get("/ai/commands")).optJSONArray("commands") ?: JSONArray()
@@ -440,6 +474,30 @@ class HermesClient @Inject constructor(
             )
         }
 
+        internal fun parsePreview(o: JSONObject): HermesPreview {
+            val path = o.optString("path")
+            o.optString("error").takeIf { it.isNotBlank() }?.let { return HermesPreview.Failed(path, it) }
+            val name = o.optString("name").ifBlank { path.substringAfterLast('/') }
+            return when (o.optString("kind")) {
+                "dir" -> HermesPreview.Folder(
+                    path, o.optString("rel").ifBlank { path }, name,
+                    o.optJSONArray("entries")?.let { a ->
+                        (0 until a.length()).mapNotNull { i ->
+                            val e = a.optJSONObject(i) ?: return@mapNotNull null
+                            HermesPreview.Folder.Entry(e.optString("name"), e.optString("path"), e.optBoolean("dir"), e.optLong("bytes"))
+                        }
+                    }.orEmpty(),
+                )
+                "image" -> HermesPreview.Image(path, name, o.optString("mime"), o.optLong("bytes"), o.optString("b64"))
+                "binary" -> HermesPreview.Binary(path, name, o.optLong("bytes"))
+                else -> HermesPreview.Text(
+                    path, o.optString("rel").ifBlank { path }, name, o.optString("text"), o.optLong("bytes"),
+                    o.optInt("lines"), o.optBoolean("truncated"), o.optString("lang"),
+                    o.optInt("from"), o.optInt("to"),
+                )
+            }
+        }
+
         internal fun parseSummary(o: JSONObject): HermesThreadSummary = HermesThreadSummary(
             id = o.optString("id"),
             title = o.optString("title").ifBlank { "New chat" },
@@ -481,7 +539,7 @@ class HermesClient @Inject constructor(
                     // A duty round's prompt is long; the transcript shows its short label instead.
                     val shown = m.optString("say").takeIf { it.isNotBlank() && m.optString("tag") == "round" }
                     val atts = m.optJSONArray("atts")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it)?.let(::parseAttachment) } }
-                    HermesItem.User(key, shown ?: m.optString("text"), atts.orEmpty())
+                    HermesItem.User(key, shown ?: m.optString("text"), atts.orEmpty(), m.optLong("ts"))
                 }
                 "output" -> HermesItem.Output(key, m.optString("text"))
                 "assistant" -> HermesItem.Assistant(
@@ -494,6 +552,7 @@ class HermesClient @Inject constructor(
                     ms = m.optLong("ms").takeIf { it > 0 },
                     model = m.optString("model").takeIf { it.isNotBlank() },
                     changes = parseChanges(m.optJSONArray("changes")),
+                    ts = m.optLong("ts"),
                 )
                 "exec" -> parseExec(m, key)
                 "ask" -> parseAsk(m, key)
@@ -587,6 +646,9 @@ class HermesClient @Inject constructor(
                     minus = c.optInt("minus"),
                     diff = c.optString("diff").takeIf { it.isNotBlank() }?.take(MAX_DIFF_CHARS),
                     status = c.optString("status"),
+                    ck = c.optString("ck"),
+                    ah = c.optString("ah"),
+                    revertedMs = c.optLong("reverted"),
                 )
             }
         }

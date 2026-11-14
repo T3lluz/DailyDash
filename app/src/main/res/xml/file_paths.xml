@@ -2,4 +2,5 @@
 <paths>
     <cache-path name="app_updates" path="app_updates/" />
     <cache-path name="meal_photos" path="meal_photos/" />
+    <cache-path name="hermes_photos" path="hermes_photos/" />
 </paths>

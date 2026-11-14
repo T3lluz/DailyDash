@@ -309,7 +309,28 @@ com.macrotracker/
                              takes one of six categorical slots (UsageKit.kt).
                              Hermes' rail groups "Needs you" first, dots a chat that moved since this phone
                              opened it (`HermesUiState.seen`), and shows each chat's tokens and context fill
-                             (`HermesThreadSummary.contextFraction`)
+                             (`HermesThreadSummary.contextFraction`).
+                             More from T3 Code's phone app, in the rail and chat: each row shows the model it
+                             runs on (logo, family, mode when not Agent, tokens: `railModel`), with filters
+                             (Active, Pinned, Snoozed, Archived), snooze (`HermesSnooze.kt`: T3 Code's presets
+                             plus a time of your own; `SettingsRepository.hermesSnoozed`, phone-side like
+                             archive), a hand-made order (`hermesOrder`, Move up/down/top, "Sort by recent"
+                             resets it), day groups, an undo pill after pin, archive and snooze, and a footer
+                             to Usage, Console and Files. The panel closes on a tap outside it (Material ignores
+                             a scrim tap while `gesturesEnabled` is false, so it is on only while open). The
+                             header's second line opens `ChatInfoSheet` (T3 Code's thread settings: model, context
+                             fill, tokens, cost, what Hermes did, mode, chat actions). A message: tap shows its
+                             time, hold gives Copy and Edit and resend (`/ai/threads/{id}/rewind`; the newest
+                             answer also has Ask again), days are divided, and a Plan answer ends with an
+                             Implement card. A change card opens the file at its lines or reverts it
+                             (`/ai/revert`, with a conflict prompt). `HermesFiles.kt` is the server file
+                             browser and viewer over `/ai/preview` (header menu, attach sheet, or typing "@");
+                             `HermesViewModel.draftFor` keeps a draft per chat. Find in chat, camera in attach,
+                             pictures drawn in messages (tap for full screen), selectable answers, and a
+                             hardware keyboard (Enter sends, Ctrl+N, Ctrl+K, Esc). "Ask Hermes" in the share
+                             sheet (`AskHermesActivity` copies the files into the cache, `HermesShareInbox`
+                             hands them to the pane) starts a new chat. Not ported, since the bridge has no
+                             equivalent: git and pull requests, worktrees, review screens, subagents, fork.
                              + ConsoleScreen.kt: the dashboard's console page (site/console.html, xterm) in a
                              WebView, the same shells as the web's console. Reached from the AI tab's menu, Home's
                              Servers card, the Servers screen and settings, Usage, and the launcher shortcuts

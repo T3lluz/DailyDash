@@ -191,14 +191,19 @@ fun MainScreen(
     val hermesActivity by hermesActivityViewModel.navActivity.collectAsState()
     // A launcher shortcut: the console, usage, or Hermes.
     val pendingOpen by (openRequest ?: remember { MutableStateFlow(null) }).collectAsState()
-    LaunchedEffect(pendingOpen, onboardingCompleted) {
+    LaunchedEffect(pendingOpen, onboardingCompleted, hasAiApiKey) {
         val where = pendingOpen ?: return@LaunchedEffect
         if (!onboardingCompleted) return@LaunchedEffect
         when (where) {
             "console" -> navController.navigateToSubScreen(SubScreenRoutes.CONSOLE)
             "usage" -> navController.navigateToSubScreen(SubScreenRoutes.USAGE)
             // A tab asked for from outside opens on the tab itself, not on a sub-screen left open over it.
-            "hermes", "ai" -> if (hasAiApiKey) navController.navigateToTabRoot(Screen.AI.route)
+            "hermes", "ai" -> {
+                // On a cold start Hermes has not answered yet, so the tab does not exist yet: wait for it
+                // (the effect restarts when it does) before giving up on the request.
+                if (!hasAiApiKey) kotlinx.coroutines.delay(8_000)
+                if (hasAiApiKey) navController.navigateToTabRoot(Screen.AI.route)
+            }
             // Tilesmith widgets' taps: a screen of the app, or the studio on a design.
             "home" -> navController.navigateToTabRoot(Screen.Home.route)
             "health" -> navController.navigateToTabRoot(Screen.Health.route)

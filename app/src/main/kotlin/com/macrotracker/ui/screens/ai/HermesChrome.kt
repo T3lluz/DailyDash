@@ -1,6 +1,13 @@
 package com.macrotracker.ui.screens.ai
 
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.animation.animateContentSize
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
@@ -137,6 +144,9 @@ internal fun HermesHeader(
     onOpenUsage: () -> Unit,
     onOpenTilesmith: () -> Unit = {},
     onCopyChat: () -> Unit = {},
+    onOpenFiles: () -> Unit = {},
+    onFind: () -> Unit = {},
+    onOpenInfo: () -> Unit = {},
     /** What the header's usage square fills with; null draws a plain chart icon. */
     usage: com.macrotracker.data.dashboard.UsageSnapshot? = null,
 ) {
@@ -150,7 +160,7 @@ internal fun HermesHeader(
     ) {
         Box {
             IconButton(onClick = { haptics.tick(); onOpenRail() }) {
-                Icon(AppIcons.History, contentDescription = "Chats", tint = TextSecondary, modifier = Modifier.size(21.dp))
+                Icon(AppIcons.PanelLeft, contentDescription = "Chats", tint = TextSecondary, modifier = Modifier.size(21.dp))
             }
             if (railAttention) {
                 Box(
@@ -184,7 +194,11 @@ internal fun HermesHeader(
                 Spacer(Modifier.width(3.dp))
                 Icon(AppIcons.ChevronDown, contentDescription = null, tint = TextTertiary, modifier = Modifier.size(14.dp))
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                // the model and mode are the chat's details: a tap opens them
+                modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(enabled = hasThread) { haptics.tick(); onOpenInfo() },
+            ) {
                 ChatStatusDot(active = working, accent = ServerBrand)
                 Spacer(Modifier.width(6.dp))
                 Text(status, color = TextTertiary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -207,11 +221,14 @@ internal fun HermesHeader(
                 if (hasThread) {
                     MenuRow("Rename", AppIcons.Edit) { menuOpen = false; onRename() }
                     MenuRow(if (pinned) "Unpin" else "Pin to the top", AppIcons.Star) { menuOpen = false; onTogglePin() }
+                    MenuRow("Chat details", AppIcons.Info) { menuOpen = false; onOpenInfo() }
+                    MenuRow("Find in chat", AppIcons.Search) { menuOpen = false; onFind() }
                     MenuRow("Copy chat", AppIcons.Copy) { menuOpen = false; onCopyChat() }
                     MenuRow("Clear this chat", AppIcons.Refresh) { menuOpen = false; onClear() }
                     MenuRow("Delete this chat", AppIcons.Delete, danger = true) { menuOpen = false; onDelete() }
                     HorizontalDivider(color = Border)
                 }
+                MenuRow("Server files", AppIcons.Folder) { menuOpen = false; onOpenFiles() }
                 MenuRow("Console", AppIcons.SquareTerminal) { menuOpen = false; onOpenConsole() }
                 MenuRow("Tilesmith widget maker", AppIcons.Blocks) { menuOpen = false; onOpenTilesmith() }
                 if (onUsePhoneAi != null) {
@@ -401,6 +418,17 @@ internal fun HermesComposer(
                 modifier = Modifier
                     .weight(1f)
                     .onFocusChanged { focused = it.isFocused }
+                    // A hardware keyboard: Enter sends, Shift+Enter is a new line. A phone's own keyboard
+                    // sends no key event for Enter (it commits a newline), so it is left alone.
+                    .onPreviewKeyEvent { e ->
+                        val enter = e.key == Key.Enter || e.key == Key.NumPadEnter
+                        if (enter && e.type == KeyEventType.KeyDown && !e.isShiftPressed && e.isPhysicalKeyboard()) {
+                            if (canSend) onSend()
+                            true
+                        } else {
+                            false
+                        }
+                    }
                     .then(if (open) Modifier.heightIn(min = 52.dp).padding(horizontal = 10.dp, vertical = 8.dp) else Modifier.padding(horizontal = 4.dp)),
                 textStyle = TextStyle(color = TextPrimary, fontSize = 15.sp, lineHeight = 21.sp),
                 cursorBrush = SolidColor(ServerBrand),
@@ -728,4 +756,10 @@ internal fun ConfirmThreadDialog(
         confirmButton = { TextButton(onClick = onConfirm) { Text(action, color = Error) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = TextSecondary) } },
     )
+}
+
+/** The key came from a real keyboard (a phone's own sends its Enter as text, with a virtual device). */
+internal fun KeyEvent.isPhysicalKeyboard(): Boolean {
+    val device = android.view.InputDevice.getDevice(nativeKeyEvent.deviceId) ?: return false
+    return !device.isVirtual && device.keyboardType == android.view.InputDevice.KEYBOARD_TYPE_ALPHABETIC
 }

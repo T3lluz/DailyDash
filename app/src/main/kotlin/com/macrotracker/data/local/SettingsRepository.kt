@@ -122,6 +122,47 @@ class SettingsRepository @Inject constructor(
 
     fun toggleHermesArchived(threadId: String) = toggleId(_hermesArchived, KEY_HERMES_ARCHIVED, threadId)
 
+    /**
+     * Chats put to sleep on this phone until a time (epoch ms), as T3 Code snoozes a thread: out of the
+     * list until it wakes, and back sooner if it starts to want you. Expired entries are dropped on read.
+     */
+    private val _hermesSnoozed = MutableStateFlow(readSnoozed())
+    val hermesSnoozed: StateFlow<Map<String, Long>> = _hermesSnoozed
+
+    fun snoozeHermes(threadId: String, untilMs: Long) = writeSnoozed(_hermesSnoozed.value + (threadId to untilMs))
+
+    fun wakeHermes(threadId: String) = writeSnoozed(_hermesSnoozed.value - threadId)
+
+    private fun readSnoozed(): Map<String, Long> {
+        val now = System.currentTimeMillis()
+        return prefs.getString(KEY_HERMES_SNOOZED, null).orEmpty().split('\n').mapNotNull { line ->
+            val id = line.substringBefore('=', "")
+            val until = line.substringAfter('=', "").toLongOrNull() ?: return@mapNotNull null
+            if (id.isBlank() || until <= now) null else id to until
+        }.toMap()
+    }
+
+    private fun writeSnoozed(now: Map<String, Long>) {
+        prefs.edit { putString(KEY_HERMES_SNOOZED, now.entries.joinToString("\n") { "${it.key}=${it.value}" }) }
+        _hermesSnoozed.value = now
+    }
+
+    /** The order chats were arranged in by hand, first to last; a chat not in it follows by when it moved. */
+    private val _hermesOrder = MutableStateFlow(prefs.getString(KEY_HERMES_ORDER, null).orEmpty().split('\n').filter { it.isNotBlank() })
+    val hermesOrder: StateFlow<List<String>> = _hermesOrder
+
+    fun setHermesOrder(ids: List<String>) {
+        prefs.edit { putString(KEY_HERMES_ORDER, ids.joinToString("\n")) }
+        _hermesOrder.value = ids
+    }
+
+    /** Text typed and not sent, per chat (`_new` for the one not started yet), so leaving a chat does not lose it. */
+    fun hermesDraft(key: String): String = prefs.getString("$KEY_HERMES_DRAFT$key", null).orEmpty()
+
+    fun setHermesDraft(key: String, text: String) {
+        prefs.edit { if (text.isBlank()) remove("$KEY_HERMES_DRAFT$key") else putString("$KEY_HERMES_DRAFT$key", text) }
+    }
+
     /** YouTube channels starred in the hub: they lead its channel row and can be the only ones shown. */
     private val _youtubeFavourites = MutableStateFlow(readIdSet(KEY_YOUTUBE_FAVOURITES))
     val youtubeFavourites: StateFlow<Set<String>> = _youtubeFavourites
@@ -448,6 +489,9 @@ class SettingsRepository @Inject constructor(
         const val KEY_HERMES_PERMISSION = "hermes_permission"
         const val KEY_HERMES_FAVOURITE_MODELS = "hermes_favourite_models"
         const val KEY_HERMES_ARCHIVED = "hermes_archived"
+        const val KEY_HERMES_SNOOZED = "hermes_snoozed"
+        const val KEY_HERMES_ORDER = "hermes_order"
+        const val KEY_HERMES_DRAFT = "hermes_draft_"
         const val KEY_YOUTUBE_FAVOURITES = "youtube_favourite_channels"
         const val KEY_TWITCH_FAVOURITES = "twitch_favourite_channels"
         const val KEY_DASHBOARD_CALS = "dashboard_cals"

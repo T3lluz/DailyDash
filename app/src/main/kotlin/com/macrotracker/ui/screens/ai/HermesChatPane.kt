@@ -10,6 +10,9 @@ import com.macrotracker.data.hermes.HermesFeed
 import com.macrotracker.data.hermes.FeedRow
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.activity.compose.BackHandler
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.DrawerValue
@@ -48,6 +51,26 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
+import androidx.compose.foundation.text.selection.SelectionContainer
+import coil.compose.AsyncImage
+import com.macrotracker.data.hermes.HermesAttachment
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.core.content.FileProvider
+import com.macrotracker.data.hermes.HermesShareInbox
+import android.net.Uri
+import java.io.File
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import com.macrotracker.ui.util.rememberClockFormatter
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.DisposableEffect
@@ -190,7 +213,48 @@ fun HermesChatPane(
     BackHandler(enabled = rail.isOpen) { scope.launch { rail.close() } }
 
     var draft by rememberSaveable { mutableStateOf("") }
+    // Whose draft the box holds, so each chat keeps what was typed in it (T3 Code keeps a draft per thread).
+    var draftId by remember { mutableStateOf(state.threadId) }
+    var draftLoaded by rememberSaveable { mutableStateOf(false) }
+    fun switchDraft(to: String?) {
+        viewModel.saveDraft(draftId, draft)
+        draftId = to
+        draft = viewModel.draftFor(to)
+    }
+    LaunchedEffect(state.threadId) {
+        val id = state.threadId
+        if (!draftLoaded) {
+            draftLoaded = true
+            if (draft.isBlank()) draft = viewModel.draftFor(id)
+            draftId = id
+        } else if (id != draftId) {
+            // a chat the app opened by itself (a notification, a new chat that just got its id)
+            val prev = draftId
+            draftId = id
+            if (prev != null) {
+                viewModel.saveDraft(prev, draft)
+                draft = viewModel.draftFor(id)
+            } else if (draft.isBlank()) {
+                draft = viewModel.draftFor(id)
+            }
+        }
+    }
+    LaunchedEffect(draft, draftId) {
+        delay(350)
+        viewModel.saveDraft(draftId, draft)
+    }
+    DisposableEffect(viewModel) { onDispose { viewModel.saveDraft(draftId, draft) } }
+    /** The server's file viewer: a path, and the lines a change touched. */
+    var filesAt by remember { mutableStateOf<Triple<String, Int, Int>?>(null) }
     var forceFollow by remember { mutableStateOf(true) }
+    // Find in chat: the matches are rows, and the list is scrolled to the one asked for.
+    var finding by rememberSaveable { mutableStateOf(false) }
+    var infoOpen by remember { mutableStateOf(false) }
+    var viewing by remember { mutableStateOf<HermesAttachment?>(null) }
+    var snoozeTarget by remember { mutableStateOf<HermesThreadSummary?>(null) }
+    var findQuery by rememberSaveable { mutableStateOf("") }
+    var findAt by rememberSaveable { mutableStateOf(0) }
+    val rowIndex = remember { HashMap<String, Int>() }
     // Read only by the list and the dock, never in this body: the composer's height animates
     // when it folds, and the whole pane must not recompose with it.
     val composerHeight = remember { mutableStateOf(0.dp) }
@@ -198,6 +262,8 @@ fun HermesChatPane(
     var queueSheet by remember { mutableStateOf(false) }
     var attachSheet by remember { mutableStateOf(false) }
     val archived by viewModel.archived.collectAsState()
+    val snoozed by viewModel.snoozed.collectAsState()
+    val order by viewModel.order.collectAsState()
     var renaming by remember { mutableStateOf<HermesThreadSummary?>(null) }
     var confirmClear by remember { mutableStateOf<HermesThreadSummary?>(null) }
     var confirmDelete by remember { mutableStateOf<HermesThreadSummary?>(null) }
@@ -233,11 +299,26 @@ fun HermesChatPane(
         onDispose { viewModel.setViewing(false) }
     }
 
+    val context = LocalContext.current
     val attachLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let(viewModel::attach)
     }
     val photoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         uri?.let(viewModel::attach)
+    }
+    // The camera writes into the app's cache, and the shot goes with the next message.
+    var shot by remember { mutableStateOf<File?>(null) }
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        shot?.takeIf { ok }?.let { viewModel.attach(Uri.fromFile(it)) }
+    }
+    fun openCamera() {
+        val dir = File(context.cacheDir, "hermes_photos").apply { mkdirs() }
+        val file = File(dir, "shot-${System.currentTimeMillis()}.jpg")
+        shot = file
+        cameraLauncher.launch(FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file))
+    }
+    val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) openCamera() else viewModel.say("Allow the camera to take a photo for Hermes")
     }
     // Speak instead of type: Android's own recogniser, and what it heard joins the draft.
     val speech = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -255,7 +336,6 @@ fun HermesChatPane(
     }
 
     // "Hermes is done" is a notification, so the first message asks once if they are off.
-    val context = LocalContext.current
     var askedNotifications by rememberSaveable { mutableStateOf(false) }
     val notificationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     fun askForNotifications() {
@@ -268,6 +348,19 @@ fun HermesChatPane(
 
     fun closeRail() {
         scope.launch { rail.close() }
+    }
+
+    // Something shared into "Ask Hermes": a new chat, the text in the box, the files attached.
+    val shared by HermesShareInbox.pending.collectAsState()
+    LaunchedEffect(shared) {
+        if (shared == null) return@LaunchedEffect
+        if (!viewModel.awaitReady()) return@LaunchedEffect
+        val incoming = HermesShareInbox.take() ?: return@LaunchedEffect
+        switchDraft(null)
+        viewModel.newThread()
+        forceFollow = true
+        draft = incoming.text
+        incoming.files.forEach { viewModel.attach(Uri.fromFile(it)) }
     }
 
     fun send(text: String) {
@@ -302,14 +395,41 @@ fun HermesChatPane(
     val rows = remember(state.items, working) { HermesFeed.rows(state.items, working) }
     var openRuns by rememberSaveable(state.threadId) { mutableStateOf(setOf<String>()) }
     val chatHaze = rememberHazeState()
+    val keysFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { keysFocus.requestFocus() } }
     val modifiers = remember(state.status) { HermesCatalog.modifiers(state.status) }
 
     ModalNavigationDrawer(
         drawerState = rail,
-        // Opened by its button or the title; closed by the scrim or back. No drag: the
-        // transcript scrolls sideways (tables, code) and the rows have swipes of their own.
-        gesturesEnabled = false,
-        modifier = modifier.clipToBounds(),
+        // Opened by its button or the title; closed by a tap outside it, a drag back, or back. Gestures
+        // are on only while it is open: Material ignores a scrim tap with them off, and a drag from the
+        // edge must not open it, since the transcript scrolls sideways (tables, code).
+        gesturesEnabled = rail.targetValue == DrawerValue.Open,
+        modifier = modifier
+            .clipToBounds()
+            .focusRequester(keysFocus)
+            .focusable()
+            // A hardware keyboard: Ctrl+N a new chat, Ctrl+K the chats, Esc closes the chats or stops Hermes.
+            .onPreviewKeyEvent { e ->
+                if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                when {
+                    e.isCtrlPressed && e.key == Key.N -> {
+                        forceFollow = true
+                        switchDraft(null)
+                        viewModel.newThread()
+                        true
+                    }
+                    e.isCtrlPressed && e.key == Key.K -> {
+                        viewModel.refreshThreads()
+                        focusManager.clearFocus()
+                        scope.launch { rail.open() }
+                        true
+                    }
+                    e.key == Key.Escape && rail.isOpen -> { scope.launch { rail.close() }; true }
+                    e.key == Key.Escape && state.busy -> { viewModel.stop(); true }
+                    else -> false
+                }
+            },
         drawerContent = {
             ModalDrawerSheet(
                 drawerContainerColor = Surface,
@@ -325,12 +445,14 @@ fun HermesChatPane(
                         onOpen = { id ->
                             haptics.tick()
                             forceFollow = true
+                            switchDraft(id)
                             viewModel.openThread(id)
                             closeRail()
                         },
                         onNewChat = {
                             haptics.tick()
                             forceFollow = true
+                            switchDraft(null)
                             viewModel.newThread()
                             closeRail()
                         },
@@ -341,6 +463,19 @@ fun HermesChatPane(
                         isUnread = state::isUnread,
                     archived = archived,
                     onToggleArchive = { viewModel.toggleArchived(it.id) },
+                    snoozed = snoozed,
+                    onSnooze = { t, until -> viewModel.snooze(t.id, until) },
+                    onWake = { viewModel.wake(it.id) },
+                    order = order,
+                    onReorder = viewModel::setOrder,
+                    modelOf = { t -> railModel(state.status, t.model) },
+                    modeTagOf = { t ->
+                        if (t.isStaff) null
+                        else HermesCatalog.modeFor(state.status, t.permId).takeIf { it.kind != "write" }?.label
+                    },
+                    onOpenUsage = { closeRail(); onOpenUsage() },
+                    onOpenConsole = { closeRail(); onOpenConsole() },
+                    onOpenFiles = { closeRail(); filesAt = Triple("~", 0, 0) },
                     )
             }
         },
@@ -367,8 +502,12 @@ fun HermesChatPane(
                     },
                     onNewChat = {
                         forceFollow = true
+                        switchDraft(null)
                         viewModel.newThread()
                     },
+                    onOpenFiles = { filesAt = Triple("~", 0, 0) },
+                    onFind = { finding = true },
+                    onOpenInfo = { infoOpen = true },
                     onRename = { current?.let { renaming = it } ?: state.threadId?.let { id -> renaming = placeholderThread(id, state.threadTitle) } },
                     onTogglePin = { state.threadId?.let { viewModel.setPinned(it, current?.pinned != true) } },
                     onClear = { state.threadId?.let { id -> confirmClear = current ?: placeholderThread(id, state.threadTitle) } },
@@ -380,13 +519,73 @@ fun HermesChatPane(
                     onCopyChat = copyChat,
                     usage = usageState.usage,
                 )
+                if (finding) {
+                    val hits = remember(rows, findQuery) {
+                        val q = findQuery.trim()
+                        if (q.length < 2) emptyList() else rows.filter { row -> rowText(row).contains(q, ignoreCase = true) }.map { it.key }
+                    }
+                    LaunchedEffect(hits) { findAt = findAt.coerceIn(0, (hits.size - 1).coerceAtLeast(0)) }
+                    fun jump(to: Int) {
+                        if (hits.isEmpty()) return
+                        findAt = (to + hits.size) % hits.size
+                        rowIndex[hits[findAt]]?.let { i -> scope.launch { forceFollow = false; listState.animateScrollToItem(i) } }
+                    }
+                    Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        SearchBox(findQuery, { findQuery = it; findAt = 0 }, "Find in this chat", Modifier.weight(1f))
+                        Text(
+                            if (findQuery.trim().length < 2) "" else if (hits.isEmpty()) "0" else "${findAt + 1}/${hits.size}",
+                            color = TextTertiary, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 8.dp),
+                        )
+                        IconButton(onClick = { jump(findAt - 1) }, enabled = hits.isNotEmpty(), modifier = Modifier.size(34.dp)) {
+                            Icon(AppIcons.ChevronUp, "Previous", tint = TextSecondary, modifier = Modifier.size(20.dp))
+                        }
+                        IconButton(onClick = { jump(findAt + 1) }, enabled = hits.isNotEmpty(), modifier = Modifier.size(34.dp)) {
+                            Icon(AppIcons.ChevronDown, "Next", tint = TextSecondary, modifier = Modifier.size(20.dp))
+                        }
+                        IconButton(onClick = { finding = false; findQuery = "" }, modifier = Modifier.size(34.dp)) {
+                            Icon(AppIcons.Close, "Close search", tint = TextSecondary, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                    // typing moves to the first match
+                    LaunchedEffect(hits.firstOrNull(), findQuery) { if (hits.isNotEmpty()) jump(0) }
+                }
                 // The chat on screen is read as it moves, so it never gets its own dot.
                 LaunchedEffect(state.threadId, current?.updatedMs) { viewModel.markSeen(state.threadId) }
 
+                // The newest question and answer are the ones that can be cut back and asked again.
+                val actions = remember(state.items, state.mode.kind) {
+                    RowActions(
+                        lastUserKey = state.items.lastOrNull { it is HermesItem.User }?.key,
+                        lastAssistantKey = state.items.lastOrNull { it is HermesItem.Assistant }?.key,
+                        planMode = state.mode.kind == "read",
+                        onOpenFile = { c ->
+                            val (from, to) = changedLines(c.diff)
+                            filesAt = Triple(c.path, from, to)
+                        },
+                        onRevert = { c -> haptics.click(); viewModel.revertChange(c) },
+                        onEdit = { user ->
+                            haptics.click()
+                            viewModel.rewind(user) { text ->
+                                forceFollow = true
+                                draft = text
+                            }
+                        },
+                        onRetry = { haptics.click(); forceFollow = true; viewModel.retry() },
+                        assetUrl = viewModel::assetUrl,
+                        onOpenImage = { viewing = it },
+                        onImplement = {
+                            haptics.click()
+                            forceFollow = true
+                            viewModel.setModeKind("write")
+                            viewModel.send("Implement the plan above.")
+                        },
+                    )
+                }
                 // One way to draw an item, for the list's own rows and for a run's steps.
                 val shown: @Composable (HermesItem) -> Unit = { item ->
                     HermesItemView(
                         item = item,
+                        actions = actions,
                         // Only what the cards read, not the whole state: with the state,
                         // every streamed token re-ran every row on screen.
                         busy = state.busy,
@@ -444,7 +643,26 @@ fun HermesChatPane(
                                 }
                             }
                         }
+                        var lastDay = 0L
+                        // list position of each row, for find in chat: counted as the rows are emitted
+                        rowIndex.clear()
+                        var position = (if (state.items.isEmpty() && !state.loadingThread && state.live == null) 1 else 0) +
+                            (if (state.loadingThread) 1 else 0)
                         rows.forEach { row ->
+                            val ts = when (row) {
+                                is FeedRow.Item -> itemTime(row.item)
+                                is FeedRow.Run -> row.items.firstNotNullOfOrNull { itemTime(it).takeIf { t -> t > 0 } } ?: 0L
+                            }
+                            if (ts > 0) {
+                                val day = startOfDay(ts)
+                                if (day != lastDay) {
+                                    lastDay = day
+                                    position++
+                                    item(key = "day-$day-${row.key}") { DayDivider(day) }
+                                }
+                            }
+                            rowIndex[row.key] = position
+                            position += 1 + if (row is FeedRow.Run && row.key in openRuns) row.items.size else 0
                             when (row) {
                                 is FeedRow.Item -> item(key = row.key) { shown(row.item) }
                                 // a finished run: one line, and its steps under it once opened
@@ -559,6 +777,12 @@ fun HermesChatPane(
                             haptics.tick()
                             viewModel.setModeKind(ModeCommands.getValue(live))
                             draft = ""
+                        } else if (typed.endsWith("@") && typed.length > draft.length &&
+                            (typed.length == 1 || typed[typed.length - 2].isWhitespace())
+                        ) {
+                            // "@" asks for a file: the server's folders open, and the pick is put in the text
+                            draft = typed.dropLast(1)
+                            filesAt = Triple("~", 0, 0)
                         } else {
                             draft = typed
                         }
@@ -620,7 +844,13 @@ fun HermesChatPane(
                 attachSheet = false
                 photoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
             },
+            onCamera = {
+                attachSheet = false
+                val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+                if (granted) openCamera() else cameraPermission.launch(Manifest.permission.CAMERA)
+            },
             onFile = { attachSheet = false; attachLauncher.launch("*/*") },
+            onServerFile = { attachSheet = false; filesAt = Triple("~", 0, 0) },
         )
     }
     if (modelSheet) {
@@ -639,6 +869,70 @@ fun HermesChatPane(
             modes = remember(state.status) { HermesCatalog.modes(state.status) },
             modeId = state.mode.id,
             onPickMode = { id -> haptics.tick(); viewModel.setMode(id) },
+        )
+    }
+    if (infoOpen) {
+        val thread = current ?: state.threadId?.let { placeholderThread(it, state.threadTitle) }
+        if (thread != null) {
+            ChatInfoSheet(
+                thread = thread,
+                model = state.currentModel,
+                modelLabel = state.currentModel?.familyLabel ?: state.status?.modelLabel,
+                mode = state.mode,
+                modes = remember(state.status) { HermesCatalog.modes(state.status) },
+                items = state.items,
+                archived = thread.id in archived,
+                wake = snoozed[thread.id]?.takeIf { it > System.currentTimeMillis() }?.let { wakeLabel(it) },
+                onPickMode = { id -> haptics.tick(); viewModel.setMode(id) },
+                onPickModel = { infoOpen = false; modelSheet = true },
+                onRename = { renaming = thread },
+                onTogglePin = { viewModel.setPinned(thread.id, !thread.pinned) },
+                onSnooze = { snoozeTarget = thread },
+                onWake = { viewModel.wake(thread.id) },
+                onToggleArchive = { viewModel.toggleArchived(thread.id) },
+                onCopyChat = copyChat,
+                onFind = { finding = true },
+                onClear = { confirmClear = thread },
+                onDelete = { confirmDelete = thread },
+                onDismiss = { infoOpen = false },
+            )
+        }
+    }
+    snoozeTarget?.let { t ->
+        SnoozeDialog(
+            title = "Snooze “${t.title}”",
+            onPick = { until -> snoozeTarget = null; viewModel.snooze(t.id, until) },
+            onDismiss = { snoozeTarget = null },
+        )
+    }
+    viewing?.let { image ->
+        ImageViewer(url = viewModel.assetUrl(image.url.orEmpty()), name = image.name, onDismiss = { viewing = null })
+    }
+    filesAt?.let { (path, from, to) ->
+        ServerFilesSheet(
+            startPath = path,
+            markFrom = from,
+            markTo = to,
+            loader = viewModel::preview,
+            onMention = { picked ->
+                draft = listOf(draft.trimEnd(), picked).filter { it.isNotBlank() }.joinToString(" ") + " "
+            },
+            onDismiss = { filesAt = null },
+        )
+    }
+    state.revertConflict?.let { change ->
+        AlertDialog(
+            onDismissRequest = viewModel::dismissRevertConflict,
+            containerColor = Surface,
+            title = { Text("Edited since", color = TextPrimary) },
+            text = {
+                Text(
+                    "${change.path.substringAfterLast('/')} was changed again after Hermes wrote this. Reverting puts back the version from before this change and loses those edits.",
+                    color = TextSecondary, fontSize = 14.sp, lineHeight = 20.sp,
+                )
+            },
+            confirmButton = { TextButton(onClick = { viewModel.revertChange(change, force = true) }) { Text("Revert anyway", color = Error) } },
+            dismissButton = { TextButton(onClick = viewModel::dismissRevertConflict) { Text("Keep it", color = TextSecondary) } },
         )
     }
     renaming?.let { thread ->
@@ -722,7 +1016,7 @@ private fun QueueSheet(
 /** What to add to a message: a picture from the phone's photos, or any file. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AttachSheet(onDismiss: () -> Unit, onPhoto: () -> Unit, onFile: () -> Unit) {
+private fun AttachSheet(onDismiss: () -> Unit, onPhoto: () -> Unit, onCamera: () -> Unit, onFile: () -> Unit, onServerFile: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Surface) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp)) {
             SheetTitle("Add to the message")
@@ -735,8 +1029,10 @@ private fun AttachSheet(onDismiss: () -> Unit, onPhoto: () -> Unit, onFile: () -
                 Spacer(Modifier.width(14.dp))
                 Text(label, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium)
             }
+            choice(AppIcons.Camera, "Take a photo", onCamera)
             choice(AppIcons.Images, "Photo", onPhoto)
             choice(AppIcons.AddCircle, "File", onFile)
+            choice(AppIcons.Folder, "A file on the server", onServerFile)
         }
     }
 }
@@ -836,18 +1132,46 @@ private fun HermesUnreachable(
 
 // ── Transcript ──────────────────────────────────────────────────────────────
 
+/** What the transcript's rows can do, and which row is which: the last question, the last answer, a plan waiting. */
+private class RowActions(
+    val lastUserKey: String?,
+    val lastAssistantKey: String?,
+    /** The chat is in Plan: its last answer is a plan that can be built. */
+    val planMode: Boolean,
+    val onOpenFile: (HermesFileChange) -> Unit,
+    val onRevert: (HermesFileChange) -> Unit,
+    val onEdit: (HermesItem.User) -> Unit,
+    val onRetry: () -> Unit,
+    val onImplement: () -> Unit,
+    val assetUrl: (String) -> String,
+    val onOpenImage: (HermesAttachment) -> Unit,
+)
+
 @Composable
 private fun HermesItemView(
     item: HermesItem,
     busy: Boolean,
     running: Set<String>,
+    actions: RowActions,
     onDecide: (HermesItem.Ask, Int, Boolean) -> Unit,
     onAnswer: (HermesItem.Clarify, String) -> Unit,
 ) {
     when (item) {
-        is HermesItem.User -> HermesUserBubble(item)
+        is HermesItem.User -> HermesUserBubble(
+            item,
+            // a message the bridge has stamped can be cut back to; so can the newest, which only the phone has seen
+            canEdit = !busy && (item.ts > 0 || item.key == actions.lastUserKey),
+            onEdit = { actions.onEdit(item) },
+            actions = actions,
+        )
         is HermesItem.Output -> OutputNote(item.text)
-        is HermesItem.Assistant -> AssistantTurn(item)
+        is HermesItem.Assistant -> AssistantTurn(
+            item,
+            last = item.key == actions.lastAssistantKey,
+            idle = !busy,
+            planReady = actions.planMode && !busy && item.key == actions.lastAssistantKey,
+            actions = actions,
+        )
         is HermesItem.Exec -> TerminalCard(item)
         is HermesItem.Ask -> ApprovalCard(item, busy, running, onDecide)
         is HermesItem.Clarify -> QuestionCard(item, enabled = !busy, onAnswer = onAnswer)
@@ -859,7 +1183,12 @@ private fun HermesItemView(
 /** The person's message, with whatever they attached above it. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun HermesUserBubble(item: HermesItem.User) {
+private fun HermesUserBubble(item: HermesItem.User, canEdit: Boolean, onEdit: () -> Unit, actions: RowActions) {
+    var menu by remember { mutableStateOf(false) }
+    var showTime by remember { mutableStateOf(false) }
+    val copy = rememberCopy(item.text)
+    val haptics = rememberHaptics()
+    val clock = rememberClockFormatter()
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
         if (item.attachments.isNotEmpty()) {
             FlowRow(
@@ -867,11 +1196,49 @@ private fun HermesUserBubble(item: HermesItem.User) {
                 verticalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier.padding(bottom = 4.dp),
             ) {
-                item.attachments.forEach { AttachmentChip(it) }
+                item.attachments.forEach { a ->
+                    val url = a.url
+                    if (a.isImage && url != null) {
+                        // a picture is drawn, and opens full screen
+                        AsyncImage(
+                            model = actions.assetUrl(url),
+                            contentDescription = a.name,
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                            modifier = Modifier
+                                .size(width = 150.dp, height = 112.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(SurfaceChrome)
+                                .clickable { actions.onOpenImage(a) },
+                        )
+                    } else {
+                        AttachmentChip(a)
+                    }
+                }
             }
         }
-        // held, a message copies itself
-        if (item.text.isNotBlank()) UserBubble(item.text, onLongPress = rememberCopy(item.text))
+        // held, a message opens its options; tapped, it says when it was sent
+        if (item.text.isNotBlank()) {
+            Box(Modifier.fillMaxWidth()) {
+                UserBubble(
+                    item.text,
+                    onLongPress = { haptics.gestureStart(); menu = true },
+                    onTap = if (item.ts > 0) ({ showTime = !showTime }) else null,
+                )
+                // anchored at the bubble's right edge, where the message is
+                Box(Modifier.align(Alignment.BottomEnd)) {
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, modifier = Modifier.background(Surface)) {
+                        MenuRow("Copy", AppIcons.Copy) { menu = false; copy() }
+                        if (canEdit) MenuRow("Edit and resend", AppIcons.Edit) { menu = false; onEdit() }
+                    }
+                }
+            }
+            AnimatedVisibility(showTime && item.ts > 0, enter = MacroMotion.expandEnter, exit = MacroMotion.expandExit) {
+                Text(
+                    java.time.Instant.ofEpochMilli(item.ts).atZone(java.time.ZoneId.systemDefault()).format(clock),
+                    color = TextTertiary, fontSize = 11.sp, modifier = Modifier.padding(top = 3.dp, end = 4.dp),
+                )
+            }
+        }
     }
 }
 
@@ -906,7 +1273,8 @@ private fun OutputNote(text: String) {
  * then the answer as plain text, and what it changed as a list of files to open.
  */
 @Composable
-private fun AssistantTurn(item: HermesItem.Assistant) {
+private fun AssistantTurn(item: HermesItem.Assistant, last: Boolean, idle: Boolean, planReady: Boolean, actions: RowActions) {
+    val clock = rememberClockFormatter()
     val split = remember(item.key, item.text, item.notes, item.tools.size) {
         HermesNarration.split(item.text, item.notes, item.tools.size)
     }
@@ -917,10 +1285,21 @@ private fun AssistantTurn(item: HermesItem.Assistant) {
         TurnByline(
             live = false,
             meta = listOfNotNull(
+                item.ts.takeIf { it > 0 }?.let { java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneId.systemDefault()).format(clock) },
                 item.ms?.let(::tookShort),
                 item.model?.let { HermesModelName(it) ?: it.substringAfter(':') }?.takeIf { it.isNotBlank() },
             ).joinToString(" · "),
-            trailing = if (split.answer.isNotBlank()) ({ CopyButton(split.answer) }) else null,
+            trailing = if (split.answer.isNotBlank() || (last && idle)) ({
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // the newest answer can be asked for again: the question is sent anew
+                    if (last && idle) {
+                        IconButton(onClick = actions.onRetry, modifier = Modifier.size(28.dp)) {
+                            Icon(AppIcons.Refresh, "Ask again", tint = TextTertiary, modifier = Modifier.size(15.dp))
+                        }
+                    }
+                    if (split.answer.isNotBlank()) CopyButton(split.answer)
+                }
+            }) else null,
         )
         if (notes.isNotEmpty() || item.tools.isNotEmpty() || !item.think.isNullOrBlank()) {
             WorkTrail(
@@ -932,19 +1311,39 @@ private fun AssistantTurn(item: HermesItem.Assistant) {
             )
         }
         if (split.answer.isNotBlank()) {
-            MarkdownText(
-                markdown = split.answer,
-                fontSize = 15.sp,
-                lineHeight = 22.sp,
-                color = TextPrimary,
-                linkColor = ServerBrand,
-                breaks = true,
-                modifier = Modifier.padding(top = 2.dp),
-            )
+            // selectable: a held word picks it, and the handles take what is wanted
+            SelectionContainer {
+                MarkdownText(
+                    markdown = split.answer,
+                    fontSize = 15.sp,
+                    lineHeight = 22.sp,
+                    color = TextPrimary,
+                    linkColor = ServerBrand,
+                    breaks = true,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+        }
+        if (planReady && split.answer.isNotBlank()) {
+            // Plan mode wrote a plan: build it, which leaves Plan and says so to Hermes
+            Spacer(Modifier.height(10.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(ServerBrand.copy(alpha = 0.10f))
+                    .padding(start = 14.dp, end = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(AppIcons.ListChecks, null, tint = ServerBrand, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Plan ready", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                PillButton(icon = AppIcons.Play, label = "Implement", accent = ServerBrand, emphasized = true, onClick = actions.onImplement)
+            }
         }
         if (item.changes.isNotEmpty()) {
             Spacer(Modifier.height(10.dp))
-            ChangesCard(item.changes)
+            ChangesCard(item.changes, actions.onOpenFile, actions.onRevert)
         }
     }
 }
@@ -1179,7 +1578,7 @@ private fun toolVerb(name: String): String {
  * file with its counts and an arrow at the far right that opens the diff.
  */
 @Composable
-private fun ChangesCard(changes: List<HermesFileChange>) {
+private fun ChangesCard(changes: List<HermesFileChange>, onOpenFile: (HermesFileChange) -> Unit, onRevert: (HermesFileChange) -> Unit) {
     var showAll by rememberSaveable { mutableStateOf(false) }
     val plus = changes.sumOf { it.plus }
     val minus = changes.sumOf { it.minus }
@@ -1211,7 +1610,7 @@ private fun ChangesCard(changes: List<HermesFileChange>) {
         }
         shown.forEach { change ->
             HorizontalDivider(color = Border, thickness = 1.dp)
-            FileChangeRow(change)
+            FileChangeRow(change, onOpenFile, onRevert)
         }
         if (changes.size > CHANGES_SHOWN && !showAll) {
             HorizontalDivider(color = Border, thickness = 1.dp)
@@ -1232,7 +1631,7 @@ private fun ChangesCard(changes: List<HermesFileChange>) {
 private const val CHANGES_SHOWN = 5
 
 @Composable
-private fun FileChangeRow(change: HermesFileChange) {
+private fun FileChangeRow(change: HermesFileChange, onOpenFile: (HermesFileChange) -> Unit, onRevert: (HermesFileChange) -> Unit) {
     var open by rememberSaveable(change.path) { mutableStateOf(false) }
     val turn = animateFloatAsState(if (open) 90f else 0f, label = "file")
     val name = change.path.substringAfterLast('/')
@@ -1266,7 +1665,17 @@ private fun FileChangeRow(change: HermesFileChange) {
             )
         }
         AnimatedVisibility(open, enter = MacroMotion.expandEnter, exit = MacroMotion.expandExit) {
-            Box(Modifier.padding(start = 10.dp, end = 10.dp, bottom = 10.dp)) {
+            Column(Modifier.padding(start = 10.dp, end = 10.dp, bottom = 10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    if (change.status.lowercase() !in setOf("deleted", "del", "removed", "d") && !change.reverted) {
+                        PillButton(icon = AppIcons.File, label = "Open file", onClick = { onOpenFile(change) })
+                    }
+                    if (change.reverted) {
+                        Text("Put back", color = TextTertiary, fontSize = 12.sp, modifier = Modifier.padding(vertical = 10.dp))
+                    } else if (change.canRevert) {
+                        PillButton(icon = AppIcons.Undo, label = "Revert", accent = ServerWarn, onClick = { onRevert(change) })
+                    }
+                }
                 val diff = change.diff
                 if (diff != null) {
                     DiffBlock(diff)
@@ -1691,3 +2100,97 @@ private fun LiveTurn(live: HermesLive) {
 }
 
 private const val LIVE_STEPS = 8
+
+
+/** When a row was said, for the day dividers; only a question or an answer carries a time. */
+private fun itemTime(item: HermesItem): Long = when (item) {
+    is HermesItem.User -> item.ts
+    is HermesItem.Assistant -> item.ts
+    else -> 0L
+}
+
+/** The new-file line range a unified diff touches, for marking it in the file; 0 to 0 when it has no hunks. */
+internal fun changedLines(diff: String?): Pair<Int, Int> {
+    if (diff == null) return 0 to 0
+    var from = Int.MAX_VALUE
+    var to = 0
+    Regex("^@@ -\\d+(?:,\\d+)? \\+(\\d+)(?:,(\\d+))? @@", RegexOption.MULTILINE).findAll(diff).forEach { m ->
+        val start = m.groupValues[1].toInt()
+        val len = m.groupValues[2].toIntOrNull() ?: 1
+        from = minOf(from, start)
+        to = maxOf(to, start + maxOf(len, 1) - 1)
+    }
+    return if (to == 0) 0 to 0 else from to to
+}
+
+/** "Today", "Yesterday", or the date, between rows from different days. */
+@Composable
+private fun DayDivider(dayStartMs: Long) {
+    val zone = java.time.ZoneId.systemDefault()
+    val date = java.time.Instant.ofEpochMilli(dayStartMs).atZone(zone).toLocalDate()
+    val today = java.time.LocalDate.now(zone)
+    val label = when (date) {
+        today -> "Today"
+        today.minusDays(1) -> "Yesterday"
+        else -> date.format(
+            java.time.format.DateTimeFormatter.ofPattern(if (date.year == today.year) "EEE d MMM" else "d MMM yyyy", java.util.Locale.getDefault()),
+        )
+    }
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        HorizontalDivider(Modifier.weight(1f), color = Border)
+        Text(label, color = TextTertiary, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 10.dp))
+        HorizontalDivider(Modifier.weight(1f), color = Border)
+    }
+}
+
+/** What find in chat searches in a row: what was said and answered, and a folded run's own words. */
+private fun rowText(row: FeedRow): String = when (row) {
+    is FeedRow.Item -> when (val i = row.item) {
+        is HermesItem.User -> i.text
+        is HermesItem.Assistant -> i.text
+        is HermesItem.Clarify -> i.question
+        is HermesItem.Error -> i.text
+        else -> ""
+    }
+    is FeedRow.Run -> row.items.joinToString("\n") { (it as? HermesItem.Assistant)?.text.orEmpty() }
+}
+
+/** A picture full screen: pinch to zoom, drag to move, tap anywhere outside the picture's own gestures to close. */
+@Composable
+private fun ImageViewer(url: String, name: String, onDismiss: () -> Unit) {
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        var scale by remember { mutableStateOf(1f) }
+        var offset by remember { mutableStateOf(Offset.Zero) }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.94f))
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = { onDismiss() }, onDoubleTap = { scale = if (scale > 1f) 1f else 2.5f; offset = Offset.Zero })
+                }
+                .pointerInput(Unit) {
+                    detectTransformGestures { _, pan, zoom, _ ->
+                        scale = (scale * zoom).coerceIn(1f, 6f)
+                        offset = if (scale > 1f) offset + pan else Offset.Zero
+                    }
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            AsyncImage(
+                model = url,
+                contentDescription = name,
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer { scaleX = scale; scaleY = scale; translationX = offset.x; translationY = offset.y },
+            )
+            IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.TopEnd).padding(top = 40.dp, end = 12.dp)) {
+                Icon(AppIcons.Close, "Close", tint = Color.White, modifier = Modifier.size(24.dp))
+            }
+            Text(name, color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 36.dp))
+        }
+    }
+}

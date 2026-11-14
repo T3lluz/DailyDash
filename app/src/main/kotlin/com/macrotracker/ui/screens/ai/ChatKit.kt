@@ -425,7 +425,7 @@ fun BotBubble(
 }
 
 @Composable
-fun UserBubble(text: String, onLongPress: (() -> Unit)? = null) {
+fun UserBubble(text: String, onLongPress: (() -> Unit)? = null, onTap: (() -> Unit)? = null) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.End,
@@ -437,10 +437,12 @@ fun UserBubble(text: String, onLongPress: (() -> Unit)? = null) {
                 .background(UserBubbleFill)
                 .then(
                     if (onLongPress != null) {
-                        // Held only: a tap does nothing, so it gets no ripple and no button role.
+                        // Held (and tapped, where a tap shows something): no ripple and no button role.
                         Modifier
-                            .pointerInput(onLongPress) { detectTapGestures(onLongPress = { onLongPress() }) }
-                            .semantics { onLongClick("Copy") { onLongPress(); true } }
+                            .pointerInput(onLongPress, onTap) {
+                                detectTapGestures(onLongPress = { onLongPress() }, onTap = onTap?.let { tap -> { tap() } })
+                            }
+                            .semantics { onLongClick("Message options") { onLongPress(); true } }
                     } else {
                         Modifier
                     },

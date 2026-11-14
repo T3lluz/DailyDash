@@ -241,6 +241,14 @@ object AppIcons {
     /** Lucide `archive` */
     val Mic: ImageVector by lazy { icon("Mic") { s("M12 2 a3 3 0 0 0 -3 3 v7 a3 3 0 0 0 6 0 V5 a3 3 0 0 0 -3 -3 z"); s("M19 10 v2 a7 7 0 0 1 -14 0 v-2"); s("M12 19 v3") } }
     val Archive: ImageVector by lazy { icon("Archive") { s("M3 3 h18 a1 1 0 0 1 1 1 v3 a1 1 0 0 1 -1 1 h-18 a1 1 0 0 1 -1 -1 v-3 a1 1 0 0 1 1 -1 z"); s("M4 8 v11 a2 2 0 0 0 2 2 h12 a2 2 0 0 0 2 -2 V8"); s("M10 12 h4") } }
+    /** Lucide `panel-left` */
+    val PanelLeft: ImageVector by lazy { icon("PanelLeft") { s("M5 3 h14 a2 2 0 0 1 2 2 v14 a2 2 0 0 1 -2 2 h-14 a2 2 0 0 1 -2 -2 v-14 a2 2 0 0 1 2 -2 z"); s("M9 3 v18") } }
+    /** Lucide `folder` */
+    val Folder: ImageVector by lazy { icon("Folder") { s("M20 20 a2 2 0 0 0 2 -2 V8 a2 2 0 0 0 -2 -2 h-7.9 a2 2 0 0 1 -1.69 -0.9 L9.6 3.9 A2 2 0 0 0 7.93 3 H4 a2 2 0 0 0 -2 2 v13 a2 2 0 0 0 2 2 z") } }
+    /** Lucide `file` */
+    val File: ImageVector by lazy { icon("File") { s("M6 22 a2 2 0 0 1 -2 -2 V4 a2 2 0 0 1 2 -2 h8 a2.4 2.4 0 0 1 1.704 0.706 l3.588 3.588 A2.4 2.4 0 0 1 20 8 v12 a2 2 0 0 1 -2 2 z"); s("M14 2 v5 a1 1 0 0 0 1 1 h5") } }
+    /** Lucide `moon` is Moon; this is the snooze bell: Lucide `bell-off` */
+    val BellOff: ImageVector by lazy { icon("BellOff") { s("M8.7 3 A6 6 0 0 1 18 8 a21.3 21.3 0 0 0 0.6 5"); s("M17 17 H3 s3 -2 3 -9 a4.67 4.67 0 0 1 0.3 -1.7"); s("M10.3 21 a1.94 1.94 0 0 0 3.4 0"); s("m2 2 20 20") } }
     /** Lucide `cloud-rain` */
     val CloudRain: ImageVector by lazy { icon("CloudRain") { s("M4 14.899 A7 7 0 1 1 15.71 8 h1.79 a4.5 4.5 0 0 1 2.5 8.242"); s("M16 14 v6"); s("M8 14 v6"); s("M12 16 v6") } }
     /** Lucide `siren` */

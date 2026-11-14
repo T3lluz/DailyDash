@@ -15,6 +15,8 @@ import com.macrotracker.data.hermes.HermesFollower
 import com.macrotracker.data.hermes.HermesOutcome
 import com.macrotracker.data.hermes.HermesClient
 import com.macrotracker.data.hermes.HermesCommand
+import com.macrotracker.data.hermes.HermesFileChange
+import com.macrotracker.data.hermes.HermesPreview
 import com.macrotracker.data.hermes.HermesEvent
 import com.macrotracker.data.hermes.HermesException
 import com.macrotracker.data.hermes.HermesItem
@@ -85,6 +87,8 @@ data class HermesUiState(
     val switchingTo: String? = null,
     /** When this phone last looked at each chat, so one that moved since gets a dot. */
     val seen: Map<String, Long> = emptyMap(),
+    /** A file change that was edited again since Hermes made it: the person decides whether to revert it anyway. */
+    val revertConflict: HermesFileChange? = null,
 ) {
     /** A chat that moved since this phone last opened it; one never opened here is not news. */
     fun isUnread(t: HermesThreadSummary): Boolean {
@@ -684,7 +688,10 @@ class HermesViewModel @Inject constructor(
             try {
                 val (name, mime, bytes) = withContext(Dispatchers.IO) {
                     val resolver = context.contentResolver
-                    val mime = resolver.getType(uri) ?: "application/octet-stream"
+                    val mime = resolver.getType(uri)
+                        ?: android.webkit.MimeTypeMap.getSingleton()
+                            .getMimeTypeFromExtension(uri.toString().substringAfterLast('.', "").lowercase())
+                        ?: "application/octet-stream"
                     val name = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
                         if (c.moveToFirst()) c.getString(0) else null
                     } ?: uri.lastPathSegment ?: "file"
@@ -709,6 +716,92 @@ class HermesViewModel @Inject constructor(
     val archived: StateFlow<Set<String>> = settings.hermesArchived
 
     fun toggleArchived(threadId: String) = settings.toggleHermesArchived(threadId)
+
+    /** Chats asleep until a time, and the order the person arranged the rest in. */
+    val snoozed: StateFlow<Map<String, Long>> = settings.hermesSnoozed
+    val order: StateFlow<List<String>> = settings.hermesOrder
+
+    fun snooze(threadId: String, untilMs: Long) = settings.snoozeHermes(threadId, untilMs)
+
+    fun wake(threadId: String) = settings.wakeHermes(threadId)
+
+    fun setOrder(ids: List<String>) = settings.setHermesOrder(ids)
+
+    /** What was typed in a chat and not sent; `null` is the chat not started yet. */
+    fun draftFor(threadId: String?): String = settings.hermesDraft(threadId ?: NEW_DRAFT)
+
+    fun saveDraft(threadId: String?, text: String) = settings.setHermesDraft(threadId ?: NEW_DRAFT, text)
+
+    /**
+     * Edit and resend: the chat is cut back to just before [item] on the bridge and in Hermes' memory,
+     * and what was said comes back through [onText] to be changed and sent again. Files the cut turns
+     * changed stay changed (each change card has its own revert).
+     */
+    fun rewind(item: HermesItem.User, onText: (String) -> Unit) {
+        val id = _state.value.threadId ?: return
+        if (_state.value.busy) {
+            say("Stop Hermes first; this chat is still answering")
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val cut = client.rewind(id, item.ts, last = item.ts == 0L)
+                _state.update { s ->
+                    if (s.threadId != id) s else s.copy(
+                        items = cut.thread?.items ?: s.items.takeWhile { it.key != item.key },
+                        attachments = cut.attachments.ifEmpty { s.attachments },
+                    )
+                }
+                onText(cut.text)
+                refreshThreads()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                say("Could not rewind: ${e.message}")
+            }
+        }
+    }
+
+    /** Asks the last question again: the answer is cut away and the question sent anew. */
+    fun retry() {
+        val last = _state.value.items.lastOrNull { it is HermesItem.User } as? HermesItem.User ?: return
+        rewind(last) { text -> send(text) }
+    }
+
+    /** Puts a file back the way Hermes found it. A file edited again since asks first; [force] goes ahead anyway. */
+    fun revertChange(change: HermesFileChange, force: Boolean = false) {
+        val id = _state.value.threadId ?: return
+        viewModelScope.launch {
+            try {
+                client.revert(id, change, force)
+                val now = System.currentTimeMillis()
+                _state.update { s ->
+                    s.copy(
+                        revertConflict = null,
+                        items = s.items.map { item ->
+                            if (item !is HermesItem.Assistant || item.changes.none { it.path == change.path && it.ck == change.ck }) item
+                            else item.copy(changes = item.changes.map { if (it.path == change.path && it.ck == change.ck) it.copy(revertedMs = now) else it })
+                        },
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: HermesException) {
+                if (e.code == 409) _state.update { it.copy(revertConflict = change) }
+                else say("Could not revert: ${e.message}")
+            } catch (e: Exception) {
+                say("Could not revert: ${e.message}")
+            }
+        }
+    }
+
+    fun dismissRevertConflict() = _state.update { it.copy(revertConflict = null) }
+
+    /** A bridge-relative file url (`/_api/ai/uploads/...`) as something an image loader can fetch. */
+    fun assetUrl(url: String): String = if (url.startsWith("/")) client.dashboardUrl + url else url
+
+    /** A path on the server, for the file preview and the browser. */
+    suspend fun preview(path: String, from: Int = 0, to: Int = 0): HermesPreview = client.preview(path, from, to)
 
     fun removeQueued(index: Int) = _state.update { it.copy(queue = it.queue.filterIndexed { i, _ -> i != index }) }
 
@@ -1130,6 +1223,7 @@ class HermesViewModel @Inject constructor(
     companion object {
         /** Every new chat's mode; its kind maps it onto each brain's own (HermesCatalog.modeFor). */
         const val AGENT_MODE = "agent"
+        private const val NEW_DRAFT = "_new"
 
         private const val KEY_LAST_THREAD = "thread"
         private const val MAX_REJOINS = 6

@@ -163,7 +163,15 @@ data class HermesFileChange(
     val diff: String? = null,
     /** `added`, `deleted`, `modified`, or blank. */
     val status: String = "",
-)
+    /** The saved copy the bridge can put back (`/ai/revert`), and the hash the file read when the change was made. */
+    val ck: String = "",
+    val ah: String = "",
+    /** When it was put back, if it has been (epoch ms); 0 otherwise. */
+    val revertedMs: Long = 0,
+) {
+    val reverted: Boolean get() = revertedMs > 0
+    val canRevert: Boolean get() = ck.isNotBlank() || status == "add" || status == "added"
+}
 
 data class HermesAskCommand(
     val cmd: String,
@@ -188,6 +196,8 @@ sealed interface HermesItem {
         override val key: String,
         val text: String,
         val attachments: List<HermesAttachment> = emptyList(),
+        /** The bridge's clock when it was sent; what a rewind names. 0 for a bubble drawn before the bridge answered. */
+        val ts: Long = 0,
     ) : HermesItem
 
     /** Command output or an answer handed back to Hermes; drawn as a note, not a bubble. */
@@ -206,6 +216,7 @@ sealed interface HermesItem {
         val changes: List<HermesFileChange>,
         /** What Hermes said between its steps, when the stream told us; else [HermesNarration] reads it from [text]. */
         val notes: List<String>? = null,
+        val ts: Long = 0,
     ) : HermesItem
 
     data class Exec(
@@ -278,3 +289,35 @@ sealed interface HermesEvent {
 
 /** What `/ai/exec` answers after an approved command has run. */
 data class HermesExecResult(val out: String, val code: Int)
+
+/** What `/ai/preview` answers for a path on the server: a file's text or picture, or a folder's entries. */
+sealed interface HermesPreview {
+    val path: String
+
+    data class Text(
+        override val path: String,
+        val rel: String,
+        val name: String,
+        val text: String,
+        val bytes: Long,
+        val lines: Int,
+        val truncated: Boolean,
+        val lang: String,
+        /** The lines the caller asked to have marked, 1-based; 0 when none. */
+        val markFrom: Int,
+        val markTo: Int,
+    ) : HermesPreview
+
+    data class Image(override val path: String, val name: String, val mime: String, val bytes: Long, val base64: String) : HermesPreview
+
+    data class Folder(override val path: String, val rel: String, val name: String, val entries: List<Entry>) : HermesPreview {
+        data class Entry(val name: String, val path: String, val dir: Boolean, val bytes: Long)
+    }
+
+    data class Binary(override val path: String, val name: String, val bytes: Long) : HermesPreview
+
+    data class Failed(override val path: String, val error: String) : HermesPreview
+}
+
+/** What `/ai/threads/{id}/rewind` hands back: the message that was cut, to edit and send again. */
+data class HermesRewound(val text: String, val attachments: List<HermesAttachment>, val thread: HermesThread?)
