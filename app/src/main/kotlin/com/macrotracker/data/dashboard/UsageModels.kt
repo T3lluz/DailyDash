@@ -375,10 +375,10 @@ fun providerName(id: String): String = when (id.lowercase()) {
 
 /** Tokens the way the dashboard writes them: 840M, 1.7B, 46k. */
 fun formatTokens(n: Long): String = when {
-    n >= 10_000_000_000 -> "${n / 1_000_000_000}B"
-    n >= 999_950_000 -> String.format(java.util.Locale.US, "%.1fB", n / 1e9)
-    n >= 100_000_000 -> "${n / 1_000_000}M"
-    // from where thousands would round up to "1000k"
+    // each step starts where the one below would round up to it: never "1000k" or "100.0M"
+    n >= 9_950_000_000 -> "${Math.round(n / 1e9)}B"
+    n >= 999_500_000 -> String.format(java.util.Locale.US, "%.1fB", n / 1e9)
+    n >= 99_950_000 -> "${Math.round(n / 1e6)}M"
     n >= 999_500 -> String.format(java.util.Locale.US, "%.1fM", n / 1e6)
     n >= 1_000 -> "${Math.round(n / 1e3)}k"
     else -> n.toString()

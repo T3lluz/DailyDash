@@ -160,7 +160,10 @@ class UsageModelsTest {
     }
 
     @Test fun `tokens never read as a thousand thousands`() {
-        assertEquals("1000", formatTokens(1_000).replace("k", "000").take(4))
+        assertEquals("1k", formatTokens(1_000))
+        assertEquals("100M", formatTokens(99_960_000))
+        assertEquals("99.9M", formatTokens(99_900_000))
+        assertEquals("10B", formatTokens(9_960_000_000))
         assertEquals("999k", formatTokens(999_400))
         assertEquals("1.0M", formatTokens(999_600))
         assertEquals("1.0B", formatTokens(999_960_000))

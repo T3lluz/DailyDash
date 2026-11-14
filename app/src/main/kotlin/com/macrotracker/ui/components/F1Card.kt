@@ -640,7 +640,9 @@ private fun F1CollapsedWidget(data: F1Standings) {
     }
     val upNext = sessions.firstOrNull { !it.over(now) }
     val main = sessions.firstOrNull { it.main }
-    val title = remember(data.driverStandings, data.schedule, now) { F1Season.titleRace(data.driverStandings, data.schedule, now) }
+    val title = remember(data.driverStandings, data.schedule, data.standingsRound, now) {
+        F1Season.titleRace(data.driverStandings, data.schedule, data.standingsRound, now)
+    }
     val outline = next?.outline
     val podium = remember(data.lastRaceResults) { data.lastRaceResults.orEmpty().filter { it.position in 1..3 }.sortedBy { it.position } }
 
@@ -1530,7 +1532,17 @@ fun DriverStandingsList(data: F1Standings) {
                 racesLeft = racesLeft,
             )
         }
-        val title = remember(standings, data.schedule) { F1Season.titleRace(standings, data.schedule) }
+        // on the minute, so the line moves on when a race ends with the tab open
+        var now by remember { mutableStateOf(Instant.now()) }
+        LaunchedWhileResumed(Unit) {
+            while (true) {
+                now = Instant.now()
+                delay(60_000L)
+            }
+        }
+        val title = remember(standings, data.schedule, data.standingsRound, now) {
+            F1Season.titleRace(standings, data.schedule, data.standingsRound, now)
+        }
         title?.let {
             Text(
                 F1Season.titleLine(it),

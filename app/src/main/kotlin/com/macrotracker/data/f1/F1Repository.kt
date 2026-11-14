@@ -45,6 +45,8 @@ class F1RepositoryImpl @Inject constructor(
         /** Bump when headshot/logo URL scheme changes so stale disk cache is discarded. */
         private const val CACHE_VERSION = 5
         private const val KEY_CACHE_VERSION = "cache_version"
+        /** How soon the season's results are asked for again when a run round is still missing. */
+        private const val HISTORY_RETRY_MS = 30 * 60_000L
     }
 
     private var cachedStandings: F1Standings? = null
@@ -56,6 +58,8 @@ class F1RepositoryImpl @Inject constructor(
     private val prefs by lazy {
         context.getSharedPreferences("f1_cache", Context.MODE_PRIVATE)
     }
+
+    private var historyTriedAt = 0L
 
     override val lastFetchTimeMs: Long get() = lastFetchTime
     override fun getCachedF1Data(): F1Standings? = cachedStandings
@@ -154,7 +158,8 @@ class F1RepositoryImpl @Inject constructor(
                 val lastRace = lastRacePair.first
                 val lastRaceName = lastRacePair.second
                 val lastQuali = lastQualiDeferred.await()
-                val schedule = withCircuitOutlines(scheduleDeferred.await())
+                // a schedule that failed to load keeps the one already held, never an empty season
+                val schedule = withCircuitOutlines(scheduleDeferred.await().ifEmpty { cached?.schedule?.takeIf { cachedYear == currentYear }.orEmpty() })
 
                 val nextRace = schedule
                     .filter { runCatching { java.time.LocalDate.parse(it.raceDate).isAfter(java.time.LocalDate.now().minusDays(1)) }.getOrDefault(false) }
@@ -166,8 +171,16 @@ class F1RepositoryImpl @Inject constructor(
                 // The season's results only change when a race is run: keep them until a round
                 // has finished that they don't have yet. A read that fails keeps the old copy.
                 val runRounds = F1Season.roundsRun(schedule)
-                val kept = cached?.history?.takeIf { cachedYear == currentYear && it.rounds.size >= runRounds }
-                val history = kept ?: (api.getSeasonHistory() ?: cached?.history?.takeIf { cachedYear == currentYear })
+                val held = cached?.history?.takeIf { cachedYear == currentYear }
+                val history = when {
+                    held != null && held.rounds.size >= runRounds -> held
+                    // a round that never gets results must not mean seven requests on every load
+                    held != null && now - historyTriedAt < HISTORY_RETRY_MS -> held
+                    else -> {
+                        historyTriedAt = now
+                        api.getSeasonHistory() ?: held
+                    }
+                }
 
                 // Podiums and fastest laps are counted from those results; the standings feed has neither.
                 val counted = if (history == null) drivers else drivers.map {
@@ -176,6 +189,7 @@ class F1RepositoryImpl @Inject constructor(
 
                 val result = F1Standings(
                     history = history,
+                    standingsRound = if (drivers.isNotEmpty()) api.standingsRound else cached?.standingsRound,
                     driverStandings = counted,
                     constructorStandings = constructors,
                     // Feed tab removed — keep empty for disk-cache schema compatibility.

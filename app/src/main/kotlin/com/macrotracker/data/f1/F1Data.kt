@@ -116,6 +116,8 @@ data class F1Standings(
     val lastLocation: String? = null,
     val nextRace: String? = null,
     val lastRaceName: String? = null,
+    /** The last round the standings include: what is left to win is counted from here. */
+    val standingsRound: Int? = null,
     /** The run rounds: winners, finishes and points round by round (F1Season). */
     val history: SeasonHistory? = null,
 )

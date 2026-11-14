@@ -15,6 +15,8 @@ import javax.inject.Singleton
 
 interface F1ApiService {
     suspend fun getSeasonDriverStandings(): List<SeasonDriverStanding>
+    /** The last round the driver standings just read include, or null when they didn't say. */
+    val standingsRound: Int?
     suspend fun getSeasonConstructorStandings(): List<SeasonConstructorStanding>
     suspend fun getF1News(): List<F1NewsArticle>
     suspend fun getLastRaceResults(): Pair<List<RaceResult>, String?>
@@ -29,12 +31,17 @@ class F1ApiServiceImpl @Inject constructor(
     private val client: HttpClient
 ) : F1ApiService {
 
-    companion object {
+@Volatile
+    override var standingsRound: Int? = null
+        private set
+
+        companion object {
         private const val TAG = "F1ApiService"
         // Jolpica is the community-maintained successor to the Ergast API (same JSON schema)
         private const val JOLPICA_BASE = "https://api.jolpi.ca/ergast/f1"
         /** Between pages of the season's results: Jolpica allows about four requests a second. */
         private const val SEASON_PAGE_GAP_MS = 350L
+        private const val SEASON_FIRST_GAP_MS = 1200L
         private const val SEASON_MAX_PAGES = 12
         private const val F1_CDN = "https://media.formula1.com"
         // No Cloudinary `d_` default — missing assets must 404 so Coil can try the next candidate.
@@ -262,6 +269,7 @@ class F1ApiServiceImpl @Inject constructor(
             val standingsLists = standingsTable?.get("StandingsLists")?.jsonArray
             val firstList = standingsLists?.firstOrNull()?.jsonObject ?: return emptyList()
             val driverStandingsList = firstList["DriverStandings"]?.jsonArray ?: return emptyList()
+            standingsRound = firstList["round"]?.jsonPrimitive?.content?.toIntOrNull()
 
             driverStandingsList.map { it.jsonObject }.map { entry ->
                 val driver = entry["Driver"]?.jsonObject
@@ -389,15 +397,26 @@ class F1ApiServiceImpl @Inject constructor(
         // Jolpica pages at 100 rows: a season of races is five pages, its sprints two. A page
         // that was throttled or cut short must never be taken for the whole season, so every
         // page has to be a real answer and the rows have to add up to the total it names.
+        suspend fun page(url: String): kotlinx.serialization.json.JsonObject {
+            var response = client.get(url)
+            if (response.status.value == 429) {
+                // throttled: wait as long as it asks (a few seconds at most) and try once more
+                val wait = response.headers["Retry-After"]?.toLongOrNull()?.coerceIn(1, 5) ?: 2
+                kotlinx.coroutines.delay(wait * 1000)
+                response = client.get(url)
+            }
+            if (response.status.value !in 200..299) throw java.io.IOException("Jolpica answered ${response.status.value}")
+            return json.parseToJsonElement(response.body<String>()).jsonObject
+        }
         suspend fun pages(path: String, rows: String): List<kotlinx.serialization.json.JsonObject> {
             val out = ArrayList<kotlinx.serialization.json.JsonObject>()
             var offset = 0
             var seen = 0
             while (true) {
-                if (offset > 0) kotlinx.coroutines.delay(SEASON_PAGE_GAP_MS)
-                val response = client.get("$JOLPICA_BASE/current/$path.json?limit=100&offset=$offset")
-                if (response.status.value !in 200..299) throw java.io.IOException("Jolpica answered ${response.status.value} for $path")
-                val page = json.parseToJsonElement(response.body<String>()).jsonObject
+                // every page waits, the first too: the standings, results and schedule have just
+                // gone out side by side, and Jolpica allows about four requests a second
+                kotlinx.coroutines.delay(if (out.isEmpty() && path == "results") SEASON_FIRST_GAP_MS else SEASON_PAGE_GAP_MS)
+                val page = page("$JOLPICA_BASE/current/$path.json?limit=100&offset=$offset")
                 val data = page["MRData"]?.jsonObject ?: throw java.io.IOException("Jolpica sent no data for $path")
                 val total = data["total"]?.jsonPrimitive?.content?.toIntOrNull() ?: throw java.io.IOException("Jolpica sent no total for $path")
                 out += page

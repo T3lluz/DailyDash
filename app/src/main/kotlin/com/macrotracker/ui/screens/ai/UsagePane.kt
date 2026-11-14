@@ -114,6 +114,8 @@ fun UsagePane(
             delay(2 * 60_000L)
         }
     }
+    var asked by remember { mutableStateOf(false) }
+    LaunchedEffect(state.loading) { if (!state.loading) asked = false }
     LaunchedEffect(viewModel) { viewModel.notes.collect { note = it } }
     LaunchedEffect(note) { if (note != null) { delay(4000); note = null } }
 
@@ -130,8 +132,9 @@ fun UsagePane(
                 UsageChip(t.label + (badge?.let { " $it" } ?: ""), t == tab) { haptics.tick(); tab = t }
             }
         }
-        IconButton(onClick = { haptics.tick(); viewModel.load(fresh = true) }, modifier = Modifier.size(40.dp)) {
-            if (state.loading) LoadingSpinner(color = Primary, size = 16.dp)
+        // A spinner only for a read someone asked for, or the first one: a background reload shows none.
+        IconButton(onClick = { haptics.tick(); asked = true; viewModel.load(fresh = true) }, modifier = Modifier.size(40.dp)) {
+            if (state.loading && (asked || state.usage == null)) LoadingSpinner(color = Primary, size = 16.dp)
             else Icon(AppIcons.Refresh, "Read again", tint = TextSecondary, modifier = Modifier.size(18.dp))
         }
     }
