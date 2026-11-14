@@ -1,5 +1,9 @@
 package com.macrotracker.ui.screens.ai
 
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.animation.animateContentSize
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.animation.animateColorAsState
@@ -88,8 +92,6 @@ import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.theme.TextTertiary
 import com.macrotracker.ui.util.rememberHaptics
 import dev.chrisbanes.haze.HazeState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import com.macrotracker.ui.util.agoShort
 
 /*
@@ -189,9 +191,6 @@ internal fun HermesHeader(
         }
         // Usage, one tap away: the square fills with the plan in use.
         UsageButton(usage, onOpenUsage)
-        IconButton(onClick = { haptics.tick(); onOpenConsole() }) {
-            Icon(AppIcons.SquareTerminal, contentDescription = "Console", tint = TextSecondary, modifier = Modifier.size(20.dp))
-        }
         IconButton(onClick = { haptics.tick(); onNewChat() }) {
             Icon(AppIcons.NewChat, contentDescription = "New chat", tint = TextSecondary, modifier = Modifier.size(21.dp))
         }
@@ -211,7 +210,7 @@ internal fun HermesHeader(
                     MenuRow("Delete this chat", AppIcons.Delete, danger = true) { menuOpen = false; onDelete() }
                     HorizontalDivider(color = Border)
                 }
-                MenuRow("Schedule and usage", AppIcons.CalendarPlus) { menuOpen = false; onOpenUsage() }
+                MenuRow("Console", AppIcons.SquareTerminal) { menuOpen = false; onOpenConsole() }
                 MenuRow("Tilesmith widget maker", AppIcons.Blocks) { menuOpen = false; onOpenTilesmith() }
                 if (onUsePhoneAi != null) {
                     MenuRow("Use this phone's AI instead", AppIcons.Bot) { menuOpen = false; onUsePhoneAi() }
@@ -222,131 +221,12 @@ internal fun HermesHeader(
 }
 
 @Composable
-private fun MenuRow(label: String, icon: ImageVector, danger: Boolean = false, onClick: () -> Unit) {
+internal fun MenuRow(label: String, icon: ImageVector, danger: Boolean = false, onClick: () -> Unit) {
     DropdownMenuItem(
         text = { Text(label, color = if (danger) Error else TextPrimary, fontSize = 14.sp) },
         leadingIcon = { Icon(icon, null, tint = if (danger) Error else TextSecondary, modifier = Modifier.size(16.dp)) },
         onClick = onClick,
     )
-}
-
-// ── Thread rail ─────────────────────────────────────────────────────────────
-
-/**
- * Every thread on the server, the same list the web's rail shows: staff and pinned chats
- * first, then the rest by when they last moved. Each row says whether Hermes is working in
- * it or waiting on you, and its menu pins, renames, clears or deletes it.
- */
-@Composable
-internal fun HermesThreadRail(
-    threads: List<HermesThreadSummary>,
-    /** Turns running anywhere (this phone, the desk), with what each is doing right now. */
-    turns: Map<String, HermesTurnActivity>,
-    selectedId: String?,
-    status: HermesStatus?,
-    onOpen: (String) -> Unit,
-    onNewChat: () -> Unit,
-    onRename: (HermesThreadSummary) -> Unit,
-    onTogglePin: (HermesThreadSummary) -> Unit,
-    onClear: (HermesThreadSummary) -> Unit,
-    onDelete: (HermesThreadSummary) -> Unit,
-    /** A chat that moved since this phone last opened it. */
-    isUnread: (HermesThreadSummary) -> Boolean = { false },
-) {
-    var query by rememberSaveable { mutableStateOf("") }
-    val shown = remember(threads, query) {
-        val q = query.trim().lowercase()
-        threads.filter { q.isEmpty() || q in it.title.lowercase() || q in it.preview.lowercase() }
-    }
-    // As the web's rail: what waits on you first, then staff, pinned and the rest.
-    val needs = shown.filter { it.waiting > 0 && !it.isStaff }
-    val staff = shown.filter { it.isStaff }
-    val pinned = shown.filter { it.pinned && !it.isStaff && it.waiting == 0 }
-    val rest = shown.filter { !it.pinned && !it.isStaff && it.waiting == 0 }.sortedByDescending { it.updatedMs }
-
-    Column(
-        modifier = Modifier
-            .fillMaxHeight()
-            .padding(top = 14.dp),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            BotAvatar(HermesIdentity, size = 30.dp, live = false)
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text("Hermes", color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                Text(
-                    listOfNotNull(
-                        status?.version?.let { "v$it" },
-                        "${threads.size} chat${if (threads.size == 1) "" else "s"}",
-                    ).joinToString(" · "),
-                    color = TextTertiary,
-                    fontSize = 11.sp,
-                )
-            }
-        }
-        Spacer(Modifier.height(12.dp))
-        Row(
-            modifier = Modifier
-                .padding(horizontal = 12.dp)
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(ServerBrand.copy(alpha = 0.14f))
-                .clickable(onClick = onNewChat)
-                .padding(horizontal = 12.dp, vertical = 11.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(AppIcons.NewChat, null, tint = ServerBrand, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(10.dp))
-            Text("New chat", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-        }
-        Spacer(Modifier.height(8.dp))
-        SearchBox(
-            value = query,
-            onValueChange = { query = it },
-            hint = "Search chats",
-            modifier = Modifier.padding(horizontal = 12.dp),
-        )
-        Spacer(Modifier.height(6.dp))
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(bottom = 16.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
-        ) {
-            fun section(label: String, rows: List<HermesThreadSummary>) {
-                if (rows.isEmpty()) return
-                item(key = "h-$label") { RailHeading(label) }
-                items(rows, key = { "t-${it.id}" }) { t ->
-                    ThreadRow(
-                        thread = t,
-                        turn = turns[t.id],
-                        selected = t.id == selectedId,
-                        unread = isUnread(t),
-                        onOpen = { onOpen(t.id) },
-                        onRename = { onRename(t) },
-                        onTogglePin = { onTogglePin(t) },
-                        onClear = { onClear(t) },
-                        onDelete = { onDelete(t) },
-                    )
-                }
-            }
-            section("Needs you", needs)
-            section("Staff", staff)
-            section("Pinned", pinned)
-            section(if (staff.isEmpty() && pinned.isEmpty()) "Chats" else "Recent", rest)
-            if (shown.isEmpty()) {
-                item(key = "none") {
-                    Text(
-                        if (query.isBlank()) "No chats yet. Ask something and one starts." else "Nothing matches.",
-                        color = TextTertiary,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
-                    )
-                }
-            }
-        }
-    }
 }
 
 @Composable
@@ -359,121 +239,6 @@ internal fun RailHeading(label: String) {
         letterSpacing = 0.8.sp,
         modifier = Modifier.padding(start = 20.dp, top = 14.dp, bottom = 4.dp),
     )
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun ThreadRow(
-    thread: HermesThreadSummary,
-    turn: HermesTurnActivity?,
-    selected: Boolean,
-    unread: Boolean,
-    onOpen: () -> Unit,
-    onRename: () -> Unit,
-    onTogglePin: () -> Unit,
-    onClear: () -> Unit,
-    onDelete: () -> Unit,
-) {
-    val haptics = rememberHaptics()
-    var menuOpen by remember { mutableStateOf(false) }
-    Box(modifier = Modifier.padding(horizontal = 8.dp)) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(if (selected) ServerBrand.copy(alpha = 0.10f) else Color.Transparent)
-                .combinedClickable(
-                    onClick = onOpen,
-                    onLongClick = {
-                        haptics.gestureStart()
-                        menuOpen = true
-                    },
-                )
-                .padding(start = 12.dp, end = 2.dp, top = 9.dp, bottom = 9.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            val busy = thread.busy || turn != null
-            Box(Modifier.size(12.dp), contentAlignment = Alignment.Center) {
-                when {
-                    busy -> LivePulseDot(color = ServerBrand, size = 12.dp)
-                    thread.pending > 0 -> Box(Modifier.size(8.dp).clip(CircleShape).background(ServerWarn))
-                    unread -> Box(Modifier.size(8.dp).clip(CircleShape).background(com.macrotracker.ui.theme.Primary))
-                    thread.isStaff -> Box(Modifier.size(8.dp).clip(CircleShape).background(ServerGood))
-                    else -> Box(Modifier.size(6.dp).clip(CircleShape).background(Border))
-                }
-            }
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        thread.title,
-                        color = TextPrimary, // selection shows in the weight and the row fill
-                        fontSize = 14.sp,
-                        fontWeight = if (selected || unread) FontWeight.SemiBold else FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    if (thread.pinned && !thread.isStaff) {
-                        Spacer(Modifier.width(4.dp))
-                        Icon(AppIcons.Star, null, tint = TextTertiary, modifier = Modifier.size(11.dp))
-                    }
-                }
-                val line = when {
-                    turn != null -> turn.label.text + "…"
-                    busy -> "working…"
-                    thread.pending > 0 -> "waiting on you"
-                    else -> thread.preview
-                }
-                if (line.isNotBlank()) {
-                    Text(
-                        line,
-                        color = when {
-                            busy -> ServerBrand
-                            thread.pending > 0 -> ServerWarn
-                            else -> TextTertiary
-                        },
-                        fontSize = 12.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-            Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(horizontal = 4.dp)) {
-                Text(agoShort(thread.updatedMs), color = TextTertiary, fontSize = 11.sp)
-                // What the chat has used and how full it is, as the web's rail tags say.
-                val meta = listOfNotNull(
-                    thread.tokens.takeIf { it > 0 }?.let { com.macrotracker.data.dashboard.formatTokens(it) },
-                    thread.contextFraction?.let { "${(it * 100).toInt()}%" },
-                ).joinToString(" · ")
-                if (meta.isNotEmpty()) {
-                    val hot = (thread.contextFraction ?: 0f) >= 0.85f
-                    val warm = (thread.contextFraction ?: 0f) >= 0.6f
-                    Text(meta, color = if (hot) com.macrotracker.ui.theme.Error else if (warm) ServerWarn else TextTertiary, fontSize = 10.sp)
-                }
-                if (thread.scheduled != null) {
-                    Icon(AppIcons.Repeat, "Runs on a schedule", tint = com.macrotracker.ui.theme.Primary, modifier = Modifier.size(11.dp))
-                }
-            }
-            Box {
-                IconButton(onClick = { haptics.tick(); menuOpen = true }, modifier = Modifier.size(32.dp)) {
-                    Icon(AppIcons.ChevronDown, contentDescription = "Chat options", tint = TextTertiary, modifier = Modifier.size(16.dp))
-                }
-                DropdownMenu(
-                    expanded = menuOpen,
-                    onDismissRequest = { menuOpen = false },
-                    modifier = Modifier.background(Surface),
-                ) {
-                    MenuRow("Rename", AppIcons.Edit) { menuOpen = false; onRename() }
-                    if (!thread.isStaff) {
-                        MenuRow(if (thread.pinned) "Unpin" else "Pin", AppIcons.Star) { menuOpen = false; onTogglePin() }
-                    }
-                    MenuRow("Clear", AppIcons.Refresh) { menuOpen = false; onClear() }
-                    MenuRow(if (thread.isStaff) "Let go" else "Delete", AppIcons.Delete, danger = true) { menuOpen = false; onDelete() }
-                }
-            }
-        }
-    }
 }
 
 @Composable
@@ -515,9 +280,11 @@ internal fun SearchBox(value: String, onValueChange: (String) -> Unit, hint: Str
 // ── Composer ────────────────────────────────────────────────────────────────
 
 /**
- * The tall composer: the words on top, and under them the three pickers the web keeps
- * there — mode, model, depth — with attach on the left and send on the right. While
- * Hermes works, send is Stop until something is typed; then it queues the line.
+ * The composer, in two shapes. Open (while it has focus, files, a draft of several lines or
+ * a new chat): the words on top, and under them attach, the mode tag, the model pill, the
+ * usage square and send. Folded: one row of attach, a line, the model's logo, the usage
+ * square and send. While Hermes works, send is Stop until something is typed; then it
+ * queues the line.
  */
 @Composable
 internal fun HermesComposer(
@@ -543,6 +310,8 @@ internal fun HermesComposer(
     hazeState: HazeState?,
     /** The usage square, beside send (ComposerUsageMeter). */
     usage: (@Composable () -> Unit)? = null,
+    /** A chat with nothing in it yet: the composer stays open, as an invitation. */
+    roomy: Boolean = false,
 ) {
     val bottomPad = composerBottomGap()
     val hasContent = value.isNotBlank() || attachments.isNotEmpty()
@@ -558,6 +327,40 @@ internal fun HermesComposer(
         label = "hermesSend",
     )
     val haptics = rememberHaptics()
+    // Open while it is being typed in (or has files, or the chat is new); otherwise one row,
+    // so a chat being read keeps the screen. T3 Code's phone composer folds the same way.
+    var focused by remember { mutableStateOf(false) }
+    val open = focused || roomy || attachments.isNotEmpty() || uploading || '\n' in value
+
+    val attach: @Composable () -> Unit = {
+        IconButton(onClick = { haptics.tick(); onAttach() }, enabled = enabled && !uploading, modifier = Modifier.size(36.dp)) {
+            Icon(AppIcons.AddCircle, contentDescription = "Attach a file", tint = TextSecondary, modifier = Modifier.size(20.dp))
+        }
+    }
+    val send: @Composable () -> Unit = {
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(CircleShape)
+                .background(sendBackground, CircleShape)
+                .clickable(enabled = showStop || canSend) {
+                    if (showStop) {
+                        haptics.tick()
+                        onStop()
+                    } else {
+                        onSend()
+                    }
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = if (showStop) AppIcons.Close else AppIcons.Send,
+                contentDescription = if (showStop) "Stop" else if (busy) "Queue" else "Send",
+                tint = if (showStop || canSend) OnAccent else TextSecondary,
+                modifier = Modifier.size(17.dp),
+            )
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -566,6 +369,7 @@ internal fun HermesComposer(
             .padding(top = 6.dp, bottom = bottomPad)
             // The navbar's and the island's glass: lift, blur, tint and edge alike.
             .chromeGlass(hazeState, ComposerShape)
+            .animateContentSize(MacroMotion.entranceSpring())
             .padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
     ) {
         if (attachments.isNotEmpty() || uploading) {
@@ -583,71 +387,75 @@ internal fun HermesComposer(
                 if (uploading) LoadingSpinner(color = ServerBrand, size = 16.dp)
             }
         }
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            enabled = enabled,
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 52.dp)
-                .padding(horizontal = 10.dp, vertical = 8.dp),
-            textStyle = TextStyle(color = TextPrimary, fontSize = 15.sp, lineHeight = 21.sp),
-            cursorBrush = SolidColor(ServerBrand),
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-            minLines = 2,
-            maxLines = 8,
-            decorationBox = { inner ->
-                if (value.isEmpty()) Text(hint, color = TextSecondary, fontSize = 15.sp, lineHeight = 21.sp)
-                inner()
-            },
-        )
+        // One field in both shapes, so folding never drops the cursor or the keyboard.
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { haptics.tick(); onAttach() }, enabled = enabled && !uploading, modifier = Modifier.size(36.dp)) {
-                Icon(AppIcons.AddCircle, contentDescription = "Attach a file", tint = TextSecondary, modifier = Modifier.size(20.dp))
-            }
-            Row(
+            if (!open) attach()
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                enabled = enabled,
                 modifier = Modifier
                     .weight(1f)
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // Agent needs no word on the bar; a chat in /plan or /ask shows it, tap to leave.
-                if (mode.kind != "write") ModeTag(mode, onClearMode)
-                ModelPill(
-                    model = model,
-                    fallback = modelFallback,
-                    switching = switchingModel,
-                    modifiers = modifiers,
-                    onClick = onPickModel,
-                )
+                    .onFocusChanged { focused = it.isFocused }
+                    .then(if (open) Modifier.heightIn(min = 52.dp).padding(horizontal = 10.dp, vertical = 8.dp) else Modifier.padding(horizontal = 4.dp)),
+                textStyle = TextStyle(color = TextPrimary, fontSize = 15.sp, lineHeight = 21.sp),
+                cursorBrush = SolidColor(ServerBrand),
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                minLines = if (open) 2 else 1,
+                maxLines = if (open) 8 else 1,
+                decorationBox = { inner ->
+                    if (value.isEmpty()) {
+                        Text(
+                            if (open) hint else hint.substringBefore("  /"),
+                            color = TextSecondary, fontSize = 15.sp, lineHeight = 21.sp,
+                            maxLines = if (open) 2 else 1, overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    inner()
+                },
+            )
+            if (!open) {
+                Spacer(Modifier.width(6.dp))
+                // a chat in /plan or /ask says so folded too
+                if (mode.kind != "write") {
+                    ModeTag(mode, onClearMode)
+                    Spacer(Modifier.width(6.dp))
+                }
+                ModelPill(model, modelFallback, switchingModel, modifiers, onPickModel, logoOnly = true)
+                Spacer(Modifier.width(6.dp))
+                usage?.let {
+                    it()
+                    Spacer(Modifier.width(4.dp))
+                }
+                send()
             }
-            Spacer(Modifier.width(6.dp))
-            usage?.let {
-                it()
-                Spacer(Modifier.width(4.dp))
-            }
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .background(sendBackground, CircleShape)
-                    .clickable(enabled = showStop || canSend) {
-                        if (showStop) {
-                            haptics.tick()
-                            onStop()
-                        } else {
-                            onSend()
-                        }
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = if (showStop) AppIcons.Close else AppIcons.Send,
-                    contentDescription = if (showStop) "Stop" else if (busy) "Queue" else "Send",
-                    tint = if (showStop || canSend) OnAccent else TextSecondary,
-                    modifier = Modifier.size(17.dp),
-                )
+        }
+        if (open) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                attach()
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    // Agent needs no word on the bar; a chat in /plan or /ask shows it, tap to leave.
+                    if (mode.kind != "write") ModeTag(mode, onClearMode)
+                    ModelPill(
+                        model = model,
+                        fallback = modelFallback,
+                        switching = switchingModel,
+                        modifiers = modifiers,
+                        onClick = onPickModel,
+                    )
+                }
+                Spacer(Modifier.width(6.dp))
+                usage?.let {
+                    it()
+                    Spacer(Modifier.width(4.dp))
+                }
+                send()
             }
         }
     }
@@ -665,6 +473,8 @@ internal fun ModelPill(
     switching: Boolean,
     modifiers: HermesCatalog.Modifiers,
     onClick: () -> Unit,
+    /** The folded composer's: the maker's logo alone, in a round button. */
+    logoOnly: Boolean = false,
 ) {
     val haptics = rememberHaptics()
     val cur = modifiers.current
@@ -685,7 +495,7 @@ internal fun ModelPill(
             .border(1.dp, Border, RoundedCornerShape(999.dp))
             .clickable { haptics.tick(); onClick() }
             .semantics { contentDescription = listOfNotNull("Model $name", depth?.let { "$it depth" }).joinToString(", ") }
-            .padding(start = 4.dp, end = 9.dp, top = 4.dp, bottom = 4.dp),
+            .padding(start = 4.dp, end = if (logoOnly) 4.dp else 9.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (switching) {
@@ -693,6 +503,7 @@ internal fun ModelPill(
         } else {
             BrandMark(model?.group.orEmpty(), model?.family ?: model?.id.orEmpty(), size = 22.dp)
         }
+        if (logoOnly) return@Row
         Spacer(Modifier.width(6.dp))
         Text(
             name,

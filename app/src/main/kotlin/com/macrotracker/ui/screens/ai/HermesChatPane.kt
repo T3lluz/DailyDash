@@ -1,5 +1,23 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.data.hermes.HermesFeed
+import com.macrotracker.data.hermes.FeedRow
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.ui.draw.clipToBounds
+import androidx.activity.compose.BackHandler
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.interaction.DragInteraction
+import androidx.compose.ui.platform.LocalFocusManager
+import com.macrotracker.ui.util.tookShort
+import androidx.compose.runtime.setValue
 import android.Manifest
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.shape.CircleShape
@@ -19,8 +37,6 @@ import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
-import com.macrotracker.data.hermes.HermesActivityLabel
-import com.macrotracker.ui.components.WorkingScanner
 import com.macrotracker.ui.util.rememberIsResumed
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -64,11 +80,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -164,20 +178,28 @@ fun HermesChatPane(
     val listState = rememberLazyListState()
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
-    // The chats open in a sheet over the pane. It is a window of its own, so it never
-    // hangs beside the pane where a tab switch's slide could bring it into view.
-    var railOpen by remember { mutableStateOf(false) }
-    val railState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    // The chats are a panel that slides in from the left, as T3 Code's phone app keeps them.
+    // The pane is clipped, so the closed panel never shows beside it while a tab slides.
+    val rail = rememberDrawerState(DrawerValue.Closed)
+    BackHandler(enabled = rail.isOpen) { scope.launch { rail.close() } }
 
     var draft by rememberSaveable { mutableStateOf("") }
     var forceFollow by remember { mutableStateOf(true) }
-    var composerHeight by remember { mutableStateOf(0.dp) }
+    // Read only by the list and the dock, never in this body: the composer's height animates
+    // when it folds, and the whole pane must not recompose with it.
+    val composerHeight = remember { mutableStateOf(0.dp) }
     var modelSheet by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<HermesThreadSummary?>(null) }
     var confirmClear by remember { mutableStateOf<HermesThreadSummary?>(null) }
     var confirmDelete by remember { mutableStateOf<HermesThreadSummary?>(null) }
 
     val nearBottom by rememberNearChatBottom(listState)
+    val awayFromEnd by rememberAwayFromChatEnd(listState)
+    // A finger on the transcript is reading, not typing: the keyboard goes and the composer folds.
+    val focusManager = LocalFocusManager.current
+    LaunchedEffect(listState) {
+        listState.interactionSource.interactions.collect { if (it is DragInteraction.Start) focusManager.clearFocus() }
+    }
     // A new message glides into view; a reply growing in place is kept pinned by FollowChatOnKeyboard.
     LaunchedEffect(state.items.size, state.live != null, state.threadId) {
         if (state.items.isEmpty() && state.live == null) return@LaunchedEffect
@@ -219,7 +241,7 @@ fun HermesChatPane(
     }
 
     fun closeRail() {
-        scope.launch { railState.hide() }.invokeOnCompletion { if (!railState.isVisible) railOpen = false }
+        scope.launch { rail.close() }
     }
 
     fun send(text: String) {
@@ -248,10 +270,52 @@ fun HermesChatPane(
     }
 
     val current = state.currentThread
+    val working = state.live != null
+    // The transcript as rows: a finished run folds into one line (T3 Code's run fold).
+    val rows = remember(state.items, working) { HermesFeed.rows(state.items, working) }
+    var openRuns by rememberSaveable(state.threadId) { mutableStateOf(setOf<String>()) }
     val chatHaze = rememberHazeState()
     val modifiers = remember(state.status) { HermesCatalog.modifiers(state.status) }
 
-    Box(modifier = modifier) {
+    ModalNavigationDrawer(
+        drawerState = rail,
+        // Opened by its button or the title; closed by the scrim or back. No drag: the
+        // transcript scrolls sideways (tables, code) and the rows have swipes of their own.
+        gesturesEnabled = false,
+        modifier = modifier.clipToBounds(),
+        drawerContent = {
+            ModalDrawerSheet(
+                drawerContainerColor = Surface,
+                drawerShape = RoundedCornerShape(topEnd = 26.dp, bottomEnd = 26.dp),
+                windowInsets = WindowInsets(0, 0, 0, 0),
+                modifier = Modifier.fillMaxWidth(0.86f),
+            ) {
+                HermesThreadRail(
+                        threads = state.threads,
+                        turns = turns,
+                        selectedId = state.threadId,
+                        status = state.status,
+                        onOpen = { id ->
+                            haptics.tick()
+                            forceFollow = true
+                            viewModel.openThread(id)
+                            closeRail()
+                        },
+                        onNewChat = {
+                            haptics.tick()
+                            forceFollow = true
+                            viewModel.newThread()
+                            closeRail()
+                        },
+                        onRename = { renaming = it },
+                        onTogglePin = { viewModel.setPinned(it.id, !it.pinned) },
+                        onClear = { confirmClear = it },
+                        onDelete = { confirmDelete = it },
+                        isUnread = state::isUnread,
+                    )
+            }
+        },
+    ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -269,7 +333,8 @@ fun HermesChatPane(
                     hasThread = state.threadId != null,
                     onOpenRail = {
                         viewModel.refreshThreads()
-                        railOpen = true
+                        focusManager.clearFocus()
+                        scope.launch { rail.open() }
                     },
                     onNewChat = {
                         forceFollow = true
@@ -288,6 +353,26 @@ fun HermesChatPane(
                 // The chat on screen is read as it moves, so it never gets its own dot.
                 LaunchedEffect(state.threadId, current?.updatedMs) { viewModel.markSeen(state.threadId) }
 
+                // One way to draw an item, for the list's own rows and for a run's steps.
+                val shown: @Composable (HermesItem) -> Unit = { item ->
+                    HermesItemView(
+                        item = item,
+                        // Only what the cards read, not the whole state: with the state,
+                        // every streamed token re-ran every row on screen.
+                        busy = state.busy,
+                        running = state.running,
+                        onDecide = { card, i, run ->
+                            haptics.click()
+                            forceFollow = true
+                            viewModel.decide(card, i, run)
+                        },
+                        onAnswer = { card, choice ->
+                            haptics.click()
+                            forceFollow = true
+                            viewModel.answer(card, choice)
+                        },
+                    )
+                }
                 when {
                     state.reach == HermesReach.DOWN -> HermesUnreachable(
                         message = state.reachError ?: "Hermes did not answer.",
@@ -299,14 +384,14 @@ fun HermesChatPane(
                         Modifier.weight(1f).fillMaxWidth(),
                         contentAlignment = Alignment.Center,
                     ) { LoadingSpinner(color = ServerBrand) }
-                    else -> LazyColumn(
+                    else -> ChatList(
                         state = listState,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
                             .hazeSource(state = chatHaze),
-                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 10.dp, bottom = composerHeight + 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        // while Hermes works the pill floats over the foot of the chat: room for it under the last line
+                        bottomRoom = { composerHeight.value + 10.dp + if (working) DockHeight + 6.dp else 0.dp },
                     ) {
                         if (state.items.isEmpty() && !state.loadingThread && state.live == null) {
                             item(key = "greeting") {
@@ -329,24 +414,25 @@ fun HermesChatPane(
                                 }
                             }
                         }
-                        items(state.items, key = { it.key }) { item ->
-                            HermesItemView(
-                                item = item,
-                                // Only what the cards read, not the whole state: with the state,
-                                // every streamed token re-ran every row on screen.
-                                busy = state.busy,
-                                running = state.running,
-                                onDecide = { card, i, run ->
-                                    haptics.click()
-                                    forceFollow = true
-                                    viewModel.decide(card, i, run)
-                                },
-                                onAnswer = { card, choice ->
-                                    haptics.click()
-                                    forceFollow = true
-                                    viewModel.answer(card, choice)
-                                },
-                            )
+                        rows.forEach { row ->
+                            when (row) {
+                                is FeedRow.Item -> item(key = row.key) { shown(row.item) }
+                                // a finished run: one line, and its steps under it once opened
+                                is FeedRow.Run -> {
+                                    val open = row.key in openRuns
+                                    item(key = row.key) {
+                                        RunFold(row, open) {
+                                            haptics.tick()
+                                            openRuns = if (open) openRuns - row.key else openRuns + row.key
+                                        }
+                                    }
+                                    if (open) {
+                                        items(row.items, key = { it.key }) { item ->
+                                            Box(Modifier.padding(start = 12.dp)) { shown(item) }
+                                        }
+                                    }
+                                }
+                            }
                         }
                         state.live?.let { live ->
                             item(key = "live") { LiveTurn(live) }
@@ -355,11 +441,23 @@ fun HermesChatPane(
                 }
             }
 
+            if (state.reach != HermesReach.DOWN) {
+                ChatDock(
+                    live = state.live,
+                    showJump = awayFromEnd && state.items.isNotEmpty(),
+                    onJump = {
+                        forceFollow = true
+                        scope.launch { listState.followChatBottom() }
+                    },
+                    hazeState = chatHaze,
+                    modifier = Modifier.align(Alignment.BottomCenter).offset { IntOffset(0, -(composerHeight.value + 2.dp).roundToPx()) },
+                )
+            }
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .onSizeChanged { composerHeight = with(density) { it.height.toDp() } },
+                    .onSizeChanged { composerHeight.value = with(density) { it.height.toDp() } },
             ) {
                 state.notice?.let { notice ->
                     Row(
@@ -459,6 +557,7 @@ fun HermesChatPane(
                     onClearMode = { viewModel.setModeKind("write") },
                     onPickModel = { modelSheet = true },
                     hazeState = chatHaze,
+                    roomy = state.items.isEmpty() && state.live == null,
                     usage = {
                         ComposerUsageMeter(
                             usage = usageState,
@@ -472,44 +571,10 @@ fun HermesChatPane(
         }
     }
 
-    if (railOpen) {
-        ModalBottomSheet(
-            onDismissRequest = { railOpen = false },
-            sheetState = railState,
-            containerColor = Surface,
-        ) {
-            // Tall enough for a real list, and a fixed height so searching doesn't make it jump.
-            Box(Modifier.fillMaxWidth().fillMaxHeight(0.86f)) {
-                HermesThreadRail(
-                    threads = state.threads,
-                    turns = turns,
-                    selectedId = state.threadId,
-                    status = state.status,
-                    onOpen = { id ->
-                        haptics.tick()
-                        forceFollow = true
-                        viewModel.openThread(id)
-                        closeRail()
-                    },
-                    onNewChat = {
-                        haptics.tick()
-                        forceFollow = true
-                        viewModel.newThread()
-                        closeRail()
-                    },
-                    onRename = { renaming = it },
-                    onTogglePin = { viewModel.setPinned(it.id, !it.pinned) },
-                    onClear = { confirmClear = it },
-                    onDelete = { confirmDelete = it },
-                    isUnread = state::isUnread,
-                )
-            }
-        }
-    }
-
     if (modelSheet) {
         HermesModelSheet(
-            status = state.status,
+            // a switch on its way is drawn as picked, so every control reads the model it changes
+            status = HermesCatalog.heading(state.status, state.switchingTo),
             switching = state.switchingModel,
             favourites = favouriteModels,
             onToggleFavourite = viewModel::toggleFavourite,
@@ -561,6 +626,44 @@ fun HermesChatPane(
     }
 }
 
+/** A finished run, folded: how long Hermes worked and in how many steps. A tap opens it to every step. */
+@Composable
+private fun RunFold(run: FeedRow.Run, open: Boolean, onToggle: () -> Unit) {
+    val label = listOfNotNull(
+        run.ms?.let { "Worked for ${tookShort(it)}" } ?: "Worked",
+        run.steps.takeIf { it > 0 }?.let { "$it step${if (it == 1) "" else "s"}" },
+    ).joinToString(" · ")
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClickLabel = if (open) "Hide the steps" else "Show the steps", onClick = onToggle)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(if (open) AppIcons.ChevronDown else AppIcons.ChevronRight, null, tint = TextTertiary, modifier = Modifier.size(15.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(label, color = TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+    }
+}
+
+/** The transcript's list. It alone reads the room to leave under the last line, so only it follows the composer's height. */
+@Composable
+private fun ChatList(
+    state: LazyListState,
+    bottomRoom: () -> Dp,
+    modifier: Modifier = Modifier,
+    content: LazyListScope.() -> Unit,
+) {
+    LazyColumn(
+        state = state,
+        modifier = modifier,
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 10.dp, bottom = bottomRoom()),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        content = content,
+    )
+}
+
 /** Enough of a thread for the dialogs when the list has not caught up with a brand-new one. */
 private fun placeholderThread(id: String, title: String) = HermesThreadSummary(
     id = id,
@@ -579,9 +682,7 @@ private fun openQuestion(state: HermesUiState): HermesItem.Clarify? =
     (state.items.lastOrNull { it is HermesItem.Clarify || it is HermesItem.User } as? HermesItem.Clarify)?.takeIf { it.open }
 
 private fun headerStatus(state: HermesUiState): String {
-    val live = state.live
     return when {
-        live != null -> "Hermes · ${HermesActivityLabel.of(live).text.lowercase()}"
         state.reach == HermesReach.DOWN -> "Hermes is not reachable"
         state.status != null -> listOfNotNull(
             state.currentModel?.familyLabel ?: state.status.modelLabel,
@@ -654,7 +755,8 @@ private fun HermesUserBubble(item: HermesItem.User) {
                 item.attachments.forEach { AttachmentChip(it) }
             }
         }
-        if (item.text.isNotBlank()) UserBubble(item.text)
+        // held, a message copies itself
+        if (item.text.isNotBlank()) UserBubble(item.text, onLongPress = rememberCopy(item.text))
     }
 }
 
@@ -700,9 +802,10 @@ private fun AssistantTurn(item: HermesItem.Assistant) {
         TurnByline(
             live = false,
             meta = listOfNotNull(
-                item.ms?.let(::turnClock),
+                item.ms?.let(::tookShort),
                 item.model?.let { HermesModelName(it) ?: it.substringAfter(':') }?.takeIf { it.isNotBlank() },
             ).joinToString(" · "),
+            trailing = if (split.answer.isNotBlank()) ({ CopyButton(split.answer) }) else null,
         )
         if (notes.isNotEmpty() || item.tools.isNotEmpty() || !item.think.isNullOrBlank()) {
             WorkTrail(
@@ -731,12 +834,6 @@ private fun AssistantTurn(item: HermesItem.Assistant) {
     }
 }
 
-/** `46s`, `2m 05s`. */
-private fun turnClock(ms: Long): String {
-    val s = (ms / 1000).coerceAtLeast(1)
-    return if (s < 60) "${s}s" else "${s / 60}m ${"%02d".format(s % 60)}s"
-}
-
 /** Who is speaking, small: Hermes' face, his name, and how long the turn took on what. */
 @Composable
 private fun TurnByline(live: Boolean, meta: String, trailing: (@Composable () -> Unit)? = null) {
@@ -747,20 +844,16 @@ private fun TurnByline(live: Boolean, meta: String, trailing: (@Composable () ->
         BotAvatar(HermesIdentity, size = 22.dp, live = live)
         Spacer(Modifier.width(8.dp))
         Text("Hermes", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-        if (meta.isNotBlank()) {
-            Text(
-                "  ·  $meta",
-                color = TextTertiary,
-                fontSize = 11.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-        }
-        if (trailing != null) {
-            Spacer(Modifier.weight(1f))
-            trailing()
-        }
+        // the meta takes the row's middle, so what trails it sits at the far edge
+        Text(
+            if (meta.isNotBlank()) "  ·  $meta" else "",
+            color = TextTertiary,
+            fontSize = 11.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        trailing?.invoke()
     }
 }
 
@@ -782,8 +875,8 @@ private fun WorkTrail(
     val label = buildString {
         append(
             when {
-                tools.isEmpty() && notes.isEmpty() -> thinkMs?.let { "Thought for ${turnClock(it)}" } ?: "Thought"
-                ms != null -> "Worked for ${turnClock(ms)}"
+                tools.isEmpty() && notes.isEmpty() -> thinkMs?.let { "Thought for ${tookShort(it)}" } ?: "Thought"
+                ms != null -> "Worked for ${tookShort(ms)}"
                 else -> "Worked"
             },
         )
@@ -849,7 +942,7 @@ private fun ThoughtEntry(think: String, thinkMs: Long?) {
             Icon(AppIcons.Sparkles, null, tint = TextTertiary, modifier = Modifier.size(12.dp))
             Spacer(Modifier.width(6.dp))
             Text(
-                thinkMs?.let { "Thought for ${turnClock(it)}" } ?: "Thinking",
+                thinkMs?.let { "Thought for ${tookShort(it)}" } ?: "Thinking",
                 color = TextSecondary,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
@@ -1447,30 +1540,9 @@ private fun WebRow(item: HermesItem.Web) {
  */
 @Composable
 private fun LiveTurn(live: HermesLive) {
-    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(live.startedAtMs) {
-        while (true) {
-            now = System.currentTimeMillis()
-            delay(1_000)
-        }
-    }
-    val elapsed = ((now - live.startedAtMs) / 1000).coerceAtLeast(0)
     Column(modifier = Modifier.fillMaxWidth()) {
-        TurnByline(live = true, meta = "") {
-            Text("${elapsed / 60}:${"%02d".format(elapsed % 60)}", color = TextTertiary, fontSize = 11.sp, fontFamily = Mono)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 2.dp, bottom = 6.dp)) {
-            WorkingScanner(color = ServerBrand, blockSize = 5.dp, gap = 2.dp)
-            Spacer(Modifier.width(8.dp))
-            Text(
-                HermesActivityLabel.of(live).text,
-                color = TextSecondary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
+        // The step he is on and the turn's clock are the dock's pill, which stays in view.
+        TurnByline(live = true, meta = "")
         val thinking = live.think.isNotBlank() && live.got.isBlank()
         if (thinking || live.notes.isNotEmpty() || live.tools.isNotEmpty()) {
             TrailRail(modifier = Modifier.padding(bottom = 8.dp)) {

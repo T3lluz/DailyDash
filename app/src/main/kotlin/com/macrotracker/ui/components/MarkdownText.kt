@@ -277,6 +277,10 @@ private class TableGeometry {
 @Composable
 private fun MdTable(block: MdBlock.Table, look: MdLook) {
     val cols = block.header.size.coerceAtLeast(1)
+    // A table written with an empty header (two columns of facts) has no header row to draw.
+    val headed = block.header.any { it.isNotBlank() }
+    val shown = if (headed) listOf(block.header) + block.rows else block.rows
+    if (shown.isEmpty()) return
     val geometry = remember(block) { TableGeometry() }
     val density = LocalDensity.current
     val cellPadH = 10.dp
@@ -296,9 +300,9 @@ private fun MdTable(block: MdBlock.Table, look: MdLook) {
             modifier = Modifier.drawBehind {
                 val rows = geometry.rowY
                 if (rows.size < 2) return@drawBehind
-                drawRect(headerFill, size = Size(size.width, rows[1].toFloat()))
+                if (headed) drawRect(headerFill, size = Size(size.width, rows[1].toFloat()))
                 for (r in 1 until rows.size - 1) {
-                    if (r % 2 == 0) {
+                    if ((r % 2 == 0) == headed) {
                         drawRect(stripe, topLeft = Offset(0f, rows[r].toFloat()), size = Size(size.width, (rows[r + 1] - rows[r]).toFloat()))
                     }
                     drawLine(Border, Offset(0f, rows[r].toFloat()), Offset(size.width, rows[r].toFloat()), strokeWidth = 1f)
@@ -309,14 +313,14 @@ private fun MdTable(block: MdBlock.Table, look: MdLook) {
                 }
             },
             content = {
-                (listOf(block.header) + block.rows).forEachIndexed { r, row ->
+                shown.forEachIndexed { r, row ->
                     for (c in 0 until cols) {
                         InlineText(
                             text = row.getOrElse(c) { "" },
                             look = look,
-                            color = if (r == 0) TextPrimary else look.color,
+                            color = if (headed && r == 0) TextPrimary else look.color,
                             fontSize = (look.fontSize.value - 1).sp,
-                            weight = if (r == 0) FontWeight.SemiBold else null,
+                            weight = if (headed && r == 0) FontWeight.SemiBold else null,
                             align = when (block.align.getOrElse(c) { MdAlign.START }) {
                                 MdAlign.START -> TextAlign.Start
                                 MdAlign.CENTER -> TextAlign.Center

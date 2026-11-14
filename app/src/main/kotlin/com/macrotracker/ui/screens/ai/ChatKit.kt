@@ -1,5 +1,15 @@
 package com.macrotracker.ui.screens.ai
 
+import androidx.compose.foundation.interaction.DragInteraction
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import com.macrotracker.ui.theme.TextTertiary
+import com.macrotracker.ui.util.rememberHaptics
+import com.macrotracker.ui.theme.Success
+import androidx.compose.ui.semantics.Role
 import android.content.ClipData
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -86,8 +96,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.macrotracker.ui.theme.AppIcons
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 
 /**
  * Every visual primitive both chat bots share.
@@ -112,6 +120,9 @@ val UserBubbleShape =
     RoundedCornerShape(topStart = 18.dp, topEnd = 6.dp, bottomEnd = 18.dp, bottomStart = 18.dp)
 val ChatPillShape = RoundedCornerShape(999.dp)
 internal val ComposerShape = RoundedCornerShape(22.dp)
+
+/** What you said: a quiet block a little lighter than the page, as T3 Code and Claude's apps set it. */
+private val UserBubbleFill = Color.White.copy(alpha = 0.09f)
 private val ComposerSendShape = RoundedCornerShape(999.dp)
 
 /** How much of the newest message may hide under the composer and still count as following along. */
@@ -188,6 +199,42 @@ fun FollowChatOnKeyboard(listState: LazyListState, shouldFollow: () -> Boolean) 
                 }
             }
     }
+}
+
+/**
+ * True once a finger has scrolled the chat well away from its end, for the button that
+ * goes back there. Only a drag turns it on (a message arriving or a chat opening moves the
+ * end, not the reader), and it turns on further out than it turns off, so the button does
+ * not come and go around the line or as the composer changes height.
+ */
+@Composable
+fun rememberAwayFromChatEnd(listState: LazyListState): State<Boolean> {
+    val density = LocalDensity.current
+    val away = remember(listState) { mutableStateOf(false) }
+    LaunchedEffect(listState, density) {
+        val on = with(density) { 260.dp.toPx() }
+        val off = with(density) { 40.dp.toPx() }
+        var dragged = false
+        launch { listState.interactionSource.interactions.collect { if (it is DragInteraction.Start) dragged = true } }
+        snapshotFlow {
+            val info = listState.layoutInfo
+            val last = info.totalItemsCount - 1
+            val item = info.visibleItemsInfo.lastOrNull()
+            when {
+                last < 0 || item == null -> 0f
+                item.index < last -> Float.MAX_VALUE
+                else -> ((item.offset + item.size) - (info.viewportEndOffset - info.afterContentPadding)).toFloat()
+            }
+        }.collect { hidden ->
+            if (hidden < off) {
+                away.value = false
+                dragged = false
+            } else if (hidden > on && dragged) {
+                away.value = true
+            }
+        }
+    }
+    return away
 }
 
 /**
@@ -378,7 +425,7 @@ fun BotBubble(
 }
 
 @Composable
-fun UserBubble(text: String) {
+fun UserBubble(text: String, onLongPress: (() -> Unit)? = null) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.End,
@@ -387,10 +434,20 @@ fun UserBubble(text: String) {
             modifier = Modifier
                 .widthIn(max = 300.dp)
                 .clip(UserBubbleShape)
-                .background(Primary)
+                .background(UserBubbleFill)
+                .then(
+                    if (onLongPress != null) {
+                        // Held only: a tap does nothing, so it gets no ripple and no button role.
+                        Modifier
+                            .pointerInput(onLongPress) { detectTapGestures(onLongPress = { onLongPress() }) }
+                            .semantics { onLongClick("Copy") { onLongPress(); true } }
+                    } else {
+                        Modifier
+                    },
+                )
                 .padding(horizontal = 14.dp, vertical = 11.dp),
         ) {
-            Text(text = text, color = OnAccent, fontSize = 14.sp, lineHeight = 21.sp)
+            Text(text = text, color = TextPrimary, fontSize = 15.sp, lineHeight = 21.sp)
         }
     }
 }
@@ -425,6 +482,46 @@ fun TypingBubble(identity: BotIdentity, label: String, onCancel: () -> Unit) {
                 .clip(ChatPillShape)
                 .clickable(onClick = onCancel)
                 .padding(horizontal = 10.dp, vertical = 6.dp),
+        )
+    }
+}
+
+/** Puts [text] on the clipboard with a tick of the motor. Android says "Copied" itself. */
+@Composable
+fun rememberCopy(text: String): () -> Unit {
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    val haptics = rememberHaptics()
+    // one lambda per text: a gesture keyed on it is not restarted by a recomposition mid-hold
+    return remember(text, clipboard) {
+        {
+            haptics.click()
+            scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Chat message", text))) }
+            Unit
+        }
+    }
+}
+
+/** Copy, small and quiet, at the end of an answer's byline; it turns to a tick for a moment. */
+@Composable
+fun CopyButton(text: String) {
+    val copy = rememberCopy(text)
+    var copied by remember { mutableStateOf(false) }
+    LaunchedEffect(copied) {
+        if (copied) { delay(1600); copied = false }
+    }
+    Box(
+        Modifier
+            .size(28.dp)
+            .clip(CircleShape)
+            .clickable(role = Role.Button) { copy(); copied = true },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            if (copied) AppIcons.Check else AppIcons.Copy,
+            contentDescription = if (copied) "Copied" else "Copy the answer",
+            tint = if (copied) Success else TextTertiary,
+            modifier = Modifier.size(14.dp),
         )
     }
 }
