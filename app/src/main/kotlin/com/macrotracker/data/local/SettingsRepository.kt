@@ -147,6 +147,24 @@ class SettingsRepository @Inject constructor(
         _hermesSnoozed.value = now
     }
 
+    /** Chats idle this many days settle by themselves (T3 Code's auto-settle); 0 never. Phone-side, like settling by hand. */
+    private val _hermesAutoSettleDays = MutableStateFlow(prefs.getInt(KEY_HERMES_AUTOSETTLE, 0))
+    val hermesAutoSettleDays: StateFlow<Int> = _hermesAutoSettleDays
+
+    fun setHermesAutoSettleDays(days: Int) {
+        prefs.edit { putInt(KEY_HERMES_AUTOSETTLE, days) }
+        _hermesAutoSettleDays.value = days
+    }
+
+    /** The chat panel groups what is left by the day it last moved. */
+    private val _hermesGroupByDay = MutableStateFlow(prefs.getBoolean(KEY_HERMES_GROUP_DAY, true))
+    val hermesGroupByDay: StateFlow<Boolean> = _hermesGroupByDay
+
+    fun setHermesGroupByDay(on: Boolean) {
+        prefs.edit { putBoolean(KEY_HERMES_GROUP_DAY, on) }
+        _hermesGroupByDay.value = on
+    }
+
     /** The order chats were arranged in by hand, first to last; a chat not in it follows by when it moved. */
     private val _hermesOrder = MutableStateFlow(prefs.getString(KEY_HERMES_ORDER, null).orEmpty().split('\n').filter { it.isNotBlank() })
     val hermesOrder: StateFlow<List<String>> = _hermesOrder
@@ -491,6 +509,8 @@ class SettingsRepository @Inject constructor(
         const val KEY_HERMES_ARCHIVED = "hermes_archived"
         const val KEY_HERMES_SNOOZED = "hermes_snoozed"
         const val KEY_HERMES_ORDER = "hermes_order"
+        const val KEY_HERMES_AUTOSETTLE = "hermes_autosettle_days"
+        const val KEY_HERMES_GROUP_DAY = "hermes_group_day"
         const val KEY_HERMES_DRAFT = "hermes_draft_"
         const val KEY_YOUTUBE_FAVOURITES = "youtube_favourite_channels"
         const val KEY_TWITCH_FAVOURITES = "twitch_favourite_channels"

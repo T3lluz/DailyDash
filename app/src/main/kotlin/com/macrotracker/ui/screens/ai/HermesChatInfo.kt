@@ -112,6 +112,11 @@ internal fun ChatInfoSheet(
     onWake: () -> Unit,
     onToggleArchive: () -> Unit,
     onCopyChat: () -> Unit,
+    onShare: () -> Unit,
+    onRetitle: () -> Unit,
+    onForkChat: () -> Unit,
+    /** The name of the chat this one was forked from, when it was. */
+    forkedFrom: String?,
     onFind: () -> Unit,
     onClear: () -> Unit,
     onDelete: () -> Unit,
@@ -130,6 +135,13 @@ internal fun ChatInfoSheet(
             // who and what: the chat, and the model it runs on
             Column(Modifier.padding(horizontal = 20.dp)) {
                 Text(thread.title, color = TextPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (forkedFrom != null) {
+                    Row(Modifier.padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(AppIcons.GitFork, null, tint = TextTertiary, modifier = Modifier.size(12.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text("Forked from $forkedFrom", color = TextTertiary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
                 Spacer(Modifier.height(10.dp))
                 Row(
                     modifier = Modifier
@@ -224,6 +236,11 @@ internal fun ChatInfoSheet(
             Action(AppIcons.Edit, "Rename", onClick = { onDismiss(); onRename() })
             Action(AppIcons.Search, "Find in chat", onClick = { onDismiss(); onFind() })
             Action(AppIcons.Copy, "Copy chat", onClick = { onDismiss(); onCopyChat() })
+            Action(AppIcons.ExternalLink, "Share chat", onClick = { onDismiss(); onShare() })
+            if (!thread.isStaff) {
+                Action(AppIcons.Sparkles, "Name it again", onClick = { onDismiss(); onRetitle() })
+                Action(AppIcons.GitFork, "Fork into a new chat", onClick = { onDismiss(); onForkChat() })
+            }
             if (!thread.isStaff) {
                 Action(AppIcons.Star, if (thread.pinned) "Unpin" else "Pin to the top", onClick = { onDismiss(); onTogglePin() })
                 if (wake != null) {
@@ -231,7 +248,7 @@ internal fun ChatInfoSheet(
                 } else {
                     Action(AppIcons.BellOff, "Snooze…", onClick = { onDismiss(); onSnooze() })
                 }
-                Action(AppIcons.Archive, if (archived) "Bring back from the archive" else "Archive", onClick = { onDismiss(); onToggleArchive() })
+                Action(AppIcons.CheckCircle, if (archived) "Unsettle" else "Settle", onClick = { onDismiss(); onToggleArchive() })
             }
             Action(AppIcons.Refresh, "Clear this chat", onClick = { onDismiss(); onClear() })
             Action(AppIcons.Delete, if (thread.isStaff) "Let go" else "Delete this chat", danger = true, onClick = { onDismiss(); onDelete() })

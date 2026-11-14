@@ -312,7 +312,7 @@ com.macrotracker/
                              (`HermesThreadSummary.contextFraction`).
                              More from T3 Code's phone app, in the rail and chat: each row shows the model it
                              runs on (logo, family, mode when not Agent, tokens: `railModel`), with filters
-                             (Active, Pinned, Snoozed, Archived), snooze (`HermesSnooze.kt`: T3 Code's presets
+                             (Active, Pinned, Snoozed, Settled), snooze (`HermesSnooze.kt`: T3 Code's presets
                              plus a time of your own; `SettingsRepository.hermesSnoozed`, phone-side like
                              archive), a hand-made order (`hermesOrder`, Move up/down/top, "Sort by recent"
                              resets it), day groups, an undo pill after pin, archive and snooze, and a footer
@@ -327,10 +327,18 @@ com.macrotracker/
                              browser and viewer over `/ai/preview` (header menu, attach sheet, or typing "@");
                              `HermesViewModel.draftFor` keeps a draft per chat. Find in chat, camera in attach,
                              pictures drawn in messages (tap for full screen), selectable answers, and a
-                             hardware keyboard (Enter sends, Ctrl+N, Ctrl+K, Esc). "Ask Hermes" in the share
+                             hardware keyboard (Enter sends, Ctrl+N, Ctrl+K focuses the chat search, Ctrl+B, Ctrl+F, Esc). "Ask Hermes" in the share
                              sheet (`AskHermesActivity` copies the files into the cache, `HermesShareInbox`
-                             hands them to the pane) starts a new chat. Not ported, since the bridge has no
-                             equivalent: git and pull requests, worktrees, review screens, subagents, fork.
+                             hands them to the pane) starts a new chat. Settling is T3 Code's word for archiving: swipe a row left (a tick for every tenth of the way, a click at the commit
+                             point, as the home pull to refresh does), or the menu. Settled also happens by itself after N idle days (the
+                             list-options menu, `hermesAutoSettleDays`). A swipe to the right anywhere in the chat opens the panel. The rail's search
+                             is the server's full-text one (`/_api/search?kind=chat`: excerpt under each row, matching words picked out; opening a hit
+                             searches that chat for the words). Fork (`/ai/threads/{id}/fork`: copies the messages up to one, and the new chat's first
+                             turn carries them to Hermes as its memory, `fork_ctx`), Name it again (`/retitle`), Share chat, a failed turn
+                             (`fail` on the summary) as a red Failed row, a "Needs your answer" pill in the dock while a question or approval is
+                             out of sight, a launcher "New chat" shortcut and `dailydash://ask?prompt=` (fills the box, never sends).
+                             The bridge side lives in `bridge.py` on twolluz (`thread_fork`, `thread_retitle`, `fork_context`). Not ported, since
+                             the bridge has no equivalent: git and pull requests, worktrees, review screens, subagents.
                              + ConsoleScreen.kt: the dashboard's console page (site/console.html, xterm) in a
                              WebView, the same shells as the web's console. Reached from the AI tab's menu, Home's
                              Servers card, the Servers screen and settings, Usage, and the launcher shortcuts

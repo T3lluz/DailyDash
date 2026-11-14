@@ -198,7 +198,9 @@ fun MainScreen(
             "console" -> navController.navigateToSubScreen(SubScreenRoutes.CONSOLE)
             "usage" -> navController.navigateToSubScreen(SubScreenRoutes.USAGE)
             // A tab asked for from outside opens on the tab itself, not on a sub-screen left open over it.
-            "hermes", "ai" -> {
+            "hermes", "ai", "new-chat" -> {
+                // the launcher's "New chat": the AI tab takes an empty share as a new chat
+                if (where == "new-chat") com.macrotracker.data.hermes.HermesShareInbox.put(com.macrotracker.data.hermes.HermesShareInbox.Shared("", emptyList()))
                 // On a cold start Hermes has not answered yet, so the tab does not exist yet: wait for it
                 // (the effect restarts when it does) before giving up on the request.
                 if (!hasAiApiKey) kotlinx.coroutines.delay(8_000)

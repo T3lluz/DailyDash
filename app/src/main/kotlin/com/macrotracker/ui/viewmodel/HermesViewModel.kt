@@ -14,6 +14,7 @@ import com.macrotracker.data.hermes.HermesCatalog
 import com.macrotracker.data.hermes.HermesFollower
 import com.macrotracker.data.hermes.HermesOutcome
 import com.macrotracker.data.hermes.HermesClient
+import com.macrotracker.data.hermes.HermesChatHit
 import com.macrotracker.data.hermes.HermesCommand
 import com.macrotracker.data.hermes.HermesFileChange
 import com.macrotracker.data.hermes.HermesPreview
@@ -721,6 +722,13 @@ class HermesViewModel @Inject constructor(
     val snoozed: StateFlow<Map<String, Long>> = settings.hermesSnoozed
     val order: StateFlow<List<String>> = settings.hermesOrder
 
+    val autoSettleDays: StateFlow<Int> = settings.hermesAutoSettleDays
+    val groupByDay: StateFlow<Boolean> = settings.hermesGroupByDay
+
+    fun setAutoSettleDays(days: Int) = settings.setHermesAutoSettleDays(days)
+
+    fun setGroupByDay(on: Boolean) = settings.setHermesGroupByDay(on)
+
     fun snooze(threadId: String, untilMs: Long) = settings.snoozeHermes(threadId, untilMs)
 
     fun wake(threadId: String) = settings.wakeHermes(threadId)
@@ -766,6 +774,60 @@ class HermesViewModel @Inject constructor(
     fun retry() {
         val last = _state.value.items.lastOrNull { it is HermesItem.User } as? HermesItem.User ?: return
         rewind(last) { text -> send(text) }
+    }
+
+    /**
+     * Takes this chat another way from the message stamped [ts]: a new chat with everything up to it. [onCreated]
+     * runs with its id before it opens, so the screen can switch the draft over.
+     */
+    fun fork(ts: Long, onCreated: (String) -> Unit) {
+        val id = _state.value.threadId ?: return
+        viewModelScope.launch {
+            try {
+                val made = client.fork(id, ts)
+                refreshThreads()
+                onCreated(made.id)
+                openThread(made.id)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                say("Could not fork: ${e.message}")
+            }
+        }
+    }
+
+    /** Names the open chat again from what it was first asked. */
+    fun retitle() {
+        val id = _state.value.threadId ?: return
+        viewModelScope.launch {
+            try {
+                val t = client.retitle(id)
+                _state.update { s -> if (s.threadId == id) s.copy(threadTitle = t.title) else s }
+                refreshThreads()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                say("Could not rename: ${e.message}")
+            }
+        }
+    }
+
+    /** Which chats mention what the rail's search box holds, by the passage that did (the server's full-text search). */
+    private val _hits = MutableStateFlow<Map<String, HermesChatHit>>(emptyMap())
+    val chatHits: StateFlow<Map<String, HermesChatHit>> = _hits
+    private var searchJob: Job? = null
+
+    fun searchChats(query: String) {
+        searchJob?.cancel()
+        val q = query.trim()
+        if (q.length < 2) {
+            _hits.value = emptyMap()
+            return
+        }
+        searchJob = viewModelScope.launch {
+            delay(280)
+            runCatching { client.searchChats(q) }.onSuccess { found -> _hits.value = found.associateBy { it.threadId } }
+        }
     }
 
     /** Puts a file back the way Hermes found it. A file edited again since asks first; [force] goes ahead anyway. */

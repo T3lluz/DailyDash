@@ -140,6 +140,10 @@ data class HermesThreadSummary(
     val window: Int = 0,
     /** The scheduled ask that runs in this chat, if one does. */
     val scheduled: String? = null,
+    /** What stopped the last turn, when the newest thing in the chat is an error. */
+    val fail: String? = null,
+    /** The chat this one was forked from. */
+    val forkedFrom: String? = null,
 ) {
     val contextFraction: Float? get() = if (window > 0 && context > 0) (context.toFloat() / window).coerceIn(0f, 1f) else null
 
@@ -321,3 +325,6 @@ sealed interface HermesPreview {
 
 /** What `/ai/threads/{id}/rewind` hands back: the message that was cut, to edit and send again. */
 data class HermesRewound(val text: String, val attachments: List<HermesAttachment>, val thread: HermesThread?)
+
+/** A chat the server's full-text search found, with the passage that matched. */
+data class HermesChatHit(val threadId: String, val title: String, val snippet: String, val ranges: List<IntRange>)

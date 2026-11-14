@@ -6,6 +6,12 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import com.macrotracker.data.hermes.HermesChatHit
+import com.macrotracker.ui.util.LaunchedWhileResumed
 import androidx.compose.material3.HorizontalDivider
 import com.macrotracker.ui.theme.Border
 import androidx.compose.foundation.rememberScrollState
@@ -46,6 +52,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -99,7 +108,7 @@ internal fun HermesThreadRail(
     turns: Map<String, HermesTurnActivity>,
     selectedId: String?,
     status: HermesStatus?,
-    onOpen: (String) -> Unit,
+    onOpen: (String, String) -> Unit,
     onNewChat: () -> Unit,
     onRename: (HermesThreadSummary) -> Unit,
     onTogglePin: (HermesThreadSummary) -> Unit,
@@ -107,7 +116,7 @@ internal fun HermesThreadRail(
     onDelete: (HermesThreadSummary) -> Unit,
     /** A chat that moved since this phone last opened it. */
     isUnread: (HermesThreadSummary) -> Boolean = { false },
-    /** Chats put away on this phone. */
+    /** Chats settled on this phone (T3 Code's word: done with, out of the way, not deleted). */
     archived: Set<String> = emptySet(),
     onToggleArchive: (HermesThreadSummary) -> Unit = {},
     /** Chats asleep until a time (epoch ms). */
@@ -124,6 +133,16 @@ internal fun HermesThreadRail(
     onOpenUsage: () -> Unit = {},
     onOpenConsole: () -> Unit = {},
     onOpenFiles: () -> Unit = {},
+    /** Chats the server's full-text search found for the box, by id. */
+    hits: Map<String, HermesChatHit> = emptyMap(),
+    onSearch: (String) -> Unit = {},
+    /** Bumped to put the cursor in the search box (Ctrl+K). */
+    focusSearch: Int = 0,
+    /** Chats idle this many days settle by themselves; 0 never. */
+    autoSettleDays: Int = 0,
+    onAutoSettle: (Int) -> Unit = {},
+    groupByDay: Boolean = true,
+    onGroupByDay: (Boolean) -> Unit = {},
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf(RailFilter.ALL) }
@@ -136,13 +155,18 @@ internal fun HermesThreadRail(
         }
     }
     val now = remember(threads, snoozed) { System.currentTimeMillis() }
-    val shown = remember(threads, query) {
+    LaunchedEffect(query) { onSearch(query) }
+    val searchFocus = remember { FocusRequester() }
+    LaunchedEffect(focusSearch) { if (focusSearch > 0) runCatching { searchFocus.requestFocus() } }
+    val shown = remember(threads, query, hits) {
         val q = query.trim().lowercase()
-        threads.filter { q.isEmpty() || q in it.title.lowercase() || q in it.preview.lowercase() || q in (modelOf(it)?.label.orEmpty()).lowercase() }
+        // a chat is a match by its name, its last words, its model, or the server finding the words inside it
+        threads.filter { q.isEmpty() || it.id in hits || q in it.title.lowercase() || q in it.preview.lowercase() || q in (modelOf(it)?.label.orEmpty()).lowercase() }
     }
     fun stateOf(t: HermesThreadSummary): RailState? = when {
         t.waiting > 0 || t.pending > 0 -> RailState.NEEDS_INPUT
         t.busy || turns[t.id] != null -> RailState.WORKING
+        t.fail != null && isUnread(t) -> RailState.FAILED
         isUnread(t) -> RailState.DONE
         else -> null
     }
@@ -154,9 +178,13 @@ internal fun HermesThreadRail(
         list.sortedWith(compareBy<HermesThreadSummary> { orderIdx[it.id] ?: -1 }.thenByDescending { it.updatedMs })
     val active = shown.filter { stateOf(it) != null }.sortedBy { stateOf(it)!!.ordinal }
     val quietAll = shown.filter { stateOf(it) == null }
-    val put = quietAll.filter { it.id in archived }.sortedByDescending { it.updatedMs }
-    val sleeping = quietAll.filter { it.id !in archived && asleep(it) }.sortedBy { snoozed[it.id] }
-    val quiet = quietAll.filter { it.id !in archived && !asleep(it) }
+    // Settled by hand, or by sitting idle for the days the options name (never what is pinned, staff or open).
+    val idleBefore = if (autoSettleDays > 0) now - autoSettleDays * 86_400_000L else 0L
+    fun settled(t: HermesThreadSummary) =
+        t.id in archived || (idleBefore > 0 && !t.pinned && !t.isStaff && t.id != selectedId && t.updatedMs in 1 until idleBefore)
+    val put = quietAll.filter { settled(it) }.sortedByDescending { it.updatedMs }
+    val sleeping = quietAll.filter { !settled(it) && asleep(it) }.sortedBy { snoozed[it.id] }
+    val quiet = quietAll.filter { !settled(it) && !asleep(it) }
     var showArchived by rememberSaveable { mutableStateOf(false) }
     var showSleeping by rememberSaveable { mutableStateOf(false) }
     val pinned = arrange(quiet.filter { it.pinned && !it.isStaff })
@@ -202,6 +230,26 @@ internal fun HermesThreadRail(
                     fontSize = 11.sp,
                 )
             }
+            var options by remember { mutableStateOf(false) }
+            Box {
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .clickable { options = true }
+                        .semantics { contentDescription = "List options" },
+                    contentAlignment = Alignment.Center,
+                ) { Icon(AppIcons.SwapVertical, null, tint = TextSecondary, modifier = Modifier.size(19.dp)) }
+                DropdownMenu(expanded = options, onDismissRequest = { options = false }, modifier = Modifier.background(Surface)) {
+                    MenuRow(if (groupByDay) "Group by day  ✓" else "Group by day", AppIcons.CalendarDays) { onGroupByDay(!groupByDay) }
+                    HorizontalDivider(color = Border)
+                    RailHeading("Settle after")
+                    listOf(0 to "Never", 3 to "3 days", 7 to "A week", 14 to "2 weeks", 30 to "A month").forEach { (days, label) ->
+                        MenuRow(if (days == autoSettleDays) "$label  ✓" else label, AppIcons.CheckCircle) { options = false; onAutoSettle(days) }
+                    }
+                }
+            }
+            Spacer(Modifier.width(4.dp))
             // a new chat, where T3 Code keeps it: at the top of the list
             Box(
                 Modifier
@@ -216,7 +264,7 @@ internal fun HermesThreadRail(
             }
         }
         Spacer(Modifier.height(12.dp))
-        SearchBox(value = query, onValueChange = { query = it }, hint = "Search chats", modifier = Modifier.padding(horizontal = 12.dp))
+        SearchBox(value = query, onValueChange = { query = it }, hint = "Search chats", modifier = Modifier.padding(horizontal = 12.dp), focusRequester = searchFocus)
         // Filters, only the ones with something in them.
         val counts = mapOf(
             RailFilter.ACTIVE to active.size,
@@ -272,7 +320,8 @@ internal fun HermesThreadRail(
                         state = stateOf(t),
                         turn = turns[t.id],
                         selected = t.id == selectedId,
-                        onOpen = { onOpen(t.id) },
+                        onOpen = { onOpen(t.id, query.trim()) },
+                        hit = hits[t.id]?.takeIf { query.isNotBlank() },
                         onRename = { onRename(t) },
                         onTogglePin = {
                             onTogglePin(t)
@@ -280,11 +329,16 @@ internal fun HermesThreadRail(
                         },
                         onClear = { onClear(t) },
                         onDelete = { onDelete(t) },
-                        archived = t.id in archived,
+                        archived = settled(t),
                         onToggleArchive = {
+                            if (t.id !in archived && settled(t)) {
+                                // settled by sitting idle: opening it keeps it out of there until it goes quiet again
+                                note = RailNote("Settled after $autoSettleDays idle days") { }
+                                return@ThreadRow
+                            }
                             val was = t.id in archived
                             onToggleArchive(t)
-                            note = RailNote(if (was) "Brought back" else "Archived") { onToggleArchive(t) }
+                            note = RailNote(if (was) "Unsettled" else "Settled") { onToggleArchive(t) }
                         },
                         wake = snoozed[t.id]?.takeIf { it > now }?.let { wakeLabel(it, now) },
                         onSnooze = { snoozing = t },
@@ -301,7 +355,7 @@ internal fun HermesThreadRail(
                 section("Active", active)
                 section("Pinned", pinned, movable = true)
                 section("Staff", staff)
-                if (order.isEmpty()) {
+                if (order.isEmpty() && groupByDay) {
                     // by the day it last moved
                     val today = startOfDay(now)
                     val days = listOf("Today" to today, "Yesterday" to today - 86_400_000L, "This week" to today - 6 * 86_400_000L)
@@ -334,7 +388,7 @@ internal fun HermesThreadRail(
                     // put away, and folded until asked for (or searched)
                     val open = showArchived || query.isNotBlank()
                     item(key = "archived") {
-                        FoldRow(AppIcons.Archive, "Archived", put.size, open) { showArchived = !showArchived }
+                        FoldRow(AppIcons.Archive, "Settled", put.size, open) { showArchived = !showArchived }
                     }
                     if (open) section("", put)
                 }
@@ -418,7 +472,7 @@ internal fun HermesThreadRail(
     }
 }
 
-private enum class RailFilter(val label: String) { ALL("All"), ACTIVE("Active"), PINNED("Pinned"), SNOOZED("Snoozed"), ARCHIVED("Archived") }
+private enum class RailFilter(val label: String) { ALL("All"), ACTIVE("Active"), PINNED("Pinned"), SNOOZED("Snoozed"), ARCHIVED("Settled") }
 
 private class RailNote(val text: String, val undo: () -> Unit) {
     val id = System.nanoTime()
@@ -450,14 +504,15 @@ private fun FoldRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label
 /** What an active chat is doing, in the order it wants a look. */
 private enum class RailState(val label: String, val tone: Color) {
     NEEDS_INPUT("Needs input", ServerWarn),
+    FAILED("Failed", Error),
     WORKING("Working", ServerBrand),
     DONE("Done", Primary),
 }
 
 /**
  * One chat. Active, it is a card: its state, when it moved, its title and what it is on.
- * Otherwise a slim row. Swiped right it pins (or unpins), swiped left it is archived (or
- * brought back), as T3 Code settles a thread; deleting is in the menu a hold opens.
+ * Otherwise a slim row. Swiped right it pins (or unpins), swiped left it is settled (or
+ * unsettled), as T3 Code settles a thread; deleting is in the menu a hold opens.
  */
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -481,12 +536,16 @@ private fun ThreadRow(
     model: RailModel? = null,
     modeTag: String? = null,
     modifier: Modifier = Modifier,
+    /** Where the server's search found the box's words in this chat. */
+    hit: HermesChatHit? = null,
 ) {
     val haptics = rememberHaptics()
     var menuOpen by remember { mutableStateOf(false) }
     val pin by rememberUpdatedState(onTogglePin)
     val archive by rememberUpdatedState(onToggleArchive)
     val swipe = rememberSwipeToDismissBoxState(
+        // the commit point, and what the haptics below count towards
+        positionalThreshold = { total -> total * SWIPE_COMMIT },
         confirmValueChange = { to ->
             when (to) {
                 SwipeToDismissBoxValue.StartToEnd -> { haptics.click(); pin() }
@@ -496,10 +555,27 @@ private fun ThreadRow(
             false // the row stays: a swipe is an action here, not a dismissal
         },
     )
+    // The same feel as pulling the home page to refresh: a tick for every tenth of the way to the commit
+    // point, then a click the moment it is reached. Settling and pinning are told apart by the same buzz.
+    var rowWidth by remember { mutableIntStateOf(0) }
+    LaunchedEffect(swipe) {
+        var last = 0
+        snapshotFlow {
+            val w = rowWidth
+            if (w <= 0) 0f else (kotlin.math.abs(runCatching { swipe.requireOffset() }.getOrDefault(0f)) / (w * SWIPE_COMMIT)).coerceIn(0f, 1f)
+        }.collect { fraction ->
+            val tick = (fraction * SWIPE_TICKS).toInt()
+            when {
+                fraction == 0f -> last = 0
+                fraction >= 1f -> if (last < SWIPE_TICKS) { haptics.click(); last = SWIPE_TICKS }
+                tick != last -> { if (tick > last) haptics.tick(); last = tick }
+            }
+        }
+    }
     val shape = RoundedCornerShape(if (state != null) 16.dp else 12.dp)
     SwipeToDismissBox(
         state = swipe,
-        modifier = modifier.padding(horizontal = 8.dp).clip(shape),
+        modifier = modifier.padding(horizontal = 8.dp).clip(shape).onSizeChanged { rowWidth = it.width },
         enableDismissFromStartToEnd = !thread.isStaff,
         backgroundContent = {
             val toPin = swipe.dismissDirection == SwipeToDismissBoxValue.StartToEnd
@@ -512,14 +588,14 @@ private fun ThreadRow(
                 horizontalArrangement = if (toPin) Arrangement.Start else Arrangement.End,
             ) {
                 Icon(
-                    if (toPin) AppIcons.Star else AppIcons.Archive,
+                    if (toPin) AppIcons.Star else AppIcons.CheckCircle,
                     contentDescription = null,
                     tint = if (toPin) ServerBrand else TextPrimary,
                     modifier = Modifier.size(18.dp),
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    when { !toPin && archived -> "Bring back"; !toPin -> "Archive"; thread.pinned -> "Unpin"; else -> "Pin" },
+                    when { !toPin && archived -> "Unsettle"; !toPin -> "Settle"; thread.pinned -> "Unpin"; else -> "Pin" },
                     color = if (toPin) ServerBrand else TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                 )
             }
@@ -547,7 +623,11 @@ private fun ThreadRow(
                 if (state != null) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (state == RailState.WORKING) {
-                            ShimmerText(state.label, state.tone, 11.5.sp, Modifier.weight(1f, fill = false))
+                            val since = turn?.startedAtMs ?: thread.live?.startedAtMs
+                            ShimmerText(
+                                if (since != null) "${state.label} · ${elapsedClock(since)}" else state.label,
+                                state.tone, 11.5.sp, Modifier.weight(1f, fill = false),
+                            )
                         } else {
                             Text(state.label, color = state.tone, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                         }
@@ -559,11 +639,12 @@ private fun ThreadRow(
                         thread.title, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
                         lineHeight = 20.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
                     )
-                    val line = turn?.label?.text ?: thread.preview
+                    val line = if (state == RailState.FAILED) thread.fail.orEmpty() else turn?.label?.text ?: thread.preview
                     if (line.isNotBlank()) {
-                        Text(line, color = TextSecondary, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(line, color = if (state == RailState.FAILED) Error else TextSecondary, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     RowModelLine(model, modeTag, thread.tokens, Modifier.padding(top = 5.dp))
+                    HitExcerpt(hit)
                 } else {
                     Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -595,7 +676,12 @@ private fun ThreadRow(
                             Text(agoShort(thread.updatedMs), color = TextTertiary, fontSize = 11.sp, maxLines = 1)
                         }
                     }
-                    RowModelLine(model, modeTag, thread.tokens, Modifier.padding(top = 3.dp))
+                    if (thread.fail != null) {
+                        Text("Failed · ${thread.fail}", color = Error, fontSize = 11.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp))
+                    } else {
+                        RowModelLine(model, modeTag, thread.tokens, Modifier.padding(top = 3.dp))
+                    }
+                    HitExcerpt(hit)
                     }
                 }
             }
@@ -604,7 +690,7 @@ private fun ThreadRow(
                 if (!thread.isStaff) {
                     MenuRow(if (thread.pinned) "Unpin" else "Pin", AppIcons.Star) { menuOpen = false; onTogglePin() }
                 }
-                MenuRow(if (archived) "Bring back" else "Archive", AppIcons.Archive) { menuOpen = false; onToggleArchive() }
+                MenuRow(if (archived) "Unsettle" else "Settle", AppIcons.CheckCircle) { menuOpen = false; onToggleArchive() }
                 if (wake != null) {
                     MenuRow("Wake now", AppIcons.Bell) { menuOpen = false; onWake() }
                 } else if (state == null) {
@@ -701,3 +787,38 @@ internal fun railModel(status: HermesStatus?, id: String): RailModel? {
     val label = option?.familyLabel ?: HermesModelName(id) ?: return null
     return RailModel(ModelBrands.brandOf(option?.family ?: id, option?.group.orEmpty()), label)
 }
+
+/** The passage the server's search matched, the matching words picked out. */
+@Composable
+private fun HitExcerpt(hit: HermesChatHit?) {
+    if (hit == null || hit.snippet.isBlank()) return
+    val text = remember(hit) {
+        buildAnnotatedString {
+            append(hit.snippet)
+            hit.ranges.forEach { r ->
+                val start = r.first.coerceIn(0, hit.snippet.length)
+                val end = (r.last + 1).coerceIn(start, hit.snippet.length)
+                if (end > start) addStyle(SpanStyle(color = ServerBrand, fontWeight = FontWeight.SemiBold), start, end)
+            }
+        }
+    }
+    Text(text, color = TextSecondary, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
+}
+
+/** `1:23`, as a turn's clock reads; it ticks once a second while the app is in front. */
+@Composable
+private fun elapsedClock(sinceMs: Long): String {
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedWhileResumed(sinceMs) {
+        while (true) {
+            now = System.currentTimeMillis()
+            delay(1_000)
+        }
+    }
+    val s = ((now - sinceMs) / 1000).coerceAtLeast(0)
+    return if (s >= 3600) "${s / 3600}:${"%02d".format(s % 3600 / 60)}:${"%02d".format(s % 60)}" else "${s / 60}:${"%02d".format(s % 60)}"
+}
+
+/** How far a row is dragged, as a share of its width, before letting go settles or pins it. */
+private const val SWIPE_COMMIT = 0.4f
+private val SWIPE_TICKS = com.macrotracker.ui.theme.MacroMotion.LiquidRipple.PULL_TICKS

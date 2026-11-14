@@ -44,3 +44,15 @@ class HermesPreviewTest {
         assertTrue(change.canRevert)
     }
 }
+
+class HermesSummaryTest {
+    @Test
+    fun `a failed turn and a fork are read from the summary`() {
+        val s = HermesClient.parseSummary(
+            JSONObject("""{"id":"a","title":"x","fail":"Hermes timed out","forked":"b","tok":10}"""),
+        )
+        assertEquals("Hermes timed out", s.fail)
+        assertEquals("b", s.forkedFrom)
+        assertEquals(null, HermesClient.parseSummary(JSONObject("""{"id":"c"}""")).fail)
+    }
+}

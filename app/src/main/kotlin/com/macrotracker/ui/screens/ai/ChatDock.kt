@@ -63,11 +63,35 @@ internal fun ChatDock(
     onJump: () -> Unit,
     hazeState: HazeState?,
     modifier: Modifier = Modifier,
+    /** A question or approval is waiting on you, and its card is out of sight. */
+    waiting: Boolean = false,
+    onWaiting: () -> Unit = {},
 ) {
     // The box takes no touches of its own, so the chat under it still scrolls.
     Box(modifier.fillMaxWidth().height(DockHeight).padding(horizontal = 16.dp)) {
         AnimatedVisibility(
-            visible = live != null,
+            visible = waiting,
+            enter = fadeIn(MacroMotion.fadeTween()) + scaleIn(MacroMotion.entranceSpring(), initialScale = 0.92f),
+            exit = fadeOut(MacroMotion.fadeTween()) + scaleOut(MacroMotion.fadeTween(), targetScale = 0.92f),
+            modifier = Modifier.align(Alignment.Center).padding(horizontal = DockHeight + 10.dp),
+        ) {
+            val haptics = rememberHaptics()
+            Row(
+                modifier = Modifier
+                    .height(DockHeight)
+                    .clip(CircleShape)
+                    .clickable(role = Role.Button) { haptics.tick(); onWaiting() }
+                    .chromeGlass(hazeState, CircleShape)
+                    .padding(horizontal = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(AppIcons.Warning, null, tint = com.macrotracker.ui.theme.ServerWarn, modifier = Modifier.size(15.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Needs your answer", color = TextPrimary, fontSize = 12.5.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+            }
+        }
+        AnimatedVisibility(
+            visible = live != null && !waiting,
             enter = fadeIn(MacroMotion.fadeTween()) + scaleIn(MacroMotion.entranceSpring(), initialScale = 0.92f),
             exit = fadeOut(MacroMotion.fadeTween()) + scaleOut(MacroMotion.fadeTween(), targetScale = 0.92f),
             // clear of the jump button either side, so the pill stays centred

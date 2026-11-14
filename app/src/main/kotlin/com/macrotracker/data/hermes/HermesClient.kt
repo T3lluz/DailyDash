@@ -128,6 +128,39 @@ class HermesClient @Inject constructor(
         HermesRewound(o.optString("text"), atts, thread)
     }
 
+    /**
+     * A new chat from this one, holding everything up to and including the message stamped [ts] (all of
+     * it when 0). Hermes is told the conversation on the new chat's first turn.
+     */
+    suspend fun fork(id: String, ts: Long): HermesThreadSummary = withContext(Dispatchers.IO) {
+        parseSummary(JSONObject(send("POST", "/ai/threads/${enc(id)}/fork", JSONObject().put("ts", ts))))
+    }
+
+    /** Names a chat again from what it was first asked. */
+    suspend fun retitle(id: String): HermesThreadSummary = withContext(Dispatchers.IO) {
+        parseSummary(JSONObject(send("POST", "/ai/threads/${enc(id)}/retitle", JSONObject())))
+    }
+
+    /** The server's full-text search over every chat: which ones mention [query], and where. */
+    suspend fun searchChats(query: String): List<HermesChatHit> = withContext(Dispatchers.IO) {
+        val groups = JSONObject(get("/search?q=${enc(query)}&kind=chat")).optJSONArray("groups") ?: JSONArray()
+        val out = ArrayList<HermesChatHit>()
+        for (g in 0 until groups.length()) {
+            val items = groups.optJSONObject(g)?.optJSONArray("items") ?: continue
+            for (i in 0 until items.length()) {
+                val it = items.optJSONObject(i) ?: continue
+                val id = it.optString("id").removePrefix("chat:")
+                if (id.isBlank()) continue
+                val sm = it.optJSONArray("sm")
+                val ranges = (0 until (sm?.length() ?: 0)).mapNotNull { k ->
+                    sm?.optJSONArray(k)?.let { r -> r.optInt(0)..r.optInt(1) }
+                }
+                out += HermesChatHit(id, it.optString("title"), it.optString("snippet"), ranges)
+            }
+        }
+        out
+    }
+
     /** Puts a file back the way [change] found it; throws a [HermesException] with code 409 when it was edited again since. */
     suspend fun revert(threadId: String, change: HermesFileChange, force: Boolean = false): Unit = withContext(Dispatchers.IO) {
         send(
@@ -517,6 +550,8 @@ class HermesClient @Inject constructor(
             context = o.optInt("ctx"),
             window = o.optInt("win"),
             scheduled = o.optJSONObject("sched")?.optString("title")?.takeIf { it.isNotBlank() },
+            fail = o.optString("fail").takeIf { it.isNotBlank() },
+            forkedFrom = o.optString("forked").takeIf { it.isNotBlank() },
         )
 
         /** The list's short copy of a running turn: when it started, the tail of its words, its tools. */

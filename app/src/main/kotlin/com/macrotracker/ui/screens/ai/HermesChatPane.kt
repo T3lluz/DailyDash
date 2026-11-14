@@ -11,6 +11,7 @@ import com.macrotracker.data.hermes.FeedRow
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.activity.compose.BackHandler
@@ -221,9 +222,11 @@ fun HermesChatPane(
         draftId = to
         draft = viewModel.draftFor(to)
     }
-    LaunchedEffect(state.threadId) {
+    LaunchedEffect(state.threadId, state.reach) {
         val id = state.threadId
         if (!draftLoaded) {
+            // wait until the chat this pane opens on is known, or a not-yet-started chat's old draft would be taken for it
+            if (state.reach != HermesReach.READY && state.reach != HermesReach.DOWN) return@LaunchedEffect
             draftLoaded = true
             if (draft.isBlank()) draft = viewModel.draftFor(id)
             draftId = id
@@ -234,8 +237,10 @@ fun HermesChatPane(
             if (prev != null) {
                 viewModel.saveDraft(prev, draft)
                 draft = viewModel.draftFor(id)
-            } else if (draft.isBlank()) {
-                draft = viewModel.draftFor(id)
+            } else {
+                // the chat that was being typed in now has its id: the not-yet-started slot is empty again
+                viewModel.saveDraft(null, "")
+                if (draft.isBlank()) draft = viewModel.draftFor(id)
             }
         }
     }
@@ -255,6 +260,16 @@ fun HermesChatPane(
     var findQuery by rememberSaveable { mutableStateOf("") }
     var findAt by rememberSaveable { mutableStateOf(0) }
     val rowIndex = remember { HashMap<String, Int>() }
+    // The newest question or approval still waiting on you; the dock points at it while it is off screen.
+    val waitingKey = remember(state.items) {
+        state.items.lastOrNull { (it is HermesItem.Ask && !it.settled) || (it is HermesItem.Clarify && it.open) }?.key
+    }
+    val waitingOffscreen by remember(waitingKey) {
+        androidx.compose.runtime.derivedStateOf {
+            val at = waitingKey?.let { rowIndex[it] }
+            at != null && listState.layoutInfo.visibleItemsInfo.none { it.index == at }
+        }
+    }
     // Read only by the list and the dock, never in this body: the composer's height animates
     // when it folds, and the whole pane must not recompose with it.
     val composerHeight = remember { mutableStateOf(0.dp) }
@@ -264,6 +279,10 @@ fun HermesChatPane(
     val archived by viewModel.archived.collectAsState()
     val snoozed by viewModel.snoozed.collectAsState()
     val order by viewModel.order.collectAsState()
+    val chatHits by viewModel.chatHits.collectAsState()
+    val autoSettleDays by viewModel.autoSettleDays.collectAsState()
+    val groupByDay by viewModel.groupByDay.collectAsState()
+    var focusSearch by remember { mutableStateOf(0) }
     var renaming by remember { mutableStateOf<HermesThreadSummary?>(null) }
     var confirmClear by remember { mutableStateOf<HermesThreadSummary?>(null) }
     var confirmDelete by remember { mutableStateOf<HermesThreadSummary?>(null) }
@@ -383,6 +402,7 @@ fun HermesChatPane(
         }
         haptics.click()
         draft = ""
+        viewModel.saveDraft(draftId, "")
         forceFollow = true
         viewModel.send(body)
         askForNotifications()
@@ -423,8 +443,12 @@ fun HermesChatPane(
                         viewModel.refreshThreads()
                         focusManager.clearFocus()
                         scope.launch { rail.open() }
+                        focusSearch++
                         true
                     }
+                    e.isCtrlPressed && e.key == Key.B -> { scope.launch { if (rail.isOpen) rail.close() else rail.open() }; true }
+                    e.isCtrlPressed && e.key == Key.F && state.threadId != null -> { finding = true; true }
+                    e.key == Key.Escape && finding -> { finding = false; findQuery = ""; true }
                     e.key == Key.Escape && rail.isOpen -> { scope.launch { rail.close() }; true }
                     e.key == Key.Escape && state.busy -> { viewModel.stop(); true }
                     else -> false
@@ -442,11 +466,13 @@ fun HermesChatPane(
                         turns = turns,
                         selectedId = state.threadId,
                         status = state.status,
-                        onOpen = { id ->
+                        onOpen = { id, q ->
                             haptics.tick()
                             forceFollow = true
                             switchDraft(id)
                             viewModel.openThread(id)
+                            // opened from a search: the words are looked for in it
+                            if (q.length >= 2) { findQuery = q; finding = true } else { finding = false; findQuery = "" }
                             closeRail()
                         },
                         onNewChat = {
@@ -476,6 +502,13 @@ fun HermesChatPane(
                     onOpenUsage = { closeRail(); onOpenUsage() },
                     onOpenConsole = { closeRail(); onOpenConsole() },
                     onOpenFiles = { closeRail(); filesAt = Triple("~", 0, 0) },
+                    autoSettleDays = autoSettleDays,
+                    onAutoSettle = viewModel::setAutoSettleDays,
+                    groupByDay = groupByDay,
+                    onGroupByDay = viewModel::setGroupByDay,
+                    hits = chatHits,
+                    onSearch = viewModel::searchChats,
+                    focusSearch = focusSearch,
                     )
             }
         },
@@ -484,7 +517,27 @@ fun HermesChatPane(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Background)
-                .imePadding(),
+                .imePadding()
+                // A swipe to the right anywhere opens the chats, as T3 Code's phone app does. It sees only
+                // drags nothing under it took, so a table or a code block still scrolls sideways first.
+                .pointerInput(rail) {
+                    var travelled = 0f
+                    detectHorizontalDragGestures(
+                        onDragStart = { travelled = 0f },
+                        onDragEnd = { travelled = 0f },
+                        onDragCancel = { travelled = 0f },
+                    ) { change, dx ->
+                        travelled += dx
+                        if (travelled > 64.dp.toPx() && rail.currentValue == DrawerValue.Closed) {
+                            change.consume()
+                            travelled = Float.NEGATIVE_INFINITY
+                            haptics.gestureStart()
+                            viewModel.refreshThreads()
+                            focusManager.clearFocus()
+                            scope.launch { rail.open() }
+                        }
+                    }
+                },
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 HermesHeader(
@@ -571,6 +624,10 @@ fun HermesChatPane(
                             }
                         },
                         onRetry = { haptics.click(); forceFollow = true; viewModel.retry() },
+                        onFork = { ts ->
+                            haptics.click()
+                            viewModel.fork(ts) { id -> switchDraft(id); forceFollow = true }
+                        },
                         assetUrl = viewModel::assetUrl,
                         onOpenImage = { viewing = it },
                         onImplement = {
@@ -691,6 +748,8 @@ fun HermesChatPane(
 
             if (state.reach != HermesReach.DOWN) {
                 ChatDock(
+                    waiting = waitingOffscreen,
+                    onWaiting = { rowIndex[waitingKey]?.let { i -> scope.launch { forceFollow = false; listState.animateScrollToItem(i) } } },
                     live = state.live,
                     showJump = awayFromEnd && state.items.isNotEmpty(),
                     onJump = {
@@ -891,6 +950,20 @@ fun HermesChatPane(
                 onWake = { viewModel.wake(thread.id) },
                 onToggleArchive = { viewModel.toggleArchived(thread.id) },
                 onCopyChat = copyChat,
+                onShare = {
+                    val text = HermesFeed.transcript(state.threadTitle, state.items)
+                    context.startActivity(
+                        Intent.createChooser(
+                            Intent(Intent.ACTION_SEND).setType("text/plain")
+                                .putExtra(Intent.EXTRA_SUBJECT, state.threadTitle.ifBlank { "Hermes chat" })
+                                .putExtra(Intent.EXTRA_TEXT, text),
+                            "Share chat",
+                        ),
+                    )
+                },
+                onRetitle = { viewModel.retitle() },
+                onForkChat = { viewModel.fork(0) { id -> switchDraft(id); forceFollow = true } },
+                forkedFrom = thread.forkedFrom?.let { from -> state.threads.firstOrNull { it.id == from }?.title ?: "an earlier chat" },
                 onFind = { finding = true },
                 onClear = { confirmClear = thread },
                 onDelete = { confirmDelete = thread },
@@ -1145,6 +1218,8 @@ private class RowActions(
     val onImplement: () -> Unit,
     val assetUrl: (String) -> String,
     val onOpenImage: (HermesAttachment) -> Unit,
+    /** A new chat holding everything up to the message stamped so. */
+    val onFork: (Long) -> Unit,
 )
 
 @Composable
@@ -1229,6 +1304,7 @@ private fun HermesUserBubble(item: HermesItem.User, canEdit: Boolean, onEdit: ()
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, modifier = Modifier.background(Surface)) {
                         MenuRow("Copy", AppIcons.Copy) { menu = false; copy() }
                         if (canEdit) MenuRow("Edit and resend", AppIcons.Edit) { menu = false; onEdit() }
+                        if (item.ts > 0) MenuRow("Fork from here", AppIcons.GitFork) { menu = false; actions.onFork(item.ts) }
                     }
                 }
             }
@@ -1289,12 +1365,18 @@ private fun AssistantTurn(item: HermesItem.Assistant, last: Boolean, idle: Boole
                 item.ms?.let(::tookShort),
                 item.model?.let { HermesModelName(it) ?: it.substringAfter(':') }?.takeIf { it.isNotBlank() },
             ).joinToString(" · "),
-            trailing = if (split.answer.isNotBlank() || (last && idle)) ({
+            trailing = if (split.answer.isNotBlank() || (last && idle) || (item.ts > 0 && idle)) ({
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     // the newest answer can be asked for again: the question is sent anew
                     if (last && idle) {
                         IconButton(onClick = actions.onRetry, modifier = Modifier.size(28.dp)) {
                             Icon(AppIcons.Refresh, "Ask again", tint = TextTertiary, modifier = Modifier.size(15.dp))
+                        }
+                    }
+                    // a new chat from here: this answer and what came before it
+                    if (item.ts > 0 && idle) {
+                        IconButton(onClick = { actions.onFork(item.ts) }, modifier = Modifier.size(28.dp)) {
+                            Icon(AppIcons.GitFork, "Fork from here", tint = TextTertiary, modifier = Modifier.size(15.dp))
                         }
                     }
                     if (split.answer.isNotBlank()) CopyButton(split.answer)

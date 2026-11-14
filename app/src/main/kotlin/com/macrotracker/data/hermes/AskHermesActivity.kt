@@ -21,7 +21,7 @@ class AskHermesActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val shared = runCatching { read(intent) }.getOrNull()
-        if (shared == null || (shared.text.isBlank() && shared.files.isEmpty())) {
+        if (shared == null || (shared.text.isBlank() && shared.files.isEmpty() && intent.action != Intent.ACTION_VIEW)) {
             Toast.makeText(applicationContext, "Nothing to ask Hermes about", Toast.LENGTH_SHORT).show()
             finish()
             return
@@ -36,6 +36,11 @@ class AskHermesActivity : Activity() {
     }
 
     private fun read(intent: Intent): HermesShareInbox.Shared? {
+        // dailydash://ask?prompt=... : a link that starts a chat with the words in the box (never sent for you)
+        if (intent.action == Intent.ACTION_VIEW) {
+            val prompt = intent.data?.getQueryParameter("prompt")?.trim().orEmpty()
+            return HermesShareInbox.Shared(prompt, emptyList())
+        }
         if (intent.action != Intent.ACTION_SEND && intent.action != Intent.ACTION_SEND_MULTIPLE) return null
         val text = listOfNotNull(
             intent.getStringExtra(Intent.EXTRA_SUBJECT)?.trim()?.takeIf { it.isNotBlank() },

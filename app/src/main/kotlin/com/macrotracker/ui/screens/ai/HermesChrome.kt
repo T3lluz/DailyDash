@@ -1,6 +1,7 @@
 package com.macrotracker.ui.screens.ai
 
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -261,7 +262,13 @@ internal fun RailHeading(label: String) {
 }
 
 @Composable
-internal fun SearchBox(value: String, onValueChange: (String) -> Unit, hint: String, modifier: Modifier = Modifier) {
+internal fun SearchBox(
+    value: String,
+    onValueChange: (String) -> Unit,
+    hint: String,
+    modifier: Modifier = Modifier,
+    focusRequester: androidx.compose.ui.focus.FocusRequester? = null,
+) {
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -279,7 +286,7 @@ internal fun SearchBox(value: String, onValueChange: (String) -> Unit, hint: Str
             singleLine = true,
             textStyle = TextStyle(color = TextPrimary, fontSize = 14.sp),
             cursorBrush = SolidColor(ServerBrand),
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier),
             decorationBox = { inner ->
                 if (value.isEmpty()) Text(hint, color = TextTertiary, fontSize = 14.sp)
                 inner()

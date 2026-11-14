@@ -29,6 +29,19 @@
         </intent>
     </shortcut>
     <shortcut
+        android:shortcutId="new_chat"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_hermes"
+        android:shortcutShortLabel="@string/shortcut_new_chat"
+        android:shortcutLongLabel="@string/shortcut_new_chat_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.macrotracker"
+            android:targetClass="com.macrotracker.MainActivity">
+            <extra android:name="open" android:value="new-chat" />
+        </intent>
+    </shortcut>
+    <shortcut
         android:shortcutId="hermes"
         android:enabled="true"
         android:icon="@drawable/ic_shortcut_hermes"

@@ -40,5 +40,7 @@
     <string name="shortcut_usage_long">Usage and limits</string>
     <string name="shortcut_hermes">Hermes</string>
     <string name="shortcut_hermes_long">Ask Hermes</string>
+    <string name="shortcut_new_chat">New chat</string>
+    <string name="shortcut_new_chat_long">New chat with Hermes</string>
 </resources>
 
