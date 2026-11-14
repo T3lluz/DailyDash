@@ -453,7 +453,7 @@ internal fun HermesThreadRail(
                 .fillMaxWidth()
                 .padding(
                     start = 12.dp, end = 12.dp, top = 8.dp,
-                    bottom = 10.dp + PillNavClearance + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+                    bottom = 12.dp,
                 ),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -470,7 +470,7 @@ internal fun HermesThreadRail(
         exit = fadeOut() + slideOutVertically { it / 2 },
         modifier = Modifier
             .align(Alignment.BottomCenter)
-            .padding(bottom = 80.dp + PillNavClearance + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
+            .padding(bottom = 86.dp),
     ) {
         val shownNote = remember(note) { note }
         Row(

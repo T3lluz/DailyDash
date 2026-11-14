@@ -2,6 +2,8 @@ package com.macrotracker.ui.screens.ai
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.activity.result.PickVisualMediaRequest
 import android.speech.RecognizerIntent
 import android.content.ActivityNotFoundException
@@ -213,6 +215,11 @@ fun HermesChatPane(
     // The pane is clipped, so the closed panel never shows beside it while a tab slides.
     val rail = rememberDrawerState(DrawerValue.Closed)
     BackHandler(enabled = rail.isOpen) { scope.launch { rail.close() } }
+    // the navbar steps aside while the panel is out
+    LaunchedEffect(rail) {
+        androidx.compose.runtime.snapshotFlow { rail.targetValue }.collect { com.macrotracker.ui.util.ChatPanelState.set(it == DrawerValue.Open) }
+    }
+    DisposableEffect(Unit) { onDispose { com.macrotracker.ui.util.ChatPanelState.set(false) } }
 
     var draft by rememberSaveable { mutableStateOf("") }
     // Whose draft the box holds, so each chat keeps what was typed in it (T3 Code keeps a draft per thread).
@@ -467,11 +474,14 @@ fun HermesChatPane(
                 }
             },
         drawerContent = {
+            // A card that floats clear of the edges, its corners all round, with the navbar slid away below it.
             ModalDrawerSheet(
                 drawerContainerColor = Surface,
-                drawerShape = RoundedCornerShape(topEnd = 26.dp, bottomEnd = 26.dp),
+                drawerShape = RoundedCornerShape(28.dp),
                 windowInsets = WindowInsets(0, 0, 0, 0),
-                modifier = Modifier.fillMaxWidth(0.86f),
+                modifier = Modifier
+                    .fillMaxWidth(0.88f)
+                    .padding(start = 8.dp, top = 4.dp, bottom = 8.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
             ) {
                 HermesThreadRail(
                         threads = state.threads,

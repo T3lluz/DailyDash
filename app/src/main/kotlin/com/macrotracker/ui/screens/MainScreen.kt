@@ -497,8 +497,10 @@ private fun MainBottomBar(
         }
     }
 
+    // out of the way while the AI tab's chat panel is open
+    val chatPanelOpen by com.macrotracker.ui.util.ChatPanelState.open.collectAsState()
     AnimatedVisibility(
-        visible = onTab,
+        visible = onTab && !chatPanelOpen,
         modifier = modifier,
         enter = slideInVertically(MacroMotion.slideTween()) { it } + fadeIn(MacroMotion.fadeTween()),
         exit = slideOutVertically(MacroMotion.slideTween()) { it } + fadeOut(MacroMotion.fadeTween(150)),

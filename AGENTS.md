@@ -337,6 +337,8 @@ com.macrotracker/
                              turn carries them to Hermes as its memory, `fork_ctx`), Name it again (`/retitle`), Share chat, a failed turn
                              (`fail` on the summary) as a red Failed row, a "Needs your answer" pill in the dock while a question or approval is
                              out of sight, a launcher "New chat" shortcut and `dailydash://ask?prompt=` (fills the box, never sends).
+                             The chat panel is a card floating clear of the screen's edges, all four corners round (`ModalDrawerSheet` with margins), and the navbar slides down
+                             out of the way while it is open (`ChatPanelState`, read by MainScreen's nav `AnimatedVisibility`).
                              Send (`SendControl` in HermesChrome.kt) is T3 Code's: an arrow when idle; while Hermes works with text typed it says Steer
                              (stop the turn and say it now, `HermesViewModel.steer`) or Queue (after the turn), per the follow-up setting
                              (`hermesFollowUp`, default steer, toggled in the header menu), and a hold on it offers the other; with nothing typed it is
