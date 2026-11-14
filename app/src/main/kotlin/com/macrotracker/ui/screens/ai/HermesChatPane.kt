@@ -281,6 +281,7 @@ fun HermesChatPane(
     val snoozed by viewModel.snoozed.collectAsState()
     val order by viewModel.order.collectAsState()
     val chatHits by viewModel.chatHits.collectAsState()
+    val followUp by viewModel.followUp.collectAsState()
     val autoSettleDays by viewModel.autoSettleDays.collectAsState()
     val groupByDay by viewModel.groupByDay.collectAsState()
     var focusSearch by remember { mutableStateOf(0) }
@@ -381,6 +382,16 @@ fun HermesChatPane(
         forceFollow = true
         draft = incoming.text
         incoming.files.forEach { viewModel.attach(Uri.fromFile(it)) }
+    }
+
+    // While Hermes works: steer (stop the turn and say it now) or queue (after it), as chosen; a hold on send picks the other.
+    fun followUpWith(mode: String) {
+        val body = draft.trim()
+        if (body.isEmpty()) return
+        draft = ""
+        viewModel.saveDraft(draftId, "")
+        forceFollow = true
+        if (mode == "steer") viewModel.steer(body) else viewModel.send(body)
     }
 
     fun send(text: String) {
@@ -562,6 +573,8 @@ fun HermesChatPane(
                     },
                     onOpenFiles = { filesAt = Triple("~", 0, 0) },
                     onOpenGit = onOpenGit,
+                    followUp = followUp,
+                    onToggleFollowUp = { haptics.tick(); viewModel.setFollowUp(if (followUp == "steer") "queue" else "steer") },
                     onFind = { finding = true },
                     onOpenInfo = { infoOpen = true },
                     brand = ModelBrands.brandOf(state.currentModel?.family.orEmpty(), state.currentModel?.group.orEmpty()),
@@ -765,9 +778,8 @@ fun HermesChatPane(
                     Row(
                         modifier = Modifier
                             .padding(horizontal = 16.dp, vertical = 4.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Background)
-                            .background(Error.copy(alpha = 0.1f))
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(com.macrotracker.ui.theme.TileDark)
                             .clickable { viewModel.dismissNotice() }
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -778,26 +790,34 @@ fun HermesChatPane(
                     }
                 }
                 if (state.queue.isNotEmpty()) {
-                    // What goes next, and how many wait behind it; a tap opens the queue.
+                    // What goes next, and how many wait behind it; a tap opens the queue, and Steer says the first now.
                     Row(
                         modifier = Modifier
                             .padding(horizontal = 16.dp, vertical = 4.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Background)
-                            .background(ServerBrand.copy(alpha = 0.10f))
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(com.macrotracker.ui.theme.TileDark)
                             .clickable(onClickLabel = "Open the queue") { haptics.tick(); queueSheet = true }
-                            .padding(horizontal = 12.dp, vertical = 9.dp),
+                            .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(AppIcons.Clock, null, tint = ServerBrand, modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(8.dp))
+                        Icon(AppIcons.ListChecks, null, tint = TextSecondary, modifier = Modifier.size(15.dp))
+                        Spacer(Modifier.width(9.dp))
                         Text(
                             state.queue.first(),
-                            color = TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            color = TextPrimary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f),
                         )
-                        Spacer(Modifier.width(8.dp))
-                        Text("${state.queue.size} queued", color = ServerBrand, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                        if (state.queue.size > 1) Text("  +${state.queue.size - 1}", color = TextTertiary, fontSize = 12.sp, maxLines = 1)
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            if (state.busy) "Steer" else "Send",
+                            color = TextPrimary, fontSize = 12.5.sp, fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .background(Color.White.copy(alpha = 0.10f))
+                                .clickable { haptics.confirm(); forceFollow = true; viewModel.sendQueuedNow(0) }
+                                .padding(horizontal = 14.dp, vertical = 9.dp),
+                        )
                     }
                 }
                 val slashOpen = draft.startsWith("/") && ' ' !in draft && '\n' !in draft
@@ -839,13 +859,15 @@ fun HermesChatPane(
                             draft = typed
                         }
                     },
-                    onSend = { send(draft) },
+                    onSend = { if (state.busy) followUpWith(followUp) else send(draft) },
+                    onSendAlternate = { followUpWith(if (followUp == "steer") "queue" else "steer") },
+                    followUp = followUp,
                     onStop = { viewModel.stop() },
                     // Not while a chat is opening: its transcript replaced the message just sent.
                     enabled = state.reach == HermesReach.READY && !state.loadingThread,
                     busy = state.busy,
                     hint = when {
-                        state.busy -> "Type to queue the next message…"
+                        state.busy -> if (followUp == "steer") "Steer Hermes…  hold send to queue" else "Queue the next message…  hold send to steer"
                         openQuestion(state) != null -> "Answer Hermes…"
                         else -> HermesIdentity.composerHint + "  / for commands"
                     },
@@ -863,14 +885,6 @@ fun HermesChatPane(
                     onPickModel = { modelSheet = true },
                     hazeState = chatHaze,
                     roomy = state.items.isEmpty() && state.live == null,
-                    usage = {
-                        ComposerUsageMeter(
-                            usage = usageState,
-                            model = state.currentModel,
-                            chat = current,
-                            onOpenUsage = onOpenUsage,
-                        )
-                    },
                 )
             }
         }
@@ -1054,20 +1068,20 @@ private fun QueueSheet(
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = Surface) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp)) {
-            SheetTitle("Queued", if (working) "Each goes when the turn before it ends" else null)
+            SheetTitle("Queued", if (working) "Each goes when the turn before it ends. Steer says one now." else null)
             queue.forEachIndexed { i, text ->
                 Column(
                     Modifier
                         .padding(horizontal = 12.dp, vertical = 4.dp)
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(14.dp))
-                        .background(Color.White.copy(alpha = 0.055f))
+                        .background(com.macrotracker.ui.theme.TileDark)
                         .padding(start = 14.dp, end = 6.dp, top = 10.dp, bottom = 4.dp),
                 ) {
                     Text(text, color = TextPrimary, fontSize = 14.sp, lineHeight = 20.sp, maxLines = 4, overflow = TextOverflow.Ellipsis)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(if (i == 0) "Next" else "${i + 1}", color = TextTertiary, fontSize = 11.sp, modifier = Modifier.weight(1f))
-                        SmallActionChip(icon = AppIcons.Send, label = if (working) "Send now" else "Send", onClick = { onSendNow(i) })
+                        SmallActionChip(icon = if (working) AppIcons.Bolt else AppIcons.Send, label = if (working) "Steer" else "Send", onClick = { onSendNow(i) })
                         Spacer(Modifier.width(6.dp))
                         SmallActionChip(icon = AppIcons.Edit, label = "Edit", onClick = { onEdit(i) })
                         Spacer(Modifier.width(6.dp))
@@ -1663,8 +1677,7 @@ private fun ChangesCard(changes: List<HermesFileChange>, onOpenFile: (HermesFile
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(SurfaceChrome)
-            .border(1.dp, Border, shape),
+            .background(com.macrotracker.ui.theme.TileDark),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 14.dp, top = 10.dp, bottom = 9.dp),
@@ -1850,8 +1863,7 @@ private fun TerminalCard(item: HermesItem.Exec) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(CardShape)
-            .background(SurfaceChrome)
-            .border(1.dp, Border, CardShape)
+            .background(com.macrotracker.ui.theme.TileDark)
             .clickable { open = !open }
             .padding(12.dp),
     ) {
@@ -1941,8 +1953,7 @@ private fun ApprovalCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(CardShape)
-            .background(Surface)
-            .border(1.dp, if (card.settled) Border else (if (grave) ServerCritical else ServerWarn).copy(alpha = 0.5f), CardShape)
+            .background(com.macrotracker.ui.theme.TileDark)
             .padding(12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2046,7 +2057,7 @@ private fun ApprovalRow(
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier
                         .clip(RoundedCornerShape(999.dp))
-                        .border(1.dp, Border, RoundedCornerShape(999.dp))
+                        .background(Color.White.copy(alpha = 0.08f))
                         .clickable(enabled = enabled, onClick = onSkip)
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                 )
@@ -2077,8 +2088,7 @@ private fun QuestionCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(CardShape)
-            .background(Surface)
-            .border(1.dp, if (card.open) ServerBrand.copy(alpha = 0.5f) else Border, CardShape)
+            .background(com.macrotracker.ui.theme.TileDark)
             .padding(12.dp),
     ) {
         Text(card.question, color = TextPrimary, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium)
@@ -2092,8 +2102,7 @@ private fun QuestionCard(
                         fontSize = 12.sp,
                         modifier = Modifier
                             .clip(ChatPillShape)
-                            .background(ServerBrand.copy(alpha = 0.12f))
-                            .border(1.dp, ServerBrand.copy(alpha = 0.35f), ChatPillShape)
+                            .background(Color.White.copy(alpha = 0.09f))
                             .clickable(enabled = enabled) { onAnswer(card, choice) }
                             .padding(horizontal = 12.dp, vertical = 7.dp),
                     )

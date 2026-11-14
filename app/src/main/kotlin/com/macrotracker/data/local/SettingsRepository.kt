@@ -165,6 +165,15 @@ class SettingsRepository @Inject constructor(
         _hermesGroupByDay.value = on
     }
 
+    /** What sending while Hermes works does: `steer` stops the turn and says it now, `queue` waits for the turn to end (T3 Code's follow-up behaviour). */
+    private val _hermesFollowUp = MutableStateFlow(prefs.getString(KEY_HERMES_FOLLOW_UP, "steer") ?: "steer")
+    val hermesFollowUp: StateFlow<String> = _hermesFollowUp
+
+    fun setHermesFollowUp(mode: String) {
+        prefs.edit { putString(KEY_HERMES_FOLLOW_UP, mode) }
+        _hermesFollowUp.value = mode
+    }
+
     /** The repo the git screen was last on. */
     var gitRepo: String
         get() = prefs.getString(KEY_GIT_REPO, null).orEmpty()
@@ -515,6 +524,7 @@ class SettingsRepository @Inject constructor(
         const val KEY_HERMES_SNOOZED = "hermes_snoozed"
         const val KEY_HERMES_ORDER = "hermes_order"
         const val KEY_GIT_REPO = "git_repo"
+        const val KEY_HERMES_FOLLOW_UP = "hermes_follow_up"
         const val KEY_HERMES_AUTOSETTLE = "hermes_autosettle_days"
         const val KEY_HERMES_GROUP_DAY = "hermes_group_day"
         const val KEY_HERMES_DRAFT = "hermes_draft_"

@@ -147,6 +147,8 @@ internal fun HermesHeader(
     onCopyChat: () -> Unit = {},
     onOpenFiles: () -> Unit = {},
     onOpenGit: () -> Unit = {},
+    followUp: String = "queue",
+    onToggleFollowUp: () -> Unit = {},
     onFind: () -> Unit = {},
     onOpenInfo: () -> Unit = {},
     /** The maker of the model in use, for the logo beside the status. */
@@ -236,6 +238,7 @@ internal fun HermesHeader(
                     MenuRow("Delete this chat", AppIcons.Delete, danger = true) { menuOpen = false; onDelete() }
                     HorizontalDivider(color = Border)
                 }
+                MenuRow(if (followUp == "steer") "While working: Steer" else "While working: Queue", if (followUp == "steer") AppIcons.Bolt else AppIcons.ListChecks) { menuOpen = false; onToggleFollowUp() }
                 MenuRow("Git and pull requests", AppIcons.GitFork) { menuOpen = false; onOpenGit() }
                 MenuRow("Server files", AppIcons.Folder) { menuOpen = false; onOpenFiles() }
                 MenuRow("Console", AppIcons.SquareTerminal) { menuOpen = false; onOpenConsole() }
@@ -347,6 +350,10 @@ internal fun HermesComposer(
     roomy: Boolean = false,
     /** Speak instead of type; null hides the microphone. */
     onDictate: (() -> Unit)? = null,
+    /** What sending does while Hermes works: `steer` or `queue` (T3 Code's follow-up behaviour). */
+    followUp: String = "queue",
+    /** The other one, from a hold on the send button. */
+    onSendAlternate: () -> Unit = {},
 ) {
     val bottomPad = composerBottomGap()
     val hasContent = value.isNotBlank() || attachments.isNotEmpty()
@@ -373,28 +380,15 @@ internal fun HermesComposer(
         }
     }
     val send: @Composable () -> Unit = {
-        Box(
-            modifier = Modifier
-                .size(38.dp)
-                .clip(CircleShape)
-                .background(sendBackground, CircleShape)
-                .clickable(enabled = showStop || canSend) {
-                    if (showStop) {
-                        haptics.tick()
-                        onStop()
-                    } else {
-                        onSend()
-                    }
-                },
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = if (showStop) AppIcons.Close else AppIcons.Send,
-                contentDescription = if (showStop) "Stop" else if (busy) "Queue" else "Send",
-                tint = if (showStop || canSend) OnAccent else TextSecondary,
-                modifier = Modifier.size(17.dp),
-            )
-        }
+        SendControl(
+            busy = busy,
+            hasText = hasContent,
+            canSend = canSend,
+            followUp = followUp,
+            onSend = onSend,
+            onAlternate = onSendAlternate,
+            onStop = onStop,
+        )
     }
 
     Column(
@@ -542,8 +536,7 @@ internal fun ModelPill(
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(999.dp))
-            .background(ServerWell)
-            .border(1.dp, Border, RoundedCornerShape(999.dp))
+            .background(Color.White.copy(alpha = 0.08f))
             .clickable { haptics.tick(); onClick() }
             .semantics { contentDescription = listOfNotNull("Model $name", depth?.let { "$it depth" }).joinToString(", ") }
             .padding(start = 4.dp, end = if (logoOnly) 4.dp else 9.dp, top = 4.dp, bottom = 4.dp),
@@ -609,8 +602,7 @@ internal fun AttachmentChip(attachment: HermesAttachment, onRemove: (() -> Unit)
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(10.dp))
-            .background(SurfaceChrome)
-            .border(1.dp, Border, RoundedCornerShape(10.dp))
+            .background(com.macrotracker.ui.theme.TileDark)
             .padding(start = 8.dp, end = if (onRemove != null) 4.dp else 8.dp, top = 5.dp, bottom = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -677,8 +669,7 @@ internal fun SlashPalette(entries: List<SlashEntry>, onPick: (SlashEntry) -> Uni
             .fillMaxWidth()
             .heightIn(max = 260.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(Surface)
-            .border(1.dp, Border, RoundedCornerShape(16.dp)),
+            .background(com.macrotracker.ui.theme.TileDark),
         contentPadding = PaddingValues(vertical = 6.dp),
     ) {
         var group: String? = null
@@ -777,3 +768,94 @@ internal fun KeyEvent.isPhysicalKeyboard(): Boolean {
     val device = android.view.InputDevice.getDevice(nativeKeyEvent.deviceId) ?: return false
     return !device.isVirtual && device.keyboardType == android.view.InputDevice.KEYBOARD_TYPE_ALPHABETIC
 }
+
+/**
+ * Send, as T3 Code's composer has it. Idle it is an arrow. While Hermes works and something is typed it says what it will do,
+ * Steer (stop the turn and say it now) or Queue (after the turn), whichever is chosen, and a hold offers the other; with
+ * nothing typed it is Stop. One light-on-dark shape for all of them, so the state is the icon and the word, not a colour.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun SendControl(
+    busy: Boolean,
+    hasText: Boolean,
+    canSend: Boolean,
+    followUp: String,
+    onSend: () -> Unit,
+    onAlternate: () -> Unit,
+    onStop: () -> Unit,
+) {
+    val haptics = rememberHaptics()
+    var menu by remember { mutableStateOf(false) }
+    val mode = when {
+        busy && hasText -> if (followUp == "steer") SendMode.STEER else SendMode.QUEUE
+        busy -> SendMode.STOP
+        else -> SendMode.SEND
+    }
+    val lit = mode == SendMode.STOP || canSend
+    val bg by animateColorAsState(if (lit) TextPrimary else Color.White.copy(alpha = 0.10f), MacroMotion.colorTween(), label = "sendBg")
+    val fg = if (lit) com.macrotracker.ui.theme.Background else TextTertiary
+    val label = when (mode) { SendMode.STEER -> "Steer"; SendMode.QUEUE -> "Queue"; else -> null }
+    Box {
+        Row(
+            modifier = Modifier
+                .height(40.dp)
+                .widthIn(min = 40.dp)
+                .clip(RoundedCornerShape(50))
+                .background(bg)
+                .animateContentSize(MacroMotion.entranceSpring())
+                .combinedClickable(
+                    enabled = lit,
+                    onClick = {
+                        when (mode) {
+                            SendMode.STOP -> { haptics.tick(); onStop() }
+                            SendMode.STEER -> { haptics.confirm(); onSend() }
+                            SendMode.QUEUE -> { haptics.tick(); onSend() }
+                            SendMode.SEND -> { haptics.click(); onSend() }
+                        }
+                    },
+                    onLongClick = if (busy && hasText) ({ haptics.gestureStart(); menu = true }) else null,
+                    onLongClickLabel = "Choose how to send",
+                )
+                .padding(horizontal = if (label != null) 15.dp else 0.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            when (mode) {
+                SendMode.STOP -> Box(Modifier.size(13.dp).background(fg, RoundedCornerShape(3.dp)))
+                SendMode.SEND -> Icon(AppIcons.ArrowUp, "Send", tint = fg, modifier = Modifier.size(20.dp))
+                SendMode.STEER -> Icon(AppIcons.Bolt, null, tint = fg, modifier = Modifier.size(16.dp))
+                SendMode.QUEUE -> Icon(AppIcons.ListChecks, null, tint = fg, modifier = Modifier.size(16.dp))
+            }
+            if (label != null) {
+                Spacer(Modifier.width(7.dp))
+                Text(label, color = fg, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, modifier = Modifier.background(Surface).widthIn(min = 250.dp)) {
+            listOf(SendMode.STEER, SendMode.QUEUE).forEach { m ->
+                val current = m == mode
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(if (m == SendMode.STEER) "Steer now" else "Queue", color = TextPrimary, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                if (m == SendMode.STEER) "Stop what Hermes is doing and say this now" else "Say this when the turn is done",
+                                color = TextTertiary, fontSize = 11.5.sp,
+                            )
+                        }
+                    },
+                    leadingIcon = { Icon(if (m == SendMode.STEER) AppIcons.Bolt else AppIcons.ListChecks, null, tint = TextSecondary, modifier = Modifier.size(17.dp)) },
+                    trailingIcon = if (current) ({ Icon(AppIcons.Check, null, tint = TextSecondary, modifier = Modifier.size(15.dp)) }) else null,
+                    onClick = {
+                        menu = false
+                        // the one it already does is the main button; the other is the alternate
+                        if (current) { haptics.click(); onSend() } else { haptics.click(); onAlternate() }
+                    },
+                )
+            }
+        }
+    }
+}
+
+private enum class SendMode { SEND, STEER, QUEUE, STOP }

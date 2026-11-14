@@ -722,6 +722,25 @@ class HermesViewModel @Inject constructor(
     val snoozed: StateFlow<Map<String, Long>> = settings.hermesSnoozed
     val order: StateFlow<List<String>> = settings.hermesOrder
 
+    val followUp: StateFlow<String> = settings.hermesFollowUp
+
+    fun setFollowUp(mode: String) = settings.setHermesFollowUp(mode)
+
+    /**
+     * Says something to Hermes now, over what he is doing: the running turn is stopped and [text] goes next,
+     * ahead of anything queued (T3 Code's steer). With nothing running it is a plain send.
+     */
+    fun steer(text: String) {
+        val body = text.trim()
+        if (body.isEmpty()) return
+        if (!_state.value.busy || body.startsWith("/")) {
+            send(body)
+            return
+        }
+        _state.update { it.copy(queue = listOf(body) + it.queue) }
+        stop(keepQueue = true)
+    }
+
     val autoSettleDays: StateFlow<Int> = settings.hermesAutoSettleDays
     val groupByDay: StateFlow<Boolean> = settings.hermesGroupByDay
 

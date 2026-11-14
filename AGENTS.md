@@ -337,6 +337,11 @@ com.macrotracker/
                              turn carries them to Hermes as its memory, `fork_ctx`), Name it again (`/retitle`), Share chat, a failed turn
                              (`fail` on the summary) as a red Failed row, a "Needs your answer" pill in the dock while a question or approval is
                              out of sight, a launcher "New chat" shortcut and `dailydash://ask?prompt=` (fills the box, never sends).
+                             Send (`SendControl` in HermesChrome.kt) is T3 Code's: an arrow when idle; while Hermes works with text typed it says Steer
+                             (stop the turn and say it now, `HermesViewModel.steer`) or Queue (after the turn), per the follow-up setting
+                             (`hermesFollowUp`, default steer, toggled in the header menu), and a hold on it offers the other; with nothing typed it is
+                             Stop. The queue strip over the composer shows the first queued message with its own Steer button. There is no usage
+                             meter in the composer; the header's square is the only one.
                              Git and pull requests (`ui/screens/git/`, reached from the panel's footer, the header menu or the welcome cards): `GitScreen` has
                              the repo strip, the branch card with Fetch / Pull / Push and stash, then Changes (stage, unstage, discard, commit),
                              History, Branches (switch, new, "Review vs base") and Pull requests (checks, reviews, comment, approve, request
