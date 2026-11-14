@@ -1,5 +1,6 @@
 package com.macrotracker.widget.server
 
+import com.macrotracker.data.server.formatUptime
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.floor
@@ -177,7 +178,7 @@ fun statusLine(c: SrvCard, now: Long): String = when (c.health()) {
     SrvHealth.OK -> buildList {
         add("All good")
         c.services?.takeIf { it.total > 0 }?.let { add("${it.up}/${it.total} services up") }
-        if (c.services == null) c.uptimeSec?.let { add("up ${fmtUptime(it)}") }
+        if (c.services == null) c.uptimeSec?.let { add("up ${formatUptime(it)}") }
     }.joinToString(" · ")
 }
 
@@ -324,7 +325,7 @@ private fun extraTiles(c: SrvCard): List<TileSpec> = buildList {
     }
     if (c.failedUnits > 0) add(TileSpec("FAILED", "${c.failedUnits} units", Tone.HOT))
     c.swap?.let { add(TileSpec("SWAP", pct(it), tone(it, SrvThresholds.SWAP_WARN, SrvThresholds.SWAP_HOT))) }
-    c.uptimeSec?.let { add(TileSpec("UPTIME", fmtUptime(it))) }
+    c.uptimeSec?.let { add(TileSpec("UPTIME", formatUptime(it))) }
     if (updates == 0 && !c.reboot && c.updates != null) add(TileSpec("UPDATES", "none"))
 }
 
@@ -335,13 +336,13 @@ fun factsLine(c: SrvCard, withNet: Boolean = true, withUptime: Boolean = false):
     if (c.ctrTotal > 0) add("${c.ctrRunning}/${c.ctrTotal} ctr")
     c.updates?.takeIf { it > 0 }?.let { add("$it upd") }
     if (c.reboot) add("reboot")
-    if (withUptime) c.uptimeSec?.let { add("up ${fmtUptime(it)}") }
+    if (withUptime) c.uptimeSec?.let { add("up ${formatUptime(it)}") }
 }.joinToString(" · ")
 
 /** The header's second line: which of how many, the OS, and the uptime. */
 fun subtitleLine(c: SrvCard, index: Int, of: Int): String = buildList {
     if (of > 1) add("${index + 1}/$of")
-    c.uptimeSec?.let { add("up ${fmtUptime(it)}") }
+    c.uptimeSec?.let { add("up ${formatUptime(it)}") }
     add(c.os.ifBlank { c.target })
 }.filter { it.isNotBlank() }.joinToString(" · ")
 
@@ -673,7 +674,7 @@ fun aiPrompt(c: SrvCard): String = buildString {
     append("Home server \"").append(c.label).append('"')
     val about = listOfNotNull(c.os.takeIf { it.isNotBlank() }, c.cores?.let { "$it cores" })
     if (about.isNotEmpty()) append(" (").append(about.joinToString(", ")).append(')')
-    c.uptimeSec?.let { append(", up ").append(fmtUptime(it)) }
+    c.uptimeSec?.let { append(", up ").append(formatUptime(it)) }
     append(".\n")
     append("Now: ")
     append(
@@ -756,18 +757,6 @@ fun refreshMode(force: Boolean, repoActive: Boolean, lastFetch: Long, now: Long,
 fun pct(v: Float?): String = v?.let { "${it.roundToInt()}%" } ?: "—"
 
 fun fmtLoad(v: Float): String = if (v >= 10f) "%.1f".format(v) else "%.2f".format(v)
-
-/** `12d 4h`, `4h 20m`, `18m` — as the app writes uptime. */
-fun fmtUptime(seconds: Long): String {
-    val days = seconds / 86_400
-    val hours = (seconds % 86_400) / 3_600
-    val minutes = (seconds % 3_600) / 60
-    return when {
-        days > 0 -> "${days}d ${hours}h"
-        hours > 0 -> "${hours}h ${minutes}m"
-        else -> "${minutes}m"
-    }
-}
 
 /** 1024-based, as `df` and `free` mean it. */
 fun fmtKb(kb: Long): String {

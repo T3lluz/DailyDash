@@ -2,6 +2,9 @@
 # The app on a headless emulator, for looking at a change without a phone.
 #
 #   tools/preview.sh up                 boot the emulator (once; it stays up)
+#   tools/preview.sh hosts              pin the dashboard's name again (after booting it by hand)
+#   tools/preview.sh build              build the debug APK
+#   tools/preview.sh install            install the APK that is built
 #   tools/preview.sh shot [screen] [f]  build, install, open <screen>, save a screenshot to f
 #   tools/preview.sh snap [f]           screenshot what is on screen now
 #   tools/preview.sh open <screen>      open a screen (home, health, ai, settings, usage, widgets,
@@ -123,5 +126,5 @@ for m in re.finditer(r"<node[^>]*?text=\"([^\"]*)\"[^>]*?content-desc=\"([^\"]*)
     t, d, x1, y1, x2, y2 = m.groups()
     if t or d:
         print(f"{(int(x1)+int(x2))//2:5d} {(int(y1)+int(y2))//2:5d}  {t or d}")' ;;
-  *) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//' ;;
+  *) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//' ;;
 esac

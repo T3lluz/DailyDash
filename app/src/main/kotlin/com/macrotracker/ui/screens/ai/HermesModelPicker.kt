@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens.ai
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,14 +35,11 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -77,7 +76,6 @@ import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.theme.TextTertiary
 import com.macrotracker.ui.util.rememberHaptics
-import kotlinx.coroutines.delay
 import com.macrotracker.ui.components.Hairline
 
 /*
@@ -339,12 +337,16 @@ private fun ModelOptions(
                     if (mods.think) OptionSwitch("Thinking", cur.think, thinkHere, onToggleThink, Modifier.weight(1f))
                     if (mods.fast != mods.think) Spacer(Modifier.weight(1f))
                 }
-                if ((mods.fast && !fastHere) || (mods.think && !thinkHere)) {
-                    Text(
-                        listOfNotNull("Fast".takeIf { mods.fast && !fastHere }, "Thinking".takeIf { mods.think && !thinkHere })
-                            .joinToString(" and ") + " not offered at this effort",
-                        color = TextTertiary, fontSize = 11.5.sp,
-                    )
+                // a switch that can't move says which way it is stuck, as the dashboard does
+                val stuck = listOfNotNull(
+                    ("Fast" to cur.fast).takeIf { mods.fast && !fastHere },
+                    ("Thinking" to cur.think).takeIf { mods.think && !thinkHere },
+                )
+                if (stuck.isNotEmpty()) {
+                    val line = stuck.groupBy({ it.second }, { it.first }).entries.joinToString(", ") { (on, names) ->
+                        names.joinToString(" and ") + if (on) " always on" else " not offered"
+                    }
+                    Text("$line at this effort", color = TextTertiary, fontSize = 11.5.sp)
                 }
             }
             if (mods.contexts.size > 1) {
@@ -388,28 +390,24 @@ private fun OptionSwitch(label: String, checked: Boolean, enabled: Boolean, onTo
  */
 @Composable
 private fun EffortSlider(stops: List<String>, effort: String, onPick: (String) -> Unit) {
+    // [effort] is the model's the moment it is picked (a switch on its way is drawn as landed),
+    // so the slider needs no memory of its own beyond the finger.
     val at = HermesCatalog.stopIndex(stops, effort)
-    // While a finger is down the slider follows it. On release it stays on the picked stop
-    // until the model has followed (the effort changes) or the switch fell through.
     var dragging by remember { mutableIntStateOf(-1) }
-    var pending by remember(effort, stops) { mutableIntStateOf(-1) }
-    val shown = (if (dragging >= 0) dragging else if (pending >= 0) pending else at).coerceIn(0, stops.lastIndex)
+    val shown = (if (dragging >= 0) dragging else at).coerceIn(0, stops.lastIndex)
     val shownEffort = stops[shown]
-    val isDefault = effort.isBlank() && "" !in stops && dragging < 0 && pending < 0
+    // the model's own depth, which has no stop of its own and is drawn at medium
+    val unset = effort.isBlank() && "" !in stops
+    val isDefault = unset && dragging < 0
     val haptics = rememberHaptics()
     // The gesture blocks outlive a pick, so they read where the slider stands now, not where
     // it stood when they started.
     val atNow by rememberUpdatedState(at)
+    val unsetNow by rememberUpdatedState(unset)
     val pick by rememberUpdatedState { i: Int ->
         val to = i.coerceIn(0, stops.lastIndex)
-        if (to != atNow) {
-            pending = to
-            onPick(stops[to])
-        }
-    }
-    LaunchedEffect(pending) {
-        // a switch that never lands (the bridge refused it) lets go after a while
-        if (pending >= 0) { delay(6000); pending = -1 }
+        // medium is a pick of its own while the depth is the model's own
+        if (to != atNow || unsetNow) onPick(stops[to])
     }
     fun indexAt(x: Float, width: Int) = ((x / width) * stops.size).toInt().coerceIn(0, stops.lastIndex)
     fun name(e: String) = if (e.isBlank()) "medium" else HermesCatalog.EFFORT_LABEL[e]?.lowercase() ?: e

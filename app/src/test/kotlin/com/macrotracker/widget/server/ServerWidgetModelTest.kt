@@ -1,5 +1,6 @@
 package com.macrotracker.widget.server
 
+import com.macrotracker.data.server.formatUptime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -293,8 +294,8 @@ class ServerWidgetModelTest {
 
     @Test
     fun `formats read like the app`() {
-        assertEquals("12d 4h", fmtUptime(12 * 86_400L + 4 * 3_600L + 59))
-        assertEquals("4h 20m", fmtUptime(4 * 3_600L + 20 * 60))
+        assertEquals("12d 4h", formatUptime(12 * 86_400L + 4 * 3_600L + 59))
+        assertEquals("4h 20m", formatUptime(4 * 3_600L + 20 * 60))
         assertEquals("1.2 MB/s", fmtRate(1_300_000))
         assertEquals("15.4 GB", fmtKb(16_100_000))
         assertEquals("980B/s", shortRate(980))

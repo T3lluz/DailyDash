@@ -136,3 +136,9 @@ fun rememberClockFormatter(): java.time.format.DateTimeFormatter {
     val h24 = rememberClock24()
     return remember(h24) { java.time.format.DateTimeFormatter.ofPattern(if (h24) "HH:mm" else "h:mm a", java.util.Locale.getDefault()) }
 }
+
+/** How long something took: `46s`, `2m 05s`. */
+fun tookShort(ms: Long): String {
+    val s = (ms / 1000).coerceAtLeast(1)
+    return if (s < 60) "${s}s" else "${s / 60}m ${"%02d".format(s % 60)}s"
+}

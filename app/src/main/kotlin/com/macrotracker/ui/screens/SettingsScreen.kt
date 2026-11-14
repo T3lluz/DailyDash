@@ -1,9 +1,9 @@
 package com.macrotracker.ui.screens
 
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import com.macrotracker.ui.util.findActivity
 import com.macrotracker.data.update.prettyVersion
 import androidx.compose.foundation.background
@@ -43,6 +43,7 @@ import com.macrotracker.data.update.updateAvailable
 import com.macrotracker.ui.components.ScreenHeader
 import com.macrotracker.ui.components.ScreenHeaderSpacer
 import com.macrotracker.ui.components.TabContentBottomPadding
+import com.macrotracker.ui.screens.ai.rememberUsageNow
 import com.macrotracker.ui.screens.settings.SettingsGroup
 import com.macrotracker.ui.screens.settings.SettingsNavRow
 import com.macrotracker.ui.screens.settings.SettingsRowDivider
@@ -176,7 +177,7 @@ fun SettingsScreen(
             val usage by usageViewModel.state.collectAsState()
             LaunchedWhileResumed(usageViewModel) { usageViewModel.load() }
             val plan = remember(usage.usage) { usage.usage?.let { com.macrotracker.data.dashboard.usageFocus(it) } }
-            val used = plan?.top?.usedPercent
+            val used = plan?.top(rememberUsageNow())?.usedPercent
             SettingsNavRow(
                 icon = AppIcons.Gauge,
                 tint = Primary,

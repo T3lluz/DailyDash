@@ -1,11 +1,11 @@
 package com.macrotracker.ui.components
 
+import com.macrotracker.ui.screens.server.StatusDot
 import androidx.compose.foundation.background
 import com.macrotracker.ui.util.rememberIsResumed
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -177,7 +177,7 @@ private fun ServerTile(
             .heightIn(min = 148.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            ConnectionDot(runtime)
+            StatusDot(runtime)
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = runtime?.profile?.label ?: fallbackLabel,
@@ -289,25 +289,6 @@ private fun NewsLine(icon: androidx.compose.ui.graphics.vector.ImageVector, text
             fontWeight = FontWeight.Medium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
-@Composable
-private fun ConnectionDot(runtime: ServerRuntime?) {
-    when (runtime?.connection) {
-        is ServerConnectionState.Online -> LivePulseDot(color = ServerGood)
-        else -> Box(
-            modifier = Modifier
-                .size(7.dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(
-                    when (runtime?.connection) {
-                        is ServerConnectionState.Connecting -> ServerWarn
-                        is ServerConnectionState.Offline -> ServerCritical
-                        else -> TextSecondary
-                    },
-                ),
         )
     }
 }

@@ -39,8 +39,6 @@ import com.macrotracker.ui.util.rememberReducedMotion
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
-import kotlin.math.cos
-import kotlin.math.sin
 
 /**
  * The night on a 24-hour clock face, after the iOS Clock app's bedtime dial: midnight at
@@ -121,11 +119,6 @@ private fun angleOf(time: Instant, zone: ZoneId): Float {
     return minutes / MINUTES_PER_DAY * 360f - 90f
 }
 
-private fun pointAt(center: Offset, radius: Float, degrees: Float): Offset {
-    val rad = Math.toRadians(degrees.toDouble())
-    return Offset(center.x + radius * cos(rad).toFloat(), center.y + radius * sin(rad).toFloat())
-}
-
 /** Hour ticks inside the ring, longer every six hours, with 0 · 6 · 12 · 18 written in. */
 private fun DrawScope.drawFace(inner: Float, measurer: TextMeasurer) {
     for (hour in 0 until 24) {
@@ -135,14 +128,14 @@ private fun DrawScope.drawFace(inner: Float, measurer: TextMeasurer) {
         val len = if (major) 6.dp.toPx() else 3.dp.toPx()
         drawLine(
             color = if (major) TextTertiary else Border,
-            start = pointAt(center, outer, angle),
-            end = pointAt(center, outer - len, angle),
+            start = pointOn(center, outer, angle),
+            end = pointOn(center, outer - len, angle),
             strokeWidth = 1.2.dp.toPx(),
             cap = StrokeCap.Round,
         )
         if (major) {
             val label = measurer.measure(hour.toString(), TextStyle(fontSize = 9.sp, color = TextTertiary))
-            val at = pointAt(center, outer - len - 9.dp.toPx(), angle)
+            val at = pointOn(center, outer - len - 9.dp.toPx(), angle)
             drawText(label, topLeft = Offset(at.x - label.size.width / 2f, at.y - label.size.height / 2f))
         }
     }
@@ -150,7 +143,7 @@ private fun DrawScope.drawFace(inner: Float, measurer: TextMeasurer) {
 
 /** A round handle on the ring with a glyph in it, like the Clock app's bedtime and wake knobs. */
 private fun DrawScope.drawHandle(painter: VectorPainter, angle: Float, radius: Float, stroke: Float) {
-    val at = pointAt(center, radius, angle)
+    val at = pointOn(center, radius, angle)
     val r = stroke * 0.62f
     drawCircle(Surface, radius = r + 1.5.dp.toPx(), center = at)
     drawCircle(HealthSleep, radius = r, center = at)

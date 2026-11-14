@@ -62,7 +62,8 @@ fun HermesModelSelector(
 
     if (modelSheet) {
         HermesModelSheet(
-            status = state.status,
+            // a switch on its way is drawn as picked, so every control reads the model it changes
+            status = HermesCatalog.heading(state.status, state.switchingTo),
             switching = state.switchingModel,
             favourites = favouriteModels,
             onToggleFavourite = viewModel::toggleFavourite,

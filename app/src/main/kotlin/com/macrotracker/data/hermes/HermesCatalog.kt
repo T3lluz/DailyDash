@@ -59,6 +59,15 @@ object HermesCatalog {
     fun current(status: HermesStatus?): HermesModelOption? =
         status?.models?.firstOrNull { it.current } ?: status?.models?.firstOrNull { it.id == status.model }
 
+    /**
+     * [status] as it will read once a switch to [id] lands: that row in use, the rest not.
+     * Unchanged when [id] is null or no row has it.
+     */
+    fun heading(status: HermesStatus?, id: String?): HermesStatus? {
+        if (status == null || id == null || status.models.none { it.id == id }) return status
+        return status.copy(model = id, models = status.models.map { if (it.current != (it.id == id)) it.copy(current = it.id == id) else it })
+    }
+
     fun byId(status: HermesStatus?, id: String): HermesModelOption? = status?.models?.firstOrNull { it.id == id }
 
     fun sourceOf(model: HermesModelOption?): String {

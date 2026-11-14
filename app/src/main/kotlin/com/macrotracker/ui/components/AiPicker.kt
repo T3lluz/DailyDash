@@ -1,5 +1,7 @@
 package com.macrotracker.ui.components
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -33,10 +35,8 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -240,7 +240,10 @@ private fun ColumnScope.AiModelList(
     val providers = remember(state.providers, onManage == null) {
         state.providers.filter { it.ready || onManage != null }.sortedBy { !it.ready }
     }
-    var tab by rememberSaveable { mutableStateOf(state.selected) }
+    var picked by rememberSaveable { mutableStateOf(state.selected) }
+    // The AI in use may have no tab (not set up, with nowhere here to set it up from): the
+    // sheet then opens on the first one that has.
+    val tab = picked.takeIf { t -> providers.any { it.provider == t } } ?: providers.firstOrNull()?.provider
     val haptics = rememberHaptics()
     SearchBox(value = query, onValueChange = { query = it }, hint = "Search all models", modifier = Modifier.padding(horizontal = 16.dp))
     if (q.isEmpty()) {
@@ -252,7 +255,7 @@ private fun ColumnScope.AiModelList(
             providers.forEach { p ->
                 PickerTab(
                     p.provider.displayName, selected = p.provider == tab, picked = p.provider == state.selected,
-                    onClick = { haptics.tick(); tab = p.provider }, dim = !p.ready,
+                    onClick = { haptics.tick(); picked = p.provider }, dim = !p.ready,
                 ) { AiProviderLogo(p.provider, 22.dp) }
             }
         }
@@ -280,7 +283,11 @@ private fun ColumnScope.AiModelList(
             if (!any) item(key = "none") { Text("No match", color = TextTertiary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp)) }
             return@LazyColumn
         }
-        val p = providers.firstOrNull { it.provider == tab } ?: return@LazyColumn
+        val p = providers.firstOrNull { it.provider == tab }
+        if (p == null) {
+            item(key = "none") { Text("No AI is set up yet", color = TextTertiary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp)) }
+            return@LazyColumn
+        }
         item(key = "how-${p.provider}") {
             Row(Modifier.padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 AiAccessBadge(p.access, label = if (p.ready) p.access.label else "Set up")

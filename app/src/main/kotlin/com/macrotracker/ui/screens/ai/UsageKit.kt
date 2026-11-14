@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,6 +34,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.macrotracker.ui.components.MacroCard
+import com.macrotracker.ui.components.rememberMinuteClock
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.Primary
@@ -193,6 +195,16 @@ internal fun pct(share: Double): String =
     if (share > 0 && share < 0.01) "<1%" else "${Math.round(share * 100)}%"
 
 internal fun count(n: Long): String = String.format(Locale.US, "%,d", n)
+
+/**
+ * The time a limit window is read at. It turns every minute while the screen is in front,
+ * so a window that resets while you look at it empties there and then.
+ */
+@Composable
+internal fun rememberUsageNow(): Instant {
+    val ms by rememberMinuteClock()
+    return Instant.ofEpochMilli(ms)
+}
 
 internal fun untilText(ms: Long): String {
     val m = Duration.between(Instant.now(), Instant.ofEpochMilli(ms)).toMinutes()

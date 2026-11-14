@@ -63,8 +63,8 @@ class UsageModelsTest {
         assertEquals("You've hit your usage limit", cursor.note)
         assertEquals(321.31, cursor.spend!!.total, 0.0)
         assertEquals(301.31, cursor.spend!!.bonus!!, 0.0)
-        assertEquals("Overall", cursor.top!!.label)
-        assertEquals("the fullest window when none is named", "Weekly", usage.limit("claude")!!.top!!.label)
+        assertEquals("Overall", cursor.top()!!.label)
+        assertEquals("the fullest window when none is named", "Weekly", usage.limit("claude")!!.top()!!.label)
     }
 
     @Test fun `days and hours split by provider, agent and model, tokens and cost`() {
@@ -160,7 +160,10 @@ class UsageModelsTest {
     }
 
     @Test fun `tokens never read as a thousand thousands`() {
-        assertEquals("1000", formatTokens(1_000).replace("k", "000").take(4))
+        assertEquals("1k", formatTokens(1_000))
+        assertEquals("100M", formatTokens(99_960_000))
+        assertEquals("99.9M", formatTokens(99_900_000))
+        assertEquals("10B", formatTokens(9_960_000_000))
         assertEquals("999k", formatTokens(999_400))
         assertEquals("1.0M", formatTokens(999_600))
         assertEquals("1.0B", formatTokens(999_960_000))

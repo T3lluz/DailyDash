@@ -1,5 +1,6 @@
 package com.macrotracker.ui.components
 
+import com.macrotracker.ui.util.tookShort
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
@@ -827,7 +828,7 @@ private fun hermesLine(activity: NavActivity): Pair<String, String> = when {
     activity.tone == NavActivityTone.WORKING -> rememberElapsed(activity.startedAtMs) to "Hermes"
     activity.tone == NavActivityTone.NEEDS_YOU -> "Needs you" to "Hermes"
     activity.tone == NavActivityTone.FAILED -> "Failed" to "Hermes"
-    activity.tookMs != null -> formatTook(activity.tookMs) to "Hermes"
+    activity.tookMs != null -> tookShort(activity.tookMs) to "Hermes"
     else -> "" to "Hermes"
 }
 
@@ -894,7 +895,7 @@ private fun HermesSolo(activity: NavActivity, onClick: () -> Unit, modifier: Mod
                 FactColumn(IslandFact(rememberElapsed(activity.startedAtMs), "working"), width = null, color = activity.tone.accent())
             activity.tone == NavActivityTone.NEEDS_YOU -> ActionChip("Answer", Warning)
             activity.tone == NavActivityTone.FAILED -> ActionChip("Failed", Error)
-            activity.tookMs != null -> FactColumn(IslandFact(formatTook(activity.tookMs), "took"), width = null, color = TextPrimary)
+            activity.tookMs != null -> FactColumn(IslandFact(tookShort(activity.tookMs), "took"), width = null, color = TextPrimary)
             else -> KindChip("Open")
         }
     }
@@ -1078,7 +1079,7 @@ private fun HermesLead(activity: NavActivity, onClick: () -> Unit, fill: Boolean
         Spacer(Modifier.width(10.dp))
         when {
             activity.tone == NavActivityTone.WORKING -> ElapsedClock(activity.startedAtMs)
-            activity.tookMs != null -> Clock(formatTook(activity.tookMs))
+            activity.tookMs != null -> Clock(tookShort(activity.tookMs))
         }
     }
 }
@@ -1849,11 +1850,6 @@ private fun rememberElapsed(startedAtMs: Long): String {
 @Composable
 private fun Clock(text: String) {
     Text(text, color = Color(0xFFD6D6D6), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace, maxLines = 1)
-}
-
-private fun formatTook(ms: Long): String {
-    val s = (ms / 1000).coerceAtLeast(1)
-    return if (s < 60) "${s}s" else "${s / 60}m ${"%02d".format(s % 60)}s"
 }
 
 private fun NavActivityTone.markIcon(): ImageVector = when (this) {

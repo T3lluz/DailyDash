@@ -3,6 +3,7 @@ package com.macrotracker.data.hermes
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -56,6 +57,22 @@ class HermesCatalogTest {
         assertFalse(mods.think)
         assertEquals("cursor:gpt-5.3-codex-high-fast", HermesCatalog.variant(mods, fast = true)?.id)
         assertEquals("cursor:gpt-5.3-codex-low", HermesCatalog.variant(mods, effort = "low")?.id)
+    }
+
+    @Test
+    fun `a change made while a switch is on its way builds on where it is heading`() {
+        // High is in use and Low was just asked for. Until Low lands, Low is what the controls change.
+        val heading = HermesCatalog.heading(status, "cursor:gpt-5.3-codex-low")!!
+        assertEquals(listOf("cursor:gpt-5.3-codex-low"), heading.models.filter { it.current }.map { it.id })
+        val mods = HermesCatalog.modifiers(heading)
+        assertEquals("cursor:gpt-5.3-codex-low", mods.current?.id)
+        // a tap back to High, the stop it left, is a pick of its own: it is no longer the row in use
+        val back = HermesCatalog.variant(mods, effort = "high")!!
+        assertEquals("cursor:gpt-5.3-codex-high", back.id)
+        assertFalse(back.current)
+        // nothing on its way, or a row the list lacks: the status as it stands
+        assertSame(status, HermesCatalog.heading(status, null))
+        assertSame(status, HermesCatalog.heading(status, "cursor:gone"))
     }
 
     @Test

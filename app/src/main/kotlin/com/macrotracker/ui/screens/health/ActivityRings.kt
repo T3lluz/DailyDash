@@ -130,7 +130,8 @@ private fun DrawScope.drawRing(tone: Color, progress: Float, radius: Float, stro
     }
 }
 
-private fun pointOn(center: Offset, radius: Float, degrees: Float): Offset {
+/** The point on a circle at [degrees], clockwise from three o'clock. The rings and the sleep dial share it. */
+internal fun pointOn(center: Offset, radius: Float, degrees: Float): Offset {
     val rad = Math.toRadians(degrees.toDouble())
     return Offset(center.x + radius * cos(rad).toFloat(), center.y + radius * sin(rad).toFloat())
 }

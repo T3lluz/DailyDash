@@ -1,5 +1,6 @@
 package com.macrotracker.ui.viewmodel
 
+import com.macrotracker.data.hermes.NewestLast
 import android.content.Context
 import com.macrotracker.util.readAtMost
 import android.net.Uri
@@ -79,6 +80,8 @@ data class HermesUiState(
     val queued: String? = null,
     /** Hermes is being pointed at another model. */
     val switchingModel: Boolean = false,
+    /** The model a switch on its way is heading for; null once Hermes has answered. */
+    val switchingTo: String? = null,
     /** When this phone last looked at each chat, so one that moved since gets a dot. */
     val seen: Map<String, Long> = emptyMap(),
 ) {
@@ -552,37 +555,75 @@ class HermesViewModel @Inject constructor(
 
     /** A family from the picker, at the depth and modifiers last chosen where it has them. */
     fun pickFamily(family: HermesCatalog.Family) {
-        val pick = HermesCatalog.pickVariant(family.members, wantEffort, wantThink, wantFast) ?: family.members.first()
-        if (pick.current) rememberThreadModel(pick.id) else setModel(pick.id)
+        // a depth or a switch still on its way counts as chosen already
+        val heading = headingFor()
+        val onWay = modifiers().current.takeIf { heading != null }
+        val pick = HermesCatalog.pickVariant(
+            family.members,
+            onWay?.effort?.ifBlank { wantEffort } ?: wantEffort,
+            onWay?.think ?: wantThink,
+            onWay?.fast ?: wantFast,
+        ) ?: family.members.first()
+        when {
+            heading == null && pick.current -> rememberThreadModel(pick.id, _state.value.threadId)
+            pick.id != heading -> setModel(pick.id)
+        }
     }
 
     fun setEffort(effort: String) = switchVariant(HermesCatalog.variant(modifiers(), effort = effort))
 
-    fun toggleThink() = modifiers().let { m -> switchVariant(HermesCatalog.variant(m, think = !(m.current?.think ?: false))) }
-
-    fun toggleFast() = modifiers().let { m -> switchVariant(HermesCatalog.variant(m, fast = !(m.current?.fast ?: false))) }
-
-    private fun modifiers() = HermesCatalog.modifiers(_state.value.status)
-
-    private fun switchVariant(pick: HermesModelOption?) {
-        if (pick == null || pick.current) return
-        setModel(pick.id)
+    fun toggleThink() {
+        val m = modifiers()
+        switchVariant(HermesCatalog.variant(m, think = !(m.current?.think ?: false)))
     }
 
-    /** Points Hermes at [id]. It is Hermes' own setting, so the desk sees the same change. */
+    fun toggleFast() {
+        val m = modifiers()
+        switchVariant(HermesCatalog.variant(m, fast = !(m.current?.fast ?: false)))
+    }
+
+    private val modelSwitches = NewestLast()
+
+    /** The model a switch still on its way is heading for. The picker draws it as picked already. */
+    private fun headingFor(): String? = _state.value.switchingTo
+
+    /**
+     * What the picker's controls change. While a switch is on its way that is the model it is
+     * heading for, so a second change builds on the first instead of undoing it.
+     */
+    private fun modifiers() = HermesCatalog.modifiers(HermesCatalog.heading(_state.value.status, headingFor()))
+
+    private fun switchVariant(pick: HermesModelOption?) {
+        if (pick == null) return
+        val heading = headingFor()
+        if (heading == null && pick.current) return
+        if (pick.id != heading) setModel(pick.id)
+    }
+
+    /**
+     * Points Hermes at [id]. It is Hermes' own setting, so the desk sees the same change.
+     * Picks go out one at a time, newest last (`NewestLast`), so quick picks can't land out
+     * of order.
+     */
     fun setModel(id: String, quiet: Boolean = false) {
-        viewModelScope.launch {
-            if (!quiet) _state.update { it.copy(switchingModel = true) }
-            try {
-                val status = client.setModel(id)
+        // The chat it was picked in keeps it, whichever chat is open when it lands, and only
+        // once it has landed: a pick that fails or is replaced must not come back on reopening.
+        val pickedIn = _state.value.threadId.takeIf { !quiet }
+        _state.update { it.copy(switchingTo = id, switchingModel = it.switchingModel || !quiet) }
+        modelSwitches.submit(viewModelScope, { client.setModel(id) }) { result ->
+            result.onSuccess { status ->
                 rememberModifiers(status)
-                _state.update { it.copy(status = status, switchingModel = false) }
-                rememberThreadModel(id)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
+                _state.update { it.copy(status = status, switchingModel = false, switchingTo = null) }
+                rememberThreadModel(id, pickedIn)
+            }.onFailure { e ->
+                // an older pick may have landed before this one failed: ask where Hermes stands
+                refreshStatus()
                 _state.update {
-                    it.copy(switchingModel = false, notice = if (quiet) it.notice else "Could not switch: ${e.message ?: "Hermes said no"}")
+                    it.copy(
+                        switchingModel = false,
+                        switchingTo = null,
+                        notice = if (quiet) it.notice else "Could not switch: ${e.message ?: "Hermes said no"}",
+                    )
                 }
             }
         }
@@ -591,6 +632,8 @@ class HermesViewModel @Inject constructor(
     fun setWindow(tokens: Int) {
         viewModelScope.launch {
             try {
+                // the window is the model's: it goes after a switch that is still on its way
+                modelSwitches.join()
                 val status = client.setWindow(tokens)
                 _state.update { it.copy(status = status) }
             } catch (e: CancellationException) {
@@ -602,8 +645,8 @@ class HermesViewModel @Inject constructor(
     }
 
     /** The open chat keeps its model, so opening it again later puts Hermes back on it. */
-    private fun rememberThreadModel(id: String) {
-        val threadId = _state.value.threadId ?: return
+    private fun rememberThreadModel(id: String, threadId: String?) {
+        if (threadId == null) return
         _state.update { s -> s.copy(threads = s.threads.map { if (it.id == threadId) it.copy(model = id) else it }) }
         viewModelScope.launch { runCatching { client.setThreadModel(threadId, id) } }
     }
@@ -612,10 +655,11 @@ class HermesViewModel @Inject constructor(
     private fun restoreThreadModel(model: String) {
         if (model.isBlank()) return
         val status = _state.value.status ?: return
-        val current = HermesCatalog.current(status)
-        if (current?.id == model) return
+        // where Hermes is, or is on his way to
+        val current = headingFor() ?: HermesCatalog.current(status)?.id
+        if (current == model) return
         // Grok Bot is marked current through its own pick flag.
-        if (model.startsWith("external:") && current?.id?.startsWith("external:") == true) return
+        if (model.startsWith("external:") && current?.startsWith("external:") == true) return
         if (status.models.none { it.id == model }) return
         setModel(model, quiet = true)
     }

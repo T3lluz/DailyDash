@@ -1,5 +1,6 @@
 package com.macrotracker.ui.screens.ai
 
+import androidx.compose.runtime.getValue
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
@@ -21,7 +22,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -155,10 +155,11 @@ internal fun ProviderLimitBlock(
     if (limit.windows.isEmpty()) {
         Text("No reading yet.", fontSize = 13.sp, color = TextSecondary)
     }
+    val now = rememberUsageNow()
     limit.windows.forEachIndexed { i, w ->
         if (i > 0) Spacer(Modifier.height(if (compact) 2.dp else 4.dp))
         val key = "${limit.id}:${w.id}"
-        LimitRow(w, open = key in open, onToggle = onToggle?.let { { it(key) } }, compact = compact)
+        LimitRow(w, now, open = key in open, onToggle = onToggle?.let { { it(key) } }, compact = compact)
     }
     if (limit.note.isNotBlank()) {
         Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -186,18 +187,18 @@ internal fun ProviderLimitBlock(
  * would be by now, when it resets and how the pace stands. A tap opens the detail.
  */
 @Composable
-internal fun LimitRow(window: LimitWindow, open: Boolean = false, onToggle: (() -> Unit)? = null, compact: Boolean = false) {
+internal fun LimitRow(window: LimitWindow, now: Instant, open: Boolean = false, onToggle: (() -> Unit)? = null, compact: Boolean = false) {
     // a reading whose reset has passed since it was taken is a window that has not started
-    val w = window.at()
+    val w = window.at(now)
     val used = w.usedPercent?.coerceIn(0.0, 100.0)
-    val pace = usagePace(w)
+    val pace = usagePace(w, now)
     val tone = limitTone(used ?: 0.0)
     val head = when {
         w.idle -> "not started"
         used != null -> "${Math.round(used)}%"
         else -> "no reading"
     }
-    val reset = w.resetsAt?.takeIf { it.isAfter(Instant.now()) }?.toEpochMilli()
+    val reset = w.resetsAt?.takeIf { it.isAfter(now) }?.toEpochMilli()
     val resetLine = when {
         w.idle -> if (w.kind == "session") "starts with your next message" else "starts with your next use"
         reset != null -> "resets in ${untilText(reset)} · ${whenText(reset)}"

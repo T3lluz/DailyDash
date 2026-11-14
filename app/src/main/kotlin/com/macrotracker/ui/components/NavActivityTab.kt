@@ -60,11 +60,6 @@ private fun Clock(text: String) {
     )
 }
 
-private fun formatTook(ms: Long): String {
-    val s = (ms / 1000).coerceAtLeast(1)
-    return if (s < 60) "${s}s" else "${s / 60}m ${"%02d".format(s % 60)}s"
-}
-
 internal fun NavActivityTone.accent(): Color = when (this) {
     NavActivityTone.WORKING -> ServerBrand
     NavActivityTone.DONE -> Success

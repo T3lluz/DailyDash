@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens.ai
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -29,11 +31,9 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -114,6 +114,8 @@ fun UsagePane(
             delay(2 * 60_000L)
         }
     }
+    var asked by remember { mutableStateOf(false) }
+    LaunchedEffect(state.loading) { if (!state.loading) asked = false }
     LaunchedEffect(viewModel) { viewModel.notes.collect { note = it } }
     LaunchedEffect(note) { if (note != null) { delay(4000); note = null } }
 
@@ -130,8 +132,9 @@ fun UsagePane(
                 UsageChip(t.label + (badge?.let { " $it" } ?: ""), t == tab) { haptics.tick(); tab = t }
             }
         }
-        IconButton(onClick = { haptics.tick(); viewModel.load(fresh = true) }, modifier = Modifier.size(40.dp)) {
-            if (state.loading) LoadingSpinner(color = Primary, size = 16.dp)
+        // A spinner only for a read someone asked for, or the first one: a background reload shows none.
+        IconButton(onClick = { haptics.tick(); asked = true; viewModel.load(fresh = true) }, modifier = Modifier.size(40.dp)) {
+            if (state.loading && (asked || state.usage == null)) LoadingSpinner(color = Primary, size = 16.dp)
             else Icon(AppIcons.Refresh, "Read again", tint = TextSecondary, modifier = Modifier.size(18.dp))
         }
     }
@@ -286,7 +289,7 @@ internal fun ContextRing(fraction: Float, size: Dp = 18.dp) {
 fun UsageButton(usage: UsageSnapshot?, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val haptics = rememberHaptics()
     val focus = remember(usage) { usage?.let(::usageFocus) }
-    val top = focus?.top
+    val top = focus?.top(rememberUsageNow())
     val said = when {
         focus != null && top != null -> "Usage. ${focus.label}: ${Math.round(top.usedPercent ?: 0.0)}% of the ${top.label.lowercase()} limit used"
         else -> "Usage"
@@ -320,7 +323,7 @@ internal fun ComposerUsageMeter(
 ) {
     val provider = usageProviderOf(model, chat)
     val limit = usage.usage?.limit(provider)
-    val top = limit?.top
+    val top = limit?.top(rememberUsageNow())
     val contextFill = chat?.contextFraction
     // Nothing to say yet (no plan reading, no chat): no meter, so it never reads as empty-but-wrong.
     if (limit == null && contextFill == null) return

@@ -10,7 +10,7 @@ Single-module Android app (Kotlin + Jetpack Compose). The **app label is "DailyD
 ./gradlew assembleDebug      # standard debug build
 ./gradlew installDebug       # build + deploy to connected device
 ```
-**Looking at a change:** `tools/preview.sh` runs the app on a headless emulator on the server (an AVD named `dash`, KVM), with the dashboard's name pinned to its tailnet address so cards have real data. `tools/preview.sh shot usage out.png` builds, installs, opens a screen and screenshots it; `open`, `tap`, `swipe`, `scroll`, `ui` (text nodes with their tap points) and `snap` drive it after that; `down` stops it. A warm incremental build is about 30 s and a screenshot a second, against minutes for a Robolectric render. The server has 14 GB and runs the house: stop the emulator (`down`) and the Gradle daemon (`./gradlew --stop`) when a stretch of looking is over, and never leave both idling. Health Connect, location and the calendar have no data there; use the phone over adb for those.
+**Looking at a change:** on the phone, over wireless debugging (`adb mdns services`, `adb connect`, `./gradlew :app:assembleDebug`, `adb install -r`, `adb exec-out screencap -p`), and build on the laptop (t3lluz) when it is on: the home server has 14 GB, runs the house, and a Gradle build there took it to 92°. `tools/preview.sh` is the fallback for when neither the laptop nor the phone can be used: it runs the app on a headless emulator (an AVD named `dash`, KVM) with the dashboard's name pinned so cards have real data. `tools/preview.sh shot usage out.png` builds, installs, opens a screen and screenshots it; `open`, `tap`, `swipe`, `scroll`, `ui` (text nodes with their tap points) and `snap` drive it after that; `down` stops it. On the server, stop the emulator (`down`) and the Gradle daemon (`./gradlew --stop`) as soon as a look is over, and never leave both idling. The emulator has no Health Connect, location or calendar data.
 
 API keys go in `local.properties` (never committed):
 ```
@@ -229,8 +229,16 @@ com.macrotracker/
                              SettingsScreen) + sub-screens (HelpScreen, CameraScanScreen)
                              + onboarding/ (SplashScreen overlay, WelcomeScreen, PermissionsScreen, TutorialScreen)
                              + ai/ (ChatKit.kt shared chat bubbles/header/composer + IME helpers, SysopChatPane,
-                             HermesChatPane + HermesChrome.kt: the web panel without its side pane — thread
-                             sheet (the History button or the title opens it), tall composer with one model pill
+                             HermesChatPane + HermesChrome.kt: the chat, after T3 Code's phone app (MIT; its
+                             ideas are ported, themed to this app). The chats are a panel from the left
+                             (HermesRail.kt, a `ModalNavigationDrawer` with gestures off and the pane clipped;
+                             the History button or the title opens it): what is active leads as cards with a
+                             word for its state (Needs input, Working in `ShimmerText`, Done), the rest are
+                             slim rows; a row swipes right to pin and left to delete, a hold opens the rest.
+                             The transcript folds a finished run (`HermesFeed.rows`, HermesFeedTest): everything
+                             between what you said and the last answer is one line, "Worked for 31s · 10
+                             steps", that opens to every step; the run still going and anything that waits on
+                             you are never folded. What you said is a quiet neutral block. Then a composer that folds, with one model pill
                              (`ModelPill`: the maker's logo, the family, its depth, Fast/Thinking) that opens the
                              picker (HermesModelPicker.kt, after the web's `modelPicker`): a search over every
                              model, the providers as tabs (`PickerTab`; starred families get a tab of their own,
@@ -239,7 +247,10 @@ com.macrotracker/
                              `HermesCatalog.pickerTab`), and pinned under them what the family in use can be set to:
                              depth on a slider (`effortStops`; sent when the finger lifts), Fast and Thinking as
                              switches, the context window as a two-way control. A tapped family is picked at once
-                             and the sheet stays open until Done. `AiPickerSheet` (the phone's own AI) has the same
+                             and the sheet stays open until Done. A switch on its way is drawn as landed
+                             (`HermesUiState.switchingTo`, laid over the status with `HermesCatalog.heading`), so
+                             every control reads the model it changes; `HermesViewModel.setModel` sends one
+                             request at a time behind a lock, newest last, and a chat keeps the model picked in it. `AiPickerSheet` (the phone's own AI) has the same
                              search and tabs. Logos are the web's, bundled in
                              assets/models and matched by `ModelBrands` (the web's `brandOf`). There is no mode chip:
                              a new chat is always Agent (`HermesViewModel.AGENT_MODE`), and `/agent`, `/plan`, `/ask`
@@ -248,7 +259,17 @@ com.macrotracker/
                              A chat only restores its saved model when the person opens it; the model is
                              Hermes-global. Hermes opens on the chat last open on this phone (prefs `hermes_last`;
                              the newest when that one is gone). The AI tab is Tech support alone: no page title, no
-                             tabs, the pane's one-row header (chats, title, console, new chat, menu). Estimating a
+                             tabs, the pane's one-row header (chats, title, usage, new chat, menu; the console is in the menu).
+                             ChatDock.kt floats over the foot of the chat, after T3 Code's phone app: while Hermes
+                             works, one glass pill with the scanner, the step he is on and the turn's clock (the
+                             header keeps saying what the chat runs on), and a round button back to the latest
+                             message once the chat is scrolled well away from it (`rememberAwayFromChatEnd`
+                             turns on further out than it turns off, so the button never flickers). The composer
+                             folds as T3 Code's does: open (two lines, the model pill, the tools) while it has
+                             focus, files, or a new chat; otherwise one row (attach, a line, the model's logo,
+                             the usage square, send). A finger on the transcript clears focus, so reading folds
+                             it. One text field serves both shapes, so folding never drops the cursor. A finished
+                             answer copies from its byline (`CopyButton`); a message of yours copies when held. Estimating a
                              meal is MealChatScreen (`meal_chat` sub-screen), opened by "Estimate with AI" in
                              `FoodLogForm` on Home's and Health's Food. Hermes' replies are drawn as Claude's apps
                              draw a turn: a byline, the work folded into "Worked for 46s · 10 steps" (thinking, what
@@ -280,10 +301,10 @@ com.macrotracker/
                              nothing from a provider. Colours: a provider keeps its own, anything else ranked
                              takes one of six categorical slots (UsageKit.kt).
                              Hermes' rail groups "Needs you" first, dots a chat that moved since this phone
-                             opened it (`HermesUiState.seen`), and shows each chat's tokens and context fill;
-                             the header has a context ring (`HermesThreadSummary.contextFraction`)
+                             opened it (`HermesUiState.seen`), and shows each chat's tokens and context fill
+                             (`HermesThreadSummary.contextFraction`)
                              + ConsoleScreen.kt: the dashboard's console page (site/console.html, xterm) in a
-                             WebView, the same shells as the web's console. Reached from the AI tab's row, Home's
+                             WebView, the same shells as the web's console. Reached from the AI tab's menu, Home's
                              Servers card, the Servers screen and settings, Usage, and the launcher shortcuts
                              (res/xml/shortcuts.xml: Console, Usage, Hermes; MainActivity `EXTRA_OPEN`)
                              + server/ (the server screen's cards: hero, history, services wall as tiles,
@@ -334,18 +355,33 @@ com.macrotracker/
                               only; tap a peek to bring it in). F1CircuitMap.kt: the dashboard's four-pass circuit
                               (kerb, bed, marque line, car) that paints its lap on screen, with a
                               `CircuitMapWeight` per place and `CircuitMotion` STILL / PAINT_ONCE / BACKDROP
-                              (replays, and keeps a dim car lapping). F1Card.kt: the F1 hub in the app's look
-                              (inset wells, stat tiles and pills like Health; round team-ringed faces; logo tiles
-                              that fall back to `F1Format.teamCode`), its five tabs a `SegmentedTabs(stacked =
-                              true)` (icon over label). Collapsed it is the dashboard's F1 page in small: the next
-                              race over its circuit with a countdown to whatever runs next (a practice, then
-                              "Lights out Sun 05:00" on its own line; "On now" while a session runs), the weekend's
-                              sessions in one row (`WeekendRow`), the last podium and fastest lap, and the title
-                              fight: who can still win it (`F1Season.titleLine`), the top three with their last
-                              five finishes as dots (`FormDots`). Flat, split by rules, no box inside the card. The
-                              Drivers tab adds the same line, form per driver and the points of the top six round
-                              by round (`PointsProgress`, a teammate dashed); Schedule shows who won each run
-                              round. Times follow the phone's 12/24-hour setting (`rememberClock24`). GitHubContributionGraph.kt: the year with
+                              (replays, and keeps a dim car lapping). F1Card.kt: the F1 hub, in one look of its
+                              own, collapsed and opened alike (the owner asked for bold and sleek, after Box Box
+                              Club; don't bring hairlines, edged wells or the old tall layouts back): filled
+                              blocks with no edges and no rules between rows (`f1Well`, `f1Hero`, `BlockFill`);
+                              names, places and headers in the heavy leaning display face (`RaceDisplay`); round
+                              team-ringed faces; logo tiles that fall back to `F1Format.teamCode`; and every
+                              circuit drawn the same way (`CircuitMapWeight.BOLD` with `CircuitMotion.FILL`: a
+                              bold white track that the marque's line fills, clears and fills again; no car).
+                              Collapsed it is one glance of about half a screen: `NextRaceBlocks` (`RaceHero`, a
+                              filled panel with the race's name, the weekend's dates and a boxed clock,
+                              `RaceClock`: days, hours and minutes far out; hours, minutes and seconds inside a
+                              day; minutes and seconds in the accent in the last hour; "LIVE" while a session
+                              runs; beside it the circuit, whole, in the panel's far half, `CircuitBackdrop`: a
+                              blurred copy glows under it and the sharp track fades where it would run under
+                              the words; then `WeekendRow`, the sessions as blocks, the next one filled in the
+                              accent, one that is on in green); the top three as team-tinted tiles
+                              (`StandingTile`: place, face, code, points, the last five finishes as `FormDots`,
+                              the gap); then who can still win it (`F1Season.titleLine`) and the last podium on
+                              one quiet line. The header says the round. Opened, it is one pane of a fixed
+                              height (never more than half the screen; the pane scrolls, a tab's `HubList`
+                              does not) with its five tabs under it, where a thumb reaches them (`HubTabs`); a
+                              sideways swipe on the pane turns the page. Drivers: the leader's panel, the title
+                              line, the standings with form per driver, then the points of the top six round by
+                              round (`PointsProgress`, a teammate dashed). Schedule: the next race exactly as
+                              the glance shows it (`NextRaceBlocks`), the circuit's facts, then the calendar as
+                              blocks (`CalendarRow`, with who won each run round) that open to the circuit, its
+                              facts and the weekend (`RaceWeekendDetail`). Times follow the phone's 12/24-hour setting (`rememberClock24`). GitHubContributionGraph.kt: the year with
                               the snake. ServerCharts.kt / ServerVitals.kt: 270° dials with an average notch,
                               mirrored area charts, the scrubbable history chart, stacked meters, uptime bars,
                               fact chips. DeviceCodePanel.kt: GitHub/Twitch device-code
@@ -615,7 +651,7 @@ when the content has its own skeleton (the Widgets screen's previews). Both use 
 `WidgetScrollBox` provides its own bounds as the viewport (`LocalSeenViewport`). Once seen, it stays built.
 
 Shared helpers to use rather than re-write: `notifyIfAllowed` / `canPostNotifications` (data/Notifications.kt)
-for every notification; `agoShort(ms)` ("5m", "3h") and `agoWords(ms)` ("5 min ago") for ages, `rememberClock24()` /
+for every notification; `agoShort(ms)` ("5m", "3h") and `agoWords(ms)` ("5 min ago") for ages, `tookShort(ms)` ("46s", "2m 05s") for how long something took, `rememberClock24()` /
 `rememberClockFormatter()` for the phone's clock (ui/util/LastUpdated.kt); `Hairline` (components/Hairline.kt) for a
 rule between rows; `findActivity()`, `openUrl(url)` (never a bare `startActivity(ACTION_VIEW)`) and
 `requestOrOpenSettings(permission) { launch }` (opens app settings once Android stops prompting) in

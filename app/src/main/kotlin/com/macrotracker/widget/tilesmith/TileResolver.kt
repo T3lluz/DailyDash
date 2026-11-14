@@ -1,5 +1,6 @@
 package com.macrotracker.widget.tilesmith
 
+import com.macrotracker.data.server.formatUptime
 import android.app.AlarmManager
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
@@ -33,7 +34,6 @@ import com.macrotracker.widget.server.SrvCard
 import com.macrotracker.widget.server.SrvHealth
 import com.macrotracker.widget.server.SrvState
 import com.macrotracker.widget.server.ServerWidgetStore
-import com.macrotracker.widget.server.fmtUptime
 import com.macrotracker.widget.server.health
 import com.macrotracker.widget.server.servicesDown
 import com.macrotracker.widget.widgetEntryPoint
@@ -620,7 +620,7 @@ internal object TileResolver {
     private fun serverValue(b: TileBlock, c: SrvCard): TileValue = when (b.bind) {
         "server.status" -> {
             val h = c.health()
-            val up = c.uptimeSec?.let { " · up ${fmtUptime(it)}" }.orEmpty()
+            val up = c.uptimeSec?.let { " · up ${formatUptime(it)}" }.orEmpty()
             when (h) {
                 SrvHealth.OK -> TileValue(text = "Healthy", sub = c.label + up, icon = "check")
                 SrvHealth.WARN -> TileValue(
@@ -643,7 +643,7 @@ internal object TileResolver {
             TileValue(text = pct(it.toDouble()), number = it.toDouble(), goal = 100.0, unit = "%", sub = (c.diskMount ?: "Disk") + free, icon = "disk")
         } ?: TileValue.empty("No disk reading")
         "server.temp" -> c.temp?.let { TileValue(text = "${it.roundToInt()}°", number = it.toDouble(), goal = 100.0, unit = "°C", sub = c.tempLabel ?: "CPU", icon = "thermometer") } ?: TileValue.empty("No temperature sensor")
-        "server.uptime" -> c.uptimeSec?.let { TileValue(text = fmtUptime(it), sub = "Uptime", icon = "clock") } ?: TileValue.empty("No uptime yet")
+        "server.uptime" -> c.uptimeSec?.let { TileValue(text = formatUptime(it), sub = "Uptime", icon = "clock") } ?: TileValue.empty("No uptime yet")
         "server.containers" -> if (c.ctrTotal == 0) TileValue.empty("No containers") else
             TileValue(text = "${c.ctrRunning}/${c.ctrTotal}", number = c.ctrRunning.toDouble(), goal = c.ctrTotal.toDouble(),
                 sub = if (c.ctrUnhealthy > 0) "${c.ctrUnhealthy} unhealthy" else "running", icon = "server")
