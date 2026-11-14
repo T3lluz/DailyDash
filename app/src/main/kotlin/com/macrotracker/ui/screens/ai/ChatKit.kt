@@ -502,6 +502,22 @@ fun rememberCopy(text: String): () -> Unit {
     }
 }
 
+/** As [rememberCopy], for text worth building only when it is asked for (a whole chat). */
+@Composable
+fun rememberCopyLatest(text: () -> String): () -> Unit {
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    val haptics = rememberHaptics()
+    val latest by rememberUpdatedState(text)
+    return remember(clipboard) {
+        {
+            haptics.click()
+            scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Chat", latest()))) }
+            Unit
+        }
+    }
+}
+
 /** Copy, small and quiet, at the end of an answer's byline; it turns to a tick for a moment. */
 @Composable
 fun CopyButton(text: String) {

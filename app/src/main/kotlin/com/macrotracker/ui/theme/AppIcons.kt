@@ -239,6 +239,7 @@ object AppIcons {
     /** Lucide `mail-open` */
     val MailOpen: ImageVector by lazy { icon("MailOpen") { s("M21.2 8.4 c0.5 0.38 0.8 0.97 0.8 1.6 v10 a2 2 0 0 1 -2 2 H4 a2 2 0 0 1 -2 -2 V10 a2 2 0 0 1 0.8 -1.6 l8 -6 a2 2 0 0 1 2.4 0 l8 6 Z"); s("m22 10 -8.97 5.7 a1.94 1.94 0 0 1 -2.06 0 L2 10") } }
     /** Lucide `archive` */
+    val Mic: ImageVector by lazy { icon("Mic") { s("M12 2 a3 3 0 0 0 -3 3 v7 a3 3 0 0 0 6 0 V5 a3 3 0 0 0 -3 -3 z"); s("M19 10 v2 a7 7 0 0 1 -14 0 v-2"); s("M12 19 v3") } }
     val Archive: ImageVector by lazy { icon("Archive") { s("M3 3 h18 a1 1 0 0 1 1 1 v3 a1 1 0 0 1 -1 1 h-18 a1 1 0 0 1 -1 -1 v-3 a1 1 0 0 1 1 -1 z"); s("M4 8 v11 a2 2 0 0 0 2 2 h12 a2 2 0 0 0 2 -2 V8"); s("M10 12 h4") } }
     /** Lucide `cloud-rain` */
     val CloudRain: ImageVector by lazy { icon("CloudRain") { s("M4 14.899 A7 7 0 1 1 15.71 8 h1.79 a4.5 4.5 0 0 1 2.5 8.242"); s("M16 14 v6"); s("M8 14 v6"); s("M12 16 v6") } }

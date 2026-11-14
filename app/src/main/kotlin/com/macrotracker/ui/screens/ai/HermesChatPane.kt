@@ -1,5 +1,11 @@
 package com.macrotracker.ui.screens.ai
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.activity.result.PickVisualMediaRequest
+import android.speech.RecognizerIntent
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import com.macrotracker.data.hermes.HermesFeed
 import com.macrotracker.data.hermes.FeedRow
 import androidx.compose.foundation.layout.WindowInsets
@@ -189,6 +195,9 @@ fun HermesChatPane(
     // when it folds, and the whole pane must not recompose with it.
     val composerHeight = remember { mutableStateOf(0.dp) }
     var modelSheet by remember { mutableStateOf(false) }
+    var queueSheet by remember { mutableStateOf(false) }
+    var attachSheet by remember { mutableStateOf(false) }
+    val archived by viewModel.archived.collectAsState()
     var renaming by remember { mutableStateOf<HermesThreadSummary?>(null) }
     var confirmClear by remember { mutableStateOf<HermesThreadSummary?>(null) }
     var confirmDelete by remember { mutableStateOf<HermesThreadSummary?>(null) }
@@ -226,6 +235,23 @@ fun HermesChatPane(
 
     val attachLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let(viewModel::attach)
+    }
+    val photoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri?.let(viewModel::attach)
+    }
+    // Speak instead of type: Android's own recogniser, and what it heard joins the draft.
+    val speech = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val said = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull().orEmpty().trim()
+        if (said.isNotEmpty()) draft = listOf(draft.trimEnd(), said).filter { it.isNotBlank() }.joinToString(" ")
+    }
+    val dictate = {
+        val ask = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+        try {
+            speech.launch(ask)
+        } catch (_: ActivityNotFoundException) {
+            viewModel.say("This phone has no speech recogniser")
+        }
     }
 
     // "Hermes is done" is a notification, so the first message asks once if they are off.
@@ -270,6 +296,7 @@ fun HermesChatPane(
     }
 
     val current = state.currentThread
+    val copyChat = rememberCopyLatest { HermesFeed.transcript(state.threadTitle, state.items) }
     val working = state.live != null
     // The transcript as rows: a finished run folds into one line (T3 Code's run fold).
     val rows = remember(state.items, working) { HermesFeed.rows(state.items, working) }
@@ -312,6 +339,8 @@ fun HermesChatPane(
                         onClear = { confirmClear = it },
                         onDelete = { confirmDelete = it },
                         isUnread = state::isUnread,
+                    archived = archived,
+                    onToggleArchive = { viewModel.toggleArchived(it.id) },
                     )
             }
         },
@@ -348,6 +377,7 @@ fun HermesChatPane(
                     onOpenConsole = onOpenConsole,
                     onOpenUsage = onOpenUsage,
                     onOpenTilesmith = onOpenTilesmith,
+                    onCopyChat = copyChat,
                     usage = usageState.usage,
                 )
                 // The chat on screen is read as it moves, so it never gets its own dot.
@@ -475,29 +505,27 @@ fun HermesChatPane(
                         Text(notice, color = TextSecondary, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
                 }
-                state.queued?.let { queued ->
+                if (state.queue.isNotEmpty()) {
+                    // What goes next, and how many wait behind it; a tap opens the queue.
                     Row(
                         modifier = Modifier
                             .padding(horizontal = 16.dp, vertical = 4.dp)
                             .clip(RoundedCornerShape(10.dp))
                             .background(Background)
                             .background(ServerBrand.copy(alpha = 0.10f))
-                            .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                            .clickable(onClickLabel = "Open the queue") { haptics.tick(); queueSheet = true }
+                            .padding(horizontal = 12.dp, vertical = 9.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(AppIcons.Clock, null, tint = ServerBrand, modifier = Modifier.size(14.dp))
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            "Next: $queued",
-                            color = TextSecondary,
-                            fontSize = 12.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false),
+                            state.queue.first(),
+                            color = TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
                         )
-                        IconButton(onClick = { viewModel.clearQueued() }, modifier = Modifier.size(28.dp)) {
-                            Icon(AppIcons.Close, contentDescription = "Don't send", tint = TextTertiary, modifier = Modifier.size(14.dp))
-                        }
+                        Spacer(Modifier.width(8.dp))
+                        Text("${state.queue.size} queued", color = ServerBrand, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                     }
                 }
                 val slashOpen = draft.startsWith("/") && ' ' !in draft && '\n' !in draft
@@ -552,7 +580,8 @@ fun HermesChatPane(
                     modifiers = modifiers,
                     attachments = state.attachments,
                     uploading = state.uploading,
-                    onAttach = { attachLauncher.launch("*/*") },
+                    onAttach = { attachSheet = true },
+                    onDictate = dictate,
                     onRemoveAttachment = viewModel::removeAttachment,
                     onClearMode = { viewModel.setModeKind("write") },
                     onPickModel = { modelSheet = true },
@@ -571,6 +600,29 @@ fun HermesChatPane(
         }
     }
 
+    if (queueSheet && state.queue.isNotEmpty()) {
+        QueueSheet(
+            queue = state.queue,
+            working = state.busy,
+            onDismiss = { queueSheet = false },
+            onSendNow = { i -> haptics.click(); forceFollow = true; viewModel.sendQueuedNow(i); queueSheet = false },
+            onEdit = { i ->
+                viewModel.takeQueued(i)?.let { draft = it }
+                queueSheet = false
+            },
+            onRemove = { i -> haptics.tick(); viewModel.removeQueued(i) },
+        )
+    }
+    if (attachSheet) {
+        AttachSheet(
+            onDismiss = { attachSheet = false },
+            onPhoto = {
+                attachSheet = false
+                photoLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            },
+            onFile = { attachSheet = false; attachLauncher.launch("*/*") },
+        )
+    }
     if (modelSheet) {
         HermesModelSheet(
             // a switch on its way is drawn as picked, so every control reads the model it changes
@@ -584,6 +636,9 @@ fun HermesChatPane(
             onToggleThink = { haptics.tick(); viewModel.toggleThink() },
             onToggleFast = { haptics.tick(); viewModel.toggleFast() },
             onPickWindow = { tokens -> haptics.tick(); viewModel.setWindow(tokens) },
+            modes = remember(state.status) { HermesCatalog.modes(state.status) },
+            modeId = state.mode.id,
+            onPickMode = { id -> haptics.tick(); viewModel.setMode(id) },
         )
     }
     renaming?.let { thread ->
@@ -623,6 +678,66 @@ fun HermesChatPane(
                 viewModel.deleteThread(thread.id)
             },
         )
+    }
+}
+
+/** What waits to be sent, in order, as T3 Code's queue: each can go now, go back to the composer, or go away. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun QueueSheet(
+    queue: List<String>,
+    working: Boolean,
+    onDismiss: () -> Unit,
+    onSendNow: (Int) -> Unit,
+    onEdit: (Int) -> Unit,
+    onRemove: (Int) -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = Surface) {
+        Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp)) {
+            SheetTitle("Queued", if (working) "Each goes when the turn before it ends" else null)
+            queue.forEachIndexed { i, text ->
+                Column(
+                    Modifier
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.White.copy(alpha = 0.055f))
+                        .padding(start = 14.dp, end = 6.dp, top = 10.dp, bottom = 4.dp),
+                ) {
+                    Text(text, color = TextPrimary, fontSize = 14.sp, lineHeight = 20.sp, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (i == 0) "Next" else "${i + 1}", color = TextTertiary, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                        SmallActionChip(icon = AppIcons.Send, label = if (working) "Send now" else "Send", onClick = { onSendNow(i) })
+                        Spacer(Modifier.width(6.dp))
+                        SmallActionChip(icon = AppIcons.Edit, label = "Edit", onClick = { onEdit(i) })
+                        Spacer(Modifier.width(6.dp))
+                        SmallActionChip(icon = AppIcons.Close, label = "Remove", onClick = { onRemove(i) })
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** What to add to a message: a picture from the phone's photos, or any file. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AttachSheet(onDismiss: () -> Unit, onPhoto: () -> Unit, onFile: () -> Unit) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Surface) {
+        Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp)) {
+            SheetTitle("Add to the message")
+            @Composable
+            fun choice(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) = Row(
+                Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(icon, null, tint = TextSecondary, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(14.dp))
+                Text(label, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            }
+            choice(AppIcons.Images, "Photo", onPhoto)
+            choice(AppIcons.AddCircle, "File", onFile)
+        }
     }
 }
 

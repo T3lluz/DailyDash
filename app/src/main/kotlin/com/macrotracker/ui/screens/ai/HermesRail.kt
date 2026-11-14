@@ -96,6 +96,9 @@ internal fun HermesThreadRail(
     onDelete: (HermesThreadSummary) -> Unit,
     /** A chat that moved since this phone last opened it. */
     isUnread: (HermesThreadSummary) -> Boolean = { false },
+    /** Chats put away on this phone. */
+    archived: Set<String> = emptySet(),
+    onToggleArchive: (HermesThreadSummary) -> Unit = {},
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     val shown = remember(threads, query) {
@@ -109,8 +112,11 @@ internal fun HermesThreadRail(
         else -> null
     }
     // What wants a look first, then what is kept, then the rest by when it last moved.
+    // Something that wants you is never left in the archive: it comes back up until it is dealt with.
     val active = shown.filter { stateOf(it) != null }.sortedBy { stateOf(it)!!.ordinal }
-    val quiet = shown.filter { stateOf(it) == null }
+    val put = shown.filter { stateOf(it) == null && it.id in archived }.sortedByDescending { it.updatedMs }
+    val quiet = shown.filter { stateOf(it) == null && it.id !in archived }
+    var showArchived by rememberSaveable { mutableStateOf(false) }
     val pinned = quiet.filter { it.pinned && !it.isStaff }
     val staff = quiet.filter { it.isStaff }
     val rest = quiet.filter { !it.pinned && !it.isStaff }.sortedByDescending { it.updatedMs }
@@ -156,7 +162,7 @@ internal fun HermesThreadRail(
         ) {
             fun section(label: String, rows: List<HermesThreadSummary>) {
                 if (rows.isEmpty()) return
-                item(key = "h-$label") { RailHeading(label) }
+                if (label.isNotBlank()) item(key = "h-$label") { RailHeading(label) }
                 items(rows, key = { "t-${it.id}" }) { t ->
                     ThreadRow(
                         thread = t,
@@ -168,6 +174,8 @@ internal fun HermesThreadRail(
                         onTogglePin = { onTogglePin(t) },
                         onClear = { onClear(t) },
                         onDelete = { onDelete(t) },
+                        archived = t.id in archived,
+                        onToggleArchive = { onToggleArchive(t) },
                     )
                 }
             }
@@ -175,6 +183,29 @@ internal fun HermesThreadRail(
             section("Pinned", pinned)
             section("Staff", staff)
             section(if (active.isEmpty() && pinned.isEmpty() && staff.isEmpty()) "Chats" else "Recent", rest)
+            if (put.isNotEmpty()) {
+                // put away, and folded until asked for (or searched)
+                val open = showArchived || query.isNotBlank()
+                item(key = "archived") {
+                    Row(
+                        modifier = Modifier
+                            .padding(horizontal = 8.dp, vertical = 6.dp)
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { showArchived = !showArchived }
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(AppIcons.Archive, null, tint = TextTertiary, modifier = Modifier.size(15.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text("Archived", color = TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                        Text("${put.size}", color = TextTertiary, fontSize = 12.sp)
+                        Spacer(Modifier.width(6.dp))
+                        Icon(if (open) AppIcons.ChevronDown else AppIcons.ChevronRight, null, tint = TextTertiary, modifier = Modifier.size(14.dp))
+                    }
+                }
+                if (open) section("", put)
+            }
             if (shown.isEmpty()) {
                 item(key = "none") {
                     Text(
@@ -198,8 +229,8 @@ private enum class RailState(val label: String, val tone: Color) {
 
 /**
  * One chat. Active, it is a card: its state, when it moved, its title and what it is on.
- * Otherwise a slim row. Swiped right it pins (or unpins), swiped left it asks to be deleted;
- * neither carries the row away, since each is confirmed or undone elsewhere.
+ * Otherwise a slim row. Swiped right it pins (or unpins), swiped left it is archived (or
+ * brought back), as T3 Code settles a thread; deleting is in the menu a hold opens.
  */
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -213,16 +244,18 @@ private fun ThreadRow(
     onTogglePin: () -> Unit,
     onClear: () -> Unit,
     onDelete: () -> Unit,
+    archived: Boolean,
+    onToggleArchive: () -> Unit,
 ) {
     val haptics = rememberHaptics()
     var menuOpen by remember { mutableStateOf(false) }
     val pin by rememberUpdatedState(onTogglePin)
-    val delete by rememberUpdatedState(onDelete)
+    val archive by rememberUpdatedState(onToggleArchive)
     val swipe = rememberSwipeToDismissBoxState(
         confirmValueChange = { to ->
             when (to) {
                 SwipeToDismissBoxValue.StartToEnd -> { haptics.click(); pin() }
-                SwipeToDismissBoxValue.EndToStart -> { haptics.click(); delete() }
+                SwipeToDismissBoxValue.EndToStart -> { haptics.click(); archive() }
                 SwipeToDismissBoxValue.Settled -> Unit
             }
             false // the row stays: a swipe is an action here, not a dismissal
@@ -238,21 +271,21 @@ private fun ThreadRow(
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(if (toPin) ServerBrand.copy(alpha = 0.22f) else Error.copy(alpha = 0.22f))
+                    .background(if (toPin) ServerBrand.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.10f))
                     .padding(horizontal = 18.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = if (toPin) Arrangement.Start else Arrangement.End,
             ) {
                 Icon(
-                    if (toPin) AppIcons.Star else AppIcons.Delete,
+                    if (toPin) AppIcons.Star else AppIcons.Archive,
                     contentDescription = null,
-                    tint = if (toPin) ServerBrand else Error,
+                    tint = if (toPin) ServerBrand else TextPrimary,
                     modifier = Modifier.size(18.dp),
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    when { !toPin && thread.isStaff -> "Let go"; !toPin -> "Delete"; thread.pinned -> "Unpin"; else -> "Pin" },
-                    color = if (toPin) ServerBrand else Error, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                    when { !toPin && archived -> "Bring back"; !toPin -> "Archive"; thread.pinned -> "Unpin"; else -> "Pin" },
+                    color = if (toPin) ServerBrand else TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                 )
             }
         },
@@ -325,6 +358,7 @@ private fun ThreadRow(
                 if (!thread.isStaff) {
                     MenuRow(if (thread.pinned) "Unpin" else "Pin", AppIcons.Star) { menuOpen = false; onTogglePin() }
                 }
+                MenuRow(if (archived) "Bring back" else "Archive", AppIcons.Archive) { menuOpen = false; onToggleArchive() }
                 MenuRow("Clear", AppIcons.Refresh) { menuOpen = false; onClear() }
                 MenuRow(if (thread.isStaff) "Let go" else "Delete", AppIcons.Delete, danger = true) { menuOpen = false; onDelete() }
             }

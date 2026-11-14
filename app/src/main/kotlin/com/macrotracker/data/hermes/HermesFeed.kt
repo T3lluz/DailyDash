@@ -66,6 +66,18 @@ object HermesFeed {
         }
     }
 
+    /** The chat as plain text, for the clipboard: what was said, by whom, without the steps. */
+    fun transcript(title: String, items: List<HermesItem>): String = buildString {
+        if (title.isNotBlank()) append(title.trim()).append("\n\n")
+        items.forEach { item ->
+            when (item) {
+                is HermesItem.User -> if (item.text.isNotBlank()) append("You:\n").append(item.text.trim()).append("\n\n")
+                is HermesItem.Assistant -> if (item.text.isNotBlank()) append("Hermes:\n").append(item.text.trim()).append("\n\n")
+                else -> Unit
+            }
+        }
+    }.trimEnd()
+
     /** Work, as against what you said, what waits on you, and what went wrong. */
     private fun foldable(item: HermesItem): Boolean = when (item) {
         is HermesItem.Assistant, is HermesItem.Web, is HermesItem.Exec, is HermesItem.Output -> true

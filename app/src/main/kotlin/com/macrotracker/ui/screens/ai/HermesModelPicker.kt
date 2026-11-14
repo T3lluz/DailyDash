@@ -116,6 +116,10 @@ internal fun HermesModelSheet(
     onToggleThink: () -> Unit,
     onToggleFast: () -> Unit,
     onPickWindow: (Int) -> Unit,
+    /** What this chat may do (Agent, Plan, Ask), set here as T3 Code sets it with the model; empty hides it. */
+    modes: List<com.macrotracker.data.hermes.HermesMode> = emptyList(),
+    modeId: String = "",
+    onPickMode: (String) -> Unit = {},
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val haptics = rememberHaptics()
@@ -196,7 +200,7 @@ internal fun HermesModelSheet(
                     }
                 }
             }
-            ModelOptions(status, current, switching, onPickEffort, onToggleThink, onToggleFast, onPickWindow, onDismiss)
+            ModelOptions(status, current, switching, onPickEffort, onToggleThink, onToggleFast, onPickWindow, onDismiss, modes, modeId, onPickMode)
         }
     }
 }
@@ -295,6 +299,9 @@ private fun ModelOptions(
     onToggleFast: () -> Unit,
     onPickWindow: (Int) -> Unit,
     onDone: () -> Unit,
+    modes: List<com.macrotracker.data.hermes.HermesMode> = emptyList(),
+    modeId: String = "",
+    onPickMode: (String) -> Unit = {},
 ) {
     val mods = HermesCatalog.modifiers(status)
     val cur = mods.current
@@ -354,6 +361,13 @@ private fun ModelOptions(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Context", color = TextSecondary, fontSize = 13.sp, modifier = Modifier.weight(1f))
                     MiniSwitch(mods.contexts.map { it to HermesCatalog.ctxLabel(it) }, mods.window, onPickWindow)
+                }
+            }
+            if (modes.size > 1) {
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Mode", color = TextSecondary, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    MiniSwitch(modes.map { it.id to it.label }, modeId, onPickMode)
                 }
             }
         }

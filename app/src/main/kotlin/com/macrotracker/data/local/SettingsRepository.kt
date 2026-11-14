@@ -116,6 +116,12 @@ class SettingsRepository @Inject constructor(
         _hermesFavouriteModels.value = now
     }
 
+    /** Hermes chats put away on this phone: they wait under Archived in the chat panel. */
+    private val _hermesArchived = MutableStateFlow(readIdSet(KEY_HERMES_ARCHIVED))
+    val hermesArchived: StateFlow<Set<String>> = _hermesArchived
+
+    fun toggleHermesArchived(threadId: String) = toggleId(_hermesArchived, KEY_HERMES_ARCHIVED, threadId)
+
     /** YouTube channels starred in the hub: they lead its channel row and can be the only ones shown. */
     private val _youtubeFavourites = MutableStateFlow(readIdSet(KEY_YOUTUBE_FAVOURITES))
     val youtubeFavourites: StateFlow<Set<String>> = _youtubeFavourites
@@ -441,6 +447,7 @@ class SettingsRepository @Inject constructor(
         const val KEY_HERMES_LAST_REACHABLE = "hermes_last_reachable"
         const val KEY_HERMES_PERMISSION = "hermes_permission"
         const val KEY_HERMES_FAVOURITE_MODELS = "hermes_favourite_models"
+        const val KEY_HERMES_ARCHIVED = "hermes_archived"
         const val KEY_YOUTUBE_FAVOURITES = "youtube_favourite_channels"
         const val KEY_TWITCH_FAVOURITES = "twitch_favourite_channels"
         const val KEY_DASHBOARD_CALS = "dashboard_cals"

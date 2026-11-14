@@ -77,7 +77,8 @@ data class HermesUiState(
     val attachments: List<HermesAttachment> = emptyList(),
     val uploading: Boolean = false,
     /** Typed while Hermes was still answering; sent the moment it is done. */
-    val queued: String? = null,
+    /** What you sent while Hermes worked, in order: each goes when the turn before it ends. */
+    val queue: List<String> = emptyList(),
     /** Hermes is being pointed at another model. */
     val switchingModel: Boolean = false,
     /** The model a switch on its way is heading for; null once Hermes has answered. */
@@ -409,7 +410,7 @@ class HermesViewModel @Inject constructor(
                 live = null,
                 loadingThread = true,
                 notice = null,
-                queued = null,
+                queue = emptyList(),
                 modeId = summary?.permId ?: it.modeId,
             )
         }
@@ -452,7 +453,7 @@ class HermesViewModel @Inject constructor(
                 live = null,
                 loadingThread = false,
                 notice = null,
-                queued = null,
+                queue = emptyList(),
                 // A new chat is always Agent; /plan and /ask change it for that chat.
                 modeId = AGENT_MODE,
             )
@@ -704,7 +705,30 @@ class HermesViewModel @Inject constructor(
 
     fun removeAttachment(id: String) = _state.update { s -> s.copy(attachments = s.attachments.filter { it.id != id }) }
 
-    fun clearQueued() = _state.update { it.copy(queued = null) }
+    /** Starred model families' neighbour: chats put away on this phone. */
+    val archived: StateFlow<Set<String>> = settings.hermesArchived
+
+    fun toggleArchived(threadId: String) = settings.toggleHermesArchived(threadId)
+
+    fun removeQueued(index: Int) = _state.update { it.copy(queue = it.queue.filterIndexed { i, _ -> i != index }) }
+
+    /** Takes a queued message back out, to be edited in the composer. */
+    fun takeQueued(index: Int): String? {
+        val text = _state.value.queue.getOrNull(index) ?: return null
+        removeQueued(index)
+        return text
+    }
+
+    /** Sends a queued message next, and now: the turn that is running is stopped for it. */
+    fun sendQueuedNow(index: Int) {
+        val text = _state.value.queue.getOrNull(index) ?: return
+        _state.update { it.copy(queue = listOf(text) + it.queue.filterIndexed { i, _ -> i != index }) }
+        val id = _state.value.threadId ?: return
+        if (_state.value.busy) stop(keepQueue = true) else sendQueued(id)
+    }
+
+    /** A line for the notice strip from the screen (a phone without a speech recogniser). */
+    fun say(text: String) = _state.update { it.copy(notice = text) }
 
     // ── Turns ───────────────────────────────────────────────────────────────
 
@@ -719,7 +743,7 @@ class HermesViewModel @Inject constructor(
         if (body.isEmpty() && _state.value.attachments.isEmpty()) return
         if (runLocalCommand(body)) return
         if (_state.value.busy) {
-            if (body.isNotEmpty()) _state.update { it.copy(queued = listOfNotNull(it.queued, body).joinToString("\n\n")) }
+            if (body.isNotEmpty()) _state.update { it.copy(queue = it.queue + body) }
             return
         }
         val openQuestion = _state.value.items.lastOrNull { it is HermesItem.Clarify || it is HermesItem.User }
@@ -787,9 +811,9 @@ class HermesViewModel @Inject constructor(
         )
     }
 
-    fun stop() {
+    fun stop(keepQueue: Boolean = false) {
         val id = _state.value.threadId ?: return
-        _state.update { it.copy(queued = null) }
+        if (!keepQueue) _state.update { it.copy(queue = emptyList()) }
         viewModelScope.launch {
             try {
                 client.stop(id)
@@ -911,7 +935,7 @@ class HermesViewModel @Inject constructor(
     /** Tells the phone how the turn ended, so it can say so if nobody is looking. */
     private fun announce(threadId: String, error: String?, stopped: Boolean) {
         val s = _state.value
-        if (s.queued != null && s.threadId == threadId) {
+        if (s.queue.isNotEmpty() && s.threadId == threadId) {
             // The next message goes straight away; that turn is the one worth announcing.
             activity.drop(threadId)
             return
@@ -929,9 +953,9 @@ class HermesViewModel @Inject constructor(
     }
 
     private fun sendQueued(threadId: String) {
-        val next = _state.value.queued ?: return
+        val next = _state.value.queue.firstOrNull() ?: return
         if (_state.value.threadId != threadId || _state.value.busy) return
-        _state.update { it.copy(queued = null) }
+        _state.update { it.copy(queue = it.queue.drop(1)) }
         send(next)
     }
 

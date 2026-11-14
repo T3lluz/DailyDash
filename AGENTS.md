@@ -238,7 +238,14 @@ com.macrotracker/
                              The transcript folds a finished run (`HermesFeed.rows`, HermesFeedTest): everything
                              between what you said and the last answer is one line, "Worked for 31s · 10
                              steps", that opens to every step; the run still going and anything that waits on
-                             you are never folded. What you said is a quiet neutral block. Then a composer that folds, with one model pill
+                             you are never folded. What you said is a quiet neutral block. More from T3 Code: what you
+                             send while Hermes works is a queue (`HermesUiState.queue`; the strip over the
+                             composer opens `QueueSheet`: send now, which stops the running turn for it, edit,
+                             remove); the composer's microphone dictates through Android's recogniser; attach
+                             asks Photo or File; a row swiped left is archived on this phone
+                             (`SettingsRepository.hermesArchived`; Archived is a folded shelf at the foot, and
+                             a chat that wants you leaves it); the header menu copies the chat as text
+                             (`HermesFeed.transcript`); the model sheet also sets the chat's mode. Then a composer that folds, with one model pill
                              (`ModelPill`: the maker's logo, the family, its depth, Fast/Thinking) that opens the
                              picker (HermesModelPicker.kt, after the web's `modelPicker`): a search over every
                              model, the providers as tabs (`PickerTab`; starred families get a tab of their own,

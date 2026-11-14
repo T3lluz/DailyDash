@@ -136,6 +136,7 @@ internal fun HermesHeader(
     onOpenConsole: () -> Unit,
     onOpenUsage: () -> Unit,
     onOpenTilesmith: () -> Unit = {},
+    onCopyChat: () -> Unit = {},
     /** What the header's usage square fills with; null draws a plain chart icon. */
     usage: com.macrotracker.data.dashboard.UsageSnapshot? = null,
 ) {
@@ -206,6 +207,7 @@ internal fun HermesHeader(
                 if (hasThread) {
                     MenuRow("Rename", AppIcons.Edit) { menuOpen = false; onRename() }
                     MenuRow(if (pinned) "Unpin" else "Pin to the top", AppIcons.Star) { menuOpen = false; onTogglePin() }
+                    MenuRow("Copy chat", AppIcons.Copy) { menuOpen = false; onCopyChat() }
                     MenuRow("Clear this chat", AppIcons.Refresh) { menuOpen = false; onClear() }
                     MenuRow("Delete this chat", AppIcons.Delete, danger = true) { menuOpen = false; onDelete() }
                     HorizontalDivider(color = Border)
@@ -312,6 +314,8 @@ internal fun HermesComposer(
     usage: (@Composable () -> Unit)? = null,
     /** A chat with nothing in it yet: the composer stays open, as an invitation. */
     roomy: Boolean = false,
+    /** Speak instead of type; null hides the microphone. */
+    onDictate: (() -> Unit)? = null,
 ) {
     val bottomPad = composerBottomGap()
     val hasContent = value.isNotBlank() || attachments.isNotEmpty()
@@ -451,6 +455,11 @@ internal fun HermesComposer(
                     )
                 }
                 Spacer(Modifier.width(6.dp))
+                if (onDictate != null) {
+                    IconButton(onClick = { haptics.tick(); onDictate() }, enabled = enabled, modifier = Modifier.size(36.dp)) {
+                        Icon(AppIcons.Mic, contentDescription = "Dictate", tint = TextSecondary, modifier = Modifier.size(19.dp))
+                    }
+                }
                 usage?.let {
                     it()
                     Spacer(Modifier.width(4.dp))
