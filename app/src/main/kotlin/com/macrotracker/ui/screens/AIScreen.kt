@@ -32,6 +32,7 @@ fun AIScreen(
     onNavigateToAiSettings: () -> Unit,
     onOpenConsole: () -> Unit = {},
     onOpenUsage: () -> Unit = {},
+    onOpenGit: () -> Unit = {},
     onOpenTilesmith: () -> Unit = {},
     serverHandoffId: String? = null,
     chatViewModel: ChatViewModel = hiltViewModel(),
@@ -74,6 +75,7 @@ fun AIScreen(
             HermesChatPane(
                 viewModel = hermesViewModel,
                 onOpenUsage = onOpenUsage,
+                onOpenGit = onOpenGit,
                 onOpenConsole = onOpenConsole,
                 onOpenTilesmith = onOpenTilesmith,
                 onUsePhoneAi = { hermesViewModel.setUsesHermes(false) },

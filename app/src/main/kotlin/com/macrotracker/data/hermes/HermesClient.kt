@@ -161,6 +161,17 @@ class HermesClient @Inject constructor(
         out
     }
 
+    /** A read from the bridge's git API (`/ai/git/<route>`); spaces in a value are %20, as the bridge reads them. */
+    suspend fun gitGet(route: String, vararg params: Pair<String, String>): JSONObject = withContext(Dispatchers.IO) {
+        val q = params.filter { it.second.isNotEmpty() }.joinToString("&") { "${it.first}=${enc(it.second).replace("+", "%20")}" }
+        JSONObject(get("/ai/git/$route" + if (q.isNotEmpty()) "?$q" else ""))
+    }
+
+    /** A change through the bridge's git API. Git's own message is the error when it refuses. */
+    suspend fun gitPost(route: String, body: JSONObject): JSONObject = withContext(Dispatchers.IO) {
+        JSONObject(send("POST", "/ai/git/$route", body))
+    }
+
     /** Puts a file back the way [change] found it; throws a [HermesException] with code 409 when it was edited again since. */
     suspend fun revert(threadId: String, change: HermesFileChange, force: Boolean = false): Unit = withContext(Dispatchers.IO) {
         send(

@@ -45,6 +45,7 @@ private val SubScreens = setOf(
     SubScreenRoutes.TILESMITH_PATTERN,
     SubScreenRoutes.USAGE,
     SubScreenRoutes.CONSOLE,
+    SubScreenRoutes.GIT,
     OnboardingRoutes.PERMISSIONS,
     OnboardingRoutes.TUTORIAL,
     SubScreenRoutes.CAMERA_SCAN,
@@ -159,6 +160,7 @@ fun DailyDashNavHost(
                 onNavigateToAiSettings = { navController.navigateToSubScreen(SettingsRoutes.AI) },
                 onOpenConsole = { navController.navigateToSubScreen(SubScreenRoutes.CONSOLE) },
                 onOpenUsage = { navController.navigateToSubScreen(SubScreenRoutes.USAGE) },
+                onOpenGit = { navController.navigateToSubScreen(SubScreenRoutes.GIT) },
                 onOpenTilesmith = { navController.navigateToSubScreen(SubScreenRoutes.tilesmith()) },
                 serverHandoffId = entry.arguments?.getString(Screen.AI.ARG_SEED),
             )
@@ -245,6 +247,17 @@ fun DailyDashNavHost(
                 onNavigateBack = { navController.popSubScreen(entry) },
                 onOpenConsole = { navController.navigateToSubScreen(SubScreenRoutes.CONSOLE) },
                 onOpenChat = { navController.navigateToTab(Screen.AI.route) },
+            )
+        }
+
+        subScreen(SubScreenRoutes.GIT) { entry ->
+            com.macrotracker.ui.screens.git.GitScreen(
+                onNavigateBack = { navController.popSubScreen(entry) },
+                // review notes and a pull request to look at go to the AI tab as a new chat's first words
+                onAskHermes = { text ->
+                    com.macrotracker.data.hermes.HermesShareInbox.put(com.macrotracker.data.hermes.HermesShareInbox.Shared(text, emptyList()))
+                    navController.navigateToTab(Screen.AI.route)
+                },
             )
         }
 

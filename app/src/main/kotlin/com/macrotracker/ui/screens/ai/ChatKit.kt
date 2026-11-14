@@ -74,6 +74,7 @@ import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.OnAccent
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.Surface
+import com.macrotracker.ui.theme.ServerBrand
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import dev.chrisbanes.haze.HazeState
@@ -123,6 +124,9 @@ internal val ComposerShape = RoundedCornerShape(22.dp)
 
 /** What you said: a quiet block a little lighter than the page, as T3 Code and Claude's apps set it. */
 private val UserBubbleFill = Color.White.copy(alpha = 0.09f)
+
+/** The accent-tinted bubble the Hermes chat draws a person's message in. */
+private val AccentBubbleFill = ServerBrand.copy(alpha = 0.16f)
 private val ComposerSendShape = RoundedCornerShape(999.dp)
 
 /** How much of the newest message may hide under the composer and still count as following along. */
@@ -425,7 +429,7 @@ fun BotBubble(
 }
 
 @Composable
-fun UserBubble(text: String, onLongPress: (() -> Unit)? = null, onTap: (() -> Unit)? = null) {
+fun UserBubble(text: String, onLongPress: (() -> Unit)? = null, onTap: (() -> Unit)? = null, accent: Boolean = false) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.End,
@@ -434,7 +438,8 @@ fun UserBubble(text: String, onLongPress: (() -> Unit)? = null, onTap: (() -> Un
             modifier = Modifier
                 .widthIn(max = 300.dp)
                 .clip(UserBubbleShape)
-                .background(UserBubbleFill)
+                .background(if (accent) AccentBubbleFill else UserBubbleFill)
+                .then(if (accent) Modifier.border(1.dp, ServerBrand.copy(alpha = 0.28f), UserBubbleShape) else Modifier)
                 .then(
                     if (onLongPress != null) {
                         // Held (and tapped, where a tap shows something): no ripple and no button role.

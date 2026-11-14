@@ -22,6 +22,9 @@ val Background = Color(0xFF181818)
 val Surface = Color(0xFF1F1F1F)
 val SurfaceElevated = Color(0xFF262626)
 val SurfaceChrome = Color(0xFF141414)
+
+/** A tile set into a page or a panel: darker than what it sits on, with no outline. */
+val TileDark = Color(0xFF111111)
 val Primary = Color(0xFF81A1C1)
 val PrimaryVariant = Color(0xFF6B8AA8)
 val OnAccent = Color(0xFF14181D)

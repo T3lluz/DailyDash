@@ -165,6 +165,11 @@ class SettingsRepository @Inject constructor(
         _hermesGroupByDay.value = on
     }
 
+    /** The repo the git screen was last on. */
+    var gitRepo: String
+        get() = prefs.getString(KEY_GIT_REPO, null).orEmpty()
+        set(v) = prefs.edit { putString(KEY_GIT_REPO, v) }.let { }
+
     /** The order chats were arranged in by hand, first to last; a chat not in it follows by when it moved. */
     private val _hermesOrder = MutableStateFlow(prefs.getString(KEY_HERMES_ORDER, null).orEmpty().split('\n').filter { it.isNotBlank() })
     val hermesOrder: StateFlow<List<String>> = _hermesOrder
@@ -509,6 +514,7 @@ class SettingsRepository @Inject constructor(
         const val KEY_HERMES_ARCHIVED = "hermes_archived"
         const val KEY_HERMES_SNOOZED = "hermes_snoozed"
         const val KEY_HERMES_ORDER = "hermes_order"
+        const val KEY_GIT_REPO = "git_repo"
         const val KEY_HERMES_AUTOSETTLE = "hermes_autosettle_days"
         const val KEY_HERMES_GROUP_DAY = "hermes_group_day"
         const val KEY_HERMES_DRAFT = "hermes_draft_"

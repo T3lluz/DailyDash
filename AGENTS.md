@@ -337,6 +337,14 @@ com.macrotracker/
                              turn carries them to Hermes as its memory, `fork_ctx`), Name it again (`/retitle`), Share chat, a failed turn
                              (`fail` on the summary) as a red Failed row, a "Needs your answer" pill in the dock while a question or approval is
                              out of sight, a launcher "New chat" shortcut and `dailydash://ask?prompt=` (fills the box, never sends).
+                             Git and pull requests (`ui/screens/git/`, reached from the panel's footer, the header menu or the welcome cards): `GitScreen` has
+                             the repo strip, the branch card with Fetch / Pull / Push and stash, then Changes (stage, unstage, discard, commit),
+                             History, Branches (switch, new, "Review vs base") and Pull requests (checks, reviews, comment, approve, request
+                             changes, squash-merge, open a PR). A diff opens `ReviewScreen` (`GitDiff` parses it; a tap on a line writes a note; the
+                             notes go to a new Hermes chat with file and line, `GitViewModel.reviewPrompt`). All of it is the bridge's `gitapi.py`
+                             (`/_api/ai/git/*`, `gh` for pull requests; only repos found under ~/projects, ~/docker and ~ are accepted).
+                             Look: flat tiles darker than the page (`TileDark`), no outlines, no accent bars down a card's side, no gradients or glow;
+                             colour only in a small status dot or word and on the one primary button. Keep it that way.
                              The bridge side lives in `bridge.py` on twolluz (`thread_fork`, `thread_retitle`, `fork_context`). Not ported, since
                              the bridge has no equivalent: git and pull requests, worktrees, review screens, subagents.
                              + ConsoleScreen.kt: the dashboard's console page (site/console.html, xterm) in a

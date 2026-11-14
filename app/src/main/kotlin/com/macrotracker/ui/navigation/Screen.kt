@@ -49,6 +49,9 @@ object SubScreenRoutes {
     /** A shell on the dashboard server (ConsoleScreen). */
     const val CONSOLE = "console"
 
+    /** Git and pull requests for the repos on the server (GitScreen). */
+    const val GIT = "git"
+
     /** What the agents spent and what runs when (UsageScreen). */
     const val USAGE = "usage"
 

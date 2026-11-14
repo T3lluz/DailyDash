@@ -190,6 +190,7 @@ fun HermesChatPane(
     onUsePhoneAi: (() -> Unit)?,
     modifier: Modifier = Modifier,
     onOpenUsage: () -> Unit = {},
+    onOpenGit: () -> Unit = {},
     onOpenConsole: () -> Unit = {},
     onOpenTilesmith: () -> Unit = {},
     usageViewModel: com.macrotracker.ui.viewmodel.UsageViewModel = androidx.hilt.navigation.compose.hiltViewModel(),
@@ -502,6 +503,7 @@ fun HermesChatPane(
                     onOpenUsage = { closeRail(); onOpenUsage() },
                     onOpenConsole = { closeRail(); onOpenConsole() },
                     onOpenFiles = { closeRail(); filesAt = Triple("~", 0, 0) },
+                    onOpenGit = { closeRail(); onOpenGit() },
                     autoSettleDays = autoSettleDays,
                     onAutoSettle = viewModel::setAutoSettleDays,
                     groupByDay = groupByDay,
@@ -559,8 +561,10 @@ fun HermesChatPane(
                         viewModel.newThread()
                     },
                     onOpenFiles = { filesAt = Triple("~", 0, 0) },
+                    onOpenGit = onOpenGit,
                     onFind = { finding = true },
                     onOpenInfo = { infoOpen = true },
+                    brand = ModelBrands.brandOf(state.currentModel?.family.orEmpty(), state.currentModel?.group.orEmpty()),
                     onRename = { current?.let { renaming = it } ?: state.threadId?.let { id -> renaming = placeholderThread(id, state.threadTitle) } },
                     onTogglePin = { state.threadId?.let { viewModel.setPinned(it, current?.pinned != true) } },
                     onClear = { state.threadId?.let { id -> confirmClear = current ?: placeholderThread(id, state.threadTitle) } },
@@ -681,16 +685,7 @@ fun HermesChatPane(
                     ) {
                         if (state.items.isEmpty() && !state.loadingThread && state.live == null) {
                             item(key = "greeting") {
-                                // Said the way his answers are: a byline, then plain words.
-                                Column {
-                                    TurnByline(live = false, meta = "")
-                                    Text(
-                                        "Ask about the server: logs, containers, disks, services.",
-                                        color = TextSecondary,
-                                        fontSize = 15.sp,
-                                        lineHeight = 22.sp,
-                                    )
-                                }
+                                HermesWelcome(onAsk = { send(it) }, onGit = onOpenGit, onFiles = { filesAt = Triple("~", 0, 0) })
                             }
                         }
                         if (state.loadingThread) {
@@ -823,8 +818,6 @@ fun HermesChatPane(
                         },
                     )
                     Spacer(Modifier.height(4.dp))
-                } else if (state.items.isEmpty() && !state.busy && !state.loadingThread && state.reach == HermesReach.READY) {
-                    ChatStarters(HermesStarters) { send(it) }
                 }
                 HermesComposer(
                     value = draft,
@@ -1413,7 +1406,7 @@ private fun AssistantTurn(item: HermesItem.Assistant, last: Boolean, idle: Boole
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(14.dp))
-                    .background(ServerBrand.copy(alpha = 0.10f))
+                    .background(com.macrotracker.ui.theme.TileDark)
                     .padding(start = 14.dp, end = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

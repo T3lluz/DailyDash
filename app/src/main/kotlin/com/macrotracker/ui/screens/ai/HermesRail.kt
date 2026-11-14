@@ -6,6 +6,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.border
+import com.macrotracker.ui.theme.ServerGood
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.text.SpanStyle
@@ -86,6 +90,7 @@ import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.ServerBrand
 import com.macrotracker.ui.theme.ServerWarn
 import com.macrotracker.ui.theme.Surface
+import com.macrotracker.ui.theme.TileDark
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.theme.TextTertiary
@@ -133,6 +138,7 @@ internal fun HermesThreadRail(
     onOpenUsage: () -> Unit = {},
     onOpenConsole: () -> Unit = {},
     onOpenFiles: () -> Unit = {},
+    onOpenGit: () -> Unit = {},
     /** Chats the server's full-text search found for the box, by id. */
     hits: Map<String, HermesChatHit> = emptyMap(),
     onSearch: (String) -> Unit = {},
@@ -144,6 +150,7 @@ internal fun HermesThreadRail(
     groupByDay: Boolean = true,
     onGroupByDay: (Boolean) -> Unit = {},
 ) {
+    val haptics = rememberHaptics()
     var query by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf(RailFilter.ALL) }
     var snoozing by remember { mutableStateOf<HermesThreadSummary?>(null) }
@@ -214,20 +221,41 @@ internal fun HermesThreadRail(
         )
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            // a cool wash at the top that settles into the panel's own grey
+            .background(Surface),
+    ) {
     Column(modifier = Modifier.fillMaxSize().padding(top = 18.dp)) {
         Row(modifier = Modifier.padding(start = 18.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            BotAvatar(HermesIdentity, size = 32.dp, live = false)
-            Spacer(Modifier.width(10.dp))
+            // Hermes with a light on: green while he is up, circling while he works
+            val workingNow = threads.count { it.busy || turns[it.id] != null }
+            Box(contentAlignment = Alignment.Center) {
+                BotAvatar(HermesIdentity, size = 38.dp, live = workingNow > 0)
+                Box(
+                    Modifier.align(Alignment.BottomEnd).size(13.dp).clip(CircleShape).background(Surface).padding(2.dp).clip(CircleShape)
+                        .background(if (status?.ready == true) ServerGood else ServerWarn),
+                )
+            }
+            Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text("Hermes", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Hermes", color = TextPrimary, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
+                    status?.version?.let {
+                        Spacer(Modifier.width(7.dp))
+                        Text("v$it", color = TextTertiary, fontSize = 10.5.sp, modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = 0.07f)).padding(horizontal = 6.dp, vertical = 1.dp))
+                    }
+                }
+                val needs = threads.count { it.waiting > 0 || it.pending > 0 }
                 Text(
                     listOfNotNull(
-                        status?.version?.let { "v$it" },
                         "${threads.size} chat${if (threads.size == 1) "" else "s"}",
-                    ).joinToString(" · "),
-                    color = TextTertiary,
-                    fontSize = 11.sp,
+                        "$workingNow working".takeIf { workingNow > 0 },
+                        "$needs need${if (needs == 1) "s" else ""} you".takeIf { needs > 0 },
+                    ).joinToString("  ·  "),
+                    color = if (needs > 0) ServerWarn else TextTertiary,
+                    fontSize = 11.5.sp,
                 )
             }
             var options by remember { mutableStateOf(false) }
@@ -287,15 +315,17 @@ internal fun HermesThreadRail(
                     Row(
                         modifier = Modifier
                             .clip(RoundedCornerShape(50))
-                            .background(if (on) ServerBrand.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.07f))
-                            .clickable { filter = f }
+                            .background(if (on) Color.White.copy(alpha = 0.14f) else TileDark)
+                            .clickable { haptics.tick(); filter = f }
                             .padding(horizontal = 11.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(f.label, color = if (on) ServerBrand else TextSecondary, fontSize = 12.5.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium)
+                        Icon(f.icon, null, tint = if (on) TextPrimary else TextTertiary, modifier = Modifier.size(13.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text(f.label, color = if (on) TextPrimary else TextSecondary, fontSize = 12.5.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium)
                         if (f != RailFilter.ALL && n > 0) {
                             Spacer(Modifier.width(5.dp))
-                            Text("$n", color = if (on) ServerBrand else TextTertiary, fontSize = 11.5.sp)
+                            Text("$n", color = TextTertiary, fontSize = 11.5.sp)
                         }
                     }
                 }
@@ -310,7 +340,9 @@ internal fun HermesThreadRail(
         ) {
             fun section(label: String, rows: List<HermesThreadSummary>, movable: Boolean = false) {
                 if (rows.isEmpty()) return
-                if (label.isNotBlank()) item(key = "h-$label") { RailHeading(label) }
+                if (label.isNotBlank()) item(key = "h-$label") {
+                    RailSection(label, rows.size, when (label) { "Active" -> ServerBrand; "Pinned" -> ServerWarn; "Staff" -> Primary; else -> TextTertiary })
+                }
                 items(rows, key = { "t-${it.id}" }) { t ->
                     ThreadRow(
                         modifier = Modifier.animateItem(),
@@ -425,9 +457,10 @@ internal fun HermesThreadRail(
                 ),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            FooterButton(AppIcons.ChartBar, "Usage", Modifier.weight(1f), onOpenUsage)
-            FooterButton(AppIcons.SquareTerminal, "Console", Modifier.weight(1f), onOpenConsole)
+            FooterButton(AppIcons.GitFork, "Git", Modifier.weight(1f), onOpenGit)
             FooterButton(AppIcons.Folder, "Files", Modifier.weight(1f), onOpenFiles)
+            FooterButton(AppIcons.SquareTerminal, "Shell", Modifier.weight(1f), onOpenConsole)
+            FooterButton(AppIcons.ChartBar, "Usage", Modifier.weight(1f), onOpenUsage)
         }
     }
     // what was just done, with a way back: the pill floats over the panel's foot
@@ -472,7 +505,13 @@ internal fun HermesThreadRail(
     }
 }
 
-private enum class RailFilter(val label: String) { ALL("All"), ACTIVE("Active"), PINNED("Pinned"), SNOOZED("Snoozed"), ARCHIVED("Settled") }
+private enum class RailFilter(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    ALL("All", AppIcons.Rows),
+    ACTIVE("Active", AppIcons.Bolt),
+    PINNED("Pinned", AppIcons.StarFilled),
+    SNOOZED("Snoozed", AppIcons.BellOff),
+    ARCHIVED("Settled", AppIcons.CheckCircle),
+}
 
 private class RailNote(val text: String, val undo: () -> Unit) {
     val id = System.nanoTime()
@@ -572,7 +611,7 @@ private fun ThreadRow(
             }
         }
     }
-    val shape = RoundedCornerShape(if (state != null) 16.dp else 12.dp)
+    val shape = RoundedCornerShape(14.dp)
     SwipeToDismissBox(
         state = swipe,
         modifier = modifier.padding(horizontal = 8.dp).clip(shape).onSizeChanged { rowWidth = it.width },
@@ -602,56 +641,29 @@ private fun ThreadRow(
         },
     ) {
         Box {
-            val fill = when {
-                selected -> ServerBrand.copy(alpha = 0.14f)
-                state != null -> Color.White.copy(alpha = 0.055f)
-                else -> Color.Transparent
-            }
-            Column(
+            val tone = state?.tone
+            val fill = if (selected) Color(0xFF2B2B2B) else TileDark
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    // opaque under the tint, so the swipe's colour does not show through a resting row
-                    .background(Surface)
+                    // opaque, so the swipe's colour does not show through a resting row
                     .background(fill)
                     .combinedClickable(
                         onClick = onOpen,
                         onLongClick = { haptics.gestureStart(); menuOpen = true },
                         onLongClickLabel = "Chat options",
                     )
-                    .padding(horizontal = 12.dp, vertical = if (state != null) 11.dp else 10.dp),
+                    .padding(start = 12.dp, end = 12.dp, top = 11.dp, bottom = 11.dp),
+                verticalAlignment = Alignment.Top,
             ) {
-                if (state != null) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (state == RailState.WORKING) {
-                            val since = turn?.startedAtMs ?: thread.live?.startedAtMs
-                            ShimmerText(
-                                if (since != null) "${state.label} · ${elapsedClock(since)}" else state.label,
-                                state.tone, 11.5.sp, Modifier.weight(1f, fill = false),
-                            )
-                        } else {
-                            Text(state.label, color = state.tone, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-                        }
-                        Spacer(Modifier.weight(1f))
-                        Text(agoShort(thread.updatedMs), color = TextTertiary, fontSize = 11.sp, maxLines = 1)
-                    }
-                    Spacer(Modifier.height(3.dp))
-                    Text(
-                        thread.title, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
-                        lineHeight = 20.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                    )
-                    val line = if (state == RailState.FAILED) thread.fail.orEmpty() else turn?.label?.text ?: thread.preview
-                    if (line.isNotBlank()) {
-                        Text(line, color = if (state == RailState.FAILED) Error else TextSecondary, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    RowModelLine(model, modeTag, thread.tokens, Modifier.padding(top = 5.dp))
-                    HitExcerpt(hit)
-                } else {
-                    Column {
+                StateDisc(model?.brand.orEmpty(), state, 42.dp)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            thread.title, color = TextPrimary, fontSize = 14.sp,
-                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                            thread.title, color = TextPrimary, fontSize = 15.sp,
+                            fontWeight = if (state != null || selected) FontWeight.Bold else FontWeight.SemiBold,
+                            lineHeight = 19.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
                         )
                         if (thread.scheduled != null) {
                             Spacer(Modifier.width(6.dp))
@@ -659,30 +671,43 @@ private fun ThreadRow(
                         }
                         if (thread.pinned && !thread.isStaff) {
                             Spacer(Modifier.width(6.dp))
-                            Icon(AppIcons.Star, "Pinned", tint = TextTertiary, modifier = Modifier.size(12.dp))
+                            Icon(AppIcons.StarFilled, "Pinned", tint = ServerWarn.copy(alpha = 0.8f), modifier = Modifier.size(12.dp))
                         }
-                        // how full the chat is, once that is worth knowing
-                        thread.contextFraction?.takeIf { it >= 0.6f }?.let { full ->
-                            Spacer(Modifier.width(8.dp))
-                            Text("${(full * 100).toInt()}%", color = if (full >= 0.85f) Error else ServerWarn, fontSize = 11.sp, maxLines = 1)
-                        }
+                        Spacer(Modifier.width(8.dp))
                         if (wake != null) {
-                            Spacer(Modifier.width(8.dp))
                             Icon(AppIcons.BellOff, "Snoozed", tint = TextTertiary, modifier = Modifier.size(11.dp))
-                            Spacer(Modifier.width(2.dp))
+                            Spacer(Modifier.width(3.dp))
                             Text(wake, color = TextTertiary, fontSize = 11.sp, maxLines = 1)
                         } else {
-                            Spacer(Modifier.width(8.dp))
                             Text(agoShort(thread.updatedMs), color = TextTertiary, fontSize = 11.sp, maxLines = 1)
                         }
                     }
-                    if (thread.fail != null) {
-                        Text("Failed · ${thread.fail}", color = Error, fontSize = 11.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp))
-                    } else {
-                        RowModelLine(model, modeTag, thread.tokens, Modifier.padding(top = 3.dp))
+                    if (state != null) {
+                        if (state == RailState.WORKING) {
+                            val since = turn?.startedAtMs ?: thread.live?.startedAtMs
+                            ShimmerText(
+                                if (since != null) "Working · ${elapsedClock(since)}" else "Working",
+                                state.tone, 12.sp, Modifier.padding(top = 2.dp),
+                            )
+                        } else {
+                            Text(state.label, color = state.tone, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.padding(top = 2.dp))
+                        }
+                    }
+                    val line = when {
+                        state == RailState.FAILED -> thread.fail.orEmpty()
+                        thread.fail != null -> "Failed · ${thread.fail}"
+                        else -> turn?.label?.text ?: thread.preview
+                    }
+                    if (line.isNotBlank()) {
+                        Text(
+                            line,
+                            color = if (thread.fail != null) Error else TextSecondary,
+                            fontSize = 12.5.sp, lineHeight = 17.sp, maxLines = if (state != null) 2 else 1, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
                     }
                     HitExcerpt(hit)
-                    }
+                    RowChips(model?.label, modeTag, thread.tokens, thread.contextFraction, Modifier.padding(top = 7.dp))
                 }
             }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }, modifier = Modifier.background(Surface)) {
@@ -765,18 +790,17 @@ private fun RowModelLine(model: RailModel?, modeTag: String?, tokens: Long, modi
 @Composable
 private fun FooterButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, modifier: Modifier, onClick: () -> Unit) {
     val haptics = rememberHaptics()
-    Row(
+    Column(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color.White.copy(alpha = 0.06f))
+            .clip(RoundedCornerShape(14.dp))
+            .background(TileDark)
             .clickable { haptics.tick(); onClick() }
             .padding(vertical = 10.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(icon, null, tint = TextSecondary, modifier = Modifier.size(15.dp))
-        Spacer(Modifier.width(6.dp))
-        Text(label, color = TextSecondary, fontSize = 12.5.sp, fontWeight = FontWeight.Medium)
+        Icon(icon, null, tint = TextSecondary, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.height(4.dp))
+        Text(label, color = TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1)
     }
 }
 
@@ -822,3 +846,48 @@ private fun elapsedClock(sinceMs: Long): String {
 /** How far a row is dragged, as a share of its width, before letting go settles or pins it. */
 private const val SWIPE_COMMIT = 0.4f
 private val SWIPE_TICKS = com.macrotracker.ui.theme.MacroMotion.LiquidRipple.PULL_TICKS
+
+/** A chat's face: its model maker's logo, and a small dot in the corner for what the chat is doing. */
+@Composable
+private fun StateDisc(brand: String, state: RailState?, size: androidx.compose.ui.unit.Dp) {
+    Box(Modifier.size(size), contentAlignment = Alignment.Center) {
+        ModelLogo(brand, size)
+        if (state != null) {
+            Box(
+                Modifier.align(Alignment.BottomEnd).size(14.dp).clip(CircleShape).background(TileDark).padding(2.5.dp).clip(CircleShape).background(state.tone),
+            )
+        }
+    }
+}
+
+/** What a chat runs on and has used, as small tags: the model, the mode when it is not Agent, how full it is, tokens. */
+@Composable
+private fun RowChips(model: String?, modeTag: String?, tokens: Long, context: Float?, modifier: Modifier = Modifier) {
+    if (model == null && modeTag == null && tokens <= 0 && context == null) return
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (model != null) Tag(model, TextSecondary, Modifier.weight(1f, fill = false))
+        if (modeTag != null) Tag(modeTag, ServerBrand, accent = true)
+        context?.takeIf { it >= 0.5f }?.let { Tag("${(it * 100).toInt()}% full", if (it >= 0.85f) Error else ServerWarn, accent = true) }
+        if (tokens > 0) Tag("${tokenLabel(tokens)} tok", TextTertiary)
+    }
+}
+
+@Composable
+private fun Tag(text: String, color: Color, modifier: Modifier = Modifier, accent: Boolean = false) {
+    Text(
+        text, color = color, fontSize = 10.5.sp, fontWeight = if (accent) FontWeight.Bold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        modifier = modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(Color.White.copy(alpha = 0.07f))
+            .padding(horizontal = 7.dp, vertical = 2.dp),
+    )
+}
+
+/** A heading in the panel: the name and how many. */
+@Composable
+private fun RailSection(label: String, count: Int, accent: Color = TextTertiary) {
+    Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 18.dp, top = 16.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label.uppercase(), color = TextTertiary, fontSize = 10.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+        Text("  $count", color = TextTertiary.copy(alpha = 0.7f), fontSize = 10.5.sp)
+    }
+}

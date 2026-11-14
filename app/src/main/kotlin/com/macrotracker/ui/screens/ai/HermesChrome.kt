@@ -146,8 +146,11 @@ internal fun HermesHeader(
     onOpenTilesmith: () -> Unit = {},
     onCopyChat: () -> Unit = {},
     onOpenFiles: () -> Unit = {},
+    onOpenGit: () -> Unit = {},
     onFind: () -> Unit = {},
     onOpenInfo: () -> Unit = {},
+    /** The maker of the model in use, for the logo beside the status. */
+    brand: String = "",
     /** What the header's usage square fills with; null draws a plain chart icon. */
     usage: com.macrotracker.data.dashboard.UsageSnapshot? = null,
 ) {
@@ -202,7 +205,11 @@ internal fun HermesHeader(
             ) {
                 ChatStatusDot(active = working, accent = ServerBrand)
                 Spacer(Modifier.width(6.dp))
-                Text(status, color = TextTertiary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (hasThread && brand.isNotBlank()) {
+                    ModelLogo(brand, 16.dp)
+                    Spacer(Modifier.width(5.dp))
+                }
+                Text(status, color = TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         // Usage, one tap away: the square fills with the plan in use.
@@ -229,6 +236,7 @@ internal fun HermesHeader(
                     MenuRow("Delete this chat", AppIcons.Delete, danger = true) { menuOpen = false; onDelete() }
                     HorizontalDivider(color = Border)
                 }
+                MenuRow("Git and pull requests", AppIcons.GitFork) { menuOpen = false; onOpenGit() }
                 MenuRow("Server files", AppIcons.Folder) { menuOpen = false; onOpenFiles() }
                 MenuRow("Console", AppIcons.SquareTerminal) { menuOpen = false; onOpenConsole() }
                 MenuRow("Tilesmith widget maker", AppIcons.Blocks) { menuOpen = false; onOpenTilesmith() }
@@ -273,8 +281,7 @@ internal fun SearchBox(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(SurfaceChrome)
-            .border(1.dp, Border, RoundedCornerShape(12.dp))
+            .background(com.macrotracker.ui.theme.TileDark)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
