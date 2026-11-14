@@ -288,6 +288,7 @@ fun HermesChatPane(
     val snoozed by viewModel.snoozed.collectAsState()
     val order by viewModel.order.collectAsState()
     val chatHits by viewModel.chatHits.collectAsState()
+    val drafts by viewModel.drafts.collectAsState()
     val followUp by viewModel.followUp.collectAsState()
     val autoSettleDays by viewModel.autoSettleDays.collectAsState()
     val groupByDay by viewModel.groupByDay.collectAsState()
@@ -393,7 +394,7 @@ fun HermesChatPane(
 
     // While Hermes works: steer (stop the turn and say it now) or queue (after it), as chosen; a hold on send picks the other.
     fun followUpWith(mode: String) {
-        val body = draft.trim()
+        val body = skillCommand(draft.trim(), state.skills)
         if (body.isEmpty()) return
         draft = ""
         viewModel.saveDraft(draftId, "")
@@ -402,7 +403,7 @@ fun HermesChatPane(
     }
 
     fun send(text: String) {
-        val body = text.trim()
+        val body = skillCommand(text.trim(), state.skills)
         if (body.isEmpty() && state.attachments.isEmpty()) return
         // The picker is a sheet here, so its command opens it.
         if (body.lowercase() == "/model") { draft = ""; modelSheet = true; return }
@@ -529,6 +530,14 @@ fun HermesChatPane(
                     onAutoSettle = viewModel::setAutoSettleDays,
                     groupByDay = groupByDay,
                     onGroupByDay = viewModel::setGroupByDay,
+                    drafts = drafts,
+                    onOpenDraft = {
+                        haptics.tick()
+                        forceFollow = true
+                        switchDraft(null)
+                        viewModel.newThread()
+                        closeRail()
+                    },
                     hits = chatHits,
                     onSearch = viewModel::searchChats,
                     focusSearch = focusSearch,
@@ -830,6 +839,18 @@ fun HermesChatPane(
                         )
                     }
                 }
+                // "$" names a skill, where "/" names a command (T3 Code's split): the word after the last "$" narrows the list
+                val skillTyped = if (draft.startsWith("/")) null else Regex("(^|\\s)\\$([\\w-]*)$").find(draft)?.groupValues?.get(2)
+                if (skillTyped != null && state.skills.isNotEmpty()) {
+                    SkillPalette(
+                        entries = skillEntries(state.skills, skillTyped),
+                        onPick = { skill ->
+                            haptics.tick()
+                            draft = draft.removeSuffix("$skillTyped").removeSuffix("$") + "$" + skill.name + " "
+                        },
+                    )
+                    Spacer(Modifier.height(4.dp))
+                }
                 val slashOpen = draft.startsWith("/") && ' ' !in draft && '\n' !in draft
                 if (slashOpen) {
                     SlashPalette(
@@ -879,7 +900,7 @@ fun HermesChatPane(
                     hint = when {
                         state.busy -> if (followUp == "steer") "Steer Hermes…  hold send to queue" else "Queue the next message…  hold send to steer"
                         openQuestion(state) != null -> "Answer Hermes…"
-                        else -> HermesIdentity.composerHint + "  / for commands"
+                        else -> HermesIdentity.composerHint + "  / commands  $ skills"
                     },
                     mode = state.mode,
                     model = state.currentModel,

@@ -27,6 +27,7 @@ import com.macrotracker.data.hermes.HermesTurnActivity
 import com.macrotracker.data.hermes.HermesMode
 import com.macrotracker.data.hermes.HermesModelOption
 import com.macrotracker.data.hermes.HermesPermission
+import com.macrotracker.data.hermes.HermesSkill
 import com.macrotracker.data.hermes.HermesStatus
 import com.macrotracker.data.hermes.HermesThreadSummary
 import com.macrotracker.data.hermes.HermesTool
@@ -76,6 +77,8 @@ data class HermesUiState(
     val notice: String? = null,
     /** Hermes' own slash commands, for the palette. */
     val commands: List<HermesCommand> = emptyList(),
+    /** Its skills, for the `$` palette. */
+    val skills: List<HermesSkill> = emptyList(),
     /** Files that go with the next message. */
     val attachments: List<HermesAttachment> = emptyList(),
     val uploading: Boolean = false,
@@ -293,6 +296,9 @@ class HermesViewModel @Inject constructor(
                 }
                 if (_state.value.commands.isEmpty()) {
                     runCatching { client.commands() }.onSuccess { cmds -> _state.update { it.copy(commands = cmds) } }
+                }
+                if (_state.value.skills.isEmpty()) {
+                    runCatching { client.skills() }.onSuccess { found -> _state.update { it.copy(skills = found) } }
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -722,6 +728,9 @@ class HermesViewModel @Inject constructor(
     val snoozed: StateFlow<Map<String, Long>> = settings.hermesSnoozed
     val order: StateFlow<List<String>> = settings.hermesOrder
 
+    /** Unsent text by chat id (`_new` for the chat not started yet), for the panel's Drafts. */
+    val drafts: StateFlow<Map<String, String>> = settings.hermesDrafts
+
     val followUp: StateFlow<String> = settings.hermesFollowUp
 
     fun setFollowUp(mode: String) = settings.setHermesFollowUp(mode)
@@ -1007,6 +1016,11 @@ class HermesViewModel @Inject constructor(
         shown: HermesItem?,
         attachments: List<HermesAttachment> = emptyList(),
     ) {
+        // saying something to a chat that was asleep or settled brings it back, as in T3 Code
+        _state.value.threadId?.let { id ->
+            settings.wakeHermes(id)
+            if (id in settings.hermesArchived.value) settings.toggleHermesArchived(id)
+        }
         streamJob?.cancel()
         val modeId = _state.value.mode.id
         _state.update {

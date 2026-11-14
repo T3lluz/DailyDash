@@ -191,8 +191,18 @@ class SettingsRepository @Inject constructor(
     /** Text typed and not sent, per chat (`_new` for the one not started yet), so leaving a chat does not lose it. */
     fun hermesDraft(key: String): String = prefs.getString("$KEY_HERMES_DRAFT$key", null).orEmpty()
 
+    /** Every draft there is, by chat id (`_new` for the chat not started yet): the chat panel lists them as drafts. */
+    private val _hermesDrafts = MutableStateFlow(
+        prefs.all.entries
+            .filter { it.key.startsWith(KEY_HERMES_DRAFT) && (it.value as? String).orEmpty().isNotBlank() }
+            .associate { it.key.removePrefix(KEY_HERMES_DRAFT) to it.value as String },
+    )
+    val hermesDrafts: StateFlow<Map<String, String>> = _hermesDrafts
+
     fun setHermesDraft(key: String, text: String) {
         prefs.edit { if (text.isBlank()) remove("$KEY_HERMES_DRAFT$key") else putString("$KEY_HERMES_DRAFT$key", text) }
+        val now = _hermesDrafts.value
+        if (text.isBlank()) { if (key in now) _hermesDrafts.value = now - key } else if (now[key] != text) _hermesDrafts.value = now + (key to text)
     }
 
     /** YouTube channels starred in the hub: they lead its channel row and can be the only ones shown. */

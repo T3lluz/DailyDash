@@ -651,11 +651,67 @@ internal val LocalSlash = listOf(
 
 internal fun slashEntries(commands: List<HermesCommand>, typed: String): List<SlashEntry> {
     val q = typed.removePrefix("/").lowercase()
-    val all = LocalSlash + commands.map { SlashEntry(it.name, it.args, it.desc, it.group, false) }
+    // skills are not here: `$` lists them (skillEntries), as in T3 Code
+    val all = LocalSlash + commands.filter { it.group != "Skills" }.map { SlashEntry(it.name, it.args, it.desc, it.group, false) }
         .filter { c -> LocalSlash.none { it.name == c.name } }
     return all.filter { q.isEmpty() || it.name.startsWith(q) }
         .ifEmpty { all.filter { q in it.name || q in it.desc.lowercase() } }
         .take(40)
+}
+
+/** The skills a `$` has been typed for: those that start with what follows it, then those that mention it, the fleet's first. */
+internal fun skillEntries(skills: List<com.macrotracker.data.hermes.HermesSkill>, query: String): List<com.macrotracker.data.hermes.HermesSkill> {
+    val q = query.lowercase()
+    if (q.isEmpty()) return skills
+    return skills.filter { it.name.startsWith(q) } + skills.filter { !it.name.startsWith(q) && (q in it.name || q in it.desc.lowercase()) }
+}
+
+/** A message that names a skill with `$` becomes Hermes' own command for it (`/ship fix it`); a long one asks for the skill in words. */
+internal fun skillCommand(text: String, skills: List<com.macrotracker.data.hermes.HermesSkill>): String {
+    val known = skills.mapTo(HashSet()) { it.name }
+    val hit = Regex("(^|\\s)\\$([\\w-]+)").findAll(text).firstOrNull { it.groupValues[2] in known } ?: return text
+    val name = hit.groupValues[2]
+    val start = hit.range.first + hit.groupValues[1].length
+    val rest = text.removeRange(start, hit.range.last + 1)
+    return if ('\n' in text) "Use your \"$name\" skill (the /$name command) for this:\n\n${rest.trim()}" else "/$name ${rest.replace(Regex("\\s+"), " ").trim()}".trim()
+}
+
+@Composable
+internal fun SkillPalette(entries: List<com.macrotracker.data.hermes.HermesSkill>, onPick: (com.macrotracker.data.hermes.HermesSkill) -> Unit) {
+    if (entries.isEmpty()) return
+    LazyColumn(
+        modifier = Modifier
+            .padding(horizontal = 12.dp)
+            .fillMaxWidth()
+            .heightIn(max = 260.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(com.macrotracker.ui.theme.TileDark),
+        contentPadding = PaddingValues(vertical = 6.dp),
+    ) {
+        var group: Boolean? = null
+        entries.forEachIndexed { i, e ->
+            if (e.fleet != group) {
+                group = e.fleet
+                item(key = "g-$i") {
+                    Text(
+                        if (e.fleet) "YOUR FLEET" else "HERMES",
+                        color = TextTertiary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp,
+                        modifier = Modifier.padding(start = 14.dp, top = 8.dp, bottom = 2.dp),
+                    )
+                }
+            }
+            item(key = "s-${e.name}") {
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable { onPick(e) }.padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("$" + e.name, color = AiAccent, fontSize = 13.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.width(10.dp))
+                    Text(e.desc, color = TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
 }
 
 @Composable

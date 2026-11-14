@@ -7,6 +7,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.border
 import com.macrotracker.ui.theme.ServerGood
 import androidx.compose.ui.draw.drawBehind
@@ -148,11 +149,17 @@ internal fun HermesThreadRail(
     onAutoSettle: (Int) -> Unit = {},
     groupByDay: Boolean = true,
     onGroupByDay: (Boolean) -> Unit = {},
+    /** Unsent text by chat id (`_new` for the chat not started yet). */
+    drafts: Map<String, String> = emptyMap(),
+    /** Opens the chat that has not been started, with its draft in the box. */
+    onOpenDraft: () -> Unit = {},
 ) {
     val haptics = rememberHaptics()
     var query by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf(RailFilter.ALL) }
     var snoozing by remember { mutableStateOf<HermesThreadSummary?>(null) }
+    // the chat whose swipe actions are showing: one at a time
+    var openRow by remember { mutableStateOf<String?>(null) }
     var note by remember { mutableStateOf<RailNote?>(null) }
     LaunchedEffect(note?.id) {
         if (note != null) {
@@ -160,7 +167,15 @@ internal fun HermesThreadRail(
             note = null
         }
     }
-    val now = remember(threads, snoozed) { System.currentTimeMillis() }
+    // the clock snoozes and idle days are read against: moved on when the list changes and every half minute, so a chat wakes on time
+    var now by remember { androidx.compose.runtime.mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(threads, snoozed) { now = System.currentTimeMillis() }
+    LaunchedWhileResumed(Unit) {
+        while (true) {
+            delay(30_000)
+            now = System.currentTimeMillis()
+        }
+    }
     LaunchedEffect(query) { onSearch(query) }
     val searchFocus = remember { FocusRequester() }
     LaunchedEffect(focusSearch) { if (focusSearch > 0) runCatching { searchFocus.requestFocus() } }
@@ -176,7 +191,8 @@ internal fun HermesThreadRail(
         isUnread(t) -> RailState.DONE
         else -> null
     }
-    fun asleep(t: HermesThreadSummary) = (snoozed[t.id] ?: 0L) > now
+    // staff are standing profiles, not conversations: they are never put to sleep or settled
+    fun asleep(t: HermesThreadSummary) = !t.isStaff && (snoozed[t.id] ?: 0L) > now
     // What wants a look first, then what is kept, then the rest by when it last moved (or as arranged).
     // Something that wants you is never left asleep or in the archive: it comes back up until it is dealt with.
     val orderIdx = remember(order) { order.withIndex().associate { it.value to it.index } }
@@ -187,12 +203,11 @@ internal fun HermesThreadRail(
     // Settled by hand, or by sitting idle for the days the options name (never what is pinned, staff or open).
     val idleBefore = if (autoSettleDays > 0) now - autoSettleDays * 86_400_000L else 0L
     fun settled(t: HermesThreadSummary) =
-        t.id in archived || (idleBefore > 0 && !t.pinned && !t.isStaff && t.id != selectedId && t.updatedMs in 1 until idleBefore)
+        !t.isStaff && (t.id in archived || (idleBefore > 0 && !t.pinned && t.id != selectedId && t.updatedMs in 1 until idleBefore))
     val put = quietAll.filter { settled(it) }.sortedByDescending { it.updatedMs }
     val sleeping = quietAll.filter { !settled(it) && asleep(it) }.sortedBy { snoozed[it.id] }
     val quiet = quietAll.filter { !settled(it) && !asleep(it) }
-    var showArchived by rememberSaveable { mutableStateOf(false) }
-    var showSleeping by rememberSaveable { mutableStateOf(false) }
+    var shelf by rememberSaveable { mutableStateOf<Shelf?>(null) }
     val pinned = arrange(quiet.filter { it.pinned && !it.isStaff })
     val staff = quiet.filter { it.isStaff }
     val rest = arrange(quiet.filter { !it.pinned && !it.isStaff })
@@ -218,6 +233,50 @@ internal fun HermesThreadRail(
             down = if (i < list.lastIndex) ({ move(list, t, i + 1) }) else null,
             top = if (i > 0) ({ move(list, t, 0) }) else null,
         )
+    }
+
+    // One chat's row, for the list and for the shelves at the foot. [within] is the list it can be moved in, if it can.
+    val rowFor: @Composable (HermesThreadSummary, List<HermesThreadSummary>?, Modifier) -> Unit = { t, within, rowModifier ->
+                    ThreadRow(
+                        modifier = rowModifier,
+                        draft = drafts[t.id],
+                        openKey = openRow,
+                        onOpenChange = { openRow = it },
+                        model = modelOf(t),
+                        modeTag = modeTagOf(t),
+                        thread = t,
+                        state = stateOf(t),
+                        turn = turns[t.id],
+                        selected = t.id == selectedId,
+                        onOpen = { onOpen(t.id, query.trim()) },
+                        hit = hits[t.id]?.takeIf { query.isNotBlank() },
+                        onRename = { onRename(t) },
+                        onTogglePin = {
+                            onTogglePin(t)
+                            note = RailNote(if (t.pinned) "Unpinned" else "Pinned") { onTogglePin(t.copy(pinned = !t.pinned)) }
+                        },
+                        onClear = { onClear(t) },
+                        onDelete = { onDelete(t) },
+                        archived = settled(t),
+                        onToggleArchive = {
+                            if (t.id !in archived && settled(t)) {
+                                // settled by sitting idle: opening it keeps it out of there until it goes quiet again
+                                note = RailNote("Settled after $autoSettleDays idle days") { }
+                                return@ThreadRow
+                            }
+                            val was = t.id in archived
+                            onToggleArchive(t)
+                            note = RailNote(if (was) "Unsettled" else "Settled") { onToggleArchive(t) }
+                        },
+                        wake = snoozed[t.id]?.takeIf { it > now }?.let { wakeLabel(it, now) },
+                        onSnooze = { snoozing = t },
+                        onWake = {
+                            val until = snoozed[t.id]
+                            onWake(t)
+                            if (until != null) note = RailNote("Awake") { onSnooze(t, until) }
+                        },
+                        moves = within?.let { moves(it, t) },
+                    )
     }
 
     Box(
@@ -296,8 +355,6 @@ internal fun HermesThreadRail(
         val counts = mapOf(
             RailFilter.ACTIVE to active.size,
             RailFilter.PINNED to pinnedAll.size,
-            RailFilter.SNOOZED to sleeping.size,
-            RailFilter.ARCHIVED to put.size,
         )
         if (counts.values.any { it > 0 }) {
             Row(
@@ -342,50 +399,21 @@ internal fun HermesThreadRail(
                 if (label.isNotBlank()) item(key = "h-$label") {
                     RailSection(label, rows.size, when (label) { "Active" -> AiAccent; "Pinned" -> ServerWarn; "Staff" -> AiAccent; else -> TextTertiary })
                 }
-                items(rows, key = { "t-${it.id}" }) { t ->
-                    ThreadRow(
-                        modifier = Modifier.animateItem(),
-                        model = modelOf(t),
-                        modeTag = modeTagOf(t),
-                        thread = t,
-                        state = stateOf(t),
-                        turn = turns[t.id],
-                        selected = t.id == selectedId,
-                        onOpen = { onOpen(t.id, query.trim()) },
-                        hit = hits[t.id]?.takeIf { query.isNotBlank() },
-                        onRename = { onRename(t) },
-                        onTogglePin = {
-                            onTogglePin(t)
-                            note = RailNote(if (t.pinned) "Unpinned" else "Pinned") { onTogglePin(t.copy(pinned = !t.pinned)) }
-                        },
-                        onClear = { onClear(t) },
-                        onDelete = { onDelete(t) },
-                        archived = settled(t),
-                        onToggleArchive = {
-                            if (t.id !in archived && settled(t)) {
-                                // settled by sitting idle: opening it keeps it out of there until it goes quiet again
-                                note = RailNote("Settled after $autoSettleDays idle days") { }
-                                return@ThreadRow
-                            }
-                            val was = t.id in archived
-                            onToggleArchive(t)
-                            note = RailNote(if (was) "Unsettled" else "Settled") { onToggleArchive(t) }
-                        },
-                        wake = snoozed[t.id]?.takeIf { it > now }?.let { wakeLabel(it, now) },
-                        onSnooze = { snoozing = t },
-                        onWake = {
-                            val until = snoozed[t.id]
-                            onWake(t)
-                            if (until != null) note = RailNote("Awake") { onSnooze(t, until) }
-                        },
-                        moves = if (movable) moves(rows, t) else null,
-                    )
-                }
+                items(rows, key = { "t-${it.id}" }) { t -> rowFor(t, if (movable) rows else null, Modifier.animateItem(fadeInSpec = null, fadeOutSpec = androidx.compose.animation.core.tween(110), placementSpec = androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMedium))) }
             }
             if (filter == RailFilter.ALL) {
+                // staff stand at the very top; then what wants you, what is kept, and what was typed and not sent
+                section("Staff", staff)
                 section("Active", active)
                 section("Pinned", pinned, movable = true)
-                section("Staff", staff)
+                // a chat not started yet, with its draft
+                val newDraft = drafts["_new"].orEmpty()
+                if (newDraft.isNotBlank() && query.isBlank()) {
+                    item(key = "h-drafts") { RailSection("Draft", 1, AiAccent) }
+                    item(key = "draft-new") {
+                        DraftRow(newDraft, selected = selectedId == null, modifier = Modifier.animateItem(), onClick = onOpenDraft)
+                    }
+                }
                 if (order.isEmpty() && groupByDay) {
                     // by the day it last moved
                     val today = startOfDay(now)
@@ -408,31 +436,13 @@ internal fun HermesThreadRail(
                         )
                     }
                 }
-                if (sleeping.isNotEmpty()) {
-                    val open = showSleeping || query.isNotBlank()
-                    item(key = "sleeping") {
-                        FoldRow(AppIcons.BellOff, "Snoozed", sleeping.size, open) { showSleeping = !showSleeping }
-                    }
-                    if (open) section("", sleeping)
-                }
-                if (put.isNotEmpty()) {
-                    // put away, and folded until asked for (or searched)
-                    val open = showArchived || query.isNotBlank()
-                    item(key = "archived") {
-                        FoldRow(AppIcons.Archive, "Settled", put.size, open) { showArchived = !showArchived }
-                    }
-                    if (open) section("", put)
+                // a search looks through the shelves too, so what it finds is in the list
+                if (query.isNotBlank()) {
+                    section("Snoozed", sleeping)
+                    section("Settled", put)
                 }
             } else {
-                section(
-                    "",
-                    when (filter) {
-                        RailFilter.ACTIVE -> active
-                        RailFilter.PINNED -> pinnedAll.sortedByDescending { it.updatedMs }
-                        RailFilter.SNOOZED -> sleeping
-                        else -> put
-                    },
-                )
+                section("", if (filter == RailFilter.ACTIVE) active else pinnedAll.sortedByDescending { it.updatedMs })
             }
             if (shown.isEmpty() || (filter != RailFilter.ALL && (counts[filter] ?: 0) == 0)) {
                 item(key = "none") {
@@ -442,6 +452,52 @@ internal fun HermesThreadRail(
                         fontSize = 13.sp,
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
                     )
+                }
+            }
+        }
+        // The shelves, at the foot as T3 Code keeps them: what is asleep and what is settled, a tap away and not at the end of a long list.
+        if (query.isBlank() && (sleeping.isNotEmpty() || put.isNotEmpty())) {
+            Column(Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                HorizontalDivider(color = Border)
+                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Shelf.entries.forEach { sh ->
+                        val list = if (sh == Shelf.SNOOZED) sleeping else put
+                        if (list.isEmpty()) return@forEach
+                        val open = shelf == sh
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(if (open) Color(0xFF2B2B2B) else TileDark)
+                                .clickable { haptics.tick(); shelf = if (open) null else sh }
+                                .padding(horizontal = 12.dp, vertical = 11.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(sh.icon, null, tint = if (open) TextPrimary else TextTertiary, modifier = Modifier.size(15.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(sh.label, color = if (open) TextPrimary else TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                            Text("${list.size}", color = TextTertiary, fontSize = 12.sp)
+                            Spacer(Modifier.width(4.dp))
+                            Icon(if (open) AppIcons.ChevronDown else AppIcons.ChevronUp, null, tint = TextTertiary, modifier = Modifier.size(14.dp))
+                        }
+                    }
+                }
+                AnimatedVisibility(
+                    visible = shelf != null,
+                    enter = androidx.compose.animation.expandVertically(androidx.compose.animation.core.tween(160)) + fadeIn(androidx.compose.animation.core.tween(120)),
+                    exit = androidx.compose.animation.shrinkVertically(androidx.compose.animation.core.tween(130)) + fadeOut(androidx.compose.animation.core.tween(90)),
+                ) {
+                    // the last shelf shown while it closes, so the rows do not vanish before the panel does
+                    val shown = remember { arrayOfNulls<Shelf>(1) }
+                    if (shelf != null) shown[0] = shelf
+                    val rows = if (shown[0] == Shelf.SNOOZED) sleeping else put
+                    LazyColumn(
+                        modifier = Modifier.heightIn(max = 252.dp),
+                        contentPadding = PaddingValues(bottom = 6.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        items(rows, key = { "s-${it.id}" }) { t -> rowFor(t, null, Modifier.animateItem(fadeInSpec = null, fadeOutSpec = androidx.compose.animation.core.tween(110), placementSpec = androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMedium))) }
+                    }
                 }
             }
         }
@@ -469,7 +525,7 @@ internal fun HermesThreadRail(
         exit = fadeOut() + slideOutVertically { it / 2 },
         modifier = Modifier
             .align(Alignment.BottomCenter)
-            .padding(bottom = 86.dp),
+            .padding(bottom = 148.dp),
     ) {
         val shownNote = remember(note) { note }
         Row(
@@ -508,8 +564,12 @@ private enum class RailFilter(val label: String, val icon: androidx.compose.ui.g
     ALL("All", AppIcons.Rows),
     ACTIVE("Active", AppIcons.Bolt),
     PINNED("Pinned", AppIcons.StarFilled),
+}
+
+/** The two shelves at the panel's foot: chats asleep, and chats settled. One is open at a time. */
+private enum class Shelf(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
     SNOOZED("Snoozed", AppIcons.BellOff),
-    ARCHIVED("Settled", AppIcons.CheckCircle),
+    SETTLED("Settled", AppIcons.CheckCircle),
 }
 
 private class RailNote(val text: String, val undo: () -> Unit) {
@@ -576,70 +636,33 @@ private fun ThreadRow(
     modifier: Modifier = Modifier,
     /** Where the server's search found the box's words in this chat. */
     hit: HermesChatHit? = null,
+    /** What was typed in this chat and not sent. */
+    draft: String? = null,
+    /** The chat whose swipe actions are open, if any: one at a time. */
+    openKey: String? = null,
+    onOpenChange: (String?) -> Unit = {},
 ) {
     val haptics = rememberHaptics()
     var menuOpen by remember { mutableStateOf(false) }
-    val pin by rememberUpdatedState(onTogglePin)
-    val archive by rememberUpdatedState(onToggleArchive)
-    val swipe = rememberSwipeToDismissBoxState(
-        // the commit point, and what the haptics below count towards
-        positionalThreshold = { total -> total * SWIPE_COMMIT },
-        confirmValueChange = { to ->
-            when (to) {
-                SwipeToDismissBoxValue.StartToEnd -> { haptics.click(); pin() }
-                SwipeToDismissBoxValue.EndToStart -> { haptics.click(); archive() }
-                SwipeToDismissBoxValue.Settled -> Unit
-            }
-            false // the row stays: a swipe is an action here, not a dismissal
-        },
-    )
-    // The same feel as pulling the home page to refresh: a tick for every tenth of the way to the commit
-    // point, then a click the moment it is reached. Settling and pinning are told apart by the same buzz.
-    var rowWidth by remember { mutableIntStateOf(0) }
-    LaunchedEffect(swipe) {
-        var last = 0
-        snapshotFlow {
-            val w = rowWidth
-            if (w <= 0) 0f else (kotlin.math.abs(runCatching { swipe.requireOffset() }.getOrDefault(0f)) / (w * SWIPE_COMMIT)).coerceIn(0f, 1f)
-        }.collect { fraction ->
-            val tick = (fraction * SWIPE_TICKS).toInt()
-            when {
-                fraction == 0f -> last = 0
-                fraction >= 1f -> if (last < SWIPE_TICKS) { haptics.click(); last = SWIPE_TICKS }
-                tick != last -> { if (tick > last) haptics.tick(); last = tick }
-            }
+    // What a swipe left shows behind the row, as T3 Code's rows do: the main action first, then a second.
+    // A chat that wants you (working, a question, news) has none: it comes back up until it is dealt with.
+    val actions = remember(state, wake, archived, thread.id) {
+        when {
+            state != null || thread.isStaff -> emptyList()
+            wake != null -> listOf(SwipeAction("Wake", AppIcons.Bell) { onWake() }, SwipeAction("Settle", AppIcons.CheckCircle) { onToggleArchive() })
+            archived -> listOf(SwipeAction("Unsettle", AppIcons.Undo) { onToggleArchive() })
+            else -> listOf(SwipeAction("Settle", AppIcons.CheckCircle) { onToggleArchive() }, SwipeAction("Snooze", AppIcons.BellOff) { onSnooze() })
         }
     }
     val shape = RoundedCornerShape(14.dp)
-    SwipeToDismissBox(
-        state = swipe,
-        modifier = modifier.padding(horizontal = 8.dp).clip(shape).onSizeChanged { rowWidth = it.width },
-        enableDismissFromStartToEnd = !thread.isStaff,
-        backgroundContent = {
-            val toPin = swipe.dismissDirection == SwipeToDismissBoxValue.StartToEnd
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(if (toPin) AiAccent.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.10f))
-                    .padding(horizontal = 18.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = if (toPin) Arrangement.Start else Arrangement.End,
-            ) {
-                Icon(
-                    if (toPin) AppIcons.Star else AppIcons.CheckCircle,
-                    contentDescription = null,
-                    tint = if (toPin) AiAccent else TextPrimary,
-                    modifier = Modifier.size(18.dp),
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    when { !toPin && archived -> "Unsettle"; !toPin -> "Settle"; thread.pinned -> "Unpin"; else -> "Pin" },
-                    color = if (toPin) AiAccent else TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                )
-            }
-        },
-    ) {
-        Box {
+    SwipeActionsRow(
+        key = thread.id,
+        openKey = openKey,
+        onOpenChange = onOpenChange,
+        actions = actions,
+        modifier = modifier.padding(horizontal = 8.dp),
+    ) { isOpen, closeActions ->
+        Box(Modifier.clip(shape)) {
             val tone = state?.tone
             val fill = if (selected) Color(0xFF2B2B2B) else TileDark
             Row(
@@ -648,7 +671,8 @@ private fun ThreadRow(
                     // opaque, so the swipe's colour does not show through a resting row
                     .background(fill)
                     .combinedClickable(
-                        onClick = onOpen,
+                        // a row with its actions out is shut by a tap, not opened
+                        onClick = { if (isOpen) closeActions() else onOpen() },
                         onLongClick = { haptics.gestureStart(); menuOpen = true },
                         onLongClickLabel = "Chat options",
                     )
@@ -693,6 +717,7 @@ private fun ThreadRow(
                         }
                     }
                     val line = when {
+                        !draft.isNullOrBlank() && state == null -> ""
                         state == RailState.FAILED -> thread.fail.orEmpty()
                         thread.fail != null -> "Failed · ${thread.fail}"
                         else -> turn?.label?.text ?: thread.preview
@@ -705,6 +730,12 @@ private fun ThreadRow(
                             modifier = Modifier.padding(top = 2.dp),
                         )
                     }
+                    if (!draft.isNullOrBlank()) {
+                        Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("Draft", color = AiAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                            Text("  ${draft.replace('\n', ' ')}", color = TextTertiary, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
                     HitExcerpt(hit)
                     RowChips(model?.label, modeTag, thread.tokens, thread.contextFraction, Modifier.padding(top = 7.dp))
                 }
@@ -714,11 +745,13 @@ private fun ThreadRow(
                 if (!thread.isStaff) {
                     MenuRow(if (thread.pinned) "Unpin" else "Pin", AppIcons.Star) { menuOpen = false; onTogglePin() }
                 }
-                MenuRow(if (archived) "Unsettle" else "Settle", AppIcons.CheckCircle) { menuOpen = false; onToggleArchive() }
-                if (wake != null) {
-                    MenuRow("Wake now", AppIcons.Bell) { menuOpen = false; onWake() }
-                } else if (state == null) {
-                    MenuRow("Snooze…", AppIcons.BellOff) { menuOpen = false; onSnooze() }
+                if (!thread.isStaff) {
+                    MenuRow(if (archived) "Unsettle" else "Settle", AppIcons.CheckCircle) { menuOpen = false; onToggleArchive() }
+                    if (wake != null) {
+                        MenuRow("Wake now", AppIcons.Bell) { menuOpen = false; onWake() }
+                    } else if (state == null) {
+                        MenuRow("Snooze…", AppIcons.BellOff) { menuOpen = false; onSnooze() }
+                    }
                 }
                 moves?.top?.let { top -> MenuRow("Move to top", AppIcons.ArrowUp) { menuOpen = false; top() } }
                 moves?.up?.let { up -> MenuRow("Move up", AppIcons.ChevronUp) { menuOpen = false; up() } }
@@ -842,10 +875,6 @@ private fun elapsedClock(sinceMs: Long): String {
     return if (s >= 3600) "${s / 3600}:${"%02d".format(s % 3600 / 60)}:${"%02d".format(s % 60)}" else "${s / 60}:${"%02d".format(s % 60)}"
 }
 
-/** How far a row is dragged, as a share of its width, before letting go settles or pins it. */
-private const val SWIPE_COMMIT = 0.4f
-private val SWIPE_TICKS = com.macrotracker.ui.theme.MacroMotion.LiquidRipple.PULL_TICKS
-
 /** A chat's face: its model maker's logo, and a small dot in the corner for what the chat is doing. */
 @Composable
 private fun StateDisc(brand: String, state: RailState?, size: androidx.compose.ui.unit.Dp) {
@@ -888,5 +917,33 @@ private fun RailSection(label: String, count: Int, accent: Color = TextTertiary)
     Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 18.dp, top = 16.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(label.uppercase(), color = TextTertiary, fontSize = 10.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
         Text("  $count", color = TextTertiary.copy(alpha = 0.7f), fontSize = 10.5.sp)
+    }
+}
+
+/** A chat that has not been started, with what was typed for it: the panel lists it as a draft. */
+@Composable
+private fun DraftRow(text: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val haptics = rememberHaptics()
+    Row(
+        modifier = modifier
+            .padding(horizontal = 8.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (selected) Color(0xFF2B2B2B) else TileDark)
+            .clickable { haptics.tick(); onClick() }
+            .padding(horizontal = 12.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(42.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.07f)), contentAlignment = Alignment.Center) {
+            Icon(AppIcons.Edit, null, tint = TextSecondary, modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("New chat", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Text("Draft", color = AiAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+            Text(text.replace('\n', ' '), color = TextSecondary, fontSize = 12.5.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+        }
     }
 }

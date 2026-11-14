@@ -79,6 +79,9 @@ data class HermesCommand(
     val aliases: List<String>,
 )
 
+/** A skill Hermes can use, for the `$` palette: the fleet's are marked and listed first. */
+data class HermesSkill(val name: String, val desc: String, val fleet: Boolean)
+
 /** A file handed to Hermes with a question, as `/ai/upload` stored it. */
 data class HermesAttachment(
     val id: String,

@@ -208,6 +208,16 @@ class HermesClient @Inject constructor(
         }
     }
 
+    /** Hermes' skills, the fleet's first (`/ai/skills`). */
+    suspend fun skills(): List<HermesSkill> = withContext(Dispatchers.IO) {
+        val arr = JSONObject(get("/ai/skills")).optJSONArray("skills") ?: JSONArray()
+        (0 until arr.length()).mapNotNull { i ->
+            val o = arr.optJSONObject(i) ?: return@mapNotNull null
+            val name = o.optString("name").takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            HermesSkill(name, o.optString("desc"), o.optBoolean("fleet"))
+        }
+    }
+
     /** Hands a file to the bridge, which keeps it for Hermes to read. */
     suspend fun upload(name: String, mime: String, bytes: ByteArray): HermesAttachment = withContext(Dispatchers.IO) {
         val body = JSONObject()
