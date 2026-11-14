@@ -357,20 +357,56 @@ private fun ModelOptions(
                 }
             }
             if (mods.contexts.size > 1) {
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(14.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Context", color = TextSecondary, fontSize = 13.sp, modifier = Modifier.weight(1f))
                     MiniSwitch(mods.contexts.map { it to HermesCatalog.ctxLabel(it) }, mods.window, onPickWindow)
                 }
             }
             if (modes.size > 1) {
-                Spacer(Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Mode", color = TextSecondary, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                    MiniSwitch(modes.map { it.id to it.label }, modeId, onPickMode)
-                }
+                Spacer(Modifier.height(14.dp))
+                ModeChips(modes, modeId, onPickMode)
             }
         }
+    }
+}
+
+/**
+ * What Hermes may do in this chat: the modes the brain offers as chips that scroll sideways (five do not fit a switch), the
+ * one in use lit, and a line under them saying what it means.
+ */
+@Composable
+private fun ModeChips(modes: List<com.macrotracker.data.hermes.HermesMode>, modeId: String, onPick: (String) -> Unit) {
+    val haptics = rememberHaptics()
+    val current = modes.firstOrNull { it.id == modeId }
+    Text("Mode", color = TextSecondary, fontSize = 13.sp)
+    val scroll = rememberScrollState()
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp)
+            .horizontalEdgeFade(scroll)
+            .horizontalScroll(scroll),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        modes.forEach { m ->
+            val on = m.id == modeId
+            Row(
+                Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(if (on) TextPrimary else Color.White.copy(alpha = 0.08f))
+                    .clickable { if (!on) { haptics.tick(); onPick(m.id) } }
+                    .padding(horizontal = 14.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(modeIcon(m.kind), null, tint = if (on) Background else TextTertiary, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(7.dp))
+                Text(m.label, color = if (on) Background else TextPrimary, fontSize = 13.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium, maxLines = 1, softWrap = false)
+            }
+        }
+    }
+    current?.desc?.takeIf { it.isNotBlank() }?.let {
+        Text(it, color = TextTertiary, fontSize = 12.sp, lineHeight = 17.sp, modifier = Modifier.padding(top = 8.dp))
     }
 }
 
