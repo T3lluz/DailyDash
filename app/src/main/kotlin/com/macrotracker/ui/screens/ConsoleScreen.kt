@@ -170,6 +170,9 @@ fun ConsoleScreen(
                         view.onInput = { text -> viewModel.send(text) }
                         view.isCtrlHeld = { ctrl }
                         view.onCtrlUsed = { ctrl = false }
+                        // the terminal has the keys from the start: with a keyboard attached, Enter
+                        // went to the back arrow, which holds focus first on a new screen
+                        view.post { view.requestFocus() }
                         terminal = view
                     }
                 },
