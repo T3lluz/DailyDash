@@ -66,6 +66,15 @@ class SettingsRepository @Inject constructor(
     private val _weatherEnabled = MutableStateFlow(prefs.getBoolean("weather_enabled", true))
     val weatherEnabled: StateFlow<Boolean> = _weatherEnabled
 
+    /** A notification when the radar shows rain on its way. */
+    private val _rainAlerts = MutableStateFlow(prefs.getBoolean("rain_alerts", true))
+    val rainAlerts: StateFlow<Boolean> = _rainAlerts
+
+    fun setRainAlerts(enabled: Boolean) {
+        prefs.edit { putBoolean("rain_alerts", enabled) }
+        _rainAlerts.value = enabled
+    }
+
     private val _tempUnit = MutableStateFlow(
         TempUnit.fromStorage(prefs.getString(KEY_TEMP_UNIT, TempUnit.CELSIUS.storageValue)),
     )

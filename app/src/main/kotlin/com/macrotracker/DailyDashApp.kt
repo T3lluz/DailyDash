@@ -67,6 +67,8 @@ class DailyDashApp : Application(), ImageLoaderFactory {
         CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
             // Every few hours, even with the app closed: a new build shows up as a notification.
             AppUpdateWorker.schedule(this@DailyDashApp)
+            // Rain on its way, said before it arrives (off in Settings → Connections → Weather).
+            com.macrotracker.data.remote.RainAlertWorker.schedule(this@DailyDashApp)
             if (WidgetStateProvider.hasAnyWidget(this@DailyDashApp)) {
                 WidgetRefreshWorker.enqueuePeriodicRefresh(this@DailyDashApp)
                 // Periodic worker covers freshness; skip an immediate full refresh on every cold start.

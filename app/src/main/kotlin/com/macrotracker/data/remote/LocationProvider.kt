@@ -27,7 +27,10 @@ class LocationProvider @Inject constructor(
 ) {
     companion object {
         private const val TAG = "LocationProvider"
-        private const val LOCATION_CACHE_TTL_MS = 5 * 60 * 1000L // 5 minutes
+        private const val LOCATION_CACHE_TTL_MS = 2 * 60 * 1000L // two minutes: a walk or a drive moves the forecast
+        /** MET's grid is about a kilometre: a fix this good already picks the right square. */
+        private const val GOOD_ENOUGH_M = 1_000f
+        private const val PRECISE_WAIT_MS = 8_000L
         /** How old a fused fix may be when we are not force-refreshing. */
         private const val MAX_UPDATE_AGE_NORMAL_MS = 60_000L
         private const val LOCATION_REQUEST_DURATION_MS = 20_000L
@@ -69,13 +72,26 @@ class LocationProvider @Inject constructor(
         // Weather needs the town, not the street: a network fix comes in a second or two,
         // where waiting on GPS indoors held the card (and pull to refresh) for up to 20 s.
         val network = requestLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, maxAge)
-        if (network != null) {
+        if (network != null && (!network.hasAccuracy() || network.accuracy <= GOOD_ENOUGH_M)) {
             Log.d(TAG, "Network fix (accuracy=${network.accuracy}m): ${network.latitude}, ${network.longitude}")
             return cacheAndReturn(network, now)
         }
+        // A fix kilometres wide (a lone cell tower) can land on the wrong side of a fjord or a hill:
+        // ask the satellites, briefly, and keep whichever is tighter.
+        if (hasFinePermission()) {
+            val precise = requestLocation(Priority.PRIORITY_HIGH_ACCURACY, maxAge, PRECISE_WAIT_MS)
+            val best = listOfNotNull(precise, network).minByOrNull { if (it.hasAccuracy()) it.accuracy else Float.MAX_VALUE }
+            if (best != null) {
+                Log.d(TAG, "Fix after a precise try (accuracy=${best.accuracy}m)")
+                return cacheAndReturn(best, now)
+            }
+        } else if (network != null) {
+            return cacheAndReturn(network, now)
+        }
 
-        // Last resort: Play Services last-known location (may be older, but better than failing refresh)
-        val last = lastLocationOrNull()
+        // Last resort: the last fix Play Services holds, then the phone's own providers (a phone
+        // without Play Services has only those). Older, but better than no forecast.
+        val last = lastLocationOrNull() ?: platformLocation()
         return if (last != null) {
             Log.w(TAG, "Using lastLocation fallback (accuracy=${last.accuracy}m, age=${now - last.time}ms)")
             cacheAndReturn(last, now)
@@ -92,14 +108,18 @@ class LocationProvider @Inject constructor(
         return result
     }
 
+    private fun hasFinePermission(): Boolean = androidx.core.content.ContextCompat.checkSelfPermission(
+        context, android.Manifest.permission.ACCESS_FINE_LOCATION,
+    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
     @SuppressLint("MissingPermission")
-    private suspend fun requestLocation(priority: Int, maxUpdateAgeMillis: Long): Location? =
+    private suspend fun requestLocation(priority: Int, maxUpdateAgeMillis: Long, waitMs: Long = LOCATION_REQUEST_DURATION_MS): Location? =
         suspendCancellableCoroutine { cont ->
             val cts = CancellationTokenSource()
             val request = CurrentLocationRequest.Builder()
                 .setPriority(priority)
                 .setMaxUpdateAgeMillis(maxUpdateAgeMillis)
-                .setDurationMillis(LOCATION_REQUEST_DURATION_MS)
+                .setDurationMillis(waitMs)
                 .build()
             fusedClient.getCurrentLocation(request, cts.token)
                 .addOnSuccessListener { location: Location? ->
@@ -124,6 +144,27 @@ class LocationProvider @Inject constructor(
                     cont.resume(null)
                 }
         }
+
+    /** The newest fix Android's own location providers hold, asking the GPS for one when they hold none. */
+    @SuppressLint("MissingPermission")
+    private suspend fun platformLocation(): Location? {
+        val manager = context.getSystemService(Context.LOCATION_SERVICE) as? android.location.LocationManager ?: return null
+        val held = runCatching {
+            manager.getProviders(true).mapNotNull { manager.getLastKnownLocation(it) }.maxByOrNull { it.time }
+        }.getOrNull()
+        if (held != null || android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) return held
+        val provider = listOf(android.location.LocationManager.GPS_PROVIDER, android.location.LocationManager.NETWORK_PROVIDER)
+            .firstOrNull { runCatching { manager.isProviderEnabled(it) }.getOrDefault(false) } ?: return null
+        return kotlinx.coroutines.withTimeoutOrNull(PRECISE_WAIT_MS) {
+            suspendCancellableCoroutine { cont ->
+                val signal = android.os.CancellationSignal()
+                runCatching {
+                    manager.getCurrentLocation(provider, signal, context.mainExecutor) { fix -> if (cont.isActive) cont.resume(fix) }
+                }.onFailure { if (cont.isActive) cont.resume(null) }
+                cont.invokeOnCancellation { signal.cancel() }
+            }
+        }
+    }
 
     @Suppress("DEPRECATION")
     suspend fun getLocationName(lat: Double, lon: Double): String = withContext(Dispatchers.IO) {

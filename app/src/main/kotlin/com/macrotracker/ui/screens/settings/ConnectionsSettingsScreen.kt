@@ -70,6 +70,7 @@ fun ConnectionsSettingsScreen(
     val calendarConnected by viewModel.calendarConnected.collectAsState()
     val masterHealthConnectEnabled by viewModel.masterHealthConnectEnabled.collectAsState()
     val masterWeatherEnabled by viewModel.masterWeatherEnabled.collectAsState()
+    val rainAlerts by viewModel.rainAlerts.collectAsState()
     val masterCalendarEnabled by viewModel.masterCalendarEnabled.collectAsState()
     val tempUnit by viewModel.tempUnit.collectAsState()
     val windUnit by viewModel.windUnit.collectAsState()
@@ -267,6 +268,28 @@ fun ConnectionsSettingsScreen(
             WidgetExpandSection(visible = masterWeatherEnabled) {
                 Column {
                     Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Rain alerts",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary,
+                        modifier = Modifier.padding(bottom = 2.dp),
+                    )
+                    Text(
+                        text = "A notification when the radar shows rain 10 to 60 minutes away",
+                        fontSize = 12.sp,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(bottom = 6.dp),
+                    )
+                    SettingsSegmentedToggle(
+                        options = listOf(true to "On", false to "Off"),
+                        selected = rainAlerts,
+                        onSelect = {
+                            haptics.tick()
+                            viewModel.setRainAlerts(it)
+                        },
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
                     Text(
                         text = "Units",
                         fontSize = 13.sp,

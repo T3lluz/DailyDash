@@ -66,6 +66,8 @@ import com.macrotracker.ui.theme.TextTertiary
 import com.macrotracker.ui.theme.WeatherRain
 import com.macrotracker.ui.theme.WeatherSun
 import com.macrotracker.ui.util.rememberHaptics
+import com.macrotracker.data.remote.WeatherMath
+import com.macrotracker.ui.util.rememberClock24
 import com.macrotracker.ui.viewmodel.WeatherUiState
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -93,19 +95,28 @@ internal fun WeatherExpandedForecast(
     var openDay by rememberSaveable { mutableStateOf<String?>(null) }
     val haptics = rememberHaptics()
 
+    val clock24 = rememberClock24()
     Column(modifier = Modifier.fillMaxWidth()) {
-        Spacer(Modifier.height(12.dp))
-        NowPanel(advice = successState.clothingAdvice, weather = weather, windUnit = windUnit, accent = accent)
+        // the radar's next ninety minutes, when there is rain on it
+        if (weather.nowcast.any { it.mmPerHour >= WeatherMath.WET }) {
+            Spacer(Modifier.height(10.dp))
+            RainNowcast(weather.nowcast)
+        }
 
         val next = weather.hourlyForecasts.take(24)
-        if (next.isNotEmpty()) {
-            SectionLabel("Next 24 hours", rainOutlook(next))
-            HourlyTimeline(steps = next, tempUnit = tempUnit, windUnit = windUnit, accent = accent)
+        if (next.size >= 4) {
+            SectionLabel("Next ${next.size} hours", "Drag to read an hour")
+            HourlyExplorer(steps = next, tempUnit = tempUnit, windUnit = windUnit, accent = accent, clock24 = clock24)
+        }
+
+        successState.clothingAdvice?.let { advice ->
+            Spacer(Modifier.height(8.dp))
+            WearRow(advice)
         }
 
         val days = weather.dailyForecasts
         if (days.isNotEmpty()) {
-            SectionLabel("${days.size}-day forecast", "Tap a day for its hours")
+            SectionLabel("${days.size}-day forecast", "Tap a day to open it")
             val weekLow = days.minOf { it.minTemp }
             val weekHigh = days.maxOf { it.maxTemp }
             Column(
@@ -118,6 +129,13 @@ internal fun WeatherExpandedForecast(
                     if (i > 0) Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp).height(1.dp).background(Color.White.copy(alpha = 0.06f)))
                     DayRow(
                         day = day,
+                        // a day is its hours from the first to the last; what is left of today runs on
+                        // into tomorrow until there is half a day to look at
+                        steps = if (day.isToday && day.steps.size < 12) {
+                            day.steps + days.getOrNull(i + 1)?.steps.orEmpty().take(12 - day.steps.size)
+                        } else {
+                            day.steps
+                        },
                         open = openDay == day.dateFull,
                         weekLow = weekLow,
                         weekHigh = weekHigh,
@@ -125,6 +143,7 @@ internal fun WeatherExpandedForecast(
                         accent = accent,
                         tempUnit = tempUnit,
                         windUnit = windUnit,
+                        clock24 = clock24,
                         onToggle = {
                             val opening = openDay != day.dateFull
                             openDay = if (opening) day.dateFull else null
@@ -134,6 +153,9 @@ internal fun WeatherExpandedForecast(
                 }
             }
         }
+
+        SectionLabel("Right now", null)
+        ConditionsGrid(weather = weather, tempUnit = tempUnit, windUnit = windUnit, accent = accent, clock24 = clock24)
 
         Spacer(Modifier.height(4.dp))
         WidgetExpandBar(
@@ -169,340 +191,16 @@ private fun SectionLabel(title: String, note: String?) {
     }
 }
 
-/** "Rain likely from 3 PM", or that the day stays dry: the one thing worth knowing about the hours. */
-private fun rainOutlook(steps: List<HourlyForecast>): String {
-    val wet = steps.firstOrNull { (it.precipProbability ?: 0) >= 40 || (it.precipitation ?: 0.0) >= 0.3 }
-    return when {
-        wet == null -> "Dry"
-        wet == steps.first() -> "Rain now" + (steps.firstOrNull { (it.precipProbability ?: 0) < 30 && (it.precipitation ?: 0.0) < 0.1 }?.let { ", easing ${it.time}" } ?: "")
-        else -> "Rain likely from ${wet.time}"
-    }
-}
-
-// ── Now: what to wear and the conditions, one panel ────────────────────────────
-
-@Composable
-private fun NowPanel(advice: ClothingAdvice?, weather: WeatherInfo, windUnit: WindUnit, accent: Color) {
-    var detailOpen by rememberSaveable { mutableStateOf(false) }
-    val haptics = rememberHaptics()
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(PanelShape)
-            .background(PanelFill)
-            .padding(vertical = 10.dp),
-    ) {
-        if (advice != null) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        detailOpen = !detailOpen
-                        if (detailOpen) haptics.toggleOn() else haptics.toggleOff()
-                    }
-                    .padding(horizontal = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .background(accent.copy(alpha = 0.22f), RoundedCornerShape(9.dp)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(AppIcons.Shirt, contentDescription = null, tint = accent, modifier = Modifier.size(16.dp))
-                }
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("WHAT TO WEAR", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = accent, letterSpacing = 0.6.sp)
-                    Text(
-                        advice.headline,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                Icon(
-                    if (detailOpen) AppIcons.ChevronUp else AppIcons.ChevronDown,
-                    contentDescription = if (detailOpen) "Less" else "Why",
-                    tint = TextTertiary,
-                    modifier = Modifier.size(16.dp),
-                )
-            }
-            AnimatedVisibility(detailOpen, enter = MacroMotion.expandEnter, exit = MacroMotion.expandExit) {
-                Text(
-                    advice.detail,
-                    fontSize = 12.sp,
-                    color = TextSecondary,
-                    lineHeight = 17.sp,
-                    modifier = Modifier.padding(start = 50.dp, end = 12.dp, top = 6.dp),
-                )
-            }
-            if (advice.items.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                SideRow {
-                    advice.items.forEach { item ->
-                        Chip(label = item.label) {
-                            Icon(painterResource(item.icon.iconRes), contentDescription = null, tint = TextPrimary, modifier = Modifier.size(14.dp))
-                        }
-                    }
-                }
-            }
-            Spacer(Modifier.height(10.dp))
-            Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp).height(1.dp).background(Color.White.copy(alpha = 0.06f)))
-            Spacer(Modifier.height(10.dp))
-        }
-        SideRow {
-            Condition(R.drawable.ic_weather_wind, "Wind", WeatherUnits.formatWind(weather.windSpeed, windUnit), TextPrimary)
-            weather.windGust?.let { Condition(R.drawable.ic_weather_wind, "Gusts", WeatherUnits.formatWind(it, windUnit), TextPrimary) }
-            weather.precipitation?.let { Condition(R.drawable.ic_weather_precip, "Rain", rainAmount(it), WeatherRain) }
-            weather.humidity?.let { Condition(R.drawable.ic_humidity, "Humidity", "${it.toInt()}%", WeatherRain) }
-            weather.uvIndex?.let { Condition(R.drawable.ic_uv_index, "UV", String.format(Locale.US, "%.0f", it), WeatherSun) }
-            weather.sunrise?.let { Condition(R.drawable.ic_sunrise, "Sunrise", it, WeatherSun) }
-            weather.sunset?.let { Condition(R.drawable.ic_sunset, "Sunset", it, NutritionCalories) }
-        }
-    }
-}
-
-/** A row that scrolls sideways inside the card without fighting the page's own scroll. */
-@Composable
-private fun SideRow(content: @Composable () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .nestedScroll(rememberWidgetCrossAxisScrollLock())
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) { content() }
-}
-
-@Composable
-private fun Chip(label: String, icon: @Composable () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .background(Color.White.copy(alpha = 0.09f), RoundedCornerShape(999.dp))
-            .padding(horizontal = 9.dp, vertical = 5.dp),
-    ) {
-        icon()
-        Spacer(Modifier.width(5.dp))
-        Text(label, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = TextPrimary, maxLines = 1)
-    }
-}
-
-@Composable
-private fun Condition(iconRes: Int, label: String, value: String, tint: Color) {
-    Column(
-        modifier = Modifier
-            .background(Color.White.copy(alpha = 0.06f), RoundedCornerShape(10.dp))
-            .padding(horizontal = 10.dp, vertical = 6.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(painterResource(iconRes), contentDescription = null, tint = tint, modifier = Modifier.size(11.dp))
-            Spacer(Modifier.width(4.dp))
-            Text(label.uppercase(Locale.US), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = TextTertiary, letterSpacing = 0.4.sp)
-        }
-        Text(value, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1)
-    }
-}
-
-// ── The timeline: time, sky, a temperature curve, rain and wind, sideways ──────
-
-private val StepWidth = 54.dp
-private val CurveHeight = 46.dp
-private val CurveLabel = 16.dp
-
-/**
- * Forecast steps side by side with one temperature curve drawn through them, so the
- * shape of the day reads at a glance and each number sits on its point. Rain gets its
- * millimetres and a bar for how much; wind sits underneath. When the steps fit the width
- * (a far day's four six-hour steps) they share it instead of scrolling.
- */
-@Composable
-internal fun HourlyTimeline(
-    steps: List<HourlyForecast>,
-    tempUnit: TempUnit,
-    windUnit: WindUnit,
-    accent: Color,
-    modifier: Modifier = Modifier,
-) {
-    if (steps.isEmpty()) return
-    val temps = remember(steps, tempUnit) { steps.map { WeatherUnits.celsiusToDisplay(it.temperature, tempUnit) } }
-    val lo = temps.min()
-    val hi = temps.max()
-    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
-        val fits = maxWidth >= StepWidth * steps.size
-        val step: Dp = if (fits) maxWidth / steps.size else StepWidth
-        val total = step * steps.size
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(PanelShape)
-                .background(PanelFill)
-                .nestedScroll(rememberWidgetCrossAxisScrollLock())
-                .horizontalScroll(rememberScrollState(), enabled = !fits),
-        ) {
-            Column(Modifier.width(total).padding(vertical = 10.dp)) {
-                Row {
-                    steps.forEachIndexed { i, s ->
-                        Text(
-                            if (i == 0 && steps.first().isNow()) "Now" else s.time,
-                            fontSize = 11.sp,
-                            fontWeight = if (i == 0) FontWeight.SemiBold else FontWeight.Medium,
-                            color = if (i == 0) TextPrimary else TextSecondary,
-                            textAlign = TextAlign.Center,
-                            maxLines = 1,
-                            modifier = Modifier.width(step),
-                        )
-                    }
-                }
-                Spacer(Modifier.height(4.dp))
-                Row {
-                    steps.forEach { s ->
-                        Box(Modifier.width(step), contentAlignment = Alignment.Center) {
-                            Icon(
-                                painterResource(s.iconRes),
-                                contentDescription = s.description,
-                                tint = Color.Unspecified,
-                                modifier = Modifier.size(26.dp),
-                            )
-                        }
-                    }
-                }
-                TemperatureCurve(temps = temps, lo = lo, hi = hi, step = step, accent = accent)
-                Row {
-                    steps.forEach { s -> RainCell(s, Modifier.width(step)) }
-                }
-                Spacer(Modifier.height(4.dp))
-                // Wind, with its unit on every value so the row needs no legend.
-                Row {
-                    steps.forEach { s ->
-                        Row(
-                            modifier = Modifier.width(step),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                painterResource(R.drawable.ic_weather_wind),
-                                contentDescription = "Wind",
-                                tint = TextTertiary,
-                                modifier = Modifier.size(9.dp),
-                            )
-                            Spacer(Modifier.width(2.dp))
-                            Text(
-                                WeatherUnits.formatWind(s.windSpeed, windUnit),
-                                fontSize = 9.sp,
-                                color = TextTertiary,
-                                maxLines = 1,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-private fun HourlyForecast.isNow(): Boolean {
-    val at = epochMillis ?: return false
-    return kotlin.math.abs(System.currentTimeMillis() - at) < 45 * 60_000L
-}
-
-@Composable
-private fun TemperatureCurve(temps: List<Double>, lo: Double, hi: Double, step: Dp, accent: Color) {
-    val span = (hi - lo).takeIf { it > 0.5 } ?: 1.0
-    // Where each point sits, as a fraction of the drawable height (0 top, 1 bottom).
-    val ys = remember(temps, lo, span) { temps.map { 1f - ((it - lo) / span).toFloat() } }
-    Box(
-        modifier = Modifier
-            .width(step * temps.size)
-            .height(CurveHeight + CurveLabel)
-            .drawBehind {
-                val top = CurveLabel.toPx()
-                val h = size.height - top - 6.dp.toPx()
-                val w = step.toPx()
-                val pts = ys.mapIndexed { i, y -> Offset(w * i + w / 2f, top + y * h) }
-                val line = Path().apply {
-                    pts.forEachIndexed { i, p ->
-                        if (i == 0) {
-                            moveTo(p.x, p.y)
-                        } else {
-                            val prev = pts[i - 1]
-                            val mid = (prev.x + p.x) / 2f
-                            cubicTo(mid, prev.y, mid, p.y, p.x, p.y)
-                        }
-                    }
-                }
-                val fill = Path().apply {
-                    addPath(line)
-                    lineTo(pts.last().x, size.height)
-                    lineTo(pts.first().x, size.height)
-                    close()
-                }
-                drawPath(fill, Brush.verticalGradient(listOf(accent.copy(alpha = 0.22f), Color.Transparent), startY = top, endY = size.height))
-                drawPath(line, accent, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
-                pts.forEach { p -> drawCircle(accent, radius = 2.5.dp.toPx(), center = p) }
-            },
-    ) {
-        temps.forEachIndexed { i, t ->
-            Text(
-                "${t.roundToInt()}°",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                modifier = Modifier
-                    .width(step)
-                    .offset {
-                        val h = (CurveHeight - 6.dp).toPx()
-                        IntOffset((step * i).roundToPx(), (ys[i] * h).roundToInt() - 2.dp.roundToPx())
-                    },
-            )
-        }
-    }
-}
-
-/** "0 mm" when nothing falls, else the amount to a tenth ("0.4 mm"). */
-private fun rainAmount(mm: Double): String = if (mm < 0.05) "0 mm" else WeatherUnits.formatPrecipMm(mm)
-
-/**
- * Rain for one step: a bar for how much, and the amount in millimetres. A dry step says
- * so with a dash.
- */
-@Composable
-private fun RainCell(step: HourlyForecast, modifier: Modifier) {
-    val mm = step.precipitation ?: 0.0
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.width(18.dp).height(10.dp), contentAlignment = Alignment.BottomCenter) {
-            if (mm >= 0.1) {
-                val frac = (mm / 4.0).coerceIn(0.15, 1.0).toFloat()
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight(frac)
-                        .background(WeatherRain.copy(alpha = 0.75f), RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp)),
-                )
-            }
-        }
-        Text(
-            if (mm >= 0.1) WeatherUnits.formatPrecipMm(mm) else "–",
-            fontSize = 10.sp,
-            fontWeight = if (mm >= 0.1) FontWeight.SemiBold else FontWeight.Normal,
-            color = if (mm >= 0.1) WeatherRain else TextTertiary,
-            maxLines = 1,
-        )
-    }
-}
-
 // ── The week, one line a day ───────────────────────────────────────────────────
 
+/**
+ * A day in a row: which day, its sky in a word, its rain, and where its low and high fall
+ * in the week's range. Opened, it is the whole day ([DayDetail]).
+ */
 @Composable
 private fun DayRow(
     day: DailyForecast,
+    steps: List<HourlyForecast>,
     open: Boolean,
     weekLow: Double,
     weekHigh: Double,
@@ -510,29 +208,38 @@ private fun DayRow(
     accent: Color,
     tempUnit: TempUnit,
     windUnit: WindUnit,
+    clock24: Boolean,
     onToggle: () -> Unit,
 ) {
     val chevron by animateFloatAsState(if (open) 180f else 0f, MacroMotion.entranceSpring(), label = "dayChevron")
+    val dateLine = remember(day.dateFull) {
+        runCatching { java.time.LocalDate.parse(day.dateFull).format(java.time.format.DateTimeFormatter.ofPattern("d MMM", Locale.getDefault())) }.getOrDefault("")
+    }
     Column(Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(onClick = onToggle)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 12.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                day.date,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = if (day.isToday) accent else TextPrimary,
-                maxLines = 1,
-                modifier = Modifier.width(50.dp),
-            )
-            Icon(painterResource(day.iconRes), contentDescription = day.description, tint = Color.Unspecified, modifier = Modifier.size(26.dp))
-            Column(Modifier.width(44.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                day.precipitation?.takeIf { it >= 0.1 }?.let {
-                    Text(WeatherUnits.formatPrecipMm(it), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = WeatherRain, maxLines = 1)
+            Column(Modifier.width(50.dp)) {
+                Text(day.date, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = if (day.isToday) accent else TextPrimary, maxLines = 1)
+                if (dateLine.isNotBlank()) Text(dateLine, fontSize = 10.5.sp, color = TextTertiary, maxLines = 1)
+            }
+            Icon(painterResource(day.iconRes), contentDescription = null, tint = Color.Unspecified, modifier = Modifier.size(28.dp))
+            Column(Modifier.weight(1f).padding(start = 8.dp, end = 6.dp)) {
+                Text(day.description, fontSize = 12.5.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val wet = (day.precipitation ?: 0.0) >= 0.1
+                val chance = day.precipProbability ?: 0
+                if (wet || chance >= 20) {
+                    Text(
+                        listOfNotNull(
+                            day.precipitation?.takeIf { it >= 0.1 }?.let { WeatherUnits.formatPrecipMm(it) },
+                            chance.takeIf { it >= 20 }?.let { "$it%" },
+                        ).joinToString(" · "),
+                        fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = WeatherRain, maxLines = 1,
+                    )
                 }
             }
             Text(
@@ -540,7 +247,7 @@ private fun DayRow(
                 fontSize = 13.sp,
                 color = TextTertiary,
                 textAlign = TextAlign.End,
-                modifier = Modifier.width(34.dp),
+                modifier = Modifier.width(30.dp),
             )
             RangeBar(
                 low = day.minTemp,
@@ -548,71 +255,34 @@ private fun DayRow(
                 weekLow = weekLow,
                 weekHigh = weekHigh,
                 now = nowTemp,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 8.dp),
+                modifier = Modifier.width(62.dp).padding(horizontal = 6.dp),
             )
             Text(
                 WeatherUnits.formatTempValue(day.maxTemp, tempUnit),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary,
-                modifier = Modifier.width(34.dp),
+                modifier = Modifier.width(30.dp),
             )
             Icon(
                 AppIcons.ChevronDown,
-                contentDescription = if (open) "Hide ${day.date}'s hours" else "Show ${day.date}'s hours",
+                contentDescription = if (open) "Close ${day.date}" else "Open ${day.date}",
                 tint = TextTertiary,
                 modifier = Modifier.size(16.dp).graphicsLayer { rotationZ = chevron },
             )
         }
         AnimatedVisibility(open, enter = MacroMotion.expandEnter, exit = MacroMotion.expandExit) {
-            Column(Modifier.padding(start = 8.dp, end = 8.dp, bottom = 10.dp)) {
-                val steps = remember(day.steps) { everyOtherHour(day.steps) }
-                if (steps.isNotEmpty()) {
-                    HourlyTimeline(steps = steps, tempUnit = tempUnit, windUnit = windUnit, accent = accent)
-                    Spacer(Modifier.height(8.dp))
-                }
-                SideRow {
-                    Chip(day.description) {
-                        Icon(painterResource(day.iconRes), contentDescription = null, tint = Color.Unspecified, modifier = Modifier.size(14.dp))
-                    }
-                    day.windSpeed?.let {
-                        Chip(WeatherUnits.formatWind(it, windUnit)) {
-                            Icon(painterResource(R.drawable.ic_weather_wind), contentDescription = "Wind", tint = TextPrimary, modifier = Modifier.size(12.dp))
-                        }
-                    }
-                    day.precipitation?.takeIf { it >= 0.1 }?.let {
-                        Chip(WeatherUnits.formatPrecipMm(it)) {
-                            Icon(painterResource(R.drawable.ic_weather_precip), contentDescription = "Rain", tint = WeatherRain, modifier = Modifier.size(12.dp))
-                        }
-                    }
-                    day.humidity?.let {
-                        Chip("${it.toInt()}%") {
-                            Icon(painterResource(R.drawable.ic_humidity), contentDescription = "Humidity", tint = WeatherRain, modifier = Modifier.size(12.dp))
-                        }
-                    }
-                }
-            }
+            DayDetail(
+                steps = steps,
+                isToday = day.isToday,
+                tempUnit = tempUnit,
+                windUnit = windUnit,
+                accent = accent,
+                clock24 = clock24,
+                modifier = Modifier.padding(top = 2.dp, bottom = 12.dp),
+            )
         }
     }
-}
-
-/**
- * A day's steps thinned to one every two hours at most. Where the forecast is already
- * six-hourly every step stays, so a far day keeps its four.
- */
-internal fun everyOtherHour(steps: List<HourlyForecast>): List<HourlyForecast> {
-    val out = ArrayList<HourlyForecast>(steps.size)
-    var last = Long.MIN_VALUE
-    for (s in steps) {
-        val at = s.epochMillis ?: continue
-        if (out.isEmpty() || at - last >= 2 * 3_600_000L - 60_000L) {
-            out += s
-            last = at
-        }
-    }
-    return out
 }
 
 /**

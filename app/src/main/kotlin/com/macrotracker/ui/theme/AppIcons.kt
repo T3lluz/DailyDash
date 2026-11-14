@@ -286,6 +286,16 @@ object AppIcons {
     val ListChecks: ImageVector by lazy { icon("ListChecks") { s("m3 17 l2 2 l4 -4"); s("m3 7 l2 2 l4 -4"); s("M13 6 h8"); s("M13 12 h8"); s("M13 18 h8") } }
     /** Lucide `brain` */
     val Brain: ImageVector by lazy { icon("Brain") { s("M12 18 V5"); s("M15 13 a4.17 4.17 0 0 1 -3 -4 a4.17 4.17 0 0 1 -3 4"); s("M17.707 6.294 A3 3 0 1 0 12 5 a3 3 0 1 0 -5.707 1.294"); s("M17.996 5.125 a4 4 0 0 1 2.526 5.77"); s("M18 18 a4 4 0 0 0 2 -7.465"); s("M19.967 17.482 a4 4 0 1 1 -7.967 0.517 a4 4 0 1 1 -7.967 -0.517"); s("M6 18 a4 4 0 0 1 -2 -7.465"); s("M6.004 5.125 a4 4 0 0 0 -2.526 5.77") } }
+    /** Lucide `sun` */
+    val Sun: ImageVector by lazy { icon("Sun") { s("M8 12 a4 4 0 1 0 8 0 a4 4 0 1 0 -8 0"); s("M12 2 v2"); s("M12 20 v2"); s("m4.93 4.93 l1.41 1.41"); s("m17.66 17.66 l1.41 1.41"); s("M2 12 h2"); s("M20 12 h2"); s("m6.34 17.66 l-1.41 1.41"); s("m19.07 4.93 l-1.41 1.41") } }
+    /** Lucide `umbrella` */
+    val Umbrella: ImageVector by lazy { icon("Umbrella") { s("M12 13 v7 a2 2 0 0 0 4 0"); s("M12 2 v2"); s("M20.992 13 a1 1 0 0 0 0.97 -1.274 a10.284 10.284 0 0 0 -19.923 0 A1 1 0 0 0 3 13 z") } }
+    /** Lucide `sunset` */
+    val Sunset: ImageVector by lazy { icon("Sunset") { s("M12 10 V2"); s("m4.93 10.93 l1.41 1.41"); s("M2 18 h2"); s("M20 18 h2"); s("m19.07 10.93 l-1.41 1.41"); s("M22 22 H2"); s("m16 6 l-4 4 l-4 -4"); s("M16 18 a4 4 0 0 0 -8 0") } }
+    /** Lucide `waves-horizontal` */
+    val Waves: ImageVector by lazy { icon("Waves") { s("M2 12 q2.5 2 5 0 t5 0 t5 0 t5 0"); s("M2 19 q2.5 2 5 0 t5 0 t5 0 t5 0"); s("M2 5 q2.5 2 5 0 t5 0 t5 0 t5 0") } }
+    /** Lucide `snowflake` */
+    val Snowflake: ImageVector by lazy { icon("Snowflake") { s("m10 20 l-1.25 -2.5 L6 18"); s("M10 4 L8.75 6.5 L6 6"); s("m14 20 l1.25 -2.5 L18 18"); s("m14 4 l1.25 2.5 L18 6"); s("m17 21 l-3 -6 h-4"); s("m17 3 l-3 6 l1.5 3"); s("M2 12 h6.5 L10 9"); s("m20 10 l-1.5 2 l1.5 2"); s("M22 12 h-6.5 L14 15"); s("m4 10 l1.5 2 L4 14"); s("m7 21 l3 -6 l-1.5 -3"); s("m7 3 l3 6 h4") } }
     /** Lucide `globe` */
     val Globe: ImageVector by lazy { icon("Globe") { s("M2 12 a10 10 0 1 0 20 0 a10 10 0 1 0 -20 0"); s("M12 2 a14.5 14.5 0 0 0 0 20 a14.5 14.5 0 0 0 0 -20"); s("M2 12 h20") } }
     /** Lucide `wrench` */

@@ -87,16 +87,6 @@ class MarkdownParserTest {
         assertEquals(MdBlock.Code("python", "print(1)", open = true), blocks[2])
     }
 
-    @Test
-    fun `a day's hourly steps thin to every other hour and six-hourly ones stay`() {
-        fun step(hour: Int) = HourlyForecast(
-            time = "$hour", temperature = 0.0, iconRes = 0, windSpeed = 0.0,
-            description = "", symbolCode = "", epochMillis = hour * 3_600_000L,
-        )
-        val hours = (0..11).map(::step) + listOf(18, 24).map(::step)
-        assertEquals(listOf("0", "2", "4", "6", "8", "10", "18", "24"), everyOtherHour(hours).map { it.time })
-    }
-
     @Test(timeout = 2_000)
     fun `a list indented with a tab or a no-break space still parses, and never hangs`() {
         val tab = MarkdownParser.parse("\t- one\n\t- two").single() as MdBlock.ListBlock

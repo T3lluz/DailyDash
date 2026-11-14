@@ -30,7 +30,18 @@ data class HourlyForecast(
     val precipitation: Double? = null, // mm for next_1_hours
     val precipProbability: Int? = null, // 0–100
     val epochMillis: Long? = null,
+    /** What the hour feels like once wind and humidity are counted ([WeatherMath.apparentTemperature]). */
+    val feelsLike: Double? = null,
+    val windGust: Double? = null,
+    /** Where the wind comes from, in degrees from north. */
+    val windDirection: Double? = null,
+    val humidity: Double? = null,
+    val uvIndex: Double? = null,
+    val cloudCover: Double? = null,
 )
+
+/** Rain by the five minutes, from MET's radar nowcast: the next hour and a half, where the radar reaches. */
+data class RainStep(val epochMillis: Long, val mmPerHour: Double)
 
 /** One of Morning / Afternoon / Evening within a daily forecast. */
 data class DayPeriodForecast(
@@ -75,7 +86,15 @@ data class WeatherInfo(
     val description: String,
     val iconRes: Int,
     val locationName: String = "",
-    val feelsLike: Double? = null,      // dew-point-based approximation from Yr.no
+    /** What it feels like once wind and humidity are counted ([WeatherMath.apparentTemperature]). */
+    val feelsLike: Double? = null,
+    val dewPoint: Double? = null,
+    /** Where the wind comes from, in degrees from north. */
+    val windDirection: Double? = null,
+    /** The next hour and a half of rain by the five minutes; empty outside the radar's reach. */
+    val nowcast: List<RainStep> = emptyList(),
+    /** The sun and moon, the sea and the aurora forecast, each where there is one. */
+    val extras: WeatherExtras = WeatherExtras(),
     val humidity: Double? = null,       // relative_humidity from Yr.no
     val precipProbability: Int? = null, // next-hour chance of precipitation
     /** Millimetres expected in the coming hour (the next six when the feed has no hourly step). */
@@ -123,7 +142,9 @@ class WeatherRepository @Inject constructor(
         private const val BASE_URL =
             "https://api.met.no/weatherapi/locationforecast/2.0/complete"
         private const val USER_AGENT = "DailyDash/1.0 (Android; daily-dash-app)"
-        private const val CACHE_TTL_MS = 8 * 60 * 1000L // 8 minutes — keeps What to Wear current
+        private const val CACHE_TTL_MS = 5 * 60 * 1000L // five minutes: fresh each time Home asks again
+        private const val NOWCAST_URL = "https://api.met.no/weatherapi/nowcast/2.0/complete"
+        private const val NOWCAST_TTL_MS = 4 * 60 * 1000L // the radar turns every five
         private const val ALERTS_URL = "https://api.met.no/weatherapi/metalerts/2.0/current.json"
         private const val WARNINGS_TTL_MS = 15 * 60 * 1000L
         private val WARNING_RANK = mapOf("red" to 3, "orange" to 2, "yellow" to 1)
@@ -202,6 +223,46 @@ class WeatherRepository @Inject constructor(
         cachedLon = roundedLon
         cacheTimestamp = now
         result
+    }
+
+    private var cachedNowcast: List<RainStep> = emptyList()
+    private var nowcastKey: String = ""
+    private var nowcastAt: Long = 0L
+
+    /**
+     * Rain for the next hour and a half by the five minutes, from MET's radar nowcast: what is
+     * on the radar now, moved along. It only reaches the Nordics, and only where the radar
+     * sees; anywhere else, and on any failure, it is empty and the hourly forecast stands alone.
+     */
+    suspend fun fetchNowcast(lat: Double, lon: Double, force: Boolean = false): List<RainStep> = withContext(Dispatchers.IO) {
+        val key = String.format(Locale.US, "%.2f,%.2f", lat, lon)
+        val now = System.currentTimeMillis()
+        if (!force && key == nowcastKey && now - nowcastAt < NOWCAST_TTL_MS) return@withContext cachedNowcast
+        val steps = runCatching {
+            val url = "$NOWCAST_URL?lat=${String.format(Locale.US, "%.4f", lat)}&lon=${String.format(Locale.US, "%.4f", lon)}"
+            httpClient.newCall(Request.Builder().url(url).header("User-Agent", USER_AGENT).get().build()).execute().use { response ->
+                if (!response.isSuccessful) return@use emptyList()
+                parseNowcast(response.body?.string().orEmpty())
+            }
+        }.getOrDefault(emptyList())
+        cachedNowcast = steps
+        nowcastKey = key
+        nowcastAt = now
+        steps
+    }
+
+    internal fun parseNowcast(body: String): List<RainStep> {
+        val properties = JSONObject(body).optJSONObject("properties") ?: return emptyList()
+        // off the radar the rates are placeholders, not a dry forecast
+        if (properties.optJSONObject("meta")?.optString("radar_coverage") != "ok") return emptyList()
+        val series = properties.optJSONArray("timeseries") ?: return emptyList()
+        return (0 until series.length()).mapNotNull { i ->
+            val entry = series.optJSONObject(i) ?: return@mapNotNull null
+            val rate = entry.optJSONObject("data")?.optJSONObject("instant")?.optJSONObject("details")?.optDouble("precipitation_rate")
+                ?.takeIf { !it.isNaN() } ?: return@mapNotNull null
+            val at = runCatching { Instant.parse(entry.optString("time")).toEpochMilli() }.getOrNull() ?: return@mapNotNull null
+            RainStep(at, rate)
+        }
     }
 
     private var cachedWarnings: List<WeatherWarning> = emptyList()
@@ -293,8 +354,10 @@ class WeatherRepository @Inject constructor(
         val temperature = instant.getDouble("air_temperature")
         val windSpeed = instant.getDouble("wind_speed")
         val humidity = instant.optDouble("relative_humidity").takeIf { !it.isNaN() }
-        // Yr.no doesn't give feels-like directly; use dew point as a proxy when available
-        val feelsLike = instant.optDouble("dew_point_temperature").takeIf { !it.isNaN() }
+        // Feels-like is worked out from wind and humidity; it used to be the dew point under another name.
+        val dewPoint = instant.optDouble("dew_point_temperature").takeIf { !it.isNaN() }
+        val feelsLike = WeatherMath.apparentTemperature(temperature, humidity, windSpeed)
+        val windDirection = instant.optDouble("wind_from_direction").takeIf { !it.isNaN() }
         val windGust = instant.optDouble("wind_speed_of_gust").takeIf { !it.isNaN() }
         val uvIndex = instant.optDouble("ultraviolet_index_clear_sky").takeIf { !it.isNaN() }
         val pressure = instant.optDouble("air_pressure_at_sea_level").takeIf { !it.isNaN() }
@@ -408,6 +471,12 @@ class WeatherRepository @Inject constructor(
                         precipitation = entryPrecip,
                         precipProbability = entryPop,
                         epochMillis = zdt.toInstant().toEpochMilli(),
+                        feelsLike = WeatherMath.apparentTemperature(temp, entryInstant.num("relative_humidity"), wind),
+                        windGust = entryInstant.num("wind_speed_of_gust"),
+                        windDirection = entryInstant.num("wind_from_direction"),
+                        humidity = entryInstant.num("relative_humidity"),
+                        uvIndex = entryInstant.num("ultraviolet_index_clear_sky"),
+                        cloudCover = entryInstant.num("cloud_area_fraction"),
                     )
                 )
                 lastHourlyInstant = zdt.toInstant()
@@ -597,6 +666,8 @@ class WeatherRepository @Inject constructor(
             iconRes = iconRes,
             locationName = locationName,
             feelsLike = feelsLike,
+            dewPoint = dewPoint,
+            windDirection = windDirection,
             humidity = humidity,
             precipProbability = precipProbability,
             precipitation = precipitation,
@@ -612,6 +683,8 @@ class WeatherRepository @Inject constructor(
     }
 
     private fun String.beforeToday(today: String): Boolean = this < today
+
+    private fun JSONObject.num(key: String): Double? = optDouble(key).takeIf { !it.isNaN() }
 
     /**
      * One step of a day's timeline from a forecast entry: its next hour where the feed has
@@ -634,6 +707,12 @@ class WeatherRepository @Inject constructor(
             precipitation = details?.optDouble("precipitation_amount")?.takeIf { !it.isNaN() },
             precipProbability = details?.optDouble("probability_of_precipitation")?.takeIf { !it.isNaN() }?.roundToInt(),
             epochMillis = localTime.toInstant().toEpochMilli(),
+            feelsLike = instant.num("air_temperature")?.let { WeatherMath.apparentTemperature(it, instant.num("relative_humidity"), instant.num("wind_speed") ?: 0.0) },
+            windGust = instant.num("wind_speed_of_gust"),
+            windDirection = instant.num("wind_from_direction"),
+            humidity = instant.num("relative_humidity"),
+            uvIndex = instant.num("ultraviolet_index_clear_sky"),
+            cloudCover = instant.num("cloud_area_fraction"),
         )
     }
 

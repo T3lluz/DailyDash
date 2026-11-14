@@ -92,6 +92,10 @@ class SettingsViewModel @Inject constructor(
         refreshConnectionStatus()
     }
 
+    val rainAlerts: StateFlow<Boolean> = settings.rainAlerts
+
+    fun setRainAlerts(enabled: Boolean) = settings.setRainAlerts(enabled)
+
     fun setMasterWeatherEnabled(enabled: Boolean) {
         settings.setWeatherEnabled(enabled)
         refreshConnectionStatus()

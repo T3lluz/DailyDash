@@ -445,9 +445,44 @@ com.macrotracker/
                               expand/scroll-box helpers. MarkdownParser.kt + MarkdownText.kt: the web's
                               `hermes-markdown.js` rules (GFM tables, nested/task lists, callouts, `run`/`search`
                               fences, diffs); `breaks`/`streaming` for chat. MarkdownParserTest pins it.
-                              WeatherForecast.kt: the opened weather card (one "now" panel, HourlyTimeline with
-                              its temperature curve, a day per row with a range bar that unfolds that day's
-                              `DailyForecast.steps`). CalendarStrip.kt: the calendar card (summary line, a day
+                              The weather card (WeatherCard.kt, WeatherForecast.kt, WeatherDetails.kt), after Pixel
+                              Weather, Carrot and (Not Boring) Weather: the temperature big, the sky beside it, one
+                              line of facts (feels, high and low, wind and where from), then a headline that says
+                              what the sky is about to do (`weatherHeadline`: MET's radar nowcast when it has one,
+                              else the first wet hour) and five hours three apart (`MiniHours`). Opened: the radar's
+                              next ninety minutes as bars when rain is on it (`RainNowcast`), the next 24 hours as
+                              one chart with chips for what it draws and a finger along it to read an hour
+                              (`HourlyExplorer`), what to wear (`WearRow`), every reading as a tile with its own
+                              small picture (`ConditionsGrid`: feels like, wind on a compass, rain, humidity and dew
+                              point, UV on its scale, pressure, cloud, the sun's arc). The order opened is hours,
+                              what to wear (two short lines; a tap says why), the days, then the tiles. A day is a
+                              row (day and date, its sky in a word, rain and chance, the range bar) that opens to
+                              `DayDetail`: its figures in a row, then the whole day as one chart, temperature as a
+                              line with its high and low written on it and rain as bars along the foot, a finger
+                              along it to read an hour. Today keeps the hours already gone (`TodayHistory`, kept
+                              in prefs by `HomeViewModel.withTodayWhole`: MET's feed starts at the hour in hand),
+                              dimmed behind a line at now, and runs on into tomorrow until there are twelve hours
+                              to look at. One tile shape, AppIcons
+                              only, and every time in the phone's clock (`hourShort`). Feels-like is the widget's
+                              sum (`WxConditions.feelsLikeC` through `WeatherMath`); it used to be the dew point.
+                              `WeatherRepository.fetchNowcast` reads `nowcast/2.0` (Nordics, radar coverage "ok"
+                              only; empty anywhere else). `LocationProvider` takes the network fix when it is
+                              within a kilometre (MET's grid), asks the satellites briefly when it is not, and
+                              falls back to Android's own providers where Play Services has nothing; Home
+                              asks again every five minutes while it is in front. WeatherMathTest pins the sums.
+                              Charts never stretch a small change to full height: `chartSpan` gives each reading a
+                              least span (temperature 8°, wind 8 m/s, rain 2 mm; humidity is 0 to 100), so a
+                              one-degree day draws nearly flat (WeatherChartTest), and lines are Catmull-Rom
+                              splines. Under the headline, `GroundLine` warns of ice (wet at about freezing) or
+                              frost in the next eighteen hours (`WeatherMath.groundRisk`). `SkyRepository`
+                              (WeatherExtras.kt) adds MET's sun and moon feed (real rise and set, moon phase, how
+                              the daylight moved since yesterday), MET's ocean forecast (sea temperature and waves;
+                              empty inland) and NOAA's Kp forecast, shown as Moon, Sea and Aurora tiles (the last
+                              from latitude 54 north, against `WeatherMath.kpNeeded`). `RainAlertWorker` reads the
+                              radar every fifteen minutes for the card's last position and notifies "Rain in about
+                              25 min" when a shower that lasts is ten to sixty minutes off, once in three hours,
+                              never while the app is in front (`WeatherMath.rainAlert`; Settings → Connections →
+                              Weather → Rain alerts). CalendarStrip.kt: the calendar card (summary line, a day
                               strip to the last busy day within `CalendarRepository.WINDOW_DAYS`, events in
                               MediaCarousel, agenda). A peek never shows a badge or words: it shows who
                               (`PeekAvatar`, the creator's picture) or when (the calendar's date column), faded

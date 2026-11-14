@@ -25,6 +25,7 @@ import com.macrotracker.data.remote.ClothingAdvice
 import com.macrotracker.data.remote.ClothingAdvisor
 import com.macrotracker.data.remote.LocationProvider
 import com.macrotracker.data.remote.WeatherInfo
+import com.macrotracker.data.remote.TodayHistory
 import com.macrotracker.data.remote.WeatherWarning
 import com.macrotracker.data.remote.WeatherRepository
 import com.macrotracker.ui.screens.health.SleepNightScore
@@ -116,6 +117,7 @@ class HomeViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val repository: MacroRepository,
     private val weatherRepository: WeatherRepository,
+    private val skyRepository: com.macrotracker.data.remote.SkyRepository,
     private val locationProvider: LocationProvider,
     private val healthConnectRepository: HealthConnectRepository,
     private val calendarRepository: CalendarRepository,
@@ -126,6 +128,7 @@ class HomeViewModel @Inject constructor(
     companion object {
         private const val TAG = "HomeViewModel"
         private const val WEATHER_PREFS = "daily_dash_weather_cache"
+        private const val KEY_TODAY_HISTORY = "today_history"
     }
 
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd")
@@ -559,7 +562,11 @@ class HomeViewModel @Inject constructor(
             val (weather, warnings) = coroutineScope {
                 val w = async { weatherRepository.fetchWeather(location.latitude, location.longitude, locationName) }
                 val alerts = async { weatherRepository.fetchWarnings(location.latitude, location.longitude, force = forceRefresh) }
-                w.await() to alerts.await()
+                // the radar's next ninety minutes ride along: empty off the radar, never an error
+                val radar = async { weatherRepository.fetchNowcast(location.latitude, location.longitude, force = forceRefresh) }
+                // the sun and moon, the sea and the aurora forecast: slow feeds, each optional
+                val sky = async { skyRepository.fetch(location.latitude, location.longitude, force = forceRefresh) }
+                withTodayWhole(w.await().copy(nowcast = radar.await(), extras = sky.await())) to alerts.await()
             }
             val clothingAdvice = ClothingAdvisor.advise(weather)
             val fetchedAt = weatherRepository.lastFetchTimeMs
@@ -584,6 +591,20 @@ class HomeViewModel @Inject constructor(
                 _weatherState.value = WeatherUiState.Error(e.message ?: "Unknown error")
             }
         }
+    }
+
+    /**
+     * Today with the hours already gone put back ([TodayHistory]), and today's hours kept for
+     * the next fetch, so the day's chart is whole and not only what is left of it.
+     */
+    private fun withTodayWhole(weather: WeatherInfo): WeatherInfo {
+        val today = weather.dailyForecasts.firstOrNull { it.isToday } ?: return weather
+        return runCatching {
+            val prefs = appContext.getSharedPreferences(WEATHER_PREFS, Context.MODE_PRIVATE)
+            val whole = TodayHistory.merge(today.dateFull, TodayHistory.decode(prefs.getString(KEY_TODAY_HISTORY, null)), today.steps)
+            prefs.edit().putString(KEY_TODAY_HISTORY, TodayHistory.encode(today.dateFull, whole)).apply()
+            weather.copy(dailyForecasts = weather.dailyForecasts.map { if (it.isToday) it.copy(steps = whole) else it })
+        }.getOrDefault(weather)
     }
 
     private fun cacheWeatherForWidget(weather: WeatherInfo, latitude: Double, longitude: Double) {

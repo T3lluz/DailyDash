@@ -54,6 +54,8 @@ import com.macrotracker.ui.theme.WeatherBrand
 import com.macrotracker.ui.theme.WeatherRain
 import com.macrotracker.ui.util.LastUpdatedText
 import com.macrotracker.ui.util.rememberHaptics
+import com.macrotracker.data.remote.WeatherMath
+import com.macrotracker.ui.util.rememberClock24
 import com.macrotracker.ui.viewmodel.WeatherUiState
 import com.macrotracker.ui.theme.AppIcons
 import androidx.compose.runtime.getValue
@@ -284,56 +286,56 @@ fun WeatherCard(
 
                             Spacer(modifier = Modifier.height(12.dp))
 
-                            // Current weather — compact: temp + wind only (no rain/humidity %)
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Icon(
-                                    painter = painterResource(weather.iconRes),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(82.dp),
-                                    tint = Color.Unspecified
-                                )
-                                Spacer(Modifier.width(16.dp))
+                            // Now: the number, big; the sky beside it; then what goes with it, in one line.
+                            val clock24 = rememberClock24()
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         WeatherUnits.formatTemp(weather.temperature, tempUnit),
-                                        fontSize = 36.sp,
+                                        fontSize = 54.sp,
+                                        lineHeight = 58.sp,
                                         fontWeight = FontWeight.Bold,
+                                        letterSpacing = (-1.5).sp,
                                         color = TextPrimary,
+                                        maxLines = 1,
                                     )
                                     Text(
                                         weather.description,
-                                        fontSize = 15.sp,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Medium,
                                         color = TextPrimary,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                     )
                                     val todayRange = weather.dailyForecasts.firstOrNull { it.isToday }
                                     val facts = listOfNotNull(
-                                        todayRange?.let {
-                                            "H ${WeatherUnits.formatTempValue(it.maxTemp, tempUnit)} · L ${WeatherUnits.formatTempValue(it.minTemp, tempUnit)}"
-                                        },
                                         weather.feelsLike?.let { "Feels ${WeatherUnits.formatTempValue(it, tempUnit)}" },
+                                        todayRange?.let {
+                                            "H ${WeatherUnits.formatTempValue(it.maxTemp, tempUnit)}  L ${WeatherUnits.formatTempValue(it.minTemp, tempUnit)}"
+                                        },
+                                        WeatherUnits.formatWind(weather.windSpeed, windUnit) +
+                                            (weather.windDirection?.let { " ${WeatherMath.compass(it)}" } ?: ""),
                                     )
-                                    if (facts.isNotEmpty()) {
-                                        Text(
-                                            facts.joinToString(" · "),
-                                            fontSize = 12.sp,
-                                            color = TextSecondary,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.padding(top = 2.dp),
-                                        )
-                                    }
+                                    Text(
+                                        facts.joinToString("  ·  "),
+                                        fontSize = 12.5.sp,
+                                        color = TextSecondary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.padding(top = 3.dp),
+                                    )
                                 }
-                                Spacer(modifier = Modifier.width(8.dp))
-                                WeatherMetricChip(
-                                    iconRes = R.drawable.ic_weather_wind,
-                                    label = WeatherUnits.formatWind(weather.windSpeed, windUnit),
+                                Spacer(Modifier.width(12.dp))
+                                Icon(
+                                    painter = painterResource(weather.iconRes),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(92.dp),
+                                    tint = Color.Unspecified,
                                 )
                             }
+                            Spacer(Modifier.height(12.dp))
+                            WeatherHeadline(remember(weather) { weatherHeadline(weather, clock24) })
+                            GroundLine(weather, tempUnit, clock24, Modifier.padding(top = 6.dp))
 
                             WidgetExpandSection(visible = expanded) {
                                 WeatherExpandedForecast(
@@ -348,6 +350,8 @@ fun WeatherCard(
                             // Folds away as the forecast opens, instead of vanishing.
                             WidgetExpandSection(visible = !expanded) {
                                 Column {
+                                    Spacer(Modifier.height(12.dp))
+                                    MiniHours(weather.hourlyForecasts, tempUnit, clock24)
                                     WidgetExpandFooter(
                                         expanded = false,
                                         onToggle = { expanded = true },
@@ -460,25 +464,3 @@ private fun warningWindow(w: WeatherWarning, zone: ZoneId): String {
 private val WARN_DAY = java.time.format.DateTimeFormatter.ofPattern("EEE", java.util.Locale.ENGLISH)
 private val WARN_TIME = java.time.format.DateTimeFormatter.ofPattern("HH:mm", java.util.Locale.ENGLISH)
 private val WarningOrange = Color(0xFFF08C3A)
-
-@Composable
-private fun WeatherMetricChip(
-    label: String,
-    iconRes: Int,
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        modifier = Modifier
-            .background(Color.White.copy(alpha = 0.12f), RoundedCornerShape(999.dp))
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-    ) {
-        Icon(
-            painter = painterResource(iconRes),
-            contentDescription = null,
-            tint = TextPrimary,
-            modifier = Modifier.size(14.dp),
-        )
-        Text(label, fontSize = 12.sp, color = TextPrimary, fontWeight = FontWeight.Medium, maxLines = 1)
-    }
-}

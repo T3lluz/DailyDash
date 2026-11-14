@@ -206,7 +206,8 @@ fun HomeScreen(
     // wiping them, and nothing runs while the app is in the background.
     LaunchedWhileResumed {
         while (true) {
-            delay(10 * 60 * 1000L)
+            // five minutes: the radar turns that often, and a walk moves the forecast
+            delay(5 * 60 * 1000L)
             today = LocalDate.now()
             greeting = greetingNow()
             val weatherVisible = currentConfigs.any { it.id == "WEATHER" && it.isVisible }
