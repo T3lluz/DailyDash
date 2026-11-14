@@ -25,6 +25,18 @@ fun NavHostController.navigateToTab(route: String, restoreState: Boolean = true)
     }
 }
 
+/**
+ * Opens a tab on the tab itself, for a jump that names what to show (a chat from a
+ * notification, a screen from a widget): its saved state comes back, so its view-models
+ * and scroll are kept, and then any sub-screen that was left open over it is closed.
+ */
+fun NavHostController.navigateToTabRoot(route: String) {
+    navigateToTab(route)
+    // the tab's destination, whose route may carry optional arguments ("ai?tab={tab}…")
+    val tab = graph.firstOrNull { it.route == route || it.route?.startsWith("$route?") == true } ?: return
+    popBackStack(tab.id, inclusive = false)
+}
+
 /** Pushes a sub-screen once: a double tap on whatever opens it can't stack a second copy. */
 fun NavHostController.navigateToSubScreen(route: String) {
     navigate(route) { launchSingleTop = true }

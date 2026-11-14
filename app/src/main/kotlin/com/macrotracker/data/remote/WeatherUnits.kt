@@ -47,9 +47,6 @@ object WeatherUnits {
         return "$value ${unit.label}"
     }
 
-    fun formatWindValue(metersPerSecond: Double, unit: WindUnit): String =
-        msToDisplay(metersPerSecond, unit).roundToInt().toString()
-
     fun formatPrecipMm(mm: Double): String =
         String.format(Locale.US, "%.1f mm", mm)
 }

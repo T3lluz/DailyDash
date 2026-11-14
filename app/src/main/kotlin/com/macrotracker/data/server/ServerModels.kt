@@ -190,8 +190,6 @@ data class ListeningPort(val port: Int, val address: String, val protocol: Strin
             }
         }
 
-    val localOnly: Boolean get() = scope == PortScope.LOOPBACK
-
     private fun isCgnat(a: String): Boolean {
         val parts = a.split('.')
         if (parts.size != 4 || parts[0] != "100") return false

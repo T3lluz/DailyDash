@@ -253,7 +253,6 @@ object MacroMotion {
         /** A slow turn under the morph, degrees per morph. */
         const val TURN_DEG = 45f
 
-        fun <T> stagePop() = spring<T>(dampingRatio = 0.62f, stiffness = 380f)
     }
 
     object CountdownRoll {
@@ -310,14 +309,6 @@ object MacroMotion {
 
     /** The navbar's activity tab rising out of the pill and settling back into it: a touch of give, no wobble. */
     fun <T> navTabSpring() = spring<T>(dampingRatio = 0.82f, stiffness = 420f)
-
-    /** The tab's label changing ("Thinking" → "Running commands"): the old word rolls up, the new one in. */
-    val navTabLabelSwap: ContentTransform
-        get() = ContentTransform(
-            targetContentEnter = slideInVertically(slideTween(260)) { it / 2 } + fadeIn(fadeTween(200)),
-            initialContentExit = slideOutVertically(slideTween(200)) { -it / 2 } + fadeOut(fadeTween(FADE_OUT_MS)),
-            sizeTransform = SizeTransform(clip = false) { _, _ -> tween(260, easing = FastOutSlowInEasing) },
-        )
 
     private const val CAROUSEL_TRAVEL_MIN_MS = 300
     private const val CAROUSEL_TRAVEL_PER_MS = 110

@@ -46,6 +46,7 @@ import com.macrotracker.ui.theme.TextTertiary
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.PhoneHubViewModel
 import kotlinx.coroutines.delay
+import com.macrotracker.ui.util.agoWords
 
 private val HubAccent = Color(0xFFA78BFA)
 
@@ -104,8 +105,8 @@ fun PhoneHubSettingsCard(viewModel: PhoneHubViewModel = hiltViewModel()) {
                 Spacer(Modifier.height(10.dp))
                 val (dot, line) = when {
                     status.waiting -> ServerWarn to "Another phone is paired. Accept this one on the dashboard: the phone button in its top bar."
-                    status.linked -> Success to "Live on the dashboard" + ago(status.lastReportAt, now)?.let { " · reported $it" }.orEmpty()
-                    status.lastReportAt > 0 -> Success to "Reported ${ago(status.lastReportAt, now)}"
+                    status.linked -> Success to "Live on the dashboard" + status.lastReportAt.takeIf { it > 0 }?.let { agoWords(it, now) }?.let { " · reported $it" }.orEmpty()
+                    status.lastReportAt > 0 -> Success to "Reported ${agoWords(status.lastReportAt, now)}"
                     status.error != null -> ServerWarn to "Not reaching the dashboard: ${status.error}"
                     else -> TextTertiary to "Connecting…"
                 }
@@ -206,12 +207,3 @@ fun PhoneHubSettingsCard(viewModel: PhoneHubViewModel = hiltViewModel()) {
     }
 }
 
-private fun ago(at: Long, now: Long): String? {
-    if (at <= 0) return null
-    val s = ((now - at) / 1000).coerceAtLeast(0)
-    return when {
-        s < 45 -> "just now"
-        s < 3600 -> "${(s / 60).coerceAtLeast(1)} min ago"
-        else -> "${s / 3600} h ago"
-    }
-}

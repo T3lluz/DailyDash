@@ -8,7 +8,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -128,6 +127,7 @@ import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import com.macrotracker.ui.components.Hairline
 
 /**
  * Body & Vitals — every body measurement and slow-moving vital Health Connect holds.

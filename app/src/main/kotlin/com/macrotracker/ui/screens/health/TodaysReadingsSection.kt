@@ -26,6 +26,7 @@ import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
+import com.macrotracker.ui.components.Hairline
 
 /**
  * One metric as Today's readings shows it. [state] carries the toggle, the permission

@@ -52,6 +52,7 @@ import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.theme.TextTertiary
 import com.macrotracker.ui.util.rememberReducedMotion
+import com.macrotracker.ui.components.Hairline
 
 // Apple Health's summary card, as a row inside a Health section: the measure's icon and
 // name in its colour, the number big and white with its unit small and grey beside it, one

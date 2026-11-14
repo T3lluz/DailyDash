@@ -1,14 +1,5 @@
 package com.macrotracker.ui.components
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.animateContentSize
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -17,19 +8,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Error
-import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.ServerBrand
 import com.macrotracker.ui.theme.Success
-import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextTertiary
 import com.macrotracker.ui.theme.Warning
 import kotlinx.coroutines.delay
@@ -50,63 +35,6 @@ data class NavActivity(
     /** Other things working at the same time. */
     val more: Int = 0,
 )
-
-/**
- * What the island leads with: opencode's scanner while working (a mark once finished), the
- * label rolling to the next word as it changes, and a clock.
- */
-@Composable
-internal fun NavActivityTabContent(activity: NavActivity, modifier: Modifier = Modifier) {
-    val accent = activity.tone.accent()
-    Row(
-        modifier = modifier
-            .fillMaxHeight()
-            .animateContentSize(MacroMotion.navTabSpring())
-            .padding(start = 14.dp, end = 14.dp, top = 1.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        AnimatedContent(
-            targetState = activity.tone,
-            transitionSpec = { MacroMotion.iconSwapTransition },
-            label = "nav_tab_mark",
-            contentAlignment = Alignment.Center,
-        ) { tone ->
-            when (tone) {
-                NavActivityTone.WORKING -> WorkingScanner(color = accent, blockSize = 4.dp, gap = 2.dp)
-                else -> Icon(
-                    imageVector = tone.icon(),
-                    contentDescription = null,
-                    tint = tone.accent(),
-                    modifier = Modifier.size(14.dp),
-                )
-            }
-        }
-        Spacer(Modifier.width(8.dp))
-        AnimatedContent(
-            targetState = activity.label,
-            transitionSpec = { MacroMotion.navTabLabelSwap },
-            label = "nav_tab_label",
-        ) { label ->
-            Text(
-                text = label,
-                color = TextPrimary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-            )
-        }
-        Spacer(Modifier.width(7.dp))
-        if (activity.tone == NavActivityTone.WORKING) {
-            ElapsedClock(activity.startedAtMs)
-        } else {
-            activity.tookMs?.let { Clock(formatTook(it)) }
-        }
-        if (activity.more > 0) {
-            Spacer(Modifier.width(6.dp))
-            Clock("+${activity.more}")
-        }
-    }
-}
 
 @Composable
 private fun ElapsedClock(startedAtMs: Long) {

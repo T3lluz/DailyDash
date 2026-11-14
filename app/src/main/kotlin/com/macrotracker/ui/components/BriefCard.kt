@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,7 +35,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import android.text.format.DateFormat
 import com.macrotracker.data.brief.DailyBrief
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.ServerBrand
@@ -51,8 +49,8 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import java.util.Locale
+import com.macrotracker.ui.util.rememberClockFormatter
 
 /*
  * The morning briefing, as the web's Today panel shows it: written at 06:45 by the first
@@ -133,9 +131,7 @@ private fun BriefContent(
     val done = fresh && brief.isDone
     val writing = fresh && brief.isWriting
     val failed = fresh && brief.isFailed
-    val clock = remember(context) {
-        DateTimeFormatter.ofPattern(if (DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm a", Locale.getDefault())
-    }
+    val clock = rememberClockFormatter()
     val note = when {
         done -> listOfNotNull(
             brief.by,

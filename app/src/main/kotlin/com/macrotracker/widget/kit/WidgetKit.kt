@@ -49,7 +49,6 @@ import com.macrotracker.data.links.OpenWithActivity
 import com.macrotracker.MainActivity
 import com.macrotracker.R
 import com.macrotracker.widget.RefreshWidgetAction
-import com.macrotracker.widget.WidgetSourceState
 import com.macrotracker.widget.isDataStale
 import com.macrotracker.widget.widgetStatusText
 
@@ -497,45 +496,6 @@ fun SectionLabel(text: String, accent: Color = WK.Sub, trailing: String? = null)
     }
 }
 
-/**
- * A label-over-value tile, the unit of "data dense": `CPU / 34%`.
- * Fill the parent (weight it in a Row) and it centres its content vertically.
- */
-@Composable
-fun StatTile(
-    label: String,
-    value: String,
-    modifier: GlanceModifier = GlanceModifier,
-    valueColor: Color = WK.Text,
-    iconRes: Int? = null,
-    iconTint: Color = WK.Sub,
-    sub: String? = null,
-    bg: Color = WK.Card,
-    valueSize: TextUnit = WT.Body,
-) {
-    Column(
-        modifier.panel(bg, 12.dp).padding(horizontal = 8.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (iconRes != null) {
-                Image(
-                    provider = ImageProvider(iconRes),
-                    contentDescription = null,
-                    modifier = GlanceModifier.size(11.dp),
-                    colorFilter = ColorFilter.tint(iconTint.cp()),
-                )
-                Spacer(GlanceModifier.width(3.dp))
-            }
-            Text(label.uppercase(), style = ts(WT.Micro, WK.Sub, FontWeight.Bold), maxLines = 1)
-        }
-        Text(value, style = ts(valueSize, valueColor, FontWeight.Bold), maxLines = 1)
-        if (!sub.isNullOrBlank()) {
-            Text(sub, style = ts(WT.Micro, WK.Muted), maxLines = 1)
-        }
-    }
-}
-
 /** A 1 dp rule. */
 @Composable
 fun Hairline(color: Color = WK.Divider, vertical: Dp = 0.dp) {
@@ -603,19 +563,6 @@ fun KitEmptyState(
             Spacer(GlanceModifier.height(2.dp))
             Text(detail, style = ts(WT.Small, WK.Sub, align = TextAlign.Center), maxLines = 3)
         }
-    }
-}
-
-/** [KitEmptyState] for the three [WidgetSourceState]s the weather widget already uses. */
-@Composable
-fun KitSourceState(state: WidgetSourceState, subject: String, iconRes: Int, accent: Color, onClick: Action?) {
-    when (state) {
-        WidgetSourceState.NO_PERMISSION ->
-            KitEmptyState(iconRes, WK.Warn, "$subject not shared", "Tap to allow it in DailyDash", onClick)
-        WidgetSourceState.ERROR ->
-            KitEmptyState(iconRes, WK.Bad, "Couldn't read $subject", "Tap to retry in the app", onClick)
-        WidgetSourceState.OK ->
-            KitEmptyState(iconRes, accent, "Nothing to show yet", null, onClick)
     }
 }
 

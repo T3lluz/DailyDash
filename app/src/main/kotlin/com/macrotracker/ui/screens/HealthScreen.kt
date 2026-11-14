@@ -61,7 +61,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.macrotracker.ui.screens.health.ActivitySection
 import com.macrotracker.ui.screens.health.ActivityTrends
 import com.macrotracker.ui.screens.health.ActivityWeekControls
-import com.macrotracker.ui.screens.health.Hairline
 import com.macrotracker.ui.screens.health.activityWeekLabel
 import com.macrotracker.ui.screens.health.AnimatedMacroBarChart
 import com.macrotracker.ui.screens.health.DailyHealthSection
@@ -117,6 +116,7 @@ import java.time.format.TextStyle as JavaTextStyle
 import java.util.Locale
 import kotlin.math.roundToInt
 import com.macrotracker.ui.theme.AppIcons
+import com.macrotracker.ui.components.Hairline
 
 
 @OptIn(ExperimentalLayoutApi::class)

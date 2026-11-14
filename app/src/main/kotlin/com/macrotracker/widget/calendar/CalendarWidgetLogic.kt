@@ -152,7 +152,6 @@ internal object CalendarLogic {
     const val STRIP_H = 38f
     const val GRID_HEAD = 13f
     const val GRID_ROW = 22f
-    const val ROW_H = 32f
     const val MIN_LIST = 64f
     const val WEEK_LOAD_H = 64f
 

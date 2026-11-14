@@ -72,6 +72,7 @@ import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlin.coroutines.cancellation.CancellationException
+import com.macrotracker.ui.navigation.navigateToTabRoot
 
 @Composable
 fun MainScreen(
@@ -196,11 +197,12 @@ fun MainScreen(
         when (where) {
             "console" -> navController.navigateToSubScreen(SubScreenRoutes.CONSOLE)
             "usage" -> navController.navigateToSubScreen(SubScreenRoutes.USAGE)
-            "hermes", "ai" -> if (hasAiApiKey) navController.navigateToTab(Screen.AI.route)
+            // A tab asked for from outside opens on the tab itself, not on a sub-screen left open over it.
+            "hermes", "ai" -> if (hasAiApiKey) navController.navigateToTabRoot(Screen.AI.route)
             // Tilesmith widgets' taps: a screen of the app, or the studio on a design.
-            "home" -> navController.navigateToTab(Screen.Home.route)
-            "health" -> navController.navigateToTab(Screen.Health.route)
-            "settings" -> navController.navigateToTab(Screen.Settings.route)
+            "home" -> navController.navigateToTabRoot(Screen.Home.route)
+            "health" -> navController.navigateToTabRoot(Screen.Health.route)
+            "settings" -> navController.navigateToTabRoot(Screen.Settings.route)
             "widgets" -> navController.navigateToSubScreen(SubScreenRoutes.WIDGETS)
             "servers" -> navController.navigate(SettingsRoutes.SERVER_DASHBOARD) { launchSingleTop = true }
             // The reconnect notification: Permissions opens Google's sheet for what lapsed.
@@ -223,14 +225,14 @@ fun MainScreen(
         if (!onboardingCompleted) return@LaunchedEffect
         if (hasAiApiKey) {
             hermesActivityViewModel.open(threadId)
-            navController.navigateToTab(Screen.AI.route)
+            navController.navigateToTabRoot(Screen.AI.route)
         }
         onHermesRequestHandled()
     }
     val onHermesActivityClick = remember(hermesActivityViewModel, navController) {
         { tab: NavActivity ->
             hermesActivityViewModel.open(tab.key)
-            navController.navigateToTab(Screen.AI.route)
+            navController.navigateToTabRoot(Screen.AI.route)
         }
     }
 
@@ -414,9 +416,9 @@ private fun MainScreenScaffold(
                 when (val target = IslandTarget.of(item)) {
                     is IslandTarget.Chat -> {
                         islandVm.openThread(target.thread)
-                        navController.navigateToTab(Screen.AI.route)
+                        navController.navigateToTabRoot(Screen.AI.route)
                     }
-                    IslandTarget.Hermes -> navController.navigateToTab(Screen.AI.route)
+                    IslandTarget.Hermes -> navController.navigateToTabRoot(Screen.AI.route)
                     IslandTarget.Update -> onOpenUpdate()
                     is IslandTarget.Servers -> {
                         serverViewModel.focusServer(target.serverId)

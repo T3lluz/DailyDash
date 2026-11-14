@@ -44,9 +44,6 @@ object WidgetAi {
         prefs(context).edit().putBoolean("enabled_$widget", enabled).apply()
     }
 
-    /** True when any ready-made widget has its AI line on. */
-    fun anyEnabled(context: Context): Boolean = WIDGETS.any { isEnabled(context, it) }
-
     /** The widget a brief belongs to: `server_<id>` is the server widget's, the rest are named after theirs. */
     private fun widgetOf(key: String): String = if (key.startsWith("server_")) "server" else key
 

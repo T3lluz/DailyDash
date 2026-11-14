@@ -10,7 +10,7 @@ Single-module Android app (Kotlin + Jetpack Compose). The **app label is "DailyD
 ./gradlew assembleDebug      # standard debug build
 ./gradlew installDebug       # build + deploy to connected device
 ```
-**Do not assemble, install, or run the app to verify UI.** The user keeps an Android emulator in the same directory as this project and checks changes themselves.
+**Looking at a change:** `tools/preview.sh` runs the app on a headless emulator on the server (an AVD named `dash`, KVM), with the dashboard's name pinned to its tailnet address so cards have real data. `tools/preview.sh shot usage out.png` builds, installs, opens a screen and screenshots it; `open`, `tap`, `swipe`, `scroll`, `ui` (text nodes with their tap points) and `snap` drive it after that; `down` stops it. A warm incremental build is about 30 s and a screenshot a second, against minutes for a Robolectric render. The server has 14 GB and runs the house: stop the emulator (`down`) and the Gradle daemon (`./gradlew --stop`) when a stretch of looking is over, and never leave both idling. Health Connect, location and the calendar have no data there; use the phone over adb for those.
 
 API keys go in `local.properties` (never committed):
 ```
@@ -173,7 +173,11 @@ com.macrotracker/
                               estimates); HealthVitalsTest pins it. VitalRange.kt: the usual range
                               Body & Vitals draws and flags against (VitalRangeTest).
     f1/                    ← F1Repository via Ktor + OpenF1 API (https://api.openf1.org/v1/);
-                              15-min in-memory + SharedPrefs disk cache. F1Circuits: circuit outlines from
+                              15-min in-memory + SharedPrefs disk cache. F1Season.kt: the season so far from
+                              Jolpica's paged results and sprints (`SeasonHistory`: winners, finishes and points
+                              round by round, fastest laps; refetched only when a round has run that it lacks),
+                              a weekend's sessions in order, and what can still be won (F1SeasonTest). Podiums and
+                              fastest laps on a driver are counted from it; the standings feed has neither. F1Circuits: circuit outlines from
                               bacinger/f1-circuits matched by coordinates (nearest within ~25 km), folded into a
                               0–100 box exactly as the dashboard's `f1_path()` does, cached per circuit for good
                               and attached to each `RaceScheduleEntry.outline`. A cancelled load must never be
@@ -227,10 +231,16 @@ com.macrotracker/
                              + ai/ (ChatKit.kt shared chat bubbles/header/composer + IME helpers, SysopChatPane,
                              HermesChatPane + HermesChrome.kt: the web panel without its side pane — thread
                              sheet (the History button or the title opens it), tall composer with one model pill
-                             (`ModelPill`: the maker's logo, the family, its depth, Fast/Thinking) that opens one
-                             sheet: the family's depth/Fast/Thinking/context as chips (`DepthQuick`, the family's own
-                             rows on the bridge) over the model list with starred favourites on top
-                             (`SettingsRepository.hermesFavouriteModels`). Logos are the web's, bundled in
+                             (`ModelPill`: the maker's logo, the family, its depth, Fast/Thinking) that opens the
+                             picker (HermesModelPicker.kt, after the web's `modelPicker`): a search over every
+                             model, the providers as tabs (`PickerTab`; starred families get a tab of their own,
+                             `SettingsRepository.hermesFavouriteModels`), the tab's families (the newest version of
+                             each line, older ones behind a fold, OpenCode's billed rows only when searched:
+                             `HermesCatalog.pickerTab`), and pinned under them what the family in use can be set to:
+                             depth on a slider (`effortStops`; sent when the finger lifts), Fast and Thinking as
+                             switches, the context window as a two-way control. A tapped family is picked at once
+                             and the sheet stays open until Done. `AiPickerSheet` (the phone's own AI) has the same
+                             search and tabs. Logos are the web's, bundled in
                              assets/models and matched by `ModelBrands` (the web's `brandOf`). There is no mode chip:
                              a new chat is always Agent (`HermesViewModel.AGENT_MODE`), and `/agent`, `/plan`, `/ask`
                              (typed with a space, or picked in the slash palette) switch the chat to that brain's
@@ -250,17 +260,25 @@ com.macrotracker/
                              `FollowChatOnKeyboard` pins the list with plain scrolls, never an animation per
                              frame. Tech support is Hermes when `HermesViewModel.usesHermes`: an
                              explicit `techSupportBrain` choice, or in `auto` whenever Hermes answers, else Sysop)
-                             + ai/UsagePane.kt in UsageScreen (from the usage ring's sheet and Hermes' menu, the
-                             `usage` sub-screen): the web's usage panel. Claude's windows say whether they are
-                             measured or estimated (usage.py calibrates from past readings), Cursor's month by
-                             model, what the work was worth, a 30-day chart of worth by model in fixed
-                             categorical slots, token mix, models/agents/chats, the schedule with a scheduled-ask
-                             sheet. Claude's windows are exact when this phone is signed in to Claude: data/usage
-                             `ProviderLimitsRepository` reads Anthropic's `/api/oauth/usage` (what Claude Code's
-                             /usage, T3 Code and CodexBar read) (`ProviderLimits`, ProviderLimitsTest); `UsageViewModel` lays them over the server's
-                             estimate. `ComposerUsageRing` is the ring beside send, for the brain the chat is on:
-                             Claude's session on Claude, this chat's context fill on Cursor, OpenCode or Hermes' own;
-                             a tap opens a sheet like the model picker's (this chat, the plan it runs on, All usage).
+                             + Usage (the `usage` sub-screen; one tap from the AI tab's header, where `UsageButton` is
+                             the dashboard's square filled with the plan in use's fullest window, from Settings →
+                             AI usage, and from the launcher shortcut): T3 Code's usage page as the dashboard draws
+                             it, in five tabs. UsageLimits.kt: a block per provider (`ProviderLimit`), a row per
+                             window with how much is used, a notch where even spending would be by now
+                             (`usagePace`), ahead / on / under pace and when it resets; a tap opens the detail.
+                             Cursor adds what it spent this cycle and its own warning; Claude its banked reset
+                             credits. UsageHistory.kt: Cost and Tokens for one window at a time (24 h by the hour;
+                             7, 30, 90 days by the day): the total against the window before, who it went to, a bar
+                             per hour or day stacked by provider, agent or model (`usageSeries`; drag sideways to
+                             read one), tokens or cost by type and by speed, then models (ids that share a name are
+                             one row), hours or days as a table, agents and projects. UsagePane.kt holds the shell,
+                             Chats, and `ComposerUsageMeter`, the square beside send: the chat's provider's fullest
+                             window where it reports limits, else this chat's context fill; its sheet lists this
+                             chat, the plan it runs on, the other plans, All usage. UsageSchedule.kt: scheduled
+                             asks and what runs by itself. Models and maths are data/dashboard/UsageModels.kt
+                             (UsageModelsTest); usage.py asks Anthropic and Cursor itself, so the phone reads
+                             nothing from a provider. Colours: a provider keeps its own, anything else ranked
+                             takes one of six categorical slots (UsageKit.kt).
                              Hermes' rail groups "Needs you" first, dots a chat that moved since this phone
                              opened it (`HermesUiState.seen`), and shows each chat's tokens and context fill;
                              the header has a context ring (`HermesThreadSummary.contextFraction`)
@@ -319,7 +337,15 @@ com.macrotracker/
                               (replays, and keeps a dim car lapping). F1Card.kt: the F1 hub in the app's look
                               (inset wells, stat tiles and pills like Health; round team-ringed faces; logo tiles
                               that fall back to `F1Format.teamCode`), its five tabs a `SegmentedTabs(stacked =
-                              true)` (icon over label). GitHubContributionGraph.kt: the year with
+                              true)` (icon over label). Collapsed it is the dashboard's F1 page in small: the next
+                              race over its circuit with a countdown to whatever runs next (a practice, then
+                              "Lights out Sun 05:00" on its own line; "On now" while a session runs), the weekend's
+                              sessions in one row (`WeekendRow`), the last podium and fastest lap, and the title
+                              fight: who can still win it (`F1Season.titleLine`), the top three with their last
+                              five finishes as dots (`FormDots`). Flat, split by rules, no box inside the card. The
+                              Drivers tab adds the same line, form per driver and the points of the top six round
+                              by round (`PointsProgress`, a teammate dashed); Schedule shows who won each run
+                              round. Times follow the phone's 12/24-hour setting (`rememberClock24`). GitHubContributionGraph.kt: the year with
                               the snake. ServerCharts.kt / ServerVitals.kt: 270° dials with an average notch,
                               mirrored area charts, the scrubbable history chart, stacked meters, uptime bars,
                               fact chips. DeviceCodePanel.kt: GitHub/Twitch device-code
@@ -426,7 +452,7 @@ val weatherState: StateFlow<WeatherUiState> = _weatherState
 
 When a sealed interface is shared across a screen and its sub-components, it lives in its own file (e.g. `F1UiState.kt` in `ui/viewmodel/`).
 
-Health Connect metrics use `HealthMetricUiState(value, today, yesterday, isEnabled)` from `ui/components/BodyStats.kt`. Use `calculatePercentageChange(today, yesterday)` to derive the delta arrow shown on each metric card.
+Health Connect metrics use `HealthMetricUiState(value, today, yesterday, isEnabled)` from `ui/components/BodyStats.kt`. 
 
 **Throttled loading pattern** — both `DashboardViewModel` and `HealthViewModel` skip reloads if called within 30 s of the last load:
 ```kotlin
@@ -501,7 +527,7 @@ Five ready-made home-screen widgets: **Weather**, **Calendar**, **F1**, **Server
 **Rendering widgets off-device.** Don't run the app to check a widget; render it. `./gradlew :app:testDebugUnitTest -PwidgetShots --tests '*WidgetShotsTest*'` (opt-in: Robolectric is only on the test classpath with `-PwidgetShots`; the harness lives in `app/src/widgetShots/`) draws every widget through the real Glance and Android layout code, hardware-rendered so rounded corners show, into `app/build/widget-shots/`: `<key>_sheet.png` (2–5 × 1–5 cells), `v_<key>.png` (other tabs and states), `report_*.txt` (text ELLIPSIZED, SQUASHED or CLIPPED, and GLANCE truncation warnings; long titles ellipsizing is expected, the rest are bugs), and `previews/widget_preview_<key>.png` to copy into `res/drawable-nodpi`. `-PwidgetShotsFont=1.3` renders at a larger system font. Renders use the Pixel's font, Google Sans Flex (fetched once from Google Fonts into `app/build/widget-shots-fonts`; `-PwidgetShotsRoboto` keeps Robolectric's Roboto). Besides the representative sheets, `device_<key>.png` renders every widget at Pixel Launcher sizes on a 411 dp phone (5- and 4-column grids, 118 and 130 dp rows) and `min_<key>.png` at each class's `minSize`, with `report_device.txt` / `report_min.txt`; both must stay free of CLIPPED and SQUASHED. `WidgetSettingsShotTest` draws the settings screen into `settings.png`. `ChromeShotsTest` (same flag, `--tests '*ChromeShotsTest*'`) draws the island and the navbar, haze and all, over a white and a dark backdrop into `chrome_*.png`; look at them after touching Glass, TopIsland or PillNavigationBar. Look at the sheets before and after a layout change. The cloud container needs the Android SDK (`sdkmanager "platforms;android-36" "build-tools;36.0.0"`, `sdk.dir` in `local.properties`) to run it.
 
 ### Tilesmith (widget/tilesmith/, ui/screens/tilesmith/)
-Widgets you describe and AI builds, in Material 3 Expressive. Reached from Settings → **Widgets & Tilesmith** (the row says "New" until `TilesmithStore.seen`), the Widgets screen's top card (`TilesmithHero`: prompt, one-tap starters, your designs; long-press a design to delete or duplicate), the AI tab's header button, a widget's long-press settings (pick a design for that copy, or "Edit in Tilesmith"), and widget taps (`MainActivity.EXTRA_OPEN` `tilesmith:<id>`; also `home`, `health`, `ai`, `settings`, `widgets`, `servers`). The studio (`TilesmithStudioScreen`, route `SubScreenRoutes.TILESMITH_PATTERN`) opened with no design is the front door: example asks, **Your widgets** (every design, newest first; tap to open in place, hold to duplicate or delete) and the starters. Its top bar never scrolls: back, the name (tap to rename), Undo, Your widgets (a sheet, with **New**) and **Add** (to the home screen). With a design open: the design on a stage of fixed height (shorter with the keyboard up; light/dark toggle; the live line on its bottom edge), what it still needs as one strip of chips ("Allow all" for Android's own dialogs), then three panes: **Chat** (its own scroll, newest at the bottom, the AI's suggested next changes as chips, and while it works a line saying what it is doing, from `TilesmithAi.Progress`: the step, the heading of its thinking, a clock), **Blocks** (tap one to change what it shows as, its list style, colour, style, width, label, or move / remove it) and **Look** (size, colours, background, shape, updates, and this widget's AI switch, `TileDesign.ai`). The composer is always at the bottom: the AI pill (`AiPill` → `AiPickerSheet`), a picture (a widget you like, a sketch) through the photo picker, send / stop. Every change saves at once (placed copies redraw); Undo steps back through the last 20.
+Widgets you describe and AI builds, in Material 3 Expressive. Reached from Settings → **Widgets & Tilesmith** (the row says "New" until `TilesmithStore.seen`), the Widgets screen's top card (`TilesmithHero`: prompt, one-tap starters, your designs; long-press a design to delete or duplicate), Hermes' menu in the AI tab (a header button while Tech support is Sysop), a widget's long-press settings (pick a design for that copy, or "Edit in Tilesmith"), and widget taps (`MainActivity.EXTRA_OPEN` `tilesmith:<id>`; also `home`, `health`, `ai`, `settings`, `widgets`, `servers`). The studio (`TilesmithStudioScreen`, route `SubScreenRoutes.TILESMITH_PATTERN`) opened with no design is the front door: example asks, **Your widgets** (every design, newest first; tap to open in place, hold to duplicate or delete) and the starters. Its top bar never scrolls: back, the name (tap to rename), Undo, Your widgets (a sheet, with **New**) and **Add** (to the home screen). With a design open: the design on a stage of fixed height (shorter with the keyboard up; light/dark toggle; the live line on its bottom edge), what it still needs as one strip of chips ("Allow all" for Android's own dialogs), then three panes: **Chat** (its own scroll, newest at the bottom, the AI's suggested next changes as chips, and while it works a line saying what it is doing, from `TilesmithAi.Progress`: the step, the heading of its thinking, a clock), **Blocks** (tap one to change what it shows as, its list style, colour, style, width, label, or move / remove it) and **Look** (size, colours, background, shape, updates, and this widget's AI switch, `TileDesign.ai`). The composer is always at the bottom: the AI pill (`AiPill` → `AiPickerSheet`), a picture (a widget you like, a sketch) through the photo picker, send / stop. Every change saves at once (placed copies redraw); Undo steps back through the last 20.
 
 **A design** (TileModel.kt) is a `TileSize` (Mini 2×1, Small 2×2, Bar 4×1, Wide 4×2, Large 4×3; each caps rows, blocks per row and blocks), a `TilePalette` (Wallpaper or ten fixed M3 schemes generated with material-color-utilities), a `TileSurface` (soft, tonal, tinted, vivid) and up to four rows of `TileBlock`s (metric, ring, bar, chart, list, text, badge, clock, date, countdown, button, ai, image, carousel, media) with a tone, a style (tile, plain, filled, shape) and one of the 35 `TileShape`s. Parameterised sources read `query` (a Gmail search, YouTube channels, a Tasks list, an album, apps), `url`/`path`/`fields` (web.json lists map each row's title, sub, trailing, image and link), `cmd`/`server` and `text`. `TileCodec.parse` reads anything an AI sends (unknown fields dropped, values clamped, aliases mapped, old source names through `TileSources.canonical`) and `TileRules.sanitize` keeps it inside its size; `reflow` pours blocks into another size. TilesmithTest and TilesmithSourcesTest pin the codec, rules, layout, AI parsing, feeds, JSON and AI rows.
 
@@ -589,7 +615,9 @@ when the content has its own skeleton (the Widgets screen's previews). Both use 
 `WidgetScrollBox` provides its own bounds as the viewport (`LocalSeenViewport`). Once seen, it stays built.
 
 Shared helpers to use rather than re-write: `notifyIfAllowed` / `canPostNotifications` (data/Notifications.kt)
-for every notification; `findActivity()`, `openUrl(url)` (never a bare `startActivity(ACTION_VIEW)`) and
+for every notification; `agoShort(ms)` ("5m", "3h") and `agoWords(ms)` ("5 min ago") for ages, `rememberClock24()` /
+`rememberClockFormatter()` for the phone's clock (ui/util/LastUpdated.kt); `Hairline` (components/Hairline.kt) for a
+rule between rows; `findActivity()`, `openUrl(url)` (never a bare `startActivity(ACTION_VIEW)`) and
 `requestOrOpenSettings(permission) { launch }` (opens app settings once Android stops prompting) in
 ui/util/Activity.kt; `preparePhoto(...)` (ui/util/Images.kt) for any photo an AI reads: scaled, upright,
 off the main thread; `toDecimalOrNull()` (util/Numbers.kt) for typed numbers ("2,5" and "2.5");
@@ -612,9 +640,9 @@ Strong skipping is the Compose compiler default on Kotlin 2.x, so there is no fl
 - `ui/navigation/Screen.kt` + `DailyDashNavHost.kt` — full route map
 - `ui/theme/Animation.kt` (`MacroMotion`) — all animation specs
 - `ui/viewmodel/DashboardViewModel.kt` — per-metric Health Connect states (today/yesterday) consumed by `HealthScreen`
-- `ui/components/BodyStats.kt` — `HealthMetricUiState` data class + `calculatePercentageChange()`
+- `ui/components/BodyStats.kt` — `HealthMetricUiState` data class
 - `widget/WidgetUpdater.kt` + `WidgetRefreshWorker.kt` — widget update strategy
-- `widget/WidgetComponents.kt` + `WeatherWidgetPreview.kt` — Glance chrome and how previews are rendered
+- `widget/kit/WidgetKit.kt` + `WeatherWidgetPreview.kt` — Glance chrome and how previews are rendered
 - `ui/screens/onboarding/` — multi-step onboarding flow (SplashScreen overlay + 3 nav-routed screens)
 
 ### Copy

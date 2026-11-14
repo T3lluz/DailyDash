@@ -54,10 +54,7 @@ val HeaderColor = TextPrimary
 
 /** Frosted pill / overlay chrome (navbar, floating composer). */
 val GlassTint = SurfaceChrome
-val GlassHairline = Color(0xFFE4E4E4).copy(alpha = 0.15f)
 
-/** Health activity maps and inset wells — named, not one-off hex. */
-val MapSurface = SurfaceChrome
 val MapWell = Color(0xFF121212)
 
 /**
@@ -86,8 +83,6 @@ val HealthOxygen = HealthVitalsTone
 val HealthRespiratory = HealthVitalsTone
 val HealthFloors = HealthActivityTone
 val HealthDistance = HealthActivityTone
-val HealthEnergy = HealthNutritionTone
-val HealthProtein = HealthNutritionTone
 val HealthActivity = HealthActivityTone
 val HealthHrv = HealthHeartTone
 val HealthWeight = HealthBodyTone
@@ -123,8 +118,6 @@ val HealthConnectBrand = Color(0xFFFF6B6B)
 
 /** Weather glyph tones — shared with the generated weather drawables. */
 val WeatherSun = Color(0xFFF5B942)
-val WeatherMoon = Color(0xFFB4A7F5)
-val WeatherCloud = Color(0xFFB8BEC7)
 val WeatherRain = Color(0xFF6CB6FF)
 
 /**

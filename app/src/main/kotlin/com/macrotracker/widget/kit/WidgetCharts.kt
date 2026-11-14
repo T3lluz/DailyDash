@@ -233,35 +233,6 @@ object WidgetCharts {
     }
 
     /**
-     * A grid of rounded cells (GitHub's contribution calendar, uptime walls, heatmaps):
-     * [cells] is column-major (`cells[col][row]`), each a colour or null for "no cell".
-     * Cells are square and as large as fit; the grid is right-aligned so the newest
-     * column always sits on the edge.
-     */
-    fun cellGrid(context: Context, width: Dp, height: Dp, cells: List<List<Color?>>, gapDp: Float = 2f, radiusDp: Float = 2f): Bitmap {
-        val wc = WidgetCanvas.create(context, width, height)
-        if (cells.isEmpty()) return wc.bitmap
-        val rows = cells.maxOf { it.size }.coerceAtLeast(1)
-        val cols = cells.size
-        val w = wc.widthDp
-        val h = wc.heightDp
-        val cell = min((w - gapDp * (cols - 1)) / cols, (h - gapDp * (rows - 1)) / rows).coerceAtLeast(1f)
-        val gridW = cols * cell + (cols - 1) * gapDp
-        val x0 = w - gridW
-        val gridH = rows * cell + (rows - 1) * gapDp
-        val y0 = (h - gridH) / 2f
-        cells.forEachIndexed { c, column ->
-            column.forEachIndexed { r, color ->
-                if (color == null) return@forEachIndexed
-                val left = x0 + c * (cell + gapDp)
-                val top = y0 + r * (cell + gapDp)
-                wc.canvas.drawRoundRect(RectF(left, top, left + cell, top + cell), radiusDp, radiusDp, paint(color))
-            }
-        }
-        return wc.bitmap
-    }
-
-    /**
      * A closed outline (an F1 circuit) in a 0…100 box, fitted and centred, with a glow
      * pass under the line and an optional start marker at the first point.
      */

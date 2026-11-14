@@ -1,7 +1,5 @@
 package com.macrotracker.ui.screens.health
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -23,7 +21,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.macrotracker.ui.components.MacroCard
-import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.TextSecondary
 
 // Every Health section is one card, and nothing inside it gets a box of its own: lists and
@@ -82,15 +79,4 @@ fun HealthHeader(
         }
         trailing()
     }
-}
-
-/** A 1 dp rule in the border colour, for lists and grids that have no boxes. */
-@Composable
-fun Hairline(modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(1.dp)
-            .background(Border),
-    )
 }

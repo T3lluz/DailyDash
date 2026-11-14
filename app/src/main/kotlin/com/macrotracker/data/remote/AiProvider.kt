@@ -21,9 +21,6 @@ enum class AiProvider(val storageValue: String, val displayName: String) {
     /** No API key on the phone; answers come from `<dashboard>/_api`. */
     val usesDashboard: Boolean get() = this == HERMES || this == CURSOR
 
-    /** Takes a pasted API key (Claude also signs in with an account instead). */
-    val takesKey: Boolean get() = this == GEMINI || this == OPENAI || this == ANTHROPIC
-
     /** Can read a photo (meal photos, label scans, a widget to copy in Tilesmith). */
     val seesPictures: Boolean get() = !usesDashboard
 

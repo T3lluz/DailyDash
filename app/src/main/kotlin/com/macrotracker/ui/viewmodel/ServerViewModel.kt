@@ -88,10 +88,6 @@ class ServerViewModel @Inject constructor(
         }
     }
 
-    fun refreshDashboard() {
-        viewModelScope.launch { dashboard.refresh(force = true) }
-    }
-
     private val _testState = MutableStateFlow<ServerTestUiState>(ServerTestUiState.Idle)
     val testState: StateFlow<ServerTestUiState> = _testState
 

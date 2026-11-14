@@ -30,9 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -85,6 +83,7 @@ import java.time.format.TextStyle as JavaTextStyle
 import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlin.math.roundToInt
+import com.macrotracker.ui.components.Hairline
 
 // Activities reads like Apple Fitness: the week in three big numbers over a bar per day,
 // the latest workout's details in a two-column grid, then the history as rows with the

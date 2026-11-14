@@ -212,12 +212,6 @@ fun formatMinutesCompact(minutes: Long): String {
     return if (h > 0) "${h}h ${m}m" else "${m}m"
 }
 
-fun formatDurationCompact(totalSeconds: Long): String {
-    if (totalSeconds <= 0) return "—"
-    val minutes = (totalSeconds + 30) / 60 // round to nearest minute
-    return formatMinutesCompact(minutes)
-}
-
 fun formatPace(minPerKm: Double?): String {
     if (minPerKm == null || minPerKm !in 5.0..30.0) return "—"
     val min = minPerKm.toInt()

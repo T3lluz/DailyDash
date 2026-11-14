@@ -42,8 +42,6 @@ data class HealthActivity(
 
     val typeLabel: String get() = exerciseTypeLabel(exerciseType)
 
-    val isOutdoorType: Boolean get() = isOutdoorExercise(exerciseType)
-
     val avgPaceMinPerKm: Double?
         get() {
             val km = distanceKm ?: return null

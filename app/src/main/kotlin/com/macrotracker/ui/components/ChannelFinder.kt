@@ -84,9 +84,6 @@ class ChannelFinderState(query: String = "", searching: Boolean = false, favouri
     fun keeps(id: String, name: String, favourites: Set<String>): Boolean =
         (!favouritesOnly || id in favourites) && (needle.isEmpty() || name.contains(needle, ignoreCase = true))
 
-    /** Whether any of [text] matches what is typed (a video's title, its channel). */
-    fun matchesText(vararg text: String): Boolean = needle.isEmpty() || text.any { it.contains(needle, ignoreCase = true) }
-
     fun closeSearch() {
         query = ""
         searching = false

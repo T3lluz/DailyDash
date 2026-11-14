@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,12 +32,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
@@ -47,7 +44,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.health.connect.client.records.SleepSessionRecord
-import com.macrotracker.R
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.Surface
@@ -55,18 +51,14 @@ import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.HapticHelper
 import java.time.Instant
-import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
-import com.macrotracker.ui.theme.TextTertiary
-import com.macrotracker.ui.theme.HealthHeartRate
 import com.macrotracker.ui.theme.SleepStageAwake
 import com.macrotracker.ui.theme.SleepStageDeep
 import com.macrotracker.ui.theme.SleepStageLight
 import com.macrotracker.ui.theme.SleepStageRem
 
-private val HrColor = HealthHeartRate
 private val SleepAwake = SleepStageAwake
 private val SleepRem = SleepStageRem
 private val SleepLight = SleepStageLight

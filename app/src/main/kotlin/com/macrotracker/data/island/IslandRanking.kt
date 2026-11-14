@@ -37,9 +37,6 @@ enum class DayPart {
  */
 object IslandRanking {
 
-    /** Items on the island's line at once. */
-    const val MAX_SHOWN = 3
-
     /** Items the island holds in all: the line and the list behind its "+N". */
     const val MAX_ITEMS = 12
 

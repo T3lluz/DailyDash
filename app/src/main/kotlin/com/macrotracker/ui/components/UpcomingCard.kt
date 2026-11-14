@@ -5,7 +5,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.border
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
-import android.text.format.DateFormat
 import com.macrotracker.ui.util.LaunchedWhileResumed
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -115,6 +114,7 @@ import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import com.macrotracker.ui.util.rememberClockFormatter
 
 /*
  * Coming up — the t3lluz dashboard's timeline, on the phone.
@@ -221,9 +221,7 @@ private fun UpcomingContent(
     val context = LocalContext.current
     val zone = remember { ZoneId.systemDefault() }
     val today = LocalDate.now(zone)
-    val clock = remember(context) {
-        DateTimeFormatter.ofPattern(if (DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm a", Locale.getDefault())
-    }
+    val clock = rememberClockFormatter()
     val shown = remember(feed.events, calendars) { feed.events.filter(calendars::shows) }
     val sources = remember(shown) { upcomingSources(shown) }
     // One source at a time (Calendar, Sonarr, Stremio, ...), or all of them; a source that

@@ -24,7 +24,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -90,6 +89,8 @@ import com.macrotracker.ui.viewmodel.AiTest
 import com.macrotracker.ui.viewmodel.AiUiState
 import com.macrotracker.ui.viewmodel.AiSetupViewModel
 import com.macrotracker.ui.viewmodel.HermesViewModel
+import com.macrotracker.ui.util.agoWords
+import com.macrotracker.ui.components.Hairline
 
 /**
  * Settings → AI, after Tilesmith for Windows: the AI in use (Change opens the same sheet as
@@ -332,8 +333,6 @@ private fun InUseTag() {
     }
 }
 
-@Composable
-private fun Hairline() = HorizontalDivider(color = Border, thickness = 1.dp)
 
 @Composable
 private fun RowTitle(icon: ImageVector, title: String, trailing: (@Composable () -> Unit)? = null) {
@@ -500,7 +499,7 @@ private fun ModelList(state: AiUiState, status: AiProviderStatus, onPick: (Strin
                     p == AiProvider.ANTHROPIC -> "Anthropic's current models"
                     !status.ready -> "Set it up to see its models"
                     loading -> "Loading the latest list…"
-                    else -> AiModels.lastFetched(context, p).takeIf { it > 0 }?.let { "${models.size} models · updated ${ago(it)}" } ?: "Suggested models"
+                    else -> AiModels.lastFetched(context, p).takeIf { it > 0 }?.let { "${models.size} models · updated ${agoWords(it)}" } ?: "Suggested models"
                 },
                 fontSize = 12.sp,
                 color = if (error != null) Warning else TextTertiary,
@@ -542,16 +541,6 @@ private fun ModelList(state: AiUiState, status: AiProviderStatus, onPick: (Strin
                 Text(if (query.isBlank()) "No models listed yet." else "Nothing matches.", fontSize = 12.5.sp, color = TextTertiary, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
             }
         }
-    }
-}
-
-private fun ago(ms: Long): String {
-    val m = (System.currentTimeMillis() - ms) / 60_000
-    return when {
-        m < 1 -> "just now"
-        m < 60 -> "${m}m ago"
-        m < 24 * 60 -> "${m / 60}h ago"
-        else -> "${m / (24 * 60)}d ago"
     }
 }
 

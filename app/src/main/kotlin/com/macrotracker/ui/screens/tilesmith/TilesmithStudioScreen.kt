@@ -135,6 +135,7 @@ import com.macrotracker.widget.tilesmith.TilesmithWidgetSpec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import com.macrotracker.ui.util.agoWords
 
 /** The studio's three panes under the stage. */
 private enum class StudioTab(val key: String, val label: String) { CHAT("chat", "Chat"), BLOCKS("blocks", "Blocks"), LOOK("look", "Look") }
@@ -694,7 +695,7 @@ private fun DesignGrid(designs: List<TileDesign>, current: String?, onOpen: (Til
                             when {
                                 placed > 1 -> "$placed on home screen"
                                 placed == 1 -> "On home screen"
-                                else -> "${d.size.label} · ${ago(d.updatedAt)}"
+                                else -> "${d.size.label} · ${designAge(d.updatedAt)}"
                             },
                             fontSize = 11.sp,
                             color = if (placed > 0) Success else TextTertiary,
@@ -705,18 +706,6 @@ private fun DesignGrid(designs: List<TileDesign>, current: String?, onOpen: (Til
                 if (pair.size == 1) Spacer(Modifier.weight(1f))
             }
         }
-    }
-}
-
-private fun ago(ms: Long): String {
-    val m = (System.currentTimeMillis() - ms) / 60_000
-    return when {
-        m < 1 -> "just now"
-        m < 60 -> "${m}m ago"
-        m < 24 * 60 -> "${m / 60}h ago"
-        m < 7 * 24 * 60 -> "${m / (24 * 60)}d ago"
-        else -> java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
-            .format(java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.getDefault()))
     }
 }
 
@@ -1524,3 +1513,9 @@ private fun Composer(
         }
     }
 }
+
+/** When a design was last changed: an age within a week, its date after that. */
+private fun designAge(ms: Long): String =
+    if (System.currentTimeMillis() - ms < 7 * 24 * 3_600_000L) agoWords(ms)
+    else java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+        .format(java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.getDefault()))

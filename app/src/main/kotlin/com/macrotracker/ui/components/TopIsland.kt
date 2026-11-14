@@ -175,7 +175,6 @@ private val IslandTop = 6.dp
 private val DiscBase = Color(0xFF141416)
 private val CardCorner = 26.dp
 private val DiscSize = 26.dp
-private val MiniDisc = 20.dp
 private val RowHeight = 52.dp
 
 /** The island's own spring: quick, with a touch of overshoot, like the one it is after. */

@@ -59,8 +59,7 @@ import com.macrotracker.ui.viewmodel.MailEvent
 import com.macrotracker.ui.viewmodel.MailUiState
 import com.macrotracker.ui.viewmodel.MailViewModel
 import kotlinx.coroutines.delay
-import java.time.Duration
-import java.time.Instant
+import com.macrotracker.ui.util.agoShort
 
 /*
  * Mail on Home: the dashboard's Mail section, fully working on the phone. Gmail is sorted
@@ -159,7 +158,7 @@ private fun MailContent(
             else listOfNotNull(
                 "${box.unread} unread in ${box.window}",
                 if (box.stale) "last refresh failed" else null,
-                box.atMs.takeIf { it > 0 }?.let { ago(it) },
+                box.atMs.takeIf { it > 0 }?.let { agoShort(it) },
             ).joinToString(" · "),
         ) {
             if (box.account.isNotBlank()) {
@@ -324,7 +323,7 @@ private fun MailRowView(row: MailRow, onOpen: () -> Unit, onAct: (String) -> Uni
                         Icon(AppIcons.Account, "In your contacts", tint = TextTertiary, modifier = Modifier.size(12.dp))
                     }
                     Spacer(Modifier.weight(1f))
-                    Text(row.at?.let { ago(it.toEpochMilli()) } ?: "", fontSize = 11.sp, color = TextTertiary)
+                    Text(row.at?.let { agoShort(it.toEpochMilli()) } ?: "", fontSize = 11.sp, color = TextTertiary)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     mailKind(row.kind)?.let { (label, icon, color) ->
@@ -390,13 +389,3 @@ private fun mailKind(kind: String): Triple<String, ImageVector, Color>? = when (
     else -> null
 }
 
-private fun ago(ms: Long): String {
-    val d = Duration.between(Instant.ofEpochMilli(ms), Instant.now())
-    return when {
-        d.toMinutes() < 1 -> "now"
-        d.toMinutes() < 60 -> "${d.toMinutes()}m"
-        d.toHours() < 24 -> "${d.toHours()}h"
-        d.toDays() < 7 -> "${d.toDays()}d"
-        else -> "${d.toDays() / 7}w"
-    }
-}

@@ -52,27 +52,3 @@ fun computeMacroInsights(
     )
 }
 
-data class HeartRateDayStats(
-    val minBpm: Long,
-    val maxBpm: Long,
-    val avgBpm: Long,
-    val sampleCount: Int,
-    val restingEstimate: Long?,
-)
-
-fun computeHeartRateDayStats(samples: List<Long>): HeartRateDayStats? {
-    if (samples.isEmpty()) return null
-    val avg = samples.average().toLong()
-    val resting = samples.sorted().let { sorted ->
-        val take = (sorted.size * 0.1).toInt().coerceAtLeast(1)
-        sorted.take(take).average().toLong()
-    }
-    return HeartRateDayStats(
-        minBpm = samples.min(),
-        maxBpm = samples.max(),
-        avgBpm = avg,
-        sampleCount = samples.size,
-        restingEstimate = resting,
-    )
-}
-
