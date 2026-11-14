@@ -163,8 +163,20 @@ class F1RepositoryImpl @Inject constructor(
                     .filter { runCatching { java.time.LocalDate.parse(it.raceDate).isBefore(java.time.LocalDate.now()) }.getOrDefault(false) }
                     .maxByOrNull { it.raceDate }
 
+                // The season's results only change when a race is run: keep them until a round
+                // has finished that they don't have yet. A read that fails keeps the old copy.
+                val runRounds = F1Season.roundsRun(schedule)
+                val kept = cached?.history?.takeIf { cachedYear == currentYear && it.rounds.size >= runRounds }
+                val history = kept ?: (api.getSeasonHistory() ?: cached?.history?.takeIf { cachedYear == currentYear })
+
+                // Podiums and fastest laps are counted from those results; the standings feed has neither.
+                val counted = if (history == null) drivers else drivers.map {
+                    it.copy(podiums = history.podiums(it.driverAcronym), fastestLaps = history.fastestLaps[it.driverAcronym] ?: 0)
+                }
+
                 val result = F1Standings(
-                    driverStandings = drivers,
+                    history = history,
+                    driverStandings = counted,
                     constructorStandings = constructors,
                     // Feed tab removed — keep empty for disk-cache schema compatibility.
                     news = emptyList(),

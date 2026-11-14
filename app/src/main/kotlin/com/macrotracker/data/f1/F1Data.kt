@@ -15,8 +15,9 @@ data class SeasonDriverStanding(
     val teamLogoUrl: String? = null,
     val driverNumber: String? = null,
     val nationality: String? = null,
-    val podiums: Int = 0,
-    val fastestLaps: Int = 0,
+    /** Top-three finishes and fastest laps this season; null until the season's results are read. */
+    val podiums: Int? = null,
+    val fastestLaps: Int? = null,
 )
 
 @Serializable
@@ -82,6 +83,8 @@ data class RaceScheduleEntry(
     val qualifyingTime: String? = null,
     val sprintDate: String? = null,
     val sprintTime: String? = null,
+    val sprintQualifyingDate: String? = null,
+    val sprintQualifyingTime: String? = null,
     val fp1Date: String? = null,
     val fp1Time: String? = null,
     val fp2Date: String? = null,
@@ -113,4 +116,6 @@ data class F1Standings(
     val lastLocation: String? = null,
     val nextRace: String? = null,
     val lastRaceName: String? = null,
+    /** The run rounds: winners, finishes and points round by round (F1Season). */
+    val history: SeasonHistory? = null,
 )

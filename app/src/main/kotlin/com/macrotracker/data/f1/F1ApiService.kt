@@ -20,6 +20,8 @@ interface F1ApiService {
     suspend fun getLastRaceResults(): Pair<List<RaceResult>, String?>
     suspend fun getLastQualiResults(): List<QualiResult>
     suspend fun getSchedule(): List<RaceScheduleEntry>
+    /** Every result of the season so far, or null when Jolpica didn't answer. */
+    suspend fun getSeasonHistory(): SeasonHistory?
 }
 
 @Singleton
@@ -31,6 +33,9 @@ class F1ApiServiceImpl @Inject constructor(
         private const val TAG = "F1ApiService"
         // Jolpica is the community-maintained successor to the Ergast API (same JSON schema)
         private const val JOLPICA_BASE = "https://api.jolpi.ca/ergast/f1"
+        /** Between pages of the season's results: Jolpica allows about four requests a second. */
+        private const val SEASON_PAGE_GAP_MS = 350L
+        private const val SEASON_MAX_PAGES = 12
         private const val F1_CDN = "https://media.formula1.com"
         // No Cloudinary `d_` default — missing assets must 404 so Coil can try the next candidate.
         // Face-gravity square crop: source assets are full-body (~200×575); center fill shows torsos.
@@ -379,6 +384,43 @@ class F1ApiServiceImpl @Inject constructor(
         }
     }
 
+    override suspend fun getSeasonHistory(): SeasonHistory? {
+        val json = Json { ignoreUnknownKeys = true }
+        // Jolpica pages at 100 rows: a season of races is five pages, its sprints two. A page
+        // that was throttled or cut short must never be taken for the whole season, so every
+        // page has to be a real answer and the rows have to add up to the total it names.
+        suspend fun pages(path: String, rows: String): List<kotlinx.serialization.json.JsonObject> {
+            val out = ArrayList<kotlinx.serialization.json.JsonObject>()
+            var offset = 0
+            var seen = 0
+            while (true) {
+                if (offset > 0) kotlinx.coroutines.delay(SEASON_PAGE_GAP_MS)
+                val response = client.get("$JOLPICA_BASE/current/$path.json?limit=100&offset=$offset")
+                if (response.status.value !in 200..299) throw java.io.IOException("Jolpica answered ${response.status.value} for $path")
+                val page = json.parseToJsonElement(response.body<String>()).jsonObject
+                val data = page["MRData"]?.jsonObject ?: throw java.io.IOException("Jolpica sent no data for $path")
+                val total = data["total"]?.jsonPrimitive?.content?.toIntOrNull() ?: throw java.io.IOException("Jolpica sent no total for $path")
+                out += page
+                seen += data["RaceTable"]?.jsonObject?.get("Races")?.jsonArray.orEmpty().sumOf { it.jsonObject[rows]?.jsonArray?.size ?: 0 }
+                offset += 100
+                if (offset >= total) {
+                    if (seen != total) throw java.io.IOException("Jolpica sent $seen of $total rows for $path")
+                    return out
+                }
+                if (out.size >= SEASON_MAX_PAGES) throw java.io.IOException("Too many pages for $path")
+            }
+        }
+        return try {
+            // sprints too, or none: a season without its sprint points draws the wrong title fight
+            F1Season.history(pages("results", "Results"), pages("sprint", "SprintResults"))
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Error fetching the season's results: ${e.message}")
+            null
+        }
+    }
+
     override suspend fun getLastQualiResults(): List<QualiResult> {
         ensureOpenF1Media()
         return try {
@@ -474,6 +516,8 @@ class F1ApiServiceImpl @Inject constructor(
                     qualifyingTime = race["Qualifying"]?.jsonObject?.get("time")?.jsonPrimitive?.content,
                     sprintDate = race["Sprint"]?.jsonObject?.get("date")?.jsonPrimitive?.content,
                     sprintTime = race["Sprint"]?.jsonObject?.get("time")?.jsonPrimitive?.content,
+                    sprintQualifyingDate = (race["SprintQualifying"] ?: race["SprintShootout"])?.jsonObject?.get("date")?.jsonPrimitive?.content,
+                    sprintQualifyingTime = (race["SprintQualifying"] ?: race["SprintShootout"])?.jsonObject?.get("time")?.jsonPrimitive?.content,
                     fp1Date = race["FirstPractice"]?.jsonObject?.get("date")?.jsonPrimitive?.content,
                     fp1Time = race["FirstPractice"]?.jsonObject?.get("time")?.jsonPrimitive?.content,
                     fp2Date = race["SecondPractice"]?.jsonObject?.get("date")?.jsonPrimitive?.content,

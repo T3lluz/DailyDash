@@ -26,6 +26,9 @@ import androidx.compose.ui.layout.HorizontalAlignmentLine
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.SpanStyle
@@ -52,13 +55,17 @@ import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.viewmodel.F1UiState
 import com.macrotracker.widget.f1.F1Format
 import kotlinx.coroutines.delay
+import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import kotlin.math.roundToInt
 import com.macrotracker.ui.theme.AppIcons
+import com.macrotracker.ui.util.rememberClock24
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 private val F1Red      = Color(0xFFE10600)
@@ -143,17 +150,20 @@ private fun totalRounds(schedule: List<RaceScheduleEntry>): Int =
     maxOf(schedule.size, schedule.maxOfOrNull { it.round } ?: 0)
 private fun safeTeamColor(hex: String): Color = try { Color("#$hex".toColorInt()) } catch (_: Exception) { F1Red }
 
-private fun formatLocalTime(dateStr: String, timeStr: String?): String {
+private fun clockPattern(h24: Boolean) = if (h24) "HH:mm" else "h:mm a"
+
+private fun formatClock(at: Instant, h24: Boolean): String =
+    at.atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern(clockPattern(h24), java.util.Locale.ENGLISH))
+
+/** "Sun 22 Nov, 05:00". */
+private fun formatDayClock(at: Instant, h24: Boolean): String =
+    at.atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("EEE d MMM, ${clockPattern(h24)}", java.util.Locale.ENGLISH))
+
+/** A session's UTC start as this phone's clock reads it, or blank without a time. */
+private fun formatLocalTime(dateStr: String, timeStr: String?, h24: Boolean): String {
+    if (timeStr.isNullOrBlank()) return ""
     return try {
-        if (timeStr.isNullOrBlank()) return ""
-        val timeClean = timeStr.replace("Z", "")
-        val utcDt = LocalDateTime.parse("${dateStr}T$timeClean").atOffset(ZoneOffset.UTC)
-        val localDt = utcDt.atZoneSameInstant(java.util.TimeZone.getDefault().toZoneId())
-        val hour = localDt.hour
-        val min = localDt.minute.toString().padStart(2, '0')
-        val amPm = if (hour < 12) "AM" else "PM"
-        val h12 = if (hour % 12 == 0) 12 else hour % 12
-        "$h12:$min $amPm"
+        formatClock(LocalDateTime.parse("${dateStr}T${timeStr.replace("Z", "")}").toInstant(ZoneOffset.UTC), h24)
     } catch (_: Exception) { "" }
 }
 
@@ -578,7 +588,7 @@ fun F1Card(
                                         when (tab) {
                                             F1Tab.DRIVERS -> DriverStandingsList(data)
                                             F1Tab.TEAMS -> ConstructorStandingsList(data)
-                                            F1Tab.SCHEDULE -> RaceScheduleList(data.schedule)
+                                            F1Tab.SCHEDULE -> RaceScheduleList(data.schedule, data.history, data.driverStandings)
                                             F1Tab.QUALI -> QualiResultsList(
                                                 data.lastQualiResults ?: emptyList(),
                                                 data.lastRaceName,
@@ -608,23 +618,31 @@ fun F1Card(
 }
 
 // ── Collapsed compact widget ──────────────────────────────────────────────────
-// The glance: the next race over its circuit with a live countdown, then the championship in one well.
+// The glance, after the dashboard's F1 page: the next race over its circuit with a countdown
+// to whatever runs next, the weekend's sessions, the last podium, and the title fight.
 @Composable
 private fun F1CollapsedWidget(data: F1Standings) {
+    val h24 = rememberClock24()
     val next = remember(data.schedule) {
         data.schedule.filter { !isPast(it.raceDate) }.minByOrNull { daysUntil(it.raceDate) }
     }
     val top3 = remember(data.driverStandings) { data.driverStandings.take(3) }
     val leader = top3.firstOrNull()
     val wcc = data.constructorStandings.firstOrNull()
-    val racesLeft = remember(data.schedule) { data.schedule.count { !isPast(it.raceDate) } }
-    val days = next?.let { daysUntil(it.raceDate) } ?: Long.MAX_VALUE
-    val isSoon = days in 0..7
-    val accent = if (isSoon) F1Red else TextPrimary
-    val localRaceTime = remember(next?.raceDate, next?.raceTime) {
-        next?.let { formatLocalTime(it.raceDate, it.raceTime) }.orEmpty()
+    val sessions = remember(next) { next?.let(F1Season::sessions).orEmpty() }
+    // Which session is next only changes on the minute; the countdown itself ticks by the second.
+    var now by remember { mutableStateOf(Instant.now()) }
+    LaunchedWhileResumed(sessions) {
+        while (true) {
+            now = Instant.now()
+            delay(30_000L)
+        }
     }
+    val upNext = sessions.firstOrNull { !it.over(now) }
+    val main = sessions.firstOrNull { it.main }
+    val title = remember(data.driverStandings, data.schedule, now) { F1Season.titleRace(data.driverStandings, data.schedule, now) }
     val outline = next?.outline
+    val podium = remember(data.lastRaceResults) { data.lastRaceResults.orEmpty().filter { it.position in 1..3 }.sortedBy { it.position } }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         // ── Next race — the circuit painted behind the race copy + live countdown ──
@@ -666,16 +684,6 @@ private fun F1CollapsedWidget(data: F1Standings) {
                                 ),
                             ),
                     )
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    0.55f to Color.Transparent,
-                                    1.0f to com.macrotracker.ui.theme.Surface.copy(alpha = 0.8f),
-                                ),
-                            ),
-                    )
                 }
 
                 Column(
@@ -712,16 +720,10 @@ private fun F1CollapsedWidget(data: F1Standings) {
                         modifier = Modifier.fillMaxWidth(0.72f),
                     )
                     Text(
-                        buildString {
-                            val place = listOfNotNull(
-                                next.locality?.takeIf { it.isNotBlank() },
-                                countryLabel(next.countryCode).takeIf { it != "—" },
-                            ).joinToString(", ")
-                            append(place)
-                            if (place.isNotBlank()) append(" · ")
-                            append(formatShort(next.raceDate))
-                            if (localRaceTime.isNotEmpty()) append(" · $localRaceTime")
-                        },
+                        listOfNotNull(
+                            next.locality.takeIf { it.isNotBlank() },
+                            countryLabel(next.countryCode).takeIf { it != "—" },
+                        ).joinToString(", ").ifBlank { next.circuitName },
                         color = TextSecondary,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
@@ -729,97 +731,288 @@ private fun F1CollapsedWidget(data: F1Standings) {
                         overflow = TextOverflow.Ellipsis,
                     )
 
-                    // The live countdown *is* the hero here — it replaces the
-                    // frozen "23 d" number, which only moved once a day and
-                    // disagreed with this ticker either side of midnight.
                     Spacer(Modifier.height(8.dp))
-                    LiveCountdown(
-                        dateStr = next.raceDate,
-                        timeStr = next.raceTime,
-                        accentColor = accent,
-                        style = CountdownStyle.Hero,
+                    when {
+                        // a session is running: say so instead of counting to the one after
+                        upNext != null && upNext.on(now) -> Column {
+                            Text("ON NOW", color = Success, style = F1MetaTextStyle.copy(fontSize = 10.sp))
+                            Spacer(Modifier.height(6.dp))
+                            Text(sessionName(upNext.label), color = TextPrimary, style = F1CountdownDigitsStyle)
+                            Text(
+                                "since ${formatClock(upNext.at, h24)}",
+                                color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium,
+                            )
+                        }
+                        upNext != null -> {
+                            LiveCountdown(
+                                dateStr = next.raceDate,
+                                timeStr = next.raceTime,
+                                accentColor = if (daysUntil(next.raceDate) in 0..7) F1Red else TextPrimary,
+                                style = CountdownStyle.Hero,
+                                label = if (upNext.main) "LIGHTS OUT IN" else "${sessionName(upNext.label).uppercase()} IN",
+                                until = { Duration.between(Instant.now(), upNext.at).seconds.coerceAtLeast(0) },
+                                // the session has started: show it as on, not a spent countdown
+                                onZero = { now = Instant.now() },
+                            )
+                            // lights out gets its own line when something else runs first
+                            if (!upNext.main && main != null) {
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    "Lights out ${formatDayClock(main.at, h24)}",
+                                    color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1,
+                                )
+                            }
+                        }
+                        // every session has run: the race is over, and the next round takes this place tomorrow
+                        sessions.isNotEmpty() -> Column {
+                            Text("RACE RUN", color = TextSecondary, style = F1MetaTextStyle.copy(fontSize = 10.sp))
+                            Spacer(Modifier.height(6.dp))
+                            Text("Finished", color = TextPrimary, style = F1CountdownDigitsStyle)
+                        }
+                        // no session times published yet: count to the race day
+                        else -> LiveCountdown(
+                            dateStr = next.raceDate,
+                            timeStr = next.raceTime,
+                            accentColor = TextPrimary,
+                            style = CountdownStyle.Hero,
+                        )
+                    }
+                }
+            }
+            if (sessions.size > 1) {
+                Spacer(Modifier.height(6.dp))
+                WeekendRow(sessions, upNext, now, h24)
+            }
+        }
+
+        // ── The last race's podium ──
+        if (podium.size == 3) {
+            GlanceRule()
+            SectionHeader(shortGP(data.lastRaceName ?: "Last race"), trailing = "Last race")
+            Spacer(Modifier.height(8.dp))
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                // Surnames when all three fit side by side, else the three-letter codes: a
+                // narrow phone or large text never cuts a name short.
+                val fontScale = LocalDensity.current.fontScale
+                val names = podium.map { driverSurname(it.driverName).lowercase().replaceFirstChar { c -> c.titlecase() } }
+                val needed = PodiumCellFixed * 3 + (names.sumOf { it.length } * PodiumCharWidth.value * fontScale).dp + 16.dp
+                val codes = needed > maxWidth && podium.all { !it.driverAcronym.isNullOrBlank() }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    podium.forEachIndexed { i, r -> PodiumCell(r, if (codes) r.driverAcronym.orEmpty() else names[i]) }
+                }
+            }
+            data.lastRaceResults?.firstOrNull { it.fastestLap }?.let { fl ->
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(7.dp).clip(CircleShape).background(FL_Purple))
+                    Spacer(Modifier.width(7.dp))
+                    Text(
+                        "Fastest lap ${driverSurname(fl.driverName).lowercase().replaceFirstChar { it.titlecase() }}",
+                        color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1,
                     )
                 }
             }
         }
 
-        // ── Standings — the top three and the constructors' leader in one well ──
+        // ── The title fight: the top three, their form, and what is left to win ──
         if (leader != null) {
-            Spacer(Modifier.height(12.dp))
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .f1Well()
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-            ) {
-                SectionHeader(
-                    "Championship",
-                    trailing = if (racesLeft > 0) "$racesLeft to go" else "Final standings",
+            GlanceRule()
+            SectionHeader("Championship", trailing = title?.let { if (it.roundsLeft > 0) "${it.roundsLeft} to go" else "Final" })
+            title?.let {
+                Text(
+                    F1Season.titleLine(it),
+                    color = if (it.decided) F1Gold else TextSecondary,
+                    fontSize = 12.sp, fontWeight = FontWeight.Medium, lineHeight = 16.sp,
+                    modifier = Modifier.padding(top = 2.dp),
                 )
-                Spacer(Modifier.height(4.dp))
-                top3.forEachIndexed { index, driver ->
-                    CollapsedStandingRow(
-                        position = driver.position,
-                        name = driverSurname(driver.driverName).lowercase()
-                            .replaceFirstChar { it.titlecase() },
-                        team = driver.constructorName,
-                        points = driver.points.toInt(),
-                        gap = if (index == 0) null else (leader.points - driver.points).toInt(),
-                        teamColor = safeTeamColor(driver.teamColor),
-                        headshotUrl = driver.headshotUrl,
-                        driverAcronym = driver.driverAcronym,
-                        driverNumber = driver.driverNumber,
-                        driverName = driver.driverName,
+            }
+            Spacer(Modifier.height(6.dp))
+            top3.forEachIndexed { index, driver ->
+                CollapsedStandingRow(
+                    position = driver.position,
+                    name = driverSurname(driver.driverName).lowercase()
+                        .replaceFirstChar { it.titlecase() },
+                    team = driver.constructorName,
+                    points = driver.points.toInt(),
+                    gap = if (index == 0) null else (leader.points - driver.points).toInt(),
+                    teamColor = safeTeamColor(driver.teamColor),
+                    headshotUrl = driver.headshotUrl,
+                    driverAcronym = driver.driverAcronym,
+                    driverNumber = driver.driverNumber,
+                    driverName = driver.driverName,
+                    form = data.history?.form(driver.driverAcronym).orEmpty(),
+                )
+            }
+            if (wcc != null) {
+                RowDivider(start = CollapsedNameStart)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp, bottom = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Spacer(Modifier.width(CollapsedPosColWidth))
+                    TeamLogo(
+                        url = wcc.teamLogoUrl,
+                        teamName = wcc.constructorName,
+                        teamColor = safeTeamColor(wcc.teamColor),
+                        modifier = Modifier.size(width = 28.dp, height = 22.dp),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        buildAnnotatedString {
+                            append(wcc.constructorName)
+                            withStyle(
+                                SpanStyle(
+                                    color = TextSecondary,
+                                    fontWeight = FontWeight.Medium,
+                                    fontSize = 11.sp,
+                                ),
+                            ) {
+                                append(" · Constructors")
+                            }
+                        },
+                        color = TextPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        "${wcc.points.toInt()}",
+                        color = TextPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.End,
+                        modifier = Modifier.width(CollapsedPtsColWidth),
                     )
                 }
-                if (wcc != null) {
-                    RowDivider(start = CollapsedNameStart)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp, bottom = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Spacer(Modifier.width(CollapsedPosColWidth))
-                        TeamLogo(
-                            url = wcc.teamLogoUrl,
-                            teamName = wcc.constructorName,
-                            teamColor = safeTeamColor(wcc.teamColor),
-                            modifier = Modifier.size(width = 28.dp, height = 22.dp),
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Text(
-                            buildAnnotatedString {
-                                append(wcc.constructorName)
-                                withStyle(
-                                    SpanStyle(
-                                        color = TextSecondary,
-                                        fontWeight = FontWeight.Medium,
-                                        fontSize = 11.sp,
-                                    ),
-                                ) {
-                                    append(" · Constructors")
-                                }
-                            },
-                            color = TextPrimary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f),
-                        )
-                        // Match driver gap + points columns so totals share one edge
-                        Spacer(Modifier.width(CollapsedGapColWidth))
-                        Text(
-                            "${wcc.points.toInt()}",
-                            color = TextPrimary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.End,
-                            modifier = Modifier.width(CollapsedPtsColWidth),
-                        )
-                    }
+            }
+        }
+    }
+}
+
+/** A rule between the glance's parts, with air either side. */
+@Composable
+private fun GlanceRule() {
+    Spacer(Modifier.height(12.dp))
+    Box(Modifier.fillMaxWidth().height(1.dp).background(Hairline))
+    Spacer(Modifier.height(12.dp))
+}
+
+private fun sessionName(label: String) = when (label) {
+    "FP1" -> "Practice 1"
+    "FP2" -> "Practice 2"
+    "FP3" -> "Practice 3"
+    "Quali" -> "Qualifying"
+    "SQ" -> "Sprint qualifying"
+    else -> label
+}
+
+/**
+ * The weekend in one row, in local time: each session's name, start and day. What runs
+ * next is in the accent; what is over fades back; a session that is on gets a green dot.
+ */
+@Composable
+private fun WeekendRow(sessions: List<F1Season.Session>, upNext: F1Season.Session?, now: Instant, h24: Boolean) {
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        // "10:30 AM" in bold needs more room than "22:30", more again with large text: when
+        // a single row would clip it, the weekend takes two.
+        val need = (if (h24) 44.dp else 66.dp) * LocalDensity.current.fontScale
+        val perRow = if (maxWidth / sessions.size >= need) sessions.size else (sessions.size + 1) / 2
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            sessions.chunked(perRow).forEach { row ->
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    row.forEach { s -> SessionCell(s, isNext = s == upNext, now = now, h24 = h24, modifier = Modifier.weight(1f)) }
+                    repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SessionCell(s: F1Season.Session, isNext: Boolean, now: Instant, h24: Boolean, modifier: Modifier) {
+    val over = s.over(now)
+    val on = s.on(now)
+    val time = formatClock(s.at, h24)
+    val day = s.at.atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("EEE d", java.util.Locale.ENGLISH))
+    Column(
+        modifier = modifier
+            .graphicsLayer { alpha = if (over) 0.45f else 1f }
+            .clearAndSetSemantics {
+                contentDescription = "${sessionName(s.label)}, $day $time" + when { on -> ", on now"; over -> ", finished"; isNext -> ", next"; else -> "" }
+            },
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                s.label,
+                color = when { isNext -> F1Red; s.sprint -> SprintPink; else -> TextSecondary },
+                fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false,
+            )
+            if (on) {
+                Spacer(Modifier.width(4.dp))
+                Box(Modifier.size(5.dp).clip(CircleShape).background(Success))
+            }
+        }
+        Text(
+            time,
+            color = TextPrimary, fontSize = 13.sp, maxLines = 1, softWrap = false,
+            fontWeight = if (isNext || s.main) FontWeight.Bold else FontWeight.Medium,
+            style = TextStyle(fontFeatureSettings = "tnum"),
+        )
+        Text(day, color = TextTertiary, fontSize = 11.sp, maxLines = 1, softWrap = false)
+    }
+}
+
+/** What a podium cell takes beside its name: the place, the face and the gap. */
+private val PodiumCellFixed = 13.dp + 26.dp + 6.dp
+private val PodiumCharWidth = 7.2.dp
+
+/** One step of the last podium: the place in its medal's colour, the face, the name. */
+@Composable
+private fun PodiumCell(r: RaceResult, name: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.semantics(mergeDescendants = true) {}) {
+        Text(
+            "${r.position}",
+            color = medalColor(r.position) ?: TextSecondary,
+            fontSize = 13.sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.width(13.dp),
+        )
+        DriverHeadshot(
+            url = r.headshotUrl,
+            driverName = r.driverName,
+            driverAcronym = r.driverAcronym.orEmpty(),
+            driverNumber = null,
+            teamColor = safeTeamColor(r.teamColor),
+            size = 26.dp,
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(name, color = TextPrimary, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+    }
+}
+
+/**
+ * The last finishes, oldest first, as dots: gold for a win, silver for a podium, grey for
+ * points, a ring for a finish outside them, a dash for a race not finished.
+ */
+@Composable
+private fun FormDots(form: List<Int?>, modifier: Modifier = Modifier) {
+    if (form.isEmpty()) return
+    val said = "Last ${form.size} finishes: " + form.joinToString(", ") { it?.toString() ?: "not classified" }
+    androidx.compose.foundation.Canvas(modifier.size(width = (form.size * 9 - 3).dp, height = 10.dp).semantics { contentDescription = said }) {
+        val d = 6.dp.toPx()
+        val step = 9.dp.toPx()
+        val cy = size.height / 2
+        form.forEachIndexed { i, p ->
+            val c = androidx.compose.ui.geometry.Offset(i * step + d / 2, cy)
+            when {
+                p == null -> drawLine(TextTertiary, c.copy(x = c.x - d / 2 + 1f), c.copy(x = c.x + d / 2 - 1f), strokeWidth = 1.5.dp.toPx())
+                p == 1 -> drawCircle(F1Gold, d / 2, c)
+                p <= 3 -> drawCircle(F1Silver, d / 2, c)
+                p <= 10 -> drawCircle(TextTertiary, d / 2, c)
+                else -> drawCircle(TextTertiary, d / 2 - 0.75.dp.toPx(), c, style = androidx.compose.ui.graphics.drawscope.Stroke(1.5.dp.toPx()))
             }
         }
     }
@@ -837,6 +1030,7 @@ private fun CollapsedStandingRow(
     driverAcronym: String,
     driverNumber: String?,
     driverName: String,
+    form: List<Int?> = emptyList(),
 ) {
     Row(
         modifier = Modifier
@@ -880,6 +1074,7 @@ private fun CollapsedStandingRow(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
+        FormDots(form, Modifier.padding(start = 6.dp))
         // Fixed columns keep gap + points aligned across rows
         Text(
             if (gap != null && gap > 0) "−$gap" else "",
@@ -1006,12 +1201,12 @@ private fun ChampionshipLeaderHero(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             F1StatTile("Wins", "${leader.wins}", Modifier.weight(1f), container = HeroTile)
-            F1StatTile("Podiums", "${leader.podiums}", Modifier.weight(1f), container = HeroTile)
+            F1StatTile("Podiums", leader.podiums?.toString() ?: "–", Modifier.weight(1f), container = HeroTile)
             F1StatTile(
                 "Fastest laps",
-                "${leader.fastestLaps}",
+                leader.fastestLaps?.toString() ?: "–",
                 Modifier.weight(1f),
-                accent = if (leader.fastestLaps > 0) FL_Purple else null,
+                accent = if ((leader.fastestLaps ?: 0) > 0) FL_Purple else null,
                 container = HeroTile,
             )
         }
@@ -1027,7 +1222,8 @@ private fun CompactNextRace(
 ) {
     val isSoon = days in 0..7
     val accent = if (isSoon) F1Red else TextPrimary
-    val localRaceTime = remember(race.raceDate, race.raceTime) { formatLocalTime(race.raceDate, race.raceTime) }
+    val h24 = rememberClock24()
+    val localRaceTime = remember(race.raceDate, race.raceTime, h24) { formatLocalTime(race.raceDate, race.raceTime, h24) }
 
     Column(
         modifier = Modifier
@@ -1126,17 +1322,24 @@ private fun LiveCountdown(
     timeStr: String?,
     accentColor: Color,
     style: CountdownStyle = CountdownStyle.Inline,
+    label: String = "LIGHTS OUT IN",
+    /** Seconds to something other than the race (the next session); null counts to lights out. */
+    until: (() -> Long)? = null,
+    /** The moment it reaches zero, so the caller can move on to what runs now. */
+    onZero: () -> Unit = {},
 ) {
     val tickersPaused = LocalTickersPaused.current
-    var secondsLeft by remember(dateStr, timeStr) { mutableLongStateOf(secondsUntilRace(dateStr, timeStr)) }
+    val left = remember(dateStr, timeStr, label) { until ?: { secondsUntilRace(dateStr, timeStr) } }
+    var secondsLeft by remember(left) { mutableLongStateOf(left()) }
 
-    LaunchedWhileResumed(dateStr, timeStr, tickersPaused) {
+    LaunchedWhileResumed(left, tickersPaused) {
         if (tickersPaused) return@LaunchedWhileResumed
-        secondsLeft = secondsUntilRace(dateStr, timeStr)
+        secondsLeft = left()
         while (secondsLeft > 0) {
             delay(1000L)
-            secondsLeft = secondsUntilRace(dateStr, timeStr)
+            secondsLeft = left()
         }
+        if (secondsLeft == 0L) onZero()
     }
 
     // -1 means the schedule entry didn't parse; 0 means we're at or past lights out.
@@ -1159,7 +1362,7 @@ private fun LiveCountdown(
     when (style) {
         CountdownStyle.Hero -> Column(modifier = Modifier.fillMaxWidth()) {
             Text(
-                "LIGHTS OUT IN",
+                label,
                 color = TextSecondary,
                 style = F1MetaTextStyle.copy(fontSize = 10.sp),
             )
@@ -1327,6 +1530,15 @@ fun DriverStandingsList(data: F1Standings) {
                 racesLeft = racesLeft,
             )
         }
+        val title = remember(standings, data.schedule) { F1Season.titleRace(standings, data.schedule) }
+        title?.let {
+            Text(
+                F1Season.titleLine(it),
+                color = if (it.decided) F1Gold else TextSecondary,
+                fontSize = 13.sp, fontWeight = FontWeight.Medium, lineHeight = 18.sp,
+            )
+        }
+        data.history?.let { PointsProgress(it, standings) }
 
         if (rest.isNotEmpty()) {
             SectionHeader("Standings", trailing = "Tap a driver for more")
@@ -1341,6 +1553,7 @@ fun DriverStandingsList(data: F1Standings) {
                     DriverStandingRow(
                         driver = driver,
                         leader = leader,
+                        form = data.history?.form(driver.driverAcronym).orEmpty(),
                         expanded = expanded == driver.driverAcronym,
                         onToggle = {
                             haptics.tick()
@@ -1354,12 +1567,76 @@ fun DriverStandingsList(data: F1Standings) {
     }
 }
 
+/**
+ * Every round's points for the top six, as lines in their team's colour (the second
+ * driver of a team dashed), the way the dashboard draws the title fight.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PointsProgress(history: SeasonHistory, standings: List<SeasonDriverStanding>) {
+    val n = history.rounds.size
+    val top = remember(history, standings) { standings.take(6).filter { (history.points[it.driverAcronym]?.size ?: 0) >= 2 } }
+    if (n < 2 || top.isEmpty()) return
+    val max = remember(history, top) { top.maxOf { history.points.getValue(it.driverAcronym).max() }.coerceAtLeast(1.0) }
+    // a team's second driver is dashed, so two cars in one colour can be told apart
+    val dashed = remember(top) {
+        val seen = HashSet<String>()
+        top.associate { it.driverAcronym to !seen.add(it.constructorName) }
+    }
+    Column(modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Points after each round for the top ${top.size}" }) {
+        androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().height(96.dp)) {
+            val pad = 3.dp.toPx()
+            top.asReversed().forEach { d ->
+                val pts = history.points.getValue(d.driverAcronym)
+                val path = Path()
+                pts.forEachIndexed { i, v ->
+                    val x = size.width * i / (n - 1).toFloat()
+                    val y = size.height - pad - (v / max).toFloat() * (size.height - 2 * pad)
+                    if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                }
+                drawPath(
+                    path, safeTeamColor(d.teamColor),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round,
+                        pathEffect = if (dashed[d.driverAcronym] == true) PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())) else null,
+                    ),
+                )
+            }
+        }
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+            Text("Round 1", color = TextTertiary, fontSize = 11.sp, maxLines = 1)
+            Spacer(Modifier.weight(1f))
+            Text("Round $n", color = TextTertiary, fontSize = 11.sp, maxLines = 1)
+        }
+        // the key wraps, and each swatch is the line it names: dashed for a team's second car
+        FlowRow(
+            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            top.forEach { d ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val colour = safeTeamColor(d.teamColor)
+                    val isDashed = dashed[d.driverAcronym] == true
+                    androidx.compose.foundation.Canvas(Modifier.size(width = 14.dp, height = 8.dp)) {
+                        drawLine(
+                            colour, androidx.compose.ui.geometry.Offset(0f, size.height / 2), androidx.compose.ui.geometry.Offset(size.width, size.height / 2), strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round,
+                            pathEffect = if (isDashed) PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 3.dp.toPx())) else null,
+                        )
+                    }
+                    Text(d.driverAcronym, color = TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 4.dp))
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun DriverStandingRow(
     driver: SeasonDriverStanding,
     leader: SeasonDriverStanding?,
     expanded: Boolean,
     onToggle: () -> Unit,
+    form: List<Int?> = emptyList(),
 ) {
     val tc = safeTeamColor(driver.teamColor)
     val isLeader = driver.position == 1
@@ -1412,6 +1689,7 @@ private fun DriverStandingRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+            FormDots(form, Modifier.padding(horizontal = 10.dp))
             Column(horizontalAlignment = Alignment.End) {
                 Text(
                     "${driver.points.toInt()}",
@@ -1444,12 +1722,12 @@ private fun DriverStandingRow(
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     F1StatTile("Wins", "${driver.wins}", Modifier.weight(1f), container = RowSurface)
-                    F1StatTile("Podiums", "${driver.podiums}", Modifier.weight(1f), container = RowSurface)
+                    F1StatTile("Podiums", driver.podiums?.toString() ?: "–", Modifier.weight(1f), container = RowSurface)
                     F1StatTile(
                         "Fast laps",
-                        "${driver.fastestLaps}",
+                        driver.fastestLaps?.toString() ?: "–",
                         Modifier.weight(1f),
-                        accent = if (driver.fastestLaps > 0) FL_Purple else null,
+                        accent = if ((driver.fastestLaps ?: 0) > 0) FL_Purple else null,
                         container = RowSurface,
                     )
                 }
@@ -1777,7 +2055,13 @@ private fun SectionHeader(title: String, modifier: Modifier = Modifier, trailing
 
 // ── Race schedule ─────────────────────────────────────────────────────────────
 @Composable
-fun RaceScheduleList(schedule: List<RaceScheduleEntry>) {
+fun RaceScheduleList(
+    schedule: List<RaceScheduleEntry>,
+    history: SeasonHistory? = null,
+    drivers: List<SeasonDriverStanding> = emptyList(),
+) {
+    val winners = remember(history) { history?.rounds.orEmpty().associate { it.round to it.winner } }
+    val colours = remember(drivers) { drivers.associate { it.driverAcronym to safeTeamColor(it.teamColor) } }
     if (schedule.isEmpty()) { EmptyF1State("Schedule not yet available."); return }
     val haptics = rememberHaptics()
     var expandedRound by rememberSaveable { mutableStateOf<Int?>(null) }
@@ -1892,7 +2176,19 @@ fun RaceScheduleList(schedule: List<RaceScheduleEntry>) {
                             }
                             Spacer(Modifier.width(8.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                val winner = winners[race.round]
                                 when {
+                                    // who won it, in the team's colour
+                                    past && winner != null -> Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.semantics { contentDescription = "Won by $winner" },
+                                    ) {
+                                        Icon(AppIcons.Trophy, null, tint = F1Gold, modifier = Modifier.size(13.dp))
+                                        Spacer(Modifier.width(5.dp))
+                                        Box(Modifier.size(7.dp).clip(CircleShape).background(colours[winner] ?: TextTertiary))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(winner, color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
                                     past -> F1Pill("Done", TextTertiary)
                                     days == 0L -> F1Pill("Today", F1Red)
                                     days <= 7L -> F1Pill("${days}d", F1Red)
@@ -1985,6 +2281,7 @@ private fun RaceSessionDetail(
                 race.fp1Date?.let { WeekendSession("FP1", it, race.fp1Time, TextSecondary) },
                 race.fp2Date?.let { WeekendSession("FP2", it, race.fp2Time, TextSecondary) },
                 race.fp3Date?.let { WeekendSession("FP3", it, race.fp3Time, TextSecondary) },
+                race.sprintQualifyingDate?.let { WeekendSession("Sprint quali", it, race.sprintQualifyingTime, SprintPink) },
                 race.sprintDate?.let { WeekendSession("Sprint", it, race.sprintTime, SprintPink) },
                 race.qualifyingDate?.let { WeekendSession("Quali", it, race.qualifyingTime, TextPrimary) },
                 WeekendSession("Race", race.raceDate, race.raceTime, accentColor, main = true),
@@ -2016,6 +2313,7 @@ private data class WeekendSession(
  */
 @Composable
 private fun SessionStrip(sessions: List<WeekendSession>, accentColor: Color) {
+    val h24 = rememberClock24()
     val next = sessions.firstOrNull { !it.over }
     // Three to a row (two when there are four), so the whole weekend shows without scrolling;
     // a shorter last row (qualifying and the race) shares the width.
@@ -2052,7 +2350,7 @@ private fun SessionStrip(sessions: List<WeekendSession>, accentColor: Color) {
                             maxLines = 1,
                         )
                         Text(
-                            formatLocalTime(s.date, s.time).ifBlank { "TBC" },
+                            formatLocalTime(s.date, s.time, h24).ifBlank { "TBC" },
                             color = TextPrimary,
                             fontSize = 13.sp,
                             fontWeight = if (s.main || isNext) FontWeight.Bold else FontWeight.SemiBold,
