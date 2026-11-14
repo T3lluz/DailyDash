@@ -205,8 +205,6 @@ internal fun HermesHeader(
                 // the model and mode are the chat's details: a tap opens them
                 modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(enabled = hasThread) { haptics.tick(); onOpenInfo() },
             ) {
-                ChatStatusDot(active = working, accent = AiAccent)
-                Spacer(Modifier.width(6.dp))
                 if (hasThread && brand.isNotBlank()) {
                     ModelLogo(brand, 16.dp)
                     Spacer(Modifier.width(5.dp))
