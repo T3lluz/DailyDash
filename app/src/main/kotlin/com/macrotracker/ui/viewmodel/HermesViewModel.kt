@@ -968,12 +968,22 @@ class HermesViewModel @Inject constructor(
         return true
     }
 
-    fun answer(card: HermesItem.Clarify, choice: String) {
+    /** Answers a question card. [answers] holds one per question when the card asked several; [choice] is them as text. */
+    fun answer(card: HermesItem.Clarify, choice: String, answers: List<String> = emptyList()) {
         if (_state.value.busy || !card.open) return
         _state.update { s ->
             s.copy(items = s.items.map { if (it is HermesItem.Clarify && it.id == card.id) it.copy(state = "answered", answer = choice) else it })
         }
-        startTurn(prompt = choice, context = null, output = true, clarifyId = card.id, shown = null)
+        startTurn(prompt = choice, context = null, output = true, clarifyId = card.id, shown = null, answers = answers)
+    }
+
+    /** Leaves a question unanswered: the bridge tells Hermes to pick a sensible default and carry on. */
+    fun skipQuestion(card: HermesItem.Clarify) {
+        if (_state.value.busy || !card.open) return
+        _state.update { s ->
+            s.copy(items = s.items.map { if (it is HermesItem.Clarify && it.id == card.id) it.copy(state = "skipped", answer = null) else it })
+        }
+        startTurn(prompt = "Skip", context = null, output = true, clarifyId = card.id, shown = null, skip = true)
     }
 
     /** Opens a fresh thread seeded with a server card's live readings, as the web's "Have Hermes look at it" does. */
@@ -1015,6 +1025,10 @@ class HermesViewModel @Inject constructor(
         clarifyId: String?,
         shown: HermesItem?,
         attachments: List<HermesAttachment> = emptyList(),
+        /** With [clarifyId]: the question is skipped, not answered. */
+        skip: Boolean = false,
+        /** With [clarifyId]: one answer per question of a card that asked several. */
+        answers: List<String> = emptyList(),
     ) {
         // saying something to a chat that was asleep or settled brings it back, as in T3 Code
         _state.value.threadId?.let { id ->
@@ -1039,7 +1053,7 @@ class HermesViewModel @Inject constructor(
                     refreshThreads()
                 }
                 report()
-                follow(threadId, client.chat(threadId, prompt, modeId, phoneContext(context), output, clarifyId, attachments))
+                follow(threadId, client.chat(threadId, prompt, modeId, phoneContext(context), output, clarifyId, attachments, clarifySkip = skip, clarifyAnswers = answers))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: HermesException) {

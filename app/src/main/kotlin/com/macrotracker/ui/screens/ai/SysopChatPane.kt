@@ -86,29 +86,28 @@ fun SysopChatPane(
     val density = LocalDensity.current
 
     var draft by rememberSaveable { mutableStateOf("") }
-    var forceFollow by remember { mutableStateOf(true) }
     var composerHeight by remember { mutableStateOf(0.dp) }
     var threadMenuOpen by remember { mutableStateOf(false) }
 
-    val nearBottom by rememberNearChatBottom(listState)
+    // Follows the newest line until a finger scrolls away from it.
+    val pin = rememberChatPin(listState)
 
     // Follow the stream unless the user has deliberately scrolled up to read.
     LaunchedEffect(state.messages.lastOrNull()?.id, state.streaming != null, state.loading) {
         if (state.messages.isEmpty() && state.streaming == null) return@LaunchedEffect
-        if (!(forceFollow || nearBottom)) return@LaunchedEffect
+        if (!pin.pinned) return@LaunchedEffect
         delay(16)
         listState.followChatBottom()
-        forceFollow = false
     }
 
-    FollowChatOnKeyboard(listState) { forceFollow || nearBottom }
+    FollowChatOnKeyboard(listState) { pin.pinned }
 
     fun send(text: String) {
         val body = text.trim()
         if (body.isEmpty() || state.loading) return
         haptics.click()
         draft = ""
-        forceFollow = true
+        pin.pinned = true
         viewModel.send(bot, body)
     }
 
@@ -162,7 +161,7 @@ fun SysopChatPane(
                                 text = { Text("New chat", color = TextPrimary, fontSize = 14.sp) },
                                 onClick = {
                                     threadMenuOpen = false
-                                    forceFollow = true
+                                    pin.pinned = true
                                     viewModel.newThread(bot)
                                 },
                             )
@@ -194,7 +193,7 @@ fun SysopChatPane(
                                     },
                                     onClick = {
                                         threadMenuOpen = false
-                                        forceFollow = true
+                                        pin.pinned = true
                                         viewModel.selectThread(bot, thread.id)
                                     },
                                 )
@@ -249,7 +248,7 @@ fun SysopChatPane(
                                             label = "Retry",
                                             onClick = {
                                                 haptics.click()
-                                                forceFollow = true
+                                                pin.pinned = true
                                                 viewModel.retry(bot)
                                             },
                                         )
@@ -271,7 +270,7 @@ fun SysopChatPane(
                                             label = "Regenerate",
                                             onClick = {
                                                 haptics.click()
-                                                forceFollow = true
+                                                pin.pinned = true
                                                 viewModel.regenerate(bot)
                                             },
                                         )

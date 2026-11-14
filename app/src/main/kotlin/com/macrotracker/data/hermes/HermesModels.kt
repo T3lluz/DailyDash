@@ -195,6 +195,9 @@ data class HermesAskCommand(
     val pending: Boolean get() = state.isBlank() || state == "pending"
 }
 
+/** One question of a card that asks several at once. */
+data class ClarifyQuestion(val question: String, val choices: List<String>)
+
 /** One entry in a thread's transcript, as the bridge stores it. */
 sealed interface HermesItem {
     val key: String
@@ -247,8 +250,13 @@ sealed interface HermesItem {
         val choices: List<String>,
         val state: String,
         val answer: String?,
+        /** Every question on the card, when it carries more than one; [question] and [choices] are the first. */
+        val questions: List<ClarifyQuestion> = emptyList(),
     ) : HermesItem {
         val open: Boolean get() = state.isBlank() || state == "pending"
+
+        /** The card's questions in order: the list when there is one, else the single question. */
+        val all: List<ClarifyQuestion> get() = questions.ifEmpty { listOf(ClarifyQuestion(question, choices)) }
     }
 
     data class Web(

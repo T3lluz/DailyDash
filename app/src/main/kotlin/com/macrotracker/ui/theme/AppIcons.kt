@@ -284,6 +284,12 @@ object AppIcons {
     val ImagePlus: ImageVector by lazy { icon("ImagePlus") { s("M16 5 h6"); s("M19 2 v6"); s("M21 11.5 V19 a2 2 0 0 1 -2 2 H5 a2 2 0 0 1 -2 -2 V5 a2 2 0 0 1 2 -2 h7.5"); s("m21 15 l-3.086 -3.086 a2 2 0 0 0 -2.828 0 L6 21"); s("M7 9 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0") } }
     /** Lucide `list-checks` */
     val ListChecks: ImageVector by lazy { icon("ListChecks") { s("m3 17 l2 2 l4 -4"); s("m3 7 l2 2 l4 -4"); s("M13 6 h8"); s("M13 12 h8"); s("M13 18 h8") } }
+    /** Lucide `brain` */
+    val Brain: ImageVector by lazy { icon("Brain") { s("M12 18 V5"); s("M15 13 a4.17 4.17 0 0 1 -3 -4 a4.17 4.17 0 0 1 -3 4"); s("M17.707 6.294 A3 3 0 1 0 12 5 a3 3 0 1 0 -5.707 1.294"); s("M17.996 5.125 a4 4 0 0 1 2.526 5.77"); s("M18 18 a4 4 0 0 0 2 -7.465"); s("M19.967 17.482 a4 4 0 1 1 -7.967 0.517 a4 4 0 1 1 -7.967 -0.517"); s("M6 18 a4 4 0 0 1 -2 -7.465"); s("M6.004 5.125 a4 4 0 0 0 -2.526 5.77") } }
+    /** Lucide `globe` */
+    val Globe: ImageVector by lazy { icon("Globe") { s("M2 12 a10 10 0 1 0 20 0 a10 10 0 1 0 -20 0"); s("M12 2 a14.5 14.5 0 0 0 0 20 a14.5 14.5 0 0 0 0 -20"); s("M2 12 h20") } }
+    /** Lucide `wrench` */
+    val Wrench: ImageVector by lazy { icon("Wrench") { s("M14.7 6.3 a1 1 0 0 0 0 1.4 l1.6 1.6 a1 1 0 0 0 1.4 0 l3.106 -3.105 c0.32 -0.322 0.863 -0.22 0.983 0.218 a6 6 0 0 1 -8.259 7.057 l-7.91 7.91 a1 1 0 0 1 -2.999 -3 l7.91 -7.91 a6 6 0 0 1 7.057 -8.259 c0.438 0.12 0.54 0.662 0.219 0.984 z") } }
 }
 
 private val Ink = SolidColor(Color.Black)

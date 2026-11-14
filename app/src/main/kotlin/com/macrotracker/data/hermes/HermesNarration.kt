@@ -69,8 +69,14 @@ object HermesNarration {
         if (STRUCTURE.containsMatchIn(b)) return false
         return SENTENCE_BREAK.split(b).any { s ->
             val t = s.trim()
-            INTENT.containsMatchIn(t) || DOING.containsMatchIn(t)
+            INTENT.containsMatchIn(t) || IN_PROGRESS.containsMatchIn(t) || MOVING_ON.containsMatchIn(t) || isDoing(t)
         }
+    }
+
+    /** "Checking whether…", "Now merging every snapshot": a sentence that opens on what is being done. */
+    private fun isDoing(sentence: String): Boolean {
+        val word = DOING.find(sentence)?.groupValues?.get(1)?.lowercase() ?: return false
+        return word !in NOT_DOING
     }
 
     private const val MAX_NOTE = 420
@@ -87,14 +93,29 @@ object HermesNarration {
         RegexOption.IGNORE_CASE,
     )
 
-    /** "Checking if that's a series", "Now putting it in the description". */
-    private val DOING = Regex(
-        "^(?:(?:ok(?:ay)?|so|first|now|next|then|alright|right)[,:]?\\s+)?" +
-            "(?:checking|looking|reading|pulling|grabbing|fetching|running|re-?running|verifying|inspecting|" +
-            "searching|confirming|opening|listing|finding|loading|updating|editing|changing|applying|fixing|" +
-            "patching|adding|rebuilding|putting|writing|setting|creating|moving|trying|retrying|testing|" +
-            "restarting|comparing|scanning|querying|calling|getting|digging|installing|replacing|removing|" +
-            "renaming|adjusting|switching|starting|stopping|waiting|pinging|probing|tailing|diffing)\\b",
+    /** "so I'm splitting the server into its own step", "Now I'm running the full pipeline": said mid-work, never in a summary of it. */
+    private val IN_PROGRESS = Regex(
+        """\bi(?:['’]m| am)\s+(?:now\s+|also\s+|still\s+|just\s+)?(?!(?:seeing|assuming|guessing|expecting|hoping|missing|having|being|feeling|going)\b)[a-z-]{3,}ing\b""",
         RegexOption.IGNORE_CASE,
+    )
+
+    /** "Now the shifts table, the Buen.md block and the daily-note lines." */
+    private val MOVING_ON = Regex("""^(?:now|next)[,:]?\s+(?:the|for|on to|onto|to)\b""", RegexOption.IGNORE_CASE)
+
+    /**
+     * A sentence opening on an -ing word, after "Now", "Next" and the like: "Checking if that's
+     * a series", "Binary-searching for the last page". Any such word counts but the ones in
+     * [NOT_DOING]; a list of verbs missed "Merging", "Working out" and whatever came next.
+     */
+    private val DOING = Regex(
+        """^(?:(?:ok(?:ay)?|so|first|now|next|then|alright|right|also)[,:]?\s+)?([a-z][a-z-]{2,}ing)\b""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    /** Words in -ing that open a statement, not a step. */
+    private val NOT_DOING = setOf(
+        "nothing", "something", "everything", "anything", "during", "according", "regarding", "depending", "assuming",
+        "being", "having", "using", "including", "excluding", "following", "pending", "missing", "existing", "remaining",
+        "interesting", "surprising", "warning", "morning", "evening", "string", "thing", "bring", "spring", "considering",
     )
 }

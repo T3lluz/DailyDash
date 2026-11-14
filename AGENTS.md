@@ -276,13 +276,56 @@ com.macrotracker/
                              focus, files, or a new chat; otherwise one row (attach, a line, the model's logo,
                              the usage square, send). A finger on the transcript clears focus, so reading folds
                              it. One text field serves both shapes, so folding never drops the cursor. A finished
-                             answer copies from its byline (`CopyButton`); a message of yours copies when held. Estimating a
+                             answer copies from the row under it (`CopyButton`); a message of yours from the row under its bubble, or when held. Estimating a
                              meal is MealChatScreen (`meal_chat` sub-screen), opened by "Estimate with AI" in
-                             `FoodLogForm` on Home's and Health's Food. Hermes' replies are drawn as Claude's apps
-                             draw a turn: a byline, the work folded into "Worked for 46s · 10 steps" (thinking, what
-                             he said between steps, each step; `HermesNarration` splits the bridge's one `text` into
-                             those notes and the answer, HermesNarrationTest), the answer as plain text, and the
-                             files it changed with an arrow at the right of each that opens its diff.
+                             `FoodLogForm` on Home's and Health's Food. The transcript is T3 Code's phone app's (`ThreadFeed.tsx`, `thread-work-log.tsx`),
+                             built by `HermesFeed.rows(items, live)` (data/hermes/HermesFeed.kt, HermesFeedTest) and drawn by
+                             HermesTranscript.kt: what Hermes does is a `WorkStep`, one 32dp line with an icon (the command,
+                             "Read ~/notes/Home.md", "Searched …"); steps with nothing said between them are one `FeedRow.Work`
+                             group closed to a summary ("Ran 3 commands and read 2 files", T3's `summarizeToolGroup`), which
+                             opens to its steps (256dp, then it scrolls) and each step to what it ran and what came back; a
+                             hold copies a step. While a turn runs nothing folds and the last group is live: it names the step
+                             Hermes is on, shimmering, with the newest thought's line above it, or a Thinking row when there
+                             is nothing yet. A finished run folds everything before its last answer into "Worked for 1m 12s"
+                             (`FeedRow.Fold`). What Hermes says is plain text with no bubble and no byline; the run's answer
+                             carries copy, fork, ask again, the time and model, and "2 files changed +16 −0", which opens the
+                             files in a sheet. Approvals still waiting, questions and errors are never folded; a decided
+                             approval is the commands it ran. The bridge's plumbing never shows: a ```search / ```run block
+                             is the request and is stripped (`stripActionFences`) once its receipt (a web item, an exec)
+                             follows or while the turn runs, and a search the bridge ran is one step, not the tool event and
+                             its receipt. Row keys go by place (`work-<run>-<n>`), so an open row stays open as its turn grows.
+                             `HermesNarration` still splits the bridge's one `text` into what was said on the way and the answer.
+                             A reply streaming in ticks the motor at most every 320 ms (T3's stream haptics), and a screen
+                             reader hears how a turn ended. A step that read or changed a file opens it in the server's
+                             file viewer, a page read offers "Open the page", a question can be skipped (`skipQuestion`),
+                             and the newest error offers Ask again, Change model and, when it reads like a limit, Usage.
+                             While Hermes works the composer grows a tab on its top left: `ComposerPanelShape`
+                             (ChatDock.kt) is one outline round both, so the glass, its edge and its shadow have no
+                             seam, and `WorkingStatus` in it shows the scanner, the turn's clock and the chat's own
+                             live line (`liveLabel`, from the feed's last row), so the two never disagree. The jump
+                             button is all that still floats.
+                             What waits on you is docked over the composer, as T3 Code docks it (HermesRequests.kt):
+                             `PendingQuestionCard` (the choices as rows, a line for an answer of your own, Submit, Dismiss)
+                             and `PendingApprovalCard` (the command, why, Allow once and Decline). A card holding several
+                             questions (`Clarify.questions`) or commands shows one at a time with arrows and dots
+                             (`Pager`) and sends the answers together (`clarify.answers`). The bridge's ```ask block
+                             holds up to six questions (a plain line after a question's choices starts the next), and
+                             tells Hermes each answer by its question (`parse_ask`, `clarify_reply` in bridge.py).
+                             The card stands where the composer does and folds to a `RequestBar`; the transcript keeps a
+                             quiet `RequestRow` where it was asked, and an answered question stays as "Answered: …".
+                             `HermesNarration` reads any sentence that opens on an -ing word, "I'm …ing" or "I'll …" as
+                             said mid-work, so a turn the phone did not watch still keeps its narration out of the answer.
+                             In a chat, `LocalMarkdownActions` (MarkdownText.kt) makes a server path written as `code` open
+                             in the file viewer at its line (`ServerPath.parse`) and draws a picture alone on its line.
+                             Code blocks are coloured by `CodeHighlight` (comments, strings, numbers, keywords, keys, per
+                             family of languages; CodeHighlightTest), everywhere MarkdownText is used. A table fits the
+                             width when it can (`fitColumns`: long columns wrap, and only a table that cannot fit scrolls);
+                             `<br>`, HTML entities, backslash escapes and `<https://…>` autolinks read as a browser reads
+                             them (`plainInline`, MarkdownLayoutTest).
+                             Every chat follows its newest line through a `ChatPin` (`rememberChatPin`, ChatKit.kt): pinned
+                             until a finger's scroll ends away from the end, pinned again by a scroll back, a send or the jump
+                             button. Never decide following from where the list happens to sit: that pulled a reader back
+                             down each time a row arrived.
                              Composers sit `composerBottomGap()` above the pane
                              bottom (follows the keyboard frame by frame; never switch on "ime > 0"), and
                              `FollowChatOnKeyboard` pins the list with plain scrolls, never an animation per
@@ -356,8 +399,13 @@ com.macrotracker/
                              colour only in a small status dot or word and on the one primary button. Keep it that way.
                              The bridge side lives in `bridge.py` on twolluz (`thread_fork`, `thread_retitle`, `fork_context`). Not ported, since
                              the bridge has no equivalent: git and pull requests, worktrees, review screens, subagents.
-                             + ConsoleScreen.kt: the dashboard's console page (site/console.html, xterm) in a
-                             WebView, the same shells as the web's console. Reached from the AI tab's menu, Home's
+                             + ConsoleScreen.kt: the dashboard server's shell, drawn natively (no WebView). The
+                             shells are the server's (`console.py`, shared with the web console); `ConsoleClient`
+                             (data/console) streams what one prints over `/_api/console/<id>/stream` and posts
+                             what is typed, `ConsoleViewModel` feeds it to Termux's `TerminalEmulator`
+                             (`com.termux.termux-app:terminal-view`, Apache 2.0, from JitPack) and
+                             `TerminalCanvasView` draws the emulator's screen with `TerminalRenderer`, takes the
+                             keyboard and scrolls back. A key row adds esc, tab, a sticky ctrl, arrows and paste. Reached from the AI tab's menu, Home's
                              Servers card, the Servers screen and settings, Usage, and the launcher shortcuts
                              (res/xml/shortcuts.xml: Console, Usage, Hermes; MainActivity `EXTRA_OPEN`)
                              + server/ (the server screen's cards: hero, history, services wall as tiles,

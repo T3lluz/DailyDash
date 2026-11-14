@@ -345,6 +345,10 @@ class HermesClient @Inject constructor(
         output: Boolean = false,
         clarifyId: String? = null,
         attachments: List<HermesAttachment> = emptyList(),
+        /** The question named by [clarifyId] is skipped: Hermes is told to go on with a default. */
+        clarifySkip: Boolean = false,
+        /** One answer per question, for a card that asked several; [prompt] is the same answers as text. */
+        clarifyAnswers: List<String> = emptyList(),
     ): Flow<HermesEvent> {
         val body = JSONObject()
             .put("thread", threadId)
@@ -363,7 +367,12 @@ class HermesClient @Inject constructor(
                 },
             )
         }
-        if (clarifyId != null) body.put("clarify", JSONObject().put("id", clarifyId).put("answer", prompt).put("skip", false))
+        if (clarifyId != null) body.put(
+            "clarify",
+            JSONObject().put("id", clarifyId).put("answer", if (clarifySkip) "" else prompt).put("skip", clarifySkip).apply {
+                if (clarifyAnswers.size > 1 && !clarifySkip) put("answers", JSONArray(clarifyAnswers))
+            },
+        )
         return stream(
             Request.Builder()
                 .url(api("/ai/chat"))
@@ -667,6 +676,14 @@ class HermesClient @Inject constructor(
                 },
                 state = m.optString("state"),
                 answer = m.optString("answer").takeIf { it.isNotBlank() },
+                questions = m.optJSONArray("questions")?.let { qs ->
+                    (0 until qs.length()).mapNotNull { i ->
+                        val q = qs.optJSONObject(i) ?: return@mapNotNull null
+                        val text = q.optString("question").ifBlank { q.optString("q") }.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                        val opts = q.optJSONArray("choices") ?: q.optJSONArray("opts") ?: JSONArray()
+                        ClarifyQuestion(text, (0 until opts.length()).mapNotNull { o -> opts.optString(o).takeIf { it.isNotBlank() } })
+                    }
+                }.orEmpty().takeIf { it.size > 1 }.orEmpty(),
             )
         }
 

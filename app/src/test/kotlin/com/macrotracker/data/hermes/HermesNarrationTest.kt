@@ -86,4 +86,39 @@ class HermesNarrationTest {
         val blocks = HermesNarration.blocksOf("a\n\n```\nx\n\ny\n```\n\nb")
         assertEquals(listOf("a", "```\nx\n\ny\n```", "b"), blocks)
     }
+
+    @Test
+    fun `what was said mid-work is narration whatever the verb, and the first past-tense summary is the answer`() {
+        val text = """
+            Next I'm reading the renderer in `buen.py`. Obsidian here has no chart plugins, so the visuals will be built-in Mermaid charts.
+
+            Now writing the new layout into `render()`: a summary callout, a this-month calendar grid and an hours chart.
+
+            Rendered fine. One wording fix ("Next big night: Tonight:"), then I'll build a phone-width preview to look at it.
+
+            The preview page works now. My cleanup command was killing its own shell, so I'm splitting the server into its own step.
+
+            Older snapshots lived at `data/program.json`. Merging every snapshot in git to see the full coverage.
+
+            Paging works with `page=` at 15 per page. Binary-searching for the last page to see where 2026 sits.
+
+            Now the shifts table, the Buen.md block and the daily-note lines.
+
+            The notes render correctly. Now I'm running the full hourly pipeline the way the timer does.
+
+            I redid `Buen shifts` and the top of `Buen.md` in the same style as Job search. The hourly run builds them, and I ran it once after the change.
+
+            ## What's new in Buen shifts
+
+            - **Summary box at the top.** 34 days, about 210 h.
+        """.trimIndent()
+        val split = HermesNarration.split(text, steps = 40)
+        assertEquals(8, split.notes.size)
+        assertTrue(split.answer.startsWith("I redid `Buen shifts`"))
+        // statements that only look like work in progress
+        assertFalse(HermesNarration.isNarration("Nothing changed on the server."))
+        assertFalse(HermesNarration.isNarration("Using the newest snapshot per day, coverage starts on 22 Apr."))
+        assertFalse(HermesNarration.isNarration("I'm seeing the same error as before."))
+        assertFalse(HermesNarration.isNarration("Now it works."))
+    }
 }

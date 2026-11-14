@@ -61,6 +61,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -346,6 +349,10 @@ internal fun HermesComposer(
     usage: (@Composable () -> Unit)? = null,
     /** A chat with nothing in it yet: the composer stays open, as an invitation. */
     roomy: Boolean = false,
+    /** The turn running now: the panel grows a tab on its top left that says what Hermes is on. */
+    working: com.macrotracker.data.hermes.HermesLive? = null,
+    workingLabel: String = "",
+    onWorking: () -> Unit = {},
     /** Speak instead of type; null hides the microphone. */
     onDictate: (() -> Unit)? = null,
     /** What sending does while Hermes works: `steer` or `queue` (T3 Code's follow-up behaviour). */
@@ -389,13 +396,28 @@ internal fun HermesComposer(
         )
     }
 
+    // The working tab is the panel itself: one outline, one sheet of glass, no seam where they meet.
+    val density = LocalDensity.current
+    val tabHeight by androidx.compose.animation.core.animateDpAsState(if (working != null) WorkingTabHeight else 0.dp, MacroMotion.entranceSpring(), label = "workingTab")
+    var tabWidth by remember { mutableStateOf(0) }
+    val panel = remember(tabHeight, tabWidth, density) {
+        ComposerPanelShape(tabWidth = tabWidth.toFloat(), tabHeight = with(density) { tabHeight.coerceAtLeast(0.dp).toPx() }, density = density)
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp)
             .padding(top = 6.dp, bottom = bottomPad)
             // The navbar's and the island's glass: lift, blur, tint and edge alike.
-            .chromeGlass(hazeState, ComposerShape)
+            .chromeGlass(hazeState, panel),
+    ) {
+    // clipped to the strip it stands in, and gone with it: at rest nothing of it lies over the field
+    Box(Modifier.height(tabHeight.coerceAtLeast(0.dp)).clipToBounds().padding(start = WorkingTabInset)) {
+        if (tabHeight > 0.5.dp) WorkingStatus(working, workingLabel, onWorking, Modifier.onSizeChanged { tabWidth = it.width })
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
             .animateContentSize(MacroMotion.entranceSpring())
             .padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
     ) {
@@ -501,6 +523,7 @@ internal fun HermesComposer(
                 send()
             }
         }
+    }
     }
 }
 

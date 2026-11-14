@@ -9,6 +9,7 @@ import android.speech.RecognizerIntent
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import com.macrotracker.data.hermes.HermesFeed
+import com.macrotracker.data.hermes.HermesActivityLabel
 import com.macrotracker.data.hermes.FeedRow
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.ui.draw.clipToBounds
@@ -42,11 +43,11 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.withStyle
 import com.macrotracker.data.hermes.HermesFileChange
-import com.macrotracker.data.hermes.HermesNarration
 import com.macrotracker.ui.util.LaunchedWhileResumed
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.togetherWith
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.macrotracker.ui.util.rememberIsResumed
@@ -105,6 +106,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -128,9 +130,7 @@ import androidx.compose.ui.unit.sp
 import com.macrotracker.R
 import com.macrotracker.data.hermes.HermesAskCommand
 import com.macrotracker.data.hermes.HermesItem
-import com.macrotracker.data.hermes.HermesLive
 import com.macrotracker.data.hermes.HermesPermission
-import com.macrotracker.data.hermes.HermesTool
 import com.macrotracker.ui.components.LoadingSpinner
 import com.macrotracker.ui.components.MarkdownText
 import com.macrotracker.ui.components.PillButton
@@ -171,6 +171,9 @@ private val HermesStarters = listOf(
     "Any failed services or unhealthy containers?",
     "What is filling up the disk?",
 )
+
+/** The least time between two ticks of a reply streaming in (T3 Code's `STREAM_HAPTIC_THROTTLE_MS`). */
+private const val STREAM_TICK_MS = 320L
 
 private val CardShape = RoundedCornerShape(14.dp)
 private val Mono = FontFamily.Monospace
@@ -259,7 +262,6 @@ fun HermesChatPane(
     DisposableEffect(viewModel) { onDispose { viewModel.saveDraft(draftId, draft) } }
     /** The server's file viewer: a path, and the lines a change touched. */
     var filesAt by remember { mutableStateOf<Triple<String, Int, Int>?>(null) }
-    var forceFollow by remember { mutableStateOf(true) }
     // Find in chat: the matches are rows, and the list is scrolled to the one asked for.
     var finding by rememberSaveable { mutableStateOf(false) }
     var infoOpen by remember { mutableStateOf(false) }
@@ -268,16 +270,12 @@ fun HermesChatPane(
     var findQuery by rememberSaveable { mutableStateOf("") }
     var findAt by rememberSaveable { mutableStateOf(0) }
     val rowIndex = remember { HashMap<String, Int>() }
-    // The newest question or approval still waiting on you; the dock points at it while it is off screen.
-    val waitingKey = remember(state.items) {
-        state.items.lastOrNull { (it is HermesItem.Ask && !it.settled) || (it is HermesItem.Clarify && it.open) }?.key
+    // The newest question or approval still waiting on you: its card is docked over the composer.
+    val pending = remember(state.items) {
+        state.items.lastOrNull { (it is HermesItem.Ask && !it.settled) || (it is HermesItem.Clarify && it.open) }
     }
-    val waitingOffscreen by remember(waitingKey) {
-        androidx.compose.runtime.derivedStateOf {
-            val at = waitingKey?.let { rowIndex[it] }
-            at != null && listState.layoutInfo.visibleItemsInfo.none { it.index == at }
-        }
-    }
+    // Folded to a bar, so the composer is back (a typed message still answers an open question).
+    var requestFolded by rememberSaveable(pending?.key) { mutableStateOf(false) }
     // Read only by the list and the dock, never in this body: the composer's height animates
     // when it folds, and the whole pane must not recompose with it.
     val composerHeight = remember { mutableStateOf(0.dp) }
@@ -297,22 +295,59 @@ fun HermesChatPane(
     var confirmClear by remember { mutableStateOf<HermesThreadSummary?>(null) }
     var confirmDelete by remember { mutableStateOf<HermesThreadSummary?>(null) }
 
-    val nearBottom by rememberNearChatBottom(listState)
+    // The transcript as rows, T3 Code's way: steps grouped into lines, a finished run folded over its answer.
+    val rows = remember(state.items, state.live) { HermesFeed.rows(state.items, state.live) }
+    val rowCount = rows.size
+    // Follows the newest line until a finger scrolls away from it.
+    val pin = rememberChatPin(listState)
     val awayFromEnd by rememberAwayFromChatEnd(listState)
     // A finger on the transcript is reading, not typing: the keyboard goes and the composer folds.
     val focusManager = LocalFocusManager.current
     LaunchedEffect(listState) {
         listState.interactionSource.interactions.collect { if (it is DragInteraction.Start) focusManager.clearFocus() }
     }
-    // A new message glides into view; a reply growing in place is kept pinned by FollowChatOnKeyboard.
-    LaunchedEffect(state.items.size, state.live != null, state.threadId) {
+    // A chat opens on its newest line, however the one before it was left.
+    LaunchedEffect(state.threadId) { pin.pinned = true }
+    // A new row glides into view; a reply growing in place is kept pinned by FollowChatOnKeyboard.
+    LaunchedEffect(rowCount, state.live != null, state.threadId) {
         if (state.items.isEmpty() && state.live == null) return@LaunchedEffect
-        if (!(forceFollow || nearBottom)) return@LaunchedEffect
+        if (!pin.pinned) return@LaunchedEffect
         delay(16)
         listState.followChatBottom()
-        forceFollow = false
     }
-    FollowChatOnKeyboard(listState) { forceFollow || nearBottom }
+    FollowChatOnKeyboard(listState) { pin.pinned }
+
+    // T3 Code's stream haptics: a tick as a reply starts to write, then at most one every 320 ms
+    // while it grows, so a fast stream reads as texture and not a buzz. A chat opened mid-stream is silent.
+    val writing = state.live?.got?.length ?: 0
+    val stream = remember(state.threadId) { longArrayOf(-1L, 0L) }
+    val inFront = rememberIsResumed()
+    LaunchedEffect(writing, state.threadId) {
+        val before = stream[0]
+        stream[0] = writing.toLong()
+        if (before < 0 || writing <= before || !inFront) return@LaunchedEffect
+        val now = android.os.SystemClock.uptimeMillis()
+        if (before == 0L || now - stream[1] >= STREAM_TICK_MS) {
+            stream[1] = now
+            haptics.tick()
+        }
+    }
+    // A screen reader hears how a turn ended, since the working pill just goes away.
+    val view = androidx.compose.ui.platform.LocalView.current
+    var wasBusy by remember(state.threadId) { mutableStateOf(false) }
+    LaunchedEffect(state.busy, state.threadId) {
+        if (wasBusy && !state.busy) {
+            val waiting = state.items.lastOrNull().let { (it is HermesItem.Ask && !it.settled) || (it is HermesItem.Clarify && it.open) }
+            view.announceForAccessibility(
+                when {
+                    waiting -> "Hermes needs your answer"
+                    state.items.lastOrNull() is HermesItem.Error -> "Hermes stopped with an error"
+                    else -> "Hermes finished"
+                },
+            )
+        }
+        wasBusy = state.busy
+    }
 
     // The bridge's change feed, while the pane is on screen and the app in front: a chat
     // started on the desk shows up in the chat list as it happens. On return it catches up.
@@ -387,7 +422,7 @@ fun HermesChatPane(
         val incoming = HermesShareInbox.take() ?: return@LaunchedEffect
         switchDraft(null)
         viewModel.newThread()
-        forceFollow = true
+        pin.pinned = true
         draft = incoming.text
         incoming.files.forEach { viewModel.attach(Uri.fromFile(it)) }
     }
@@ -398,7 +433,7 @@ fun HermesChatPane(
         if (body.isEmpty()) return
         draft = ""
         viewModel.saveDraft(draftId, "")
-        forceFollow = true
+        pin.pinned = true
         if (mode == "steer") viewModel.steer(body) else viewModel.send(body)
     }
 
@@ -415,7 +450,7 @@ fun HermesChatPane(
             val rest = body.substringAfter(' ', "").trim()
             draft = ""
             if (rest.isEmpty()) return
-            forceFollow = true
+            pin.pinned = true
             viewModel.send(rest)
             askForNotifications()
             return
@@ -423,7 +458,7 @@ fun HermesChatPane(
         haptics.click()
         draft = ""
         viewModel.saveDraft(draftId, "")
-        forceFollow = true
+        pin.pinned = true
         viewModel.send(body)
         askForNotifications()
     }
@@ -431,9 +466,12 @@ fun HermesChatPane(
     val current = state.currentThread
     val copyChat = rememberCopyLatest { HermesFeed.transcript(state.threadTitle, state.items) }
     val working = state.live != null
-    // The transcript as rows: a finished run folds into one line (T3 Code's run fold).
-    val rows = remember(state.items, working) { HermesFeed.rows(state.items, working) }
-    var openRuns by rememberSaveable(state.threadId) { mutableStateOf(setOf<String>()) }
+    // Which folds, groups and steps are open, by row key; a chat keeps its own.
+    var openRows by rememberSaveable(state.threadId) { mutableStateOf(setOf<String>()) }
+    val isOpen: (String) -> Boolean = { it in openRows }
+    val toggleOpen: (String) -> Unit = { key -> openRows = if (key in openRows) openRows - key else openRows + key }
+    // The answer whose changed files are open in a sheet, by its row.
+    var changesOf by rememberSaveable(state.threadId) { mutableStateOf<String?>(null) }
     val chatHaze = rememberHazeState()
     val keysFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { keysFocus.requestFocus() } }
@@ -454,7 +492,7 @@ fun HermesChatPane(
                 if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 when {
                     e.isCtrlPressed && e.key == Key.N -> {
-                        forceFollow = true
+                        pin.pinned = true
                         switchDraft(null)
                         viewModel.newThread()
                         true
@@ -491,7 +529,7 @@ fun HermesChatPane(
                         status = state.status,
                         onOpen = { id, q ->
                             haptics.tick()
-                            forceFollow = true
+                            pin.pinned = true
                             switchDraft(id)
                             viewModel.openThread(id)
                             // opened from a search: the words are looked for in it
@@ -500,7 +538,7 @@ fun HermesChatPane(
                         },
                         onNewChat = {
                             haptics.tick()
-                            forceFollow = true
+                            pin.pinned = true
                             switchDraft(null)
                             viewModel.newThread()
                             closeRail()
@@ -533,7 +571,7 @@ fun HermesChatPane(
                     drafts = drafts,
                     onOpenDraft = {
                         haptics.tick()
-                        forceFollow = true
+                        pin.pinned = true
                         switchDraft(null)
                         viewModel.newThread()
                         closeRail()
@@ -586,7 +624,7 @@ fun HermesChatPane(
                         scope.launch { rail.open() }
                     },
                     onNewChat = {
-                        forceFollow = true
+                        pin.pinned = true
                         switchDraft(null)
                         viewModel.newThread()
                     },
@@ -617,7 +655,7 @@ fun HermesChatPane(
                     fun jump(to: Int) {
                         if (hits.isEmpty()) return
                         findAt = (to + hits.size) % hits.size
-                        rowIndex[hits[findAt]]?.let { i -> scope.launch { forceFollow = false; listState.animateScrollToItem(i) } }
+                        rowIndex[hits[findAt]]?.let { i -> scope.launch { pin.pinned = false; listState.animateScrollToItem(i) } }
                     }
                     Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         SearchBox(findQuery, { findQuery = it; findAt = 0 }, "Find in this chat", Modifier.weight(1f))
@@ -642,58 +680,83 @@ fun HermesChatPane(
                 LaunchedEffect(state.threadId, current?.updatedMs) { viewModel.markSeen(state.threadId) }
 
                 // The newest question and answer are the ones that can be cut back and asked again.
-                val actions = remember(state.items, state.mode.kind) {
-                    RowActions(
-                        lastUserKey = state.items.lastOrNull { it is HermesItem.User }?.key,
-                        lastAssistantKey = state.items.lastOrNull { it is HermesItem.Assistant }?.key,
-                        planMode = state.mode.kind == "read",
-                        onOpenFile = { c ->
-                            val (from, to) = changedLines(c.diff)
-                            filesAt = Triple(c.path, from, to)
-                        },
-                        onRevert = { c -> haptics.click(); viewModel.revertChange(c) },
+                val lastUserKey = remember(state.items) { state.items.lastOrNull { it is HermesItem.User }?.key }
+                val bubbleActions = remember(state.items) {
+                    BubbleActions(
                         onEdit = { user ->
                             haptics.click()
                             viewModel.rewind(user) { text ->
-                                forceFollow = true
+                                pin.pinned = true
                                 draft = text
                             }
                         },
-                        onRetry = { haptics.click(); forceFollow = true; viewModel.retry() },
                         onFork = { ts ->
                             haptics.click()
-                            viewModel.fork(ts) { id -> switchDraft(id); forceFollow = true }
+                            viewModel.fork(ts) { id -> switchDraft(id); pin.pinned = true }
                         },
                         assetUrl = viewModel::assetUrl,
                         onOpenImage = { viewing = it },
+                    )
+                }
+                val answerActions = remember(rows, state.busy, state.mode.kind) {
+                    AnswerActions(
+                        idle = !state.busy,
+                        lastKey = rows.lastOrNull { it is FeedRow.Message && it.final }?.key,
+                        planMode = state.mode.kind == "read",
+                        onRetry = { haptics.click(); pin.pinned = true; viewModel.retry() },
+                        onFork = { ts ->
+                            haptics.click()
+                            viewModel.fork(ts) { id -> switchDraft(id); pin.pinned = true }
+                        },
                         onImplement = {
                             haptics.click()
-                            forceFollow = true
+                            pin.pinned = true
                             viewModel.setModeKind("write")
                             viewModel.send("Implement the plan above.")
                         },
+                        onOpenChanges = { key -> changesOf = key },
                     )
                 }
-                // One way to draw an item, for the list's own rows and for a run's steps.
-                val shown: @Composable (HermesItem) -> Unit = { item ->
-                    HermesItemView(
-                        item = item,
-                        actions = actions,
+                // What an answer's text can open: a server path in the file viewer at its line, a picture full screen.
+                val markdownActions = remember {
+                    com.macrotracker.ui.components.MarkdownActions(
+                        openPath = { path, line -> haptics.tick(); filesAt = Triple(path, line, line) },
+                        openImage = { url, alt -> viewing = HermesAttachment(id = url, name = alt.ifBlank { "Picture" }, mime = "image/*", kind = "image", size = 0, url = url) },
+                    )
+                }
+                // One way to draw a row, for the list's own rows and for an opened fold's.
+                val shown: @Composable (FeedRow) -> Unit = { row ->
+                    when (row) {
+                        is FeedRow.User -> HermesUserBubble(
+                            row.item,
+                            // a message the bridge has stamped can be cut back to; so can the newest, which only the phone has seen
+                            canEdit = !state.busy && (row.item.ts > 0 || row.item.key == lastUserKey),
+                            actions = bubbleActions,
+                        )
+                        is FeedRow.Message -> AssistantMessage(row, answerActions)
+                        is FeedRow.Work -> WorkGroup(row, isOpen, toggleOpen) { path -> haptics.tick(); filesAt = Triple(path, 0, 0) }
+                        is FeedRow.Thinking -> ThinkingRow(row.label)
                         // Only what the cards read, not the whole state: with the state,
                         // every streamed token re-ran every row on screen.
-                        busy = state.busy,
-                        running = state.running,
-                        onDecide = { card, i, run ->
-                            haptics.click()
-                            forceFollow = true
-                            viewModel.decide(card, i, run)
-                        },
-                        onAnswer = { card, choice ->
-                            haptics.click()
-                            forceFollow = true
-                            viewModel.answer(card, choice)
-                        },
-                    )
+                        is FeedRow.Card -> when (val item = row.item) {
+                            // the newest thing in an idle chat: it can be asked again, on another model
+                            is HermesItem.Error -> ErrorRow(
+                                item,
+                                recover = if (!state.busy && item.key == state.items.lastOrNull()?.key) {
+                                    ErrorActions(
+                                        onRetry = { haptics.click(); pin.pinned = true; viewModel.retry() },
+                                        onPickModel = { modelSheet = true },
+                                        onOpenUsage = onOpenUsage,
+                                    )
+                                } else {
+                                    null
+                                },
+                            )
+                            // a question or an approval: a line here, its card over the composer
+                            else -> RequestRow(item, isOpen(item.key)) { toggleOpen(item.key) }
+                        }
+                        is FeedRow.Fold -> Unit
+                    }
                 }
                 when {
                     state.reach == HermesReach.DOWN -> HermesUnreachable(
@@ -706,14 +769,16 @@ fun HermesChatPane(
                         Modifier.weight(1f).fillMaxWidth(),
                         contentAlignment = Alignment.Center,
                     ) { LoadingSpinner(color = AiAccent) }
-                    else -> ChatList(
+                    else -> androidx.compose.runtime.CompositionLocalProvider(
+                        com.macrotracker.ui.components.LocalMarkdownActions provides markdownActions,
+                    ) { ChatList(
                         state = listState,
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth()
                             .hazeSource(state = chatHaze),
-                        // while Hermes works the pill floats over the foot of the chat: room for it under the last line
-                        bottomRoom = { composerHeight.value + 10.dp + if (working) DockHeight + 6.dp else 0.dp },
+                        // the working tab is part of the composer's column, so its height is already in this
+                        bottomRoom = { composerHeight.value + 10.dp },
                     ) {
                         if (state.items.isEmpty() && !state.loadingThread && state.live == null) {
                             item(key = "greeting") {
@@ -733,54 +798,45 @@ fun HermesChatPane(
                         var position = (if (state.items.isEmpty() && !state.loadingThread && state.live == null) 1 else 0) +
                             (if (state.loadingThread) 1 else 0)
                         rows.forEach { row ->
-                            val ts = when (row) {
-                                is FeedRow.Item -> itemTime(row.item)
-                                is FeedRow.Run -> row.items.firstNotNullOfOrNull { itemTime(it).takeIf { t -> t > 0 } } ?: 0L
-                            }
+                            val ts = rowTime(row)
                             if (ts > 0) {
                                 val day = startOfDay(ts)
                                 if (day != lastDay) {
                                     lastDay = day
                                     position++
-                                    item(key = "day-$day-${row.key}") { DayDivider(day) }
+                                    item(key = "day-$day-${row.key}", contentType = "day") { DayDivider(day) }
                                 }
                             }
                             rowIndex[row.key] = position
-                            position += 1 + if (row is FeedRow.Run && row.key in openRuns) row.items.size else 0
-                            when (row) {
-                                is FeedRow.Item -> item(key = row.key) { shown(row.item) }
-                                // a finished run: one line, and its steps under it once opened
-                                is FeedRow.Run -> {
-                                    val open = row.key in openRuns
-                                    item(key = row.key) {
-                                        RunFold(row, open) {
-                                            haptics.tick()
-                                            openRuns = if (open) openRuns - row.key else openRuns + row.key
-                                        }
+                            position++
+                            if (row is FeedRow.Fold) {
+                                // a finished run: one line, and what it did and said under it once opened
+                                val open = row.key in openRows
+                                item(key = row.key, contentType = "fold") {
+                                    FoldRow(row, open) { haptics.tick(); toggleOpen(row.key) }
+                                }
+                                if (open) {
+                                    position += row.rows.size
+                                    items(row.rows, key = { it.key }, contentType = { it::class }) { child ->
+                                        Box(Modifier.animateItem(fadeInSpec = MacroMotion.fadeTween(), placementSpec = null, fadeOutSpec = null)) { shown(child) }
                                     }
-                                    if (open) {
-                                        items(row.items, key = { it.key }) { item ->
-                                            Box(Modifier.padding(start = 12.dp)) { shown(item) }
-                                        }
-                                    }
+                                }
+                            } else {
+                                // a row that has just arrived fades in; nothing slides, so a growing reply never chases its neighbours
+                                item(key = row.key, contentType = row::class) {
+                                    Box(Modifier.animateItem(fadeInSpec = MacroMotion.fadeTween(), placementSpec = null, fadeOutSpec = null)) { shown(row) }
                                 }
                             }
                         }
-                        state.live?.let { live ->
-                            item(key = "live") { LiveTurn(live) }
-                        }
-                    }
+                    } }
                 }
             }
 
             if (state.reach != HermesReach.DOWN) {
                 ChatDock(
-                    waiting = waitingOffscreen,
-                    onWaiting = { rowIndex[waitingKey]?.let { i -> scope.launch { forceFollow = false; listState.animateScrollToItem(i) } } },
-                    live = state.live,
                     showJump = awayFromEnd && state.items.isNotEmpty(),
                     onJump = {
-                        forceFollow = true
+                        pin.pinned = true
                         scope.launch { listState.followChatBottom() }
                     },
                     hazeState = chatHaze,
@@ -834,7 +890,7 @@ fun HermesChatPane(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(50))
                                 .background(Color.White.copy(alpha = 0.10f))
-                                .clickable { haptics.confirm(); forceFollow = true; viewModel.sendQueuedNow(0) }
+                                .clickable { haptics.confirm(); pin.pinned = true; viewModel.sendQueuedNow(0) }
                                 .padding(horizontal = 14.dp, vertical = 9.dp),
                         )
                     }
@@ -870,63 +926,157 @@ fun HermesChatPane(
                     )
                     Spacer(Modifier.height(4.dp))
                 }
-                HermesComposer(
-                    value = draft,
-                    onValueChange = { typed ->
-                        // "/plan " (the space is the Enter): the mode switches as you type and the
-                        // box empties, so what you type next is asked in that mode. The web's way.
-                        val live = Regex("^/(\\w+) $").matchEntire(typed)?.groupValues?.get(1)?.lowercase()
-                        if (live != null && live in ModeCommands) {
-                            haptics.tick()
-                            viewModel.setModeKind(ModeCommands.getValue(live))
-                            draft = ""
-                        } else if (typed.endsWith("@") && typed.length > draft.length &&
-                            (typed.length == 1 || typed[typed.length - 2].isWhitespace())
-                        ) {
-                            // "@" asks for a file: the server's folders open, and the pick is put in the text
-                            draft = typed.dropLast(1)
-                            filesAt = Triple("~", 0, 0)
-                        } else {
-                            draft = typed
+                // What Hermes is on, in the chat's own words: the live line's, so the tab and the line never disagree.
+                val liveLabel = remember(rows, state.live) {
+                    when (val tail = rows.lastOrNull()) {
+                        is FeedRow.Work -> tail.summary.takeIf { tail.live }
+                        is FeedRow.Thinking -> tail.label
+                        is FeedRow.Message -> "Writing".takeIf { tail.streaming }
+                        else -> null
+                    } ?: state.live?.let { HermesActivityLabel.of(it).text }.orEmpty()
+                }
+                val request = pending?.takeIf { !requestFolded }
+                // What waits on you stands where the composer does; folded, it is a bar over it.
+                androidx.compose.animation.AnimatedContent(
+                    targetState = request?.key,
+                    transitionSpec = {
+                        (androidx.compose.animation.fadeIn(MacroMotion.fadeTween()) togetherWith androidx.compose.animation.fadeOut(MacroMotion.fadeTween()))
+                            .using(androidx.compose.animation.SizeTransform(clip = false))
+                    },
+                    label = "request",
+                ) { key ->
+                    val item = pending?.takeIf { it.key == key }
+                    // a card on its way out, whose request is gone: nothing, so the composer is not drawn twice
+                    if (key != null && item == null) return@AnimatedContent
+                    Column {
+                        when (item) {
+                            is HermesItem.Clarify -> PendingQuestionCard(
+                                card = item,
+                                enabled = !state.busy,
+                                hazeState = chatHaze,
+                                bottomGap = composerBottomGap(),
+                                onSubmit = { text, answers ->
+                                    focusManager.clearFocus()
+                                    pin.pinned = true
+                                    viewModel.answer(item, text, answers)
+                                },
+                                onDismiss = {
+                                    focusManager.clearFocus()
+                                    pin.pinned = true
+                                    viewModel.skipQuestion(item)
+                                },
+                                onCollapse = { requestFolded = true },
+                            )
+                            is HermesItem.Ask -> PendingApprovalCard(
+                                card = item,
+                                busy = state.busy,
+                                running = state.running,
+                                hazeState = chatHaze,
+                                bottomGap = composerBottomGap(),
+                                onDecide = { i, run ->
+                                    pin.pinned = true
+                                    viewModel.decide(item, i, run)
+                                },
+                                onCollapse = { requestFolded = true },
+                            )
+                            else -> {
+                                pending?.let { waiting ->
+                                    val (label, detail) = requestBarText(waiting)
+                                    RequestBar(label, detail, chatHaze) { focusManager.clearFocus(); requestFolded = false }
+                                }
+                                HermesComposer(
+                                    value = draft,
+                                    onValueChange = { typed ->
+                                        // "/plan " (the space is the Enter): the mode switches as you type and the
+                                        // box empties, so what you type next is asked in that mode. The web's way.
+                                        val live = Regex("^/(\\w+) $").matchEntire(typed)?.groupValues?.get(1)?.lowercase()
+                                        if (live != null && live in ModeCommands) {
+                                            haptics.tick()
+                                            viewModel.setModeKind(ModeCommands.getValue(live))
+                                            draft = ""
+                                        } else if (typed.endsWith("@") && typed.length > draft.length &&
+                                            (typed.length == 1 || typed[typed.length - 2].isWhitespace())
+                                        ) {
+                                            // "@" asks for a file: the server's folders open, and the pick is put in the text
+                                            draft = typed.dropLast(1)
+                                            filesAt = Triple("~", 0, 0)
+                                        } else {
+                                            draft = typed
+                                        }
+                                    },
+                                    onSend = { if (state.busy) followUpWith(followUp) else send(draft) },
+                                    onSendAlternate = { followUpWith(if (followUp == "steer") "queue" else "steer") },
+                                    followUp = followUp,
+                                    onStop = { viewModel.stop() },
+                                    // Not while a chat is opening: its transcript replaced the message just sent.
+                                    enabled = state.reach == HermesReach.READY && !state.loadingThread,
+                                    busy = state.busy,
+                                    hint = when {
+                                        state.busy -> if (followUp == "steer") "Steer Hermes…  hold send to queue" else "Queue the next message…  hold send to steer"
+                                        openQuestion(state) != null -> "Answer Hermes…"
+                                        else -> HermesIdentity.composerHint + "  / commands  $ skills"
+                                    },
+                                    mode = state.mode,
+                                    model = state.currentModel,
+                                    modelFallback = state.status?.modelLabel,
+                                    switchingModel = state.switchingModel,
+                                    modifiers = modifiers,
+                                    attachments = state.attachments,
+                                    uploading = state.uploading,
+                                    onAttach = { attachSheet = true },
+                                    onDictate = dictate,
+                                    onRemoveAttachment = viewModel::removeAttachment,
+                                    onClearMode = { viewModel.setModeKind("write") },
+                                    onPickModel = { modelSheet = true },
+                                    hazeState = chatHaze,
+                                    working = state.live,
+                                    workingLabel = liveLabel,
+                                    onWorking = {
+                                        pin.pinned = true
+                                        scope.launch { listState.followChatBottom() }
+                                    },
+                                    roomy = state.items.isEmpty() && state.live == null,
+                                )
+                            }
                         }
-                    },
-                    onSend = { if (state.busy) followUpWith(followUp) else send(draft) },
-                    onSendAlternate = { followUpWith(if (followUp == "steer") "queue" else "steer") },
-                    followUp = followUp,
-                    onStop = { viewModel.stop() },
-                    // Not while a chat is opening: its transcript replaced the message just sent.
-                    enabled = state.reach == HermesReach.READY && !state.loadingThread,
-                    busy = state.busy,
-                    hint = when {
-                        state.busy -> if (followUp == "steer") "Steer Hermes…  hold send to queue" else "Queue the next message…  hold send to steer"
-                        openQuestion(state) != null -> "Answer Hermes…"
-                        else -> HermesIdentity.composerHint + "  / commands  $ skills"
-                    },
-                    mode = state.mode,
-                    model = state.currentModel,
-                    modelFallback = state.status?.modelLabel,
-                    switchingModel = state.switchingModel,
-                    modifiers = modifiers,
-                    attachments = state.attachments,
-                    uploading = state.uploading,
-                    onAttach = { attachSheet = true },
-                    onDictate = dictate,
-                    onRemoveAttachment = viewModel::removeAttachment,
-                    onClearMode = { viewModel.setModeKind("write") },
-                    onPickModel = { modelSheet = true },
-                    hazeState = chatHaze,
-                    roomy = state.items.isEmpty() && state.live == null,
-                )
+                    }
+                }
             }
         }
     }
 
+    changesOf?.let { key ->
+        // read from the rows each time, so a file put back shows as put back
+        val changes = (rows.firstOrNull { it.key == key } as? FeedRow.Message)?.changes.orEmpty()
+        if (changes.isEmpty()) {
+            changesOf = null
+        } else {
+            ModalBottomSheet(onDismissRequest = { changesOf = null }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = Surface) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .navigationBarsPadding()
+                        .padding(start = 12.dp, end = 12.dp, bottom = 16.dp),
+                ) {
+                    ChangesCard(
+                        changes,
+                        onOpenFile = { c ->
+                            val (from, to) = changedLines(c.diff)
+                            filesAt = Triple(c.path, from, to)
+                        },
+                        onRevert = { c -> haptics.click(); viewModel.revertChange(c) },
+                    )
+                }
+            }
+        }
+    }
     if (queueSheet && state.queue.isNotEmpty()) {
         QueueSheet(
             queue = state.queue,
             working = state.busy,
             onDismiss = { queueSheet = false },
-            onSendNow = { i -> haptics.click(); forceFollow = true; viewModel.sendQueuedNow(i); queueSheet = false },
+            onSendNow = { i -> haptics.click(); pin.pinned = true; viewModel.sendQueuedNow(i); queueSheet = false },
             onEdit = { i ->
                 viewModel.takeQueued(i)?.let { draft = it }
                 queueSheet = false
@@ -1000,7 +1150,7 @@ fun HermesChatPane(
                     )
                 },
                 onRetitle = { viewModel.retitle() },
-                onForkChat = { viewModel.fork(0) { id -> switchDraft(id); forceFollow = true } },
+                onForkChat = { viewModel.fork(0) { id -> switchDraft(id); pin.pinned = true } },
                 forkedFrom = thread.forkedFrom?.let { from -> state.threads.firstOrNull { it.id == from }?.title ?: "an earlier chat" },
                 onFind = { finding = true },
                 onClear = { confirmClear = thread },
@@ -1148,27 +1298,6 @@ private fun AttachSheet(onDismiss: () -> Unit, onPhoto: () -> Unit, onCamera: ()
     }
 }
 
-/** A finished run, folded: how long Hermes worked and in how many steps. A tap opens it to every step. */
-@Composable
-private fun RunFold(run: FeedRow.Run, open: Boolean, onToggle: () -> Unit) {
-    val label = listOfNotNull(
-        run.ms?.let { "Worked for ${tookShort(it)}" } ?: "Worked",
-        run.steps.takeIf { it > 0 }?.let { "$it step${if (it == 1) "" else "s"}" },
-    ).joinToString(" · ")
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .clickable(onClickLabel = if (open) "Hide the steps" else "Show the steps", onClick = onToggle)
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(if (open) AppIcons.ChevronDown else AppIcons.ChevronRight, null, tint = TextTertiary, modifier = Modifier.size(15.dp))
-        Spacer(Modifier.width(8.dp))
-        Text(label, color = TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-    }
-}
-
 /** The transcript's list. It alone reads the room to leave under the last line, so only it follows the composer's height. */
 @Composable
 private fun ChatList(
@@ -1180,8 +1309,8 @@ private fun ChatList(
     LazyColumn(
         state = state,
         modifier = modifier,
+        // rows space themselves: work rows sit tight, as T3 Code's work log does
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 10.dp, bottom = bottomRoom()),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
         content = content,
     )
 }
@@ -1243,66 +1372,27 @@ private fun HermesUnreachable(
 
 // ── Transcript ──────────────────────────────────────────────────────────────
 
-/** What the transcript's rows can do, and which row is which: the last question, the last answer, a plan waiting. */
-private class RowActions(
-    val lastUserKey: String?,
-    val lastAssistantKey: String?,
-    /** The chat is in Plan: its last answer is a plan that can be built. */
-    val planMode: Boolean,
-    val onOpenFile: (HermesFileChange) -> Unit,
-    val onRevert: (HermesFileChange) -> Unit,
+/** What a message of yours can do. */
+private class BubbleActions(
     val onEdit: (HermesItem.User) -> Unit,
-    val onRetry: () -> Unit,
-    val onImplement: () -> Unit,
-    val assetUrl: (String) -> String,
-    val onOpenImage: (HermesAttachment) -> Unit,
     /** A new chat holding everything up to the message stamped so. */
     val onFork: (Long) -> Unit,
+    val assetUrl: (String) -> String,
+    val onOpenImage: (HermesAttachment) -> Unit,
 )
 
-@Composable
-private fun HermesItemView(
-    item: HermesItem,
-    busy: Boolean,
-    running: Set<String>,
-    actions: RowActions,
-    onDecide: (HermesItem.Ask, Int, Boolean) -> Unit,
-    onAnswer: (HermesItem.Clarify, String) -> Unit,
-) {
-    when (item) {
-        is HermesItem.User -> HermesUserBubble(
-            item,
-            // a message the bridge has stamped can be cut back to; so can the newest, which only the phone has seen
-            canEdit = !busy && (item.ts > 0 || item.key == actions.lastUserKey),
-            onEdit = { actions.onEdit(item) },
-            actions = actions,
-        )
-        is HermesItem.Output -> OutputNote(item.text)
-        is HermesItem.Assistant -> AssistantTurn(
-            item,
-            last = item.key == actions.lastAssistantKey,
-            idle = !busy,
-            planReady = actions.planMode && !busy && item.key == actions.lastAssistantKey,
-            actions = actions,
-        )
-        is HermesItem.Exec -> TerminalCard(item)
-        is HermesItem.Ask -> ApprovalCard(item, busy, running, onDecide)
-        is HermesItem.Clarify -> QuestionCard(item, enabled = !busy, onAnswer = onAnswer)
-        is HermesItem.Web -> WebRow(item)
-        is HermesItem.Error -> BotBubble(identity = HermesIdentity, text = item.text, isError = true)
-    }
-}
-
-/** The person's message, with whatever they attached above it. */
+/**
+ * The person's message, with whatever they attached above it, and under it when it was sent
+ * and a way to copy it (T3 Code's bubble). Held, it opens the rest: edit and resend, fork.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun HermesUserBubble(item: HermesItem.User, canEdit: Boolean, onEdit: () -> Unit, actions: RowActions) {
+private fun HermesUserBubble(item: HermesItem.User, canEdit: Boolean, actions: BubbleActions) {
     var menu by remember { mutableStateOf(false) }
-    var showTime by remember { mutableStateOf(false) }
     val copy = rememberCopy(item.text)
     val haptics = rememberHaptics()
     val clock = rememberClockFormatter()
-    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 10.dp), horizontalAlignment = Alignment.End) {
         if (item.attachments.isNotEmpty()) {
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
@@ -1329,367 +1419,29 @@ private fun HermesUserBubble(item: HermesItem.User, canEdit: Boolean, onEdit: ()
                 }
             }
         }
-        // held, a message opens its options; tapped, it says when it was sent
         if (item.text.isNotBlank()) {
             Box(Modifier.fillMaxWidth()) {
-                UserBubble(
-                    item.text,
-                    onLongPress = { haptics.gestureStart(); menu = true },
-                    onTap = if (item.ts > 0) ({ showTime = !showTime }) else null,
-                )
+                UserBubble(item.text, onLongPress = { haptics.gestureStart(); menu = true })
                 // anchored at the bubble's right edge, where the message is
                 Box(Modifier.align(Alignment.BottomEnd)) {
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, modifier = Modifier.background(Surface)) {
                         MenuRow("Copy", AppIcons.Copy) { menu = false; copy() }
-                        if (canEdit) MenuRow("Edit and resend", AppIcons.Edit) { menu = false; onEdit() }
+                        if (canEdit) MenuRow("Edit and resend", AppIcons.Edit) { menu = false; actions.onEdit(item) }
                         if (item.ts > 0) MenuRow("Fork from here", AppIcons.GitFork) { menu = false; actions.onFork(item.ts) }
                     }
                 }
             }
-            AnimatedVisibility(showTime && item.ts > 0, enter = MacroMotion.expandEnter, exit = MacroMotion.expandExit) {
-                Text(
-                    java.time.Instant.ofEpochMilli(item.ts).atZone(java.time.ZoneId.systemDefault()).format(clock),
-                    color = TextTertiary, fontSize = 11.sp, modifier = Modifier.padding(top = 3.dp, end = 4.dp),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun OutputNote(text: String) {
-    // Saveable, so a fold the person opened stays open when it scrolls away and back.
-    var open by rememberSaveable { mutableStateOf(false) }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 36.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            if (open) "Hide what was sent back" else "Results sent back to Hermes",
-            color = TextTertiary,
-            fontSize = 11.sp,
-            modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .clickable { open = !open }
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-        )
-        AnimatedVisibility(open, enter = MacroMotion.expandEnter, exit = MacroMotion.expandExit) {
-            MonoBlock(text, maxLines = 30)
-        }
-    }
-}
-
-/**
- * Hermes' reply the way Claude's apps draw one while it works and after: a byline, the work
- * folded into one grey line (thinking, what it said between steps, the steps themselves),
- * then the answer as plain text, and what it changed as a list of files to open.
- */
-@Composable
-private fun AssistantTurn(item: HermesItem.Assistant, last: Boolean, idle: Boolean, planReady: Boolean, actions: RowActions) {
-    val clock = rememberClockFormatter()
-    val split = remember(item.key, item.text, item.notes, item.tools.size) {
-        HermesNarration.split(item.text, item.notes, item.tools.size)
-    }
-    val notes = remember(split, item.say) {
-        listOfNotNull(item.say?.trim()?.takeIf { it.isNotEmpty() }) + split.notes
-    }
-    Column(modifier = Modifier.fillMaxWidth()) {
-        TurnByline(
-            live = false,
-            meta = listOfNotNull(
-                item.ts.takeIf { it > 0 }?.let { java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneId.systemDefault()).format(clock) },
-                item.ms?.let(::tookShort),
-                item.model?.let { HermesModelName(it) ?: it.substringAfter(':') }?.takeIf { it.isNotBlank() },
-            ).joinToString(" · "),
-            trailing = if (split.answer.isNotBlank() || (last && idle) || (item.ts > 0 && idle)) ({
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    // the newest answer can be asked for again: the question is sent anew
-                    if (last && idle) {
-                        IconButton(onClick = actions.onRetry, modifier = Modifier.size(28.dp)) {
-                            Icon(AppIcons.Refresh, "Ask again", tint = TextTertiary, modifier = Modifier.size(15.dp))
-                        }
-                    }
-                    // a new chat from here: this answer and what came before it
-                    if (item.ts > 0 && idle) {
-                        IconButton(onClick = { actions.onFork(item.ts) }, modifier = Modifier.size(28.dp)) {
-                            Icon(AppIcons.GitFork, "Fork from here", tint = TextTertiary, modifier = Modifier.size(15.dp))
-                        }
-                    }
-                    if (split.answer.isNotBlank()) CopyButton(split.answer)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // a bubble the bridge has not stamped yet has no time to show
+                if (item.ts > 0) {
+                    Text(
+                        java.time.Instant.ofEpochMilli(item.ts).atZone(java.time.ZoneId.systemDefault()).format(clock),
+                        color = TextTertiary, fontSize = 11.5.sp, style = TabularNumbers, maxLines = 1,
+                    )
                 }
-            }) else null,
-        )
-        if (notes.isNotEmpty() || item.tools.isNotEmpty() || !item.think.isNullOrBlank()) {
-            WorkTrail(
-                think = item.think,
-                thinkMs = item.thinkMs,
-                notes = notes,
-                tools = item.tools,
-                ms = item.ms,
-            )
-        }
-        if (split.answer.isNotBlank()) {
-            // selectable: a held word picks it, and the handles take what is wanted
-            SelectionContainer {
-                MarkdownText(
-                    markdown = split.answer,
-                    fontSize = 15.sp,
-                    lineHeight = 22.sp,
-                    color = TextPrimary,
-                    linkColor = AiAccent,
-                    breaks = true,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
+                CopyButton(item.text)
             }
         }
-        if (planReady && split.answer.isNotBlank()) {
-            // Plan mode wrote a plan: build it, which leaves Plan and says so to Hermes
-            Spacer(Modifier.height(10.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(com.macrotracker.ui.theme.TileDark)
-                    .padding(start = 14.dp, end = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(AppIcons.ListChecks, null, tint = AiAccent, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Plan ready", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                PillButton(icon = AppIcons.Play, label = "Implement", accent = AiAccent, emphasized = true, onClick = actions.onImplement)
-            }
-        }
-        if (item.changes.isNotEmpty()) {
-            Spacer(Modifier.height(10.dp))
-            ChangesCard(item.changes, actions.onOpenFile, actions.onRevert)
-        }
-    }
-}
-
-/** Who is speaking, small: Hermes' face, his name, and how long the turn took on what. */
-@Composable
-private fun TurnByline(live: Boolean, meta: String, trailing: (@Composable () -> Unit)? = null) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        BotAvatar(HermesIdentity, size = 22.dp, live = live)
-        Spacer(Modifier.width(8.dp))
-        Text("Hermes", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-        // the meta takes the row's middle, so what trails it sits at the far edge
-        Text(
-            if (meta.isNotBlank()) "  ·  $meta" else "",
-            color = TextTertiary,
-            fontSize = 11.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        trailing?.invoke()
-    }
-}
-
-/**
- * The work behind an answer, closed to one grey line until tapped. Opened, it is a rail of
- * what happened: the thinking (its own fold), each thing Hermes said on the way, and each
- * step with what it touched. A step opens to the rest of its output.
- */
-@Composable
-private fun WorkTrail(
-    think: String?,
-    thinkMs: Long?,
-    notes: List<String>,
-    tools: List<HermesTool>,
-    ms: Long?,
-) {
-    var open by rememberSaveable { mutableStateOf(false) }
-    val failed = tools.count { it.failed }
-    val label = buildString {
-        append(
-            when {
-                tools.isEmpty() && notes.isEmpty() -> thinkMs?.let { "Thought for ${tookShort(it)}" } ?: "Thought"
-                ms != null -> "Worked for ${tookShort(ms)}"
-                else -> "Worked"
-            },
-        )
-        if (tools.isNotEmpty()) append(" · ${tools.size} ${if (tools.size == 1) "step" else "steps"}")
-        if (failed > 0) append(" · $failed failed")
-    }
-    val turn = animateFloatAsState(if (open) 90f else 0f, label = "trail")
-    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-        Row(
-            modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .clickable { open = !open }
-                .padding(vertical = 4.dp, horizontal = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                AppIcons.ChevronRight,
-                null,
-                tint = TextTertiary,
-                modifier = Modifier.size(14.dp).graphicsLayer { rotationZ = turn.value },
-            )
-            Spacer(Modifier.width(4.dp))
-            Text(label, color = TextTertiary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-        }
-        AnimatedVisibility(open, enter = MacroMotion.expandEnter, exit = MacroMotion.expandExit) {
-            TrailRail(modifier = Modifier.padding(top = 4.dp)) {
-                if (!think.isNullOrBlank()) ThoughtEntry(think, thinkMs)
-                notes.forEach { NoteEntry(it) }
-                tools.forEach { ToolEntry(it) }
-            }
-        }
-    }
-}
-
-/** A hairline down the left, the way a run of steps hangs together in Claude Code. */
-@Composable
-private fun TrailRail(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = 8.dp)
-            .drawBehind {
-                drawLine(
-                    color = Border,
-                    start = Offset(0f, 2.dp.toPx()),
-                    end = Offset(0f, size.height - 2.dp.toPx()),
-                    strokeWidth = 1.5.dp.toPx(),
-                )
-            }
-            .padding(start = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(7.dp),
-    ) { content() }
-}
-
-@Composable
-private fun ThoughtEntry(think: String, thinkMs: Long?) {
-    var open by rememberSaveable { mutableStateOf(false) }
-    Column {
-        Row(
-            modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { open = !open },
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(AppIcons.Sparkles, null, tint = TextTertiary, modifier = Modifier.size(12.dp))
-            Spacer(Modifier.width(6.dp))
-            Text(
-                thinkMs?.let { "Thought for ${tookShort(it)}" } ?: "Thinking",
-                color = TextSecondary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-            )
-            Spacer(Modifier.width(2.dp))
-            Icon(if (open) AppIcons.ChevronUp else AppIcons.ChevronDown, null, tint = TextTertiary, modifier = Modifier.size(12.dp))
-        }
-        AnimatedVisibility(open, enter = MacroMotion.expandEnter, exit = MacroMotion.expandExit) {
-            Text(
-                think.trim(),
-                color = TextTertiary,
-                fontSize = 12.sp,
-                lineHeight = 17.sp,
-                fontStyle = FontStyle.Italic,
-                modifier = Modifier.padding(top = 4.dp, start = 18.dp),
-            )
-        }
-    }
-}
-
-/** Something Hermes said on the way: grey, small, never a bubble. */
-@Composable
-private fun NoteEntry(text: String) {
-    MarkdownText(
-        markdown = text,
-        fontSize = 12.5.sp,
-        lineHeight = 18.sp,
-        color = TextSecondary,
-        linkColor = AiAccent,
-        breaks = true,
-    )
-}
-
-/** One step: whether it worked, what kind of step, what it touched; tap for the rest. */
-@Composable
-private fun ToolEntry(tool: HermesTool) {
-    var open by rememberSaveable { mutableStateOf(false) }
-    val preview = tool.preview.trim()
-    val first = preview.lineSequence().firstOrNull().orEmpty()
-    val more = preview.length > first.length
-    Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(6.dp))
-                .clickable(enabled = more) { open = !open },
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            ToolStatusDot(tool)
-            Spacer(Modifier.width(8.dp))
-            Text(
-                toolVerb(tool.name),
-                color = TextSecondary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-            )
-            if (first.isNotBlank()) {
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    first,
-                    color = TextTertiary,
-                    fontSize = 11.sp,
-                    fontFamily = Mono,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-            } else {
-                Spacer(Modifier.weight(1f))
-            }
-            if (more) {
-                Icon(if (open) AppIcons.ChevronUp else AppIcons.ChevronDown, null, tint = TextTertiary, modifier = Modifier.size(12.dp))
-            }
-        }
-        AnimatedVisibility(open && more, enter = MacroMotion.expandEnter, exit = MacroMotion.expandExit) {
-            Box(Modifier.padding(top = 6.dp)) { MonoBlock(preview, maxLines = 20) }
-        }
-    }
-}
-
-@Composable
-private fun ToolStatusDot(tool: HermesTool) {
-    val color = when {
-        tool.failed -> ServerCritical
-        tool.running -> AiAccent
-        else -> ServerGood
-    }
-    Box(
-        Modifier
-            .size(7.dp)
-            .clip(CircleShape)
-            .background(if (tool.running) color.copy(alpha = 0.55f) else color),
-    )
-}
-
-/** `read_file` → "Read", `terminal` → "Ran": the step as a verb, as Claude Code labels its tools. */
-private fun toolVerb(name: String): String {
-    val n = name.lowercase()
-    return when {
-        n == "terminal" || n.contains("shell") || n.contains("bash") || n.contains("exec") -> "Ran"
-        n.contains("search") && (n.contains("file") || n.contains("code")) -> "Searched files"
-        n.contains("grep") || n.contains("glob") -> "Searched files"
-        n.contains("web") && n.contains("search") -> "Searched the web"
-        n.contains("read") || n.contains("view") || n == "cat" -> "Read"
-        n.contains("write") || n.contains("create") -> "Wrote"
-        n.contains("edit") || n.contains("patch") || n.contains("replace") -> "Edited"
-        n.contains("fetch") || n.contains("browse") || n.contains("extract") -> "Fetched"
-        n.contains("memory") -> "Memory"
-        n.contains("skill") -> "Skill"
-        n.contains("todo") || n.contains("plan") -> "Planned"
-        n.contains("delegate") || n.contains("agent") -> "Delegated"
-        else -> name.replace('_', ' ').replaceFirstChar { it.uppercase() }
     }
 }
 
@@ -1698,7 +1450,7 @@ private fun toolVerb(name: String): String {
  * file with its counts and an arrow at the far right that opens the diff.
  */
 @Composable
-private fun ChangesCard(changes: List<HermesFileChange>, onOpenFile: (HermesFileChange) -> Unit, onRevert: (HermesFileChange) -> Unit) {
+internal fun ChangesCard(changes: List<HermesFileChange>, onOpenFile: (HermesFileChange) -> Unit, onRevert: (HermesFileChange) -> Unit) {
     var showAll by rememberSaveable { mutableStateOf(false) }
     val plus = changes.sumOf { it.plus }
     val minus = changes.sumOf { it.minus }
@@ -1886,51 +1638,6 @@ private fun DiffBlock(diff: String) {
 
 private const val DIFF_LINES = 160
 
-/** A command Hermes ran by itself: the prompt line, exit code, time, and the output folded in. */
-@Composable
-private fun TerminalCard(item: HermesItem.Exec) {
-    var open by rememberSaveable { mutableStateOf(item.code != 0) }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(CardShape)
-            .background(com.macrotracker.ui.theme.TileDark)
-            .clickable { open = !open }
-            .padding(12.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(AppIcons.Terminal, null, tint = TextTertiary, modifier = Modifier.size(13.dp))
-            Spacer(Modifier.width(6.dp))
-            Text(
-                "$ ${item.cmd}",
-                color = TextPrimary,
-                fontSize = 12.sp,
-                fontFamily = Mono,
-                maxLines = if (open) 6 else 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            Spacer(Modifier.width(6.dp))
-            ExitChip(item.code)
-        }
-        val meta = listOfNotNull(
-            item.what,
-            if (item.risk == "act") "changed something" else null,
-            item.ms?.let { if (it < 1000) "${it}ms" else "%.1fs".format(it / 1000f) },
-        ).joinToString(" · ")
-        if (meta.isNotBlank()) {
-            Text(meta, color = if (item.risk == "act") ServerWarn else TextTertiary, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
-        }
-        AnimatedVisibility(
-            open && item.out.isNotBlank(),
-            enter = MacroMotion.expandEnter,
-            exit = MacroMotion.expandExit,
-        ) {
-            Box(Modifier.padding(top = 8.dp)) { MonoBlock(item.out, maxLines = 24) }
-        }
-    }
-}
-
 @Composable
 private fun ExitChip(code: Int?) {
     val ok = code == 0
@@ -1968,262 +1675,6 @@ private fun MonoBlock(text: String, maxLines: Int) {
     }
 }
 
-/**
- * The approval card. Nothing on it runs until it is tapped, and the tap goes straight
- * to the bridge — Hermes is not in that path and cannot approve its own commands.
- */
-@Composable
-private fun ApprovalCard(
-    card: HermesItem.Ask,
-    busy: Boolean,
-    running: Set<String>,
-    onDecide: (HermesItem.Ask, Int, Boolean) -> Unit,
-) {
-    val grave = card.cmds.any { it.risk == "grave" }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(CardShape)
-            .background(com.macrotracker.ui.theme.TileDark)
-            .padding(12.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            BotAvatar(HermesIdentity, size = 22.dp, live = false)
-            Spacer(Modifier.width(8.dp))
-            Text("Hermes wants to run", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            Text(
-                if (card.settled) "decided" else "nothing runs without you",
-                color = TextTertiary,
-                fontSize = 10.sp,
-            )
-        }
-        card.cmds.forEachIndexed { i, cmd ->
-            Spacer(Modifier.height(10.dp))
-            ApprovalRow(
-                cmd = cmd,
-                running = "${card.id}:$i" in running,
-                enabled = !busy,
-                onRun = { onDecide(card, i, true) },
-                onSkip = { onDecide(card, i, false) },
-            )
-        }
-    }
-}
-
-@Composable
-private fun ApprovalRow(
-    cmd: HermesAskCommand,
-    running: Boolean,
-    enabled: Boolean,
-    onRun: () -> Unit,
-    onSkip: () -> Unit,
-) {
-    val riskColor = when (cmd.risk) {
-        "grave" -> ServerCritical
-        "act" -> ServerWarn
-        else -> ServerGood
-    }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(SurfaceChrome)
-            .padding(10.dp),
-    ) {
-        Text(
-            "$ ${cmd.cmd}",
-            color = if (cmd.state == "skipped") TextTertiary else TextPrimary,
-            fontSize = 12.sp,
-            fontFamily = Mono,
-            maxLines = 6,
-            overflow = TextOverflow.Ellipsis,
-        )
-        val blurb = cmd.what ?: cmd.why.takeIf { it.isNotBlank() }
-        if (blurb != null) {
-            Text(blurb, color = TextSecondary, fontSize = 11.sp, lineHeight = 15.sp, modifier = Modifier.padding(top = 5.dp))
-        }
-        Row(modifier = Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                when (cmd.risk) {
-                    "grave" -> "irreversible"
-                    "act" -> "changes something"
-                    else -> "reads only"
-                },
-                color = riskColor,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(5.dp))
-                    .background(riskColor.copy(alpha = 0.12f))
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
-            )
-            cmd.undo?.let {
-                Spacer(Modifier.width(8.dp))
-                Text("undo: $it", color = TextTertiary, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-            }
-        }
-        Spacer(Modifier.height(8.dp))
-        when {
-            running -> Row(verticalAlignment = Alignment.CenterVertically) {
-                LoadingSpinner(color = AiAccent)
-                Spacer(Modifier.width(8.dp))
-                Text("running…", color = TextSecondary, fontSize = 12.sp)
-            }
-            cmd.pending -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    "Run",
-                    color = OnAccent,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(if (enabled) riskColor else Border)
-                        .clickable(enabled = enabled, onClick = onRun)
-                        .padding(horizontal = 18.dp, vertical = 8.dp),
-                )
-                Text(
-                    "Skip",
-                    color = TextPrimary,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(Color.White.copy(alpha = 0.08f))
-                        .clickable(enabled = enabled, onClick = onSkip)
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                )
-            }
-            else -> Row(verticalAlignment = Alignment.CenterVertically) {
-                when (cmd.state) {
-                    "skipped" -> Text("skipped", color = TextTertiary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                    else -> ExitChip(cmd.code ?: if (cmd.state == "ran") 0 else 1)
-                }
-            }
-        }
-        if (!cmd.out.isNullOrBlank() && !cmd.pending) {
-            Spacer(Modifier.height(8.dp))
-            MonoBlock(cmd.out, maxLines = 16)
-        }
-    }
-}
-
-/** A question Hermes will not guess past: tap an answer, or type one. */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun QuestionCard(
-    card: HermesItem.Clarify,
-    enabled: Boolean,
-    onAnswer: (HermesItem.Clarify, String) -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(CardShape)
-            .background(com.macrotracker.ui.theme.TileDark)
-            .padding(12.dp),
-    ) {
-        Text(card.question, color = TextPrimary, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium)
-        if (card.open && card.choices.isNotEmpty()) {
-            Spacer(Modifier.height(10.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                card.choices.forEach { choice ->
-                    Text(
-                        choice,
-                        color = TextPrimary,
-                        fontSize = 12.sp,
-                        modifier = Modifier
-                            .clip(ChatPillShape)
-                            .background(Color.White.copy(alpha = 0.09f))
-                            .clickable(enabled = enabled) { onAnswer(card, choice) }
-                            .padding(horizontal = 12.dp, vertical = 7.dp),
-                    )
-                }
-            }
-        } else if (!card.open) {
-            Spacer(Modifier.height(6.dp))
-            Text(
-                if (card.state == "skipped") "skipped" else "→ ${card.answer.orEmpty()}",
-                color = TextSecondary,
-                fontSize = 12.sp,
-            )
-        }
-    }
-}
-
-@Composable
-private fun WebRow(item: HermesItem.Web) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(if (item.kind == "search") AppIcons.Search else AppIcons.Link, null, tint = TextTertiary, modifier = Modifier.size(12.dp))
-        Spacer(Modifier.width(6.dp))
-        Text(
-            when {
-                item.error != null -> "${if (item.kind == "search") "Search" else "Fetch"} failed: ${item.error}"
-                item.kind == "search" -> "Searched “${item.arg}”" + (item.hits?.let { " · $it results" } ?: "")
-                else -> "Read ${item.title ?: item.arg}"
-            },
-            color = if (item.error != null) ServerWarn else TextTertiary,
-            fontSize = 11.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
-/**
- * The turn as it happens, as a Claude chat shows one: the scanner and what Hermes is doing
- * with a clock, the work so far on its rail (what he said on the way, every step, the
- * thinking's last lines), and the answer writing itself underneath in plain text.
- */
-@Composable
-private fun LiveTurn(live: HermesLive) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        // The step he is on and the turn's clock are the dock's pill, which stays in view.
-        TurnByline(live = true, meta = "")
-        val thinking = live.think.isNotBlank() && live.got.isBlank()
-        if (thinking || live.notes.isNotEmpty() || live.tools.isNotEmpty()) {
-            TrailRail(modifier = Modifier.padding(bottom = 8.dp)) {
-                live.notes.forEach { NoteEntry(it) }
-                live.tools.takeLast(LIVE_STEPS).forEach { ToolEntry(it) }
-                if (thinking) {
-                    Text(
-                        live.think.takeLast(320).substringAfter('\n').trim(),
-                        color = TextTertiary,
-                        fontSize = 12.sp,
-                        lineHeight = 17.sp,
-                        fontStyle = FontStyle.Italic,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-        }
-        if (live.got.isNotBlank()) {
-            MarkdownText(
-                markdown = live.got,
-                fontSize = 15.sp,
-                lineHeight = 22.sp,
-                color = TextPrimary,
-                linkColor = AiAccent,
-                breaks = true,
-                streaming = true,
-            )
-        }
-    }
-}
-
-private const val LIVE_STEPS = 8
-
-
-/** When a row was said, for the day dividers; only a question or an answer carries a time. */
-private fun itemTime(item: HermesItem): Long = when (item) {
-    is HermesItem.User -> item.ts
-    is HermesItem.Assistant -> item.ts
-    else -> 0L
-}
-
 /** The new-file line range a unified diff touches, for marking it in the file; 0 to 0 when it has no hunks. */
 internal fun changedLines(diff: String?): Pair<Int, Int> {
     if (diff == null) return 0 to 0
@@ -2256,18 +1707,6 @@ private fun DayDivider(dayStartMs: Long) {
         Text(label, color = TextTertiary, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 10.dp))
         HorizontalDivider(Modifier.weight(1f), color = Border)
     }
-}
-
-/** What find in chat searches in a row: what was said and answered, and a folded run's own words. */
-private fun rowText(row: FeedRow): String = when (row) {
-    is FeedRow.Item -> when (val i = row.item) {
-        is HermesItem.User -> i.text
-        is HermesItem.Assistant -> i.text
-        is HermesItem.Clarify -> i.question
-        is HermesItem.Error -> i.text
-        else -> ""
-    }
-    is FeedRow.Run -> row.items.joinToString("\n") { (it as? HermesItem.Assistant)?.text.orEmpty() }
 }
 
 /** A picture full screen: pinch to zoom, drag to move, tap anywhere outside the picture's own gestures to close. */

@@ -83,4 +83,20 @@ class HermesProtocolTest {
         assertEquals(HermesPermission.FULL, s.perm)
         assertTrue(s.busy)
     }
+
+    @Test
+    fun `a card with several questions keeps them all, and one question reads as before`() {
+        val many = HermesClient.parseItems(
+            JSONArray(
+                """[{"role":"clarify","id":"c1","question":"Which log?","choices":["Caddy","Docker"],"state":"pending","ts":5,
+                    "questions":[{"question":"Which log?","choices":["Caddy","Docker"]},{"q":"How far back?","opts":["1 hour","1 day"]}]}]""",
+            ),
+        ).single() as HermesItem.Clarify
+        assertEquals(listOf("Which log?", "How far back?"), many.all.map { it.question })
+        assertEquals(listOf("1 hour", "1 day"), many.all[1].choices)
+        val one = HermesClient.parseItems(
+            JSONArray("""[{"role":"clarify","id":"c2","question":"Which log?","choices":["Caddy"],"state":"pending","ts":6}]"""),
+        ).single() as HermesItem.Clarify
+        assertEquals(listOf(ClarifyQuestion("Which log?", listOf("Caddy"))), one.all)
+    }
 }

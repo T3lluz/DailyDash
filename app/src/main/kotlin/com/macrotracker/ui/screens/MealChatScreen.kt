@@ -86,7 +86,7 @@ import com.macrotracker.ui.screens.ai.ChatPaneHeader
 import com.macrotracker.ui.screens.ai.ChatPillShape
 import com.macrotracker.ui.screens.ai.FollowChatOnKeyboard
 import com.macrotracker.ui.screens.ai.followChatBottom
-import com.macrotracker.ui.screens.ai.rememberNearChatBottom
+import com.macrotracker.ui.screens.ai.rememberChatPin
 import com.macrotracker.ui.screens.ai.DishSuggestion
 import com.macrotracker.ui.screens.ai.SmallActionChip
 import com.macrotracker.ui.screens.ai.SysopChatPane
@@ -171,11 +171,12 @@ private fun MacrosChatPane(
     val loggedCount by viewModel.loggedCount.collectAsState()
     val haptics = rememberHaptics()
     val listState = rememberLazyListState()
+    // Follows the newest line until a finger scrolls away from it.
+    val pin = rememberChatPin(listState)
 
     var draft by rememberSaveable { mutableStateOf("") }
     val liveSuggestions = remember(draft) { suggestionsForDraft(draft) }
     val showSuggestions = !loading && liveSuggestions.isNotEmpty()
-    var forceFollow by remember { mutableStateOf(true) }
     var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
     var pendingCameraFile by remember { mutableStateOf<File?>(null) }
 
@@ -189,7 +190,7 @@ private fun MacrosChatPane(
                 Toast.makeText(context, "Couldn't read that image.", Toast.LENGTH_SHORT).show()
                 return@launch
             }
-            forceFollow = true
+            pin.pinned = true
             viewModel.sendMealPhoto(photo.base64)
             photo.bitmap.recycle()
         }
@@ -218,7 +219,7 @@ private fun MacrosChatPane(
                     Toast.makeText(context, "Couldn't read that image.", Toast.LENGTH_SHORT).show()
                     return@launch
                 }
-                forceFollow = true
+                pin.pinned = true
                 viewModel.sendMealPhoto(photo.base64)
                 photo.bitmap.recycle()
             }
@@ -267,7 +268,6 @@ private fun MacrosChatPane(
         galleryLauncher.launch("image/*")
     }
 
-    val nearBottom by rememberNearChatBottom(listState)
 
     val lastMessageId = messages.lastOrNull()?.id
     val lastEstimateKey = (messages.lastOrNull() as? NutritionChatMessage.Doctor)
@@ -277,23 +277,22 @@ private fun MacrosChatPane(
     // Keep the conversation pinned to the newest bubble when the user is following along.
     LaunchedEffect(lastMessageId, loading, lastEstimateKey, showSuggestions) {
         if (messages.isEmpty()) return@LaunchedEffect
-        if (!(forceFollow || nearBottom)) return@LaunchedEffect
+        if (!pin.pinned) return@LaunchedEffect
         // Two passes: once for the new bubble, again after tall estimate cards measure.
         delay(16)
         listState.followChatBottom()
         delay(48)
         listState.followChatBottom()
-        forceFollow = false
     }
 
-    FollowChatOnKeyboard(listState) { messages.isNotEmpty() && (forceFollow || nearBottom) }
+    FollowChatOnKeyboard(listState) { messages.isNotEmpty() && pin.pinned }
 
     fun send() {
         val text = draft.trim()
         if (text.isEmpty() || loading) return
         haptics.click()
         draft = ""
-        forceFollow = true
+        pin.pinned = true
         viewModel.sendFoodQuery(text)
     }
 
@@ -301,7 +300,7 @@ private fun MacrosChatPane(
         haptics.tick()
         if (suggestion.replacesDraft || draft.isBlank()) {
             draft = ""
-            forceFollow = true
+            pin.pinned = true
             viewModel.sendFoodQuery(suggestion.query)
         } else {
             draft = refineDraft(draft, suggestion)
@@ -332,10 +331,10 @@ private fun MacrosChatPane(
                 onClear = {
                     viewModel.clearChat()
                     draft = ""
-                    forceFollow = true
+                    pin.pinned = true
                 },
                 onCancel = {
-                    forceFollow = true
+                    pin.pinned = true
                     viewModel.cancelEstimate()
                 },
                 canClear = messages.size > 1 && !loading,
@@ -373,7 +372,7 @@ private fun MacrosChatPane(
                                                 label = "Retry",
                                                 onClick = {
                                                     haptics.click()
-                                                    forceFollow = true
+                                                    pin.pinned = true
                                                     viewModel.retryQuery(query)
                                                 },
                                             )
@@ -399,7 +398,7 @@ private fun MacrosChatPane(
                                         estimate = estimate,
                                         logged = message.estimateLogged,
                                         onLog = {
-                                            forceFollow = true
+                                            pin.pinned = true
                                             viewModel.logEstimate(message.id, it)
                                         },
                                     )
@@ -412,7 +411,7 @@ private fun MacrosChatPane(
                             label = "Estimating…",
                             onCancel = {
                                 haptics.tick()
-                                forceFollow = true
+                                pin.pinned = true
                                 viewModel.cancelEstimate()
                             },
                         )

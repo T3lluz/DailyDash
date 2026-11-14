@@ -90,6 +90,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.rememberCoroutineScope
@@ -129,9 +130,6 @@ private val UserBubbleFill = Color.White.copy(alpha = 0.09f)
 private val AccentBubbleFill = AiAccent.copy(alpha = 0.16f)
 private val ComposerSendShape = RoundedCornerShape(999.dp)
 
-/** How much of the newest message may hide under the composer and still count as following along. */
-private const val NEAR_BOTTOM_PX = 160
-
 /** Pill nav = 64dp + 8dp bottom pad; keep a little air above it. */
 internal val PillNavClearance = 80.dp
 
@@ -154,21 +152,50 @@ suspend fun LazyListState.followChatBottom(animate: Boolean = true) {
     }
 }
 
-/** True while the newest message is (nearly) in view — i.e. the user is following along. */
-@Composable
-fun rememberNearChatBottom(listState: LazyListState): State<Boolean> = remember(listState) {
-    derivedStateOf {
-        val info = listState.layoutInfo
-        val lastIndex = info.totalItemsCount - 1
-        if (lastIndex < 0 || info.visibleItemsInfo.isEmpty()) return@derivedStateOf true
-        val visibleBottom = info.viewportEndOffset - info.afterContentPadding
-        // At most a little of the newest message (or, the moment one arrives, of the one
-        // before it) is hidden under the composer.
-        info.visibleItemsInfo.any { item ->
-            item.index >= lastIndex - 1 && (item.offset + item.size) - visibleBottom <= NEAR_BOTTOM_PX
-        }
+/**
+ * Whether the chat follows its newest line. It starts pinned and stays pinned however much
+ * is added under it. Only a finger changes that: a scroll that ends away from the end lets
+ * go, and one that ends back at it (or a send, or the button that goes there) takes hold
+ * again. Deciding from where the list happens to sit instead pulled a reader back down
+ * each time a row arrived while the row before the last was still on screen.
+ */
+@Stable
+class ChatPin {
+    var pinned by mutableStateOf(true)
+}
+
+/** How far the chat's last line sits under the visible end; the most there is when it is not laid out. */
+private fun LazyListState.hiddenBelow(): Float {
+    val info = layoutInfo
+    val last = info.totalItemsCount - 1
+    val item = info.visibleItemsInfo.lastOrNull()
+    return when {
+        last < 0 || item == null -> 0f
+        item.index < last -> Float.MAX_VALUE
+        else -> ((item.offset + item.size) - (info.viewportEndOffset - info.afterContentPadding)).toFloat()
     }
 }
+
+@Composable
+fun rememberChatPin(listState: LazyListState): ChatPin {
+    val pin = remember(listState) { ChatPin() }
+    val density = LocalDensity.current
+    LaunchedEffect(listState, density) {
+        val slack = with(density) { PIN_SLACK.toPx() }
+        // set by a drag, and kept through the fling it throws: only that scroll may move the pin
+        var byHand = false
+        launch { listState.interactionSource.interactions.collect { if (it is DragInteraction.Start) byHand = true } }
+        snapshotFlow { listState.isScrollInProgress to listState.hiddenBelow() }.collect { (moving, hidden) ->
+            if (!byHand) return@collect
+            pin.pinned = hidden <= slack
+            if (!moving) byHand = false
+        }
+    }
+    return pin
+}
+
+/** A scroll that ends within this of the end is still following. */
+private val PIN_SLACK = 24.dp
 
 /**
  * Keeps the conversation pinned to its newest message while the space around it changes:
@@ -220,15 +247,7 @@ fun rememberAwayFromChatEnd(listState: LazyListState): State<Boolean> {
         val off = with(density) { 40.dp.toPx() }
         var dragged = false
         launch { listState.interactionSource.interactions.collect { if (it is DragInteraction.Start) dragged = true } }
-        snapshotFlow {
-            val info = listState.layoutInfo
-            val last = info.totalItemsCount - 1
-            val item = info.visibleItemsInfo.lastOrNull()
-            when {
-                last < 0 || item == null -> 0f
-                item.index < last -> Float.MAX_VALUE
-                else -> ((item.offset + item.size) - (info.viewportEndOffset - info.afterContentPadding)).toFloat()
-            }
+        snapshotFlow { listState.hiddenBelow()
         }.collect { hidden ->
             if (hidden < off) {
                 away.value = false
