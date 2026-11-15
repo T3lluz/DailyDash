@@ -2,6 +2,7 @@ package com.macrotracker.ui.viewmodel
 
 import com.macrotracker.data.hermes.NewestLast
 import android.content.Context
+import android.os.SystemClock
 import com.macrotracker.util.readAtMost
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -29,6 +30,7 @@ import com.macrotracker.data.hermes.HermesModelOption
 import com.macrotracker.data.hermes.HermesPermission
 import com.macrotracker.data.hermes.HermesSkill
 import com.macrotracker.data.hermes.HermesStatus
+import com.macrotracker.data.hermes.HermesThreadList
 import com.macrotracker.data.hermes.HermesThreadSummary
 import com.macrotracker.data.hermes.HermesTool
 import com.macrotracker.data.local.SettingsRepository
@@ -38,7 +40,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -94,10 +98,13 @@ data class HermesUiState(
     /** A file change that was edited again since Hermes made it: the person decides whether to revert it anyway. */
     val revertConflict: HermesFileChange? = null,
 ) {
-    /** A chat that moved since this phone last opened it; one never opened here is not news. */
+    /** A chat that moved since it was last read, here or on another device (the bridge keeps the mark). */
     fun isUnread(t: HermesThreadSummary): Boolean {
-        val at = seen[t.id] ?: return false
-        return t.id != threadId && t.updatedMs > at + 1500
+        if (t.id == threadId) return false
+        val here = seen[t.id]
+        // a bridge that keeps no read marks: one never opened on this phone is not news
+        if (t.seenMs < 0 && here == null) return false
+        return t.updatedMs > maxOf(here ?: 0L, t.seenMs) + 1500
     }
 
     val busy: Boolean get() = live != null
@@ -148,7 +155,19 @@ class HermesViewModel @Inject constructor(
             val old = seenPrefs.all.entries.sortedBy { (it.value as? Long) ?: 0L }.take(50)
             seenPrefs.edit().apply { old.forEach { remove(it.key) } }.apply()
         }
+        // Read here is read on the web dashboard too, once the pane really is in front. A turn still
+        // running says so when it ends: until then every device shows the chat as working, not as unread.
+        if (t == null || !viewing || t.busy || t.seenMs !in 0 until t.updatedMs) return
+        val upTo = t.updatedMs
+        seenJobs[id]?.cancel()
+        seenJobs[id] = viewModelScope.launch {
+            delay(1000)
+            runCatching { client.setSeen(id, upTo) }
+        }
     }
+
+    private val seenJobs = mutableMapOf<String, Job>()
+    private var viewing = false
 
     /**
      * Whether Tech support is Hermes right now. An explicit choice sticks; otherwise it is
@@ -261,7 +280,9 @@ class HermesViewModel @Inject constructor(
 
     /** The pane is on screen and the app in front, so this chat's turns need no announcing. */
     fun setViewing(onScreen: Boolean) {
+        viewing = onScreen
         activity.setViewing(if (onScreen) _state.value.threadId else null)
+        if (onScreen) markSeen(_state.value.threadId)
     }
 
     /** The person picked a bot; that sticks until they pick the other. */
@@ -277,7 +298,8 @@ class HermesViewModel @Inject constructor(
             if (!quiet) _state.update { it.copy(reach = if (it.reach == HermesReach.READY) it.reach else HermesReach.CHECKING) }
             try {
                 val status = client.status()
-                val threads = client.threads().filter { it.kind != "duty" }
+                val asked = SystemClock.elapsedRealtime()
+                val threads = client.threadList().also { takeRail(it, asked) }.threads.filter { it.kind != "duty" }
                 settings.setHermesLastReachable(status.ready)
                 rememberModifiers(status)
                 _state.update {
@@ -327,8 +349,133 @@ class HermesViewModel @Inject constructor(
     fun refreshThreads() {
         threadsRefreshJob?.cancel()
         threadsRefreshJob = viewModelScope.launch {
-            runCatching { client.threads().filter { it.kind != "duty" } }
+            val asked = SystemClock.elapsedRealtime()
+            runCatching { client.threadList().also { takeRail(it, asked) }.threads.filter { it.kind != "duty" } }
                 .onSuccess { threads -> _state.update { it.copy(threads = threads) } }
+        }
+    }
+
+    /** Changes to where a chat sits that were sent to the bridge and have not come back yet. */
+    private var railWrites = 0
+
+    /**
+     * What a device used to keep for itself about the chats is the bridge's to keep, so the web dashboard
+     * and this phone agree: settled, snoozed, the read mark and the draft ride on each chat; the hand-made
+     * order, the auto-settle days, starred models, steer or queue, grouping by day and the not-yet-started
+     * chat's draft ride on the list. `SettingsRepository` holds the last copy, which the pane draws from,
+     * and every list replaces it. A list asked for before a change made here has landed is skipped, so it
+     * cannot undo that change on screen. What this phone kept by itself before the bridge did goes up once.
+     */
+    private fun takeRail(list: HermesThreadList, asked: Long) {
+        val rail = list.rail ?: return
+        if (railWrites > 0) return
+        val now = System.currentTimeMillis()
+        val had = settings.hermesRailVersion
+        val stars = rail.favourites       // null from a bridge that keeps only where a chat sits
+        val ups = mutableListOf<suspend () -> Unit>()
+        if (had < 1) {
+            val byId = list.threads.filter { !it.isStaff }.associateBy { it.id }
+            settings.hermesArchived.value.filter { byId[it]?.settled == false }.forEach { id -> ups += { client.setSettled(id, true) } }
+            settings.hermesSnoozed.value
+                .filter { (id, until) -> until > now && (byId[id]?.snoozedUntilMs ?: Long.MAX_VALUE) < until }
+                .forEach { (id, until) -> ups += { client.setSnoozed(id, until) } }
+            val order = settings.hermesOrder.value.filter { id -> list.threads.any { it.id == id } }.takeIf { it.isNotEmpty() && rail.order.isEmpty() }
+            val days = settings.hermesAutoSettleDays.value.takeIf { it > 0 && rail.autoSettleDays == 0 }
+            if (order != null || days != null) ups += { client.setRail(order, days) }
+        }
+        if (had < 2 && stars != null) {
+            val mine = settings.hermesFavouriteModels.value
+            if (mine.isNotEmpty() && stars.isEmpty()) ups += { client.setRail(favourites = mine) }
+            // a draft typed here goes up where the bridge has none; where it has one, that one stands
+            settings.hermesDrafts.value.forEach { (key, text) ->
+                val theirs = if (key == NEW_DRAFT) rail.draft else list.threads.firstOrNull { it.id == key }?.draft
+                if (text.isNotBlank() && theirs == "") tellDraft(key)
+            }
+        }
+        if (stars != null) {
+            // the list's options start as the first device to ask has them
+            if (rail.followUp == null) settings.hermesFollowUp.value.let { mode -> ups += { client.setRail(followUp = mode) } }
+            if (rail.byDay == null) settings.hermesGroupByDay.value.let { on -> ups += { client.setRail(byDay = on) } }
+        }
+        settings.hermesRailVersion = if (stars != null) 2 else 1
+        if (ups.isNotEmpty()) {
+            // the phone's copy stands until the bridge has it; the list that follows brings the two together
+            putRail { ups.forEach { up -> runCatching { up() } } }
+            return
+        }
+        settings.setHermesArchived(list.threads.filter { it.settled }.mapTo(LinkedHashSet()) { it.id })
+        settings.setHermesSnoozed(list.threads.filter { it.snoozedUntilMs > now }.associate { it.id to it.snoozedUntilMs })
+        settings.setHermesOrder(rail.order)
+        settings.setHermesAutoSettleDays(rail.autoSettleDays)
+        stars?.let(settings::setHermesFavouriteModels)
+        rail.followUp?.let(settings::setHermesFollowUp)
+        rail.byDay?.let(settings::setHermesGroupByDay)
+        rail.draft?.let { takeDraft(NEW_DRAFT, it, asked) }
+        list.threads.forEach { t -> t.draft?.let { takeDraft(t.id, it, asked) } }
+    }
+
+    /**
+     * Drafts, the same on every device. [serverDrafts] is what the bridge last said, or was last told, a
+     * chat's draft is. One typed here goes up a moment after the typing stops; one that changed elsewhere
+     * lands here ([remoteDrafts] tells the box) unless this phone has typed over it since, or the list was
+     * asked for before the bridge had this phone's own.
+     */
+    private val serverDrafts = mutableMapOf<String, String>()
+    private val draftDirty = mutableSetOf<String>()
+    private val draftJobs = mutableMapOf<String, Job>()
+    private val draftSentAt = mutableMapOf<String, Long>()
+    private val _remoteDrafts = MutableSharedFlow<RemoteDraft>(extraBufferCapacity = 16)
+
+    /** A draft another device changed: [was] is what this phone had for the chat, [text] what it has now. */
+    data class RemoteDraft(val key: String, val was: String, val text: String)
+
+    val remoteDrafts: SharedFlow<RemoteDraft> = _remoteDrafts
+
+    private fun tellDraft(key: String) {
+        draftDirty += key
+        draftJobs[key]?.cancel()
+        draftJobs[key] = viewModelScope.launch {
+            delay(800)
+            draftDirty -= key
+            val text = settings.hermesDraft(key)
+            if (text == (serverDrafts[key] ?: "")) return@launch
+            serverDrafts[key] = text
+            draftSentAt[key] = Long.MAX_VALUE
+            try {
+                if (key == NEW_DRAFT) client.setRail(draft = text) else client.setDraft(key, text)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // the next change, or the next list, brings the two together
+            } finally {
+                draftSentAt[key] = SystemClock.elapsedRealtime()
+            }
+        }
+    }
+
+    private fun takeDraft(key: String, theirs: String, asked: Long) {
+        if (key in draftDirty || asked < (draftSentAt[key] ?: 0L) || serverDrafts[key] == theirs) return
+        serverDrafts[key] = theirs
+        val mine = settings.hermesDraft(key)
+        if (mine == theirs) return
+        settings.setHermesDraft(key, theirs)
+        _remoteDrafts.tryEmit(RemoteDraft(key, mine, theirs))
+    }
+
+    /** Sends a change to where a chat sits; the list is read again after, which also takes back one the bridge refused. */
+    private fun putRail(change: suspend () -> Unit) {
+        railWrites++
+        viewModelScope.launch {
+            try {
+                change()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(notice = "Could not save that on the server: ${e.message}") }
+            } finally {
+                railWrites--
+                if (railWrites == 0) refreshThreads()
+            }
         }
     }
 
@@ -563,7 +710,11 @@ class HermesViewModel @Inject constructor(
     /** Starred model families, which head the picker. */
     val favouriteModels: StateFlow<List<String>> = settings.hermesFavouriteModels
 
-    fun toggleFavourite(family: String) = settings.toggleHermesFavourite(family)
+    fun toggleFavourite(family: String) {
+        settings.toggleHermesFavourite(family)
+        val now = settings.hermesFavouriteModels.value
+        putRail { client.setRail(favourites = now) }
+    }
 
     /** A family from the picker, at the depth and modifiers last chosen where it has them. */
     fun pickFamily(family: HermesCatalog.Family) {
@@ -719,10 +870,14 @@ class HermesViewModel @Inject constructor(
 
     fun removeAttachment(id: String) = _state.update { s -> s.copy(attachments = s.attachments.filter { it.id != id }) }
 
-    /** Starred model families' neighbour: chats put away on this phone. */
+    /** Settled chats, the same ones on every device (the bridge keeps them; see [takeRail]). */
     val archived: StateFlow<Set<String>> = settings.hermesArchived
 
-    fun toggleArchived(threadId: String) = settings.toggleHermesArchived(threadId)
+    fun toggleArchived(threadId: String) {
+        val settle = threadId !in settings.hermesArchived.value
+        settings.toggleHermesArchived(threadId)
+        putRail { client.setSettled(threadId, settle) }
+    }
 
     /** Chats asleep until a time, and the order the person arranged the rest in. */
     val snoozed: StateFlow<Map<String, Long>> = settings.hermesSnoozed
@@ -733,7 +888,10 @@ class HermesViewModel @Inject constructor(
 
     val followUp: StateFlow<String> = settings.hermesFollowUp
 
-    fun setFollowUp(mode: String) = settings.setHermesFollowUp(mode)
+    fun setFollowUp(mode: String) {
+        settings.setHermesFollowUp(mode)
+        putRail { client.setRail(followUp = mode) }
+    }
 
     /**
      * Says something to Hermes now, over what he is doing: the running turn is stopped and [text] goes next,
@@ -753,20 +911,40 @@ class HermesViewModel @Inject constructor(
     val autoSettleDays: StateFlow<Int> = settings.hermesAutoSettleDays
     val groupByDay: StateFlow<Boolean> = settings.hermesGroupByDay
 
-    fun setAutoSettleDays(days: Int) = settings.setHermesAutoSettleDays(days)
+    fun setAutoSettleDays(days: Int) {
+        settings.setHermesAutoSettleDays(days)
+        putRail { client.setRail(autoSettleDays = days) }
+    }
 
-    fun setGroupByDay(on: Boolean) = settings.setHermesGroupByDay(on)
+    fun setGroupByDay(on: Boolean) {
+        settings.setHermesGroupByDay(on)
+        putRail { client.setRail(byDay = on) }
+    }
 
-    fun snooze(threadId: String, untilMs: Long) = settings.snoozeHermes(threadId, untilMs)
+    fun snooze(threadId: String, untilMs: Long) {
+        settings.snoozeHermes(threadId, untilMs)
+        putRail { client.setSnoozed(threadId, untilMs) }
+    }
 
-    fun wake(threadId: String) = settings.wakeHermes(threadId)
+    fun wake(threadId: String) {
+        settings.wakeHermes(threadId)
+        putRail { client.setSnoozed(threadId, 0) }
+    }
 
-    fun setOrder(ids: List<String>) = settings.setHermesOrder(ids)
+    fun setOrder(ids: List<String>) {
+        settings.setHermesOrder(ids)
+        putRail { client.setRail(order = ids) }
+    }
 
     /** What was typed in a chat and not sent; `null` is the chat not started yet. */
     fun draftFor(threadId: String?): String = settings.hermesDraft(threadId ?: NEW_DRAFT)
 
-    fun saveDraft(threadId: String?, text: String) = settings.setHermesDraft(threadId ?: NEW_DRAFT, text)
+    fun saveDraft(threadId: String?, text: String) {
+        val key = threadId ?: NEW_DRAFT
+        val was = settings.hermesDraft(key)
+        settings.setHermesDraft(key, text)
+        if (settings.hermesDraft(key) != was) tellDraft(key)
+    }
 
     /**
      * Edit and resend: the chat is cut back to just before [item] on the bridge and in Hermes' memory,
@@ -1030,7 +1208,8 @@ class HermesViewModel @Inject constructor(
         /** With [clarifyId]: one answer per question of a card that asked several. */
         answers: List<String> = emptyList(),
     ) {
-        // saying something to a chat that was asleep or settled brings it back, as in T3 Code
+        // saying something to a chat that was asleep or settled brings it back, as in T3 Code;
+        // the bridge does the same for every device when the message reaches it
         _state.value.threadId?.let { id ->
             settings.wakeHermes(id)
             if (id in settings.hermesArchived.value) settings.toggleHermesArchived(id)

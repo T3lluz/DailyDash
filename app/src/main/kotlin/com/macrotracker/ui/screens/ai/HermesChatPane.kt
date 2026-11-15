@@ -260,6 +260,12 @@ fun HermesChatPane(
         viewModel.saveDraft(draftId, draft)
     }
     DisposableEffect(viewModel) { onDispose { viewModel.saveDraft(draftId, draft) } }
+    // A draft changed on another device lands in the box, unless something was typed here since the last save.
+    LaunchedEffect(viewModel) {
+        viewModel.remoteDrafts.collect { remote ->
+            if (draftLoaded && remote.key == (draftId ?: "_new") && draft == remote.was) draft = remote.text
+        }
+    }
     /** The server's file viewer: a path, and the lines a change touched. */
     var filesAt by remember { mutableStateOf<Triple<String, Int, Int>?>(null) }
     // Find in chat: the matches are rows, and the list is scrolled to the one asked for.
@@ -677,7 +683,7 @@ fun HermesChatPane(
                     LaunchedEffect(hits.firstOrNull(), findQuery) { if (hits.isNotEmpty()) jump(0) }
                 }
                 // The chat on screen is read as it moves, so it never gets its own dot.
-                LaunchedEffect(state.threadId, current?.updatedMs) { viewModel.markSeen(state.threadId) }
+                LaunchedEffect(state.threadId, current?.updatedMs, current?.busy) { viewModel.markSeen(state.threadId) }
 
                 // The newest question and answer are the ones that can be cut back and asked again.
                 val lastUserKey = remember(state.items) { state.items.lastOrNull { it is HermesItem.User }?.key }

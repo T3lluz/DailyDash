@@ -356,8 +356,7 @@ com.macrotracker/
                              More from T3 Code's phone app, in the rail and chat: each row shows the model it
                              runs on (logo, family, mode when not Agent, tokens: `railModel`), with filters
                              (Active, Pinned, Snoozed, Settled), snooze (`HermesSnooze.kt`: T3 Code's presets
-                             plus a time of your own; `SettingsRepository.hermesSnoozed`, phone-side like
-                             archive), a hand-made order (`hermesOrder`, Move up/down/top, "Sort by recent"
+                             plus a time of your own), a hand-made order (Move up/down/top, "Sort by recent"
                              resets it), day groups, an undo pill after pin, archive and snooze, and a footer
                              to Usage, Console and Files. The panel closes on a tap outside it (Material ignores
                              a scrim tap while `gesturesEnabled` is false, so it is on only while open). The
@@ -374,7 +373,18 @@ com.macrotracker/
                              sheet (`AskHermesActivity` copies the files into the cache, `HermesShareInbox`
                              hands them to the pane) starts a new chat. Settling is T3 Code's word for archiving: swipe a row left (a tick for every tenth of the way, a click at the commit
                              point, as the home pull to refresh does), or the menu. Settled also happens by itself after N idle days (the
-                             list-options menu, `hermesAutoSettleDays`). A swipe to the right anywhere in the chat opens the panel. The rail's search
+                             list-options menu). What the phone once kept for itself about the chats is the same on the web
+                             dashboard and the phone. The bridge keeps `settled`, `snoozed`, `seen` (the `updated` a chat was
+                             last read at) and `draft` on each chat, and `rail` beside the list in `/ai/threads`: `order`,
+                             `autoSettle`, `favs` (starred models), `followUp`, `byDay` and `draft` (the chat not started
+                             yet). The phone writes them with `PATCH /ai/threads/{id}` and `PUT /ai/rail`
+                             (`HermesClient.setSettled`, `setSnoozed`, `setSeen`, `setDraft`, `setRail`), and
+                             `HermesViewModel.takeRail` copies every list into `SettingsRepository`, which the pane draws
+                             from; a list asked for before a change made here landed is skipped. A chat is unread while
+                             `seen` is behind `updated` (`HermesUiState.isUnread`), and opening it with the pane in front
+                             marks it read everywhere once no turn runs in it. A draft goes up 800 ms after the typing
+                             stops (`tellDraft`); one changed elsewhere lands in the box unless something was typed here
+                             since (`takeDraft`, `remoteDrafts`). `hermesRailVersion` counts what this phone has handed over. A swipe to the right anywhere in the chat opens the panel. The rail's search
                              is the server's full-text one (`/_api/search?kind=chat`: excerpt under each row, matching words picked out; opening a hit
                              searches that chat for the words). Fork (`/ai/threads/{id}/fork`: copies the messages up to one, and the new chat's first
                              turn carries them to Hermes as its memory, `fork_ctx`), Name it again (`/retitle`), Share chat, a failed turn

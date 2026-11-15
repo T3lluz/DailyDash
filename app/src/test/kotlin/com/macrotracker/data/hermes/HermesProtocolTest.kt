@@ -85,6 +85,43 @@ class HermesProtocolTest {
     }
 
     @Test
+    fun `the chat list carries what every device shares about it`() {
+        val list = HermesClient.parseThreadList(
+            JSONObject(
+                """{"threads":[{"id":"a","settled":true},{"id":"b","snoozed":1900000000000},{"id":"c"}],
+                   "rail":{"order":["b","a"],"autoSettle":7}}""",
+            ),
+        )
+        assertEquals(listOf(true, false, false), list.threads.map { it.settled })
+        assertEquals(listOf(0L, 1_900_000_000_000L, 0L), list.threads.map { it.snoozedUntilMs })
+        assertEquals(HermesRail(listOf("b", "a"), 7), list.rail)
+        // a bridge from before it kept any: the phone goes on with its own copy
+        assertEquals(null, HermesClient.parseThreadList(JSONObject("""{"threads":[{"id":"a"}]}""")).rail)
+    }
+
+    @Test
+    fun `read marks, drafts, stars and the list's options come with the list when the bridge keeps them`() {
+        val list = HermesClient.parseThreadList(
+            JSONObject(
+                """{"threads":[{"id":"a","updated":50,"seen":40,"draft":"half a thought"},{"id":"b","seen":0,"draft":""}],
+                   "rail":{"order":[],"autoSettle":0,"favs":["opus","sonnet"],"followUp":"queue","byDay":false,"draft":"not started"}}""",
+            ),
+        )
+        assertEquals(listOf(40L, 0L), list.threads.map { it.seenMs })
+        assertEquals(listOf("half a thought", ""), list.threads.map { it.draft })
+        assertEquals(HermesRail(emptyList(), 0, listOf("opus", "sonnet"), "queue", false, "not started"), list.rail)
+        // nobody has chosen steer or queue, or grouping, yet: left out so the first device brings its own
+        val fresh = HermesClient.parseThreadList(JSONObject("""{"threads":[],"rail":{"order":[],"autoSettle":0,"favs":[],"draft":""}}""")).rail!!
+        assertEquals(null, fresh.followUp)
+        assertEquals(null, fresh.byDay)
+        assertEquals(emptyList<String>(), fresh.favourites)
+        // an older bridge says nothing about either, which is not the same as read at 0 or an empty draft
+        val old = HermesClient.parseSummary(JSONObject("""{"id":"c","updated":50}"""))
+        assertEquals(-1L, old.seenMs)
+        assertEquals(null, old.draft)
+    }
+
+    @Test
     fun `a card with several questions keeps them all, and one question reads as before`() {
         val many = HermesClient.parseItems(
             JSONArray(

@@ -72,9 +72,11 @@ class HermesClient @Inject constructor(
         parseStatus(JSONObject(get("/ai/status")))
     }
 
-    suspend fun threads(): List<HermesThreadSummary> = withContext(Dispatchers.IO) {
-        val arr = JSONObject(get("/ai/threads")).optJSONArray("threads") ?: JSONArray()
-        (0 until arr.length()).mapNotNull { arr.optJSONObject(it)?.let(::parseSummary) }
+    suspend fun threads(): List<HermesThreadSummary> = threadList().threads
+
+    /** The chats, and what the bridge keeps about the list itself (the order, the auto-settle days). */
+    suspend fun threadList(): HermesThreadList = withContext(Dispatchers.IO) {
+        parseThreadList(JSONObject(get("/ai/threads")))
     }
 
     suspend fun thread(id: String): HermesThread = withContext(Dispatchers.IO) {
@@ -102,6 +104,45 @@ class HermesClient @Inject constructor(
 
     suspend fun setPinned(id: String, pinned: Boolean): Unit = withContext(Dispatchers.IO) {
         send("PATCH", "/ai/threads/${enc(id)}", JSONObject().put("pinned", pinned))
+    }
+
+    /** Settles a chat, or brings it back, on every device. The bridge does not count it as the chat moving. */
+    suspend fun setSettled(id: String, settled: Boolean): Unit = withContext(Dispatchers.IO) {
+        send("PATCH", "/ai/threads/${enc(id)}", JSONObject().put("settled", settled))
+    }
+
+    /** Puts a chat to sleep until [untilMs] on every device; 0 wakes it. */
+    suspend fun setSnoozed(id: String, untilMs: Long): Unit = withContext(Dispatchers.IO) {
+        send("PATCH", "/ai/threads/${enc(id)}", JSONObject().put("snoozed", untilMs))
+    }
+
+    /** Marks a chat read up to [updatedMs] on every device. */
+    suspend fun setSeen(id: String, updatedMs: Long): Unit = withContext(Dispatchers.IO) {
+        send("PATCH", "/ai/threads/${enc(id)}", JSONObject().put("seen", updatedMs))
+    }
+
+    /** What is typed in a chat and not sent, for every device; blank clears it. */
+    suspend fun setDraft(id: String, text: String): Unit = withContext(Dispatchers.IO) {
+        send("PATCH", "/ai/threads/${enc(id)}", JSONObject().put("draft", text))
+    }
+
+    /** Replaces parts of what every device shares about the chat list ([HermesRail]); null leaves a part as it is. */
+    suspend fun setRail(
+        order: List<String>? = null,
+        autoSettleDays: Int? = null,
+        favourites: List<String>? = null,
+        followUp: String? = null,
+        byDay: Boolean? = null,
+        draft: String? = null,
+    ): Unit = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+        if (order != null) body.put("order", JSONArray(order))
+        if (autoSettleDays != null) body.put("autoSettle", autoSettleDays)
+        if (favourites != null) body.put("favs", JSONArray(favourites))
+        if (followUp != null) body.put("followUp", followUp)
+        if (byDay != null) body.put("byDay", byDay)
+        if (draft != null) body.put("draft", draft)
+        send("PUT", "/ai/rail", body)
     }
 
     /** Remembers the model this chat used, so opening it later puts Hermes back on it. */
@@ -561,6 +602,22 @@ class HermesClient @Inject constructor(
             }
         }
 
+        internal fun parseThreadList(o: JSONObject): HermesThreadList {
+            val arr = o.optJSONArray("threads") ?: JSONArray()
+            val rail = o.optJSONObject("rail")?.let { r ->
+                val order = r.optJSONArray("order") ?: JSONArray()
+                HermesRail(
+                    order = (0 until order.length()).map { order.optString(it) }.filter { it.isNotBlank() },
+                    autoSettleDays = r.optInt("autoSettle"),
+                    favourites = r.optJSONArray("favs")?.let { f -> (0 until f.length()).map { f.optString(it) }.filter { it.isNotBlank() } },
+                    followUp = r.optString("followUp").takeIf { it == "steer" || it == "queue" },
+                    byDay = if (r.has("byDay")) r.optBoolean("byDay") else null,
+                    draft = if (r.has("draft")) r.optString("draft") else null,
+                )
+            }
+            return HermesThreadList((0 until arr.length()).mapNotNull { arr.optJSONObject(it)?.let(::parseSummary) }, rail)
+        }
+
         internal fun parseSummary(o: JSONObject): HermesThreadSummary = HermesThreadSummary(
             id = o.optString("id"),
             title = o.optString("title").ifBlank { "New chat" },
@@ -582,6 +639,10 @@ class HermesClient @Inject constructor(
             scheduled = o.optJSONObject("sched")?.optString("title")?.takeIf { it.isNotBlank() },
             fail = o.optString("fail").takeIf { it.isNotBlank() },
             forkedFrom = o.optString("forked").takeIf { it.isNotBlank() },
+            settled = o.optBoolean("settled"),
+            snoozedUntilMs = o.optLong("snoozed"),
+            seenMs = if (o.has("seen")) o.optLong("seen") else -1,
+            draft = if (o.has("draft")) o.optString("draft") else null,
         )
 
         /** The list's short copy of a running turn: when it started, the tail of its words, its tools. */

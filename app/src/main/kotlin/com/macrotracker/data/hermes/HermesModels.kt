@@ -116,6 +116,24 @@ enum class HermesPermission(val id: String, val label: String, val blurb: String
     }
 }
 
+/**
+ * What every device shares about the chat list: the order arranged by hand, the idle days after which a
+ * chat settles by itself, starred model families, what a message does while Hermes works (`steer` or
+ * `queue`), grouping by day, and the draft of the chat not started yet. The last four are null from a
+ * bridge that keeps only the first two, and [followUp] and [byDay] until some device has chosen.
+ */
+data class HermesRail(
+    val order: List<String> = emptyList(),
+    val autoSettleDays: Int = 0,
+    val favourites: List<String>? = null,
+    val followUp: String? = null,
+    val byDay: Boolean? = null,
+    val draft: String? = null,
+)
+
+/** The chat list as the bridge hands it over; [rail] is null from a bridge that keeps none. */
+data class HermesThreadList(val threads: List<HermesThreadSummary>, val rail: HermesRail?)
+
 data class HermesThreadSummary(
     val id: String,
     val title: String,
@@ -147,6 +165,14 @@ data class HermesThreadSummary(
     val fail: String? = null,
     /** The chat this one was forked from. */
     val forkedFrom: String? = null,
+    /** Put away as done with, on every device (T3 Code's settle). */
+    val settled: Boolean = false,
+    /** Asleep until this time (epoch ms) on every device; 0 when awake. */
+    val snoozedUntilMs: Long = 0,
+    /** The [updatedMs] it was last read at, on any device; -1 from a bridge that keeps no read marks. */
+    val seenMs: Long = -1,
+    /** Typed in it and not sent, on any device; null from a bridge that keeps no drafts. */
+    val draft: String? = null,
 ) {
     val contextFraction: Float? get() = if (window > 0 && context > 0) (context.toFloat() / window).coerceIn(0f, 1f) else null
 

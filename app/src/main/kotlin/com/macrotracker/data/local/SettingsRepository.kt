@@ -119,21 +119,43 @@ class SettingsRepository @Inject constructor(
     )
     val hermesFavouriteModels: StateFlow<List<String>> = _hermesFavouriteModels
 
-    fun toggleHermesFavourite(family: String) {
-        val now = _hermesFavouriteModels.value.let { if (family in it) it - family else it + family }
-        prefs.edit { putString(KEY_HERMES_FAVOURITE_MODELS, now.joinToString("\n")) }
-        _hermesFavouriteModels.value = now
+    fun toggleHermesFavourite(family: String) =
+        setHermesFavouriteModels(_hermesFavouriteModels.value.let { if (family in it) it - family else it + family })
+
+    fun setHermesFavouriteModels(families: List<String>) {
+        if (families == _hermesFavouriteModels.value) return
+        prefs.edit { putString(KEY_HERMES_FAVOURITE_MODELS, families.joinToString("\n")) }
+        _hermesFavouriteModels.value = families
     }
 
-    /** Hermes chats put away on this phone: they wait under Archived in the chat panel. */
+    /**
+     * Settled Hermes chats: they wait under Settled in the chat panel. The bridge keeps which ones, so the
+     * web dashboard and the phone agree; this, [hermesSnoozed], [hermesOrder], [hermesAutoSettleDays],
+     * [hermesFavouriteModels], [hermesFollowUp], [hermesGroupByDay] and the drafts are the phone's last copy
+     * of what the bridge keeps, which `HermesViewModel.takeRail` replaces with every list.
+     */
     private val _hermesArchived = MutableStateFlow(readIdSet(KEY_HERMES_ARCHIVED))
     val hermesArchived: StateFlow<Set<String>> = _hermesArchived
 
     fun toggleHermesArchived(threadId: String) = toggleId(_hermesArchived, KEY_HERMES_ARCHIVED, threadId)
 
+    fun setHermesArchived(ids: Set<String>) {
+        if (ids == _hermesArchived.value) return
+        prefs.edit { putString(KEY_HERMES_ARCHIVED, ids.joinToString("\n")) }
+        _hermesArchived.value = ids
+    }
+
     /**
-     * Chats put to sleep on this phone until a time (epoch ms), as T3 Code snoozes a thread: out of the
-     * list until it wakes, and back sooner if it starts to want you. Expired entries are dropped on read.
+     * How much of what this phone once kept by itself has gone up to the bridge: 1 is settled, snoozed,
+     * the order and the idle days; 2 adds starred models and drafts.
+     */
+    var hermesRailVersion: Int
+        get() = prefs.getInt(KEY_HERMES_RAIL_VERSION, if (prefs.getBoolean(KEY_HERMES_RAIL_SYNCED, false)) 1 else 0)
+        set(v) = prefs.edit { putInt(KEY_HERMES_RAIL_VERSION, v) }
+
+    /**
+     * Chats put to sleep until a time (epoch ms), as T3 Code snoozes a thread: out of the list until it
+     * wakes, and back sooner if it starts to want you. Expired entries are dropped on read.
      */
     private val _hermesSnoozed = MutableStateFlow(readSnoozed())
     val hermesSnoozed: StateFlow<Map<String, Long>> = _hermesSnoozed
@@ -141,6 +163,10 @@ class SettingsRepository @Inject constructor(
     fun snoozeHermes(threadId: String, untilMs: Long) = writeSnoozed(_hermesSnoozed.value + (threadId to untilMs))
 
     fun wakeHermes(threadId: String) = writeSnoozed(_hermesSnoozed.value - threadId)
+
+    fun setHermesSnoozed(until: Map<String, Long>) {
+        if (until != _hermesSnoozed.value) writeSnoozed(until)
+    }
 
     private fun readSnoozed(): Map<String, Long> {
         val now = System.currentTimeMillis()
@@ -156,11 +182,12 @@ class SettingsRepository @Inject constructor(
         _hermesSnoozed.value = now
     }
 
-    /** Chats idle this many days settle by themselves (T3 Code's auto-settle); 0 never. Phone-side, like settling by hand. */
+    /** Chats idle this many days settle by themselves (T3 Code's auto-settle); 0 never. The bridge's, like settling by hand. */
     private val _hermesAutoSettleDays = MutableStateFlow(prefs.getInt(KEY_HERMES_AUTOSETTLE, 0))
     val hermesAutoSettleDays: StateFlow<Int> = _hermesAutoSettleDays
 
     fun setHermesAutoSettleDays(days: Int) {
+        if (days == _hermesAutoSettleDays.value) return
         prefs.edit { putInt(KEY_HERMES_AUTOSETTLE, days) }
         _hermesAutoSettleDays.value = days
     }
@@ -170,6 +197,7 @@ class SettingsRepository @Inject constructor(
     val hermesGroupByDay: StateFlow<Boolean> = _hermesGroupByDay
 
     fun setHermesGroupByDay(on: Boolean) {
+        if (on == _hermesGroupByDay.value) return
         prefs.edit { putBoolean(KEY_HERMES_GROUP_DAY, on) }
         _hermesGroupByDay.value = on
     }
@@ -179,6 +207,7 @@ class SettingsRepository @Inject constructor(
     val hermesFollowUp: StateFlow<String> = _hermesFollowUp
 
     fun setHermesFollowUp(mode: String) {
+        if (mode == _hermesFollowUp.value) return
         prefs.edit { putString(KEY_HERMES_FOLLOW_UP, mode) }
         _hermesFollowUp.value = mode
     }
@@ -193,6 +222,7 @@ class SettingsRepository @Inject constructor(
     val hermesOrder: StateFlow<List<String>> = _hermesOrder
 
     fun setHermesOrder(ids: List<String>) {
+        if (ids == _hermesOrder.value) return
         prefs.edit { putString(KEY_HERMES_ORDER, ids.joinToString("\n")) }
         _hermesOrder.value = ids
     }
@@ -541,6 +571,8 @@ class SettingsRepository @Inject constructor(
         const val KEY_HERMES_FAVOURITE_MODELS = "hermes_favourite_models"
         const val KEY_HERMES_ARCHIVED = "hermes_archived"
         const val KEY_HERMES_SNOOZED = "hermes_snoozed"
+        const val KEY_HERMES_RAIL_SYNCED = "hermes_rail_synced"
+        const val KEY_HERMES_RAIL_VERSION = "hermes_rail_version"
         const val KEY_HERMES_ORDER = "hermes_order"
         const val KEY_GIT_REPO = "git_repo"
         const val KEY_HERMES_FOLLOW_UP = "hermes_follow_up"
