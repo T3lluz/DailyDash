@@ -25,6 +25,10 @@ interface MacroDao {
     @Query("SELECT * FROM macro_logs WHERE date = :date ORDER BY id DESC")
     suspend fun getLogsForDate(date: String): List<MacroLogEntity>
 
+    /** The newest entries of any day, for "log it again". */
+    @Query("SELECT * FROM macro_logs ORDER BY date DESC, id DESC LIMIT :limit")
+    suspend fun getRecentLogs(limit: Int): List<MacroLogEntity>
+
     /**
      * Returns calorie + protein totals for each requested date in a single SQL round-trip.
      * Dates with no logs simply won't appear in the result — callers should treat missing

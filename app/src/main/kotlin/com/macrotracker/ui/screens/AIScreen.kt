@@ -25,7 +25,7 @@ import com.macrotracker.ui.viewmodel.HermesViewModel
  * phone's own Sysop when he doesn't. One pane, its own one-row header, nothing above it.
  *
  * Estimating a meal used to share the tab behind a switcher; it lives with Food now
- * ([MealChatScreen]), where the log is.
+ * (`MealEstimateSheet`, a card over Food), where the log is.
  */
 @Composable
 fun AIScreen(

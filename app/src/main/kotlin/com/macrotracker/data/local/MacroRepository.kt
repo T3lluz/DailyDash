@@ -45,6 +45,16 @@ class MacroRepository @Inject constructor(
 
     suspend fun getLogsForDate(date: String): List<MacroLogEntity> = dao.getLogsForDate(date)
 
+    /**
+     * What was logged lately, one entry per name (the newest), for logging it again. Entries
+     * without a name of their own are left out.
+     */
+    suspend fun getRecentFoods(limit: Int = 8): List<MacroLogEntity> =
+        dao.getRecentLogs(limit * 6)
+            .filter { it.foodName.isNotBlank() && it.foodName != UNNAMED_FOOD }
+            .distinctBy { it.foodName.trim().lowercase() }
+            .take(limit)
+
     /** Fetches today's summary in 2 DB round-trips (batch totals + goals). */
     suspend fun getDailySummary(date: String): DailySummary {
         val totals = dao.getTotalsForDates(listOf(date)).firstOrNull()

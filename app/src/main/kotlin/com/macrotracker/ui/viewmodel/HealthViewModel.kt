@@ -93,6 +93,10 @@ class HealthViewModel @Inject constructor(
     private val _logs = MutableStateFlow<List<MacroLogEntity>>(emptyList())
     val logs: StateFlow<List<MacroLogEntity>> = _logs
 
+    /** What was logged lately, a name each, for the composer's "again" chips. */
+    private val _recentFoods = MutableStateFlow<List<MacroLogEntity>>(emptyList())
+    val recentFoods: StateFlow<List<MacroLogEntity>> = _recentFoods
+
     private val _healthConnectState = MutableStateFlow<HealthConnectUiState>(HealthConnectUiState.Loading)
     val healthConnectState: StateFlow<HealthConnectUiState> = _healthConnectState
 
@@ -284,6 +288,7 @@ class HealthViewModel @Inject constructor(
         macrosJob = viewModelScope.launch {
             _summary.value = repository.getDailySummary(today)
             _logs.value = repository.getLogsForDate(today)
+            _recentFoods.value = repository.getRecentFoods()
         }
         loadMacroHistory()
     }

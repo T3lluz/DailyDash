@@ -468,7 +468,7 @@ private fun MainScreenScaffold(
 }
 
 /** Routes whose screen is a platform view, kept out of the chrome's haze source. */
-private val PlatformViewRoutes = setOf(SubScreenRoutes.CONSOLE, SubScreenRoutes.CAMERA_SCAN, SubScreenRoutes.LINK)
+private val PlatformViewRoutes = setOf(SubScreenRoutes.CONSOLE, SubScreenRoutes.LINK)
 
 @Composable
 private fun MainBottomBar(

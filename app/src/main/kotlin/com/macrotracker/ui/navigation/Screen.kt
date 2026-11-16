@@ -44,7 +44,6 @@ object SettingsRoutes {
 // Other pushed sub-screens
 object SubScreenRoutes {
     const val WIDGETS = "widgets"
-    const val CAMERA_SCAN = "camera_scan"
 
     /** A shell on the dashboard server (ConsoleScreen). */
     const val CONSOLE = "console"
@@ -58,8 +57,6 @@ object SubScreenRoutes {
     /** What the agents spent and what runs when (UsageScreen). */
     const val USAGE = "usage"
 
-    /** Estimating a meal with the AI (MealChatScreen), pushed from Food. */
-    const val MEAL_CHAT = "meal_chat"
 
     /** The Tilesmith studio: a saved design, a starter, or a request for the AI (TilesmithStudioScreen). */
     const val TILESMITH = "tilesmith"

@@ -1,7 +1,7 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-
 package com.macrotracker.ui.navigation
 
+import com.macrotracker.ui.screens.health.MealEstimateSheet
+import com.macrotracker.ui.screens.health.ScanLabelSheet
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,10 +18,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.macrotracker.ui.screens.AIScreen
-import com.macrotracker.ui.screens.CameraScanScreen
 import com.macrotracker.ui.screens.HealthScreen
 import com.macrotracker.ui.screens.HomeScreen
-import com.macrotracker.ui.screens.MealChatScreen
 import com.macrotracker.ui.screens.ServerScreen
 import com.macrotracker.ui.screens.SettingsScreen
 import com.macrotracker.ui.screens.WidgetsScreen
@@ -56,8 +54,6 @@ private val SubScreens = setOf(
     SubScreenRoutes.GIT,
     OnboardingRoutes.PERMISSIONS,
     OnboardingRoutes.TUTORIAL,
-    SubScreenRoutes.CAMERA_SCAN,
-    SubScreenRoutes.MEAL_CHAT,
     SettingsRoutes.CONNECTIONS,
     SettingsRoutes.AI,
     SettingsRoutes.NUTRITION,
@@ -87,39 +83,22 @@ fun DailyDashNavHost(
 ) {
     // Estimating a meal and scanning a label are cards that slide up over Food, not screens.
     var foodSheet by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
-    foodSheet?.let { which ->
-        androidx.compose.material3.ModalBottomSheet(
-            onDismissRequest = { foodSheet = null },
-            sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = com.macrotracker.ui.theme.Background,
-            shape = androidx.compose.foundation.shape.RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
-        ) {
-            androidx.compose.foundation.layout.Box(
-                modifier = androidx.compose.ui.Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(0.9f),
-            ) {
-                if (which == "meal") {
-                    MealChatScreen(
-                        onNavigateBack = { foodSheet = null },
-                        onNavigateToCameraScan = { foodSheet = "scan" },
-                        onNavigateToAiSettings = {
-                            foodSheet = null
-                            navController.navigateToSubScreen(SettingsRoutes.AI)
-                        },
-                    )
-                } else {
-                    CameraScanScreen(
-                        onNavigateBack = { foodSheet = null },
-                        onLogged = { foodSheet = null },
-                        onNavigateToAiSettings = {
-                            foodSheet = null
-                            navController.navigateToSubScreen(SettingsRoutes.AI)
-                        },
-                    )
-                }
-            }
-        }
+    when (foodSheet) {
+        "meal" -> MealEstimateSheet(
+            onDismiss = { foodSheet = null },
+            onScanLabel = { foodSheet = "scan" },
+            onAiSettings = {
+                foodSheet = null
+                navController.navigateToSubScreen(SettingsRoutes.AI)
+            },
+        )
+        "scan" -> ScanLabelSheet(
+            onDismiss = { foodSheet = null },
+            onAiSettings = {
+                foodSheet = null
+                navController.navigateToSubScreen(SettingsRoutes.AI)
+            },
+        )
     }
 
     NavHost(
@@ -343,22 +322,6 @@ fun DailyDashNavHost(
                 onNavigateBack = { navController.popSubScreen(entry) },
                 onOpenRoute = { navController.navigateToSubScreen(it) },
                 onOpenTab = { navController.navigateToTab(it) },
-            )
-        }
-
-        subScreen(SubScreenRoutes.MEAL_CHAT) { entry ->
-            MealChatScreen(
-                onNavigateBack = { navController.popSubScreen(entry) },
-                onNavigateToCameraScan = { navController.navigateToSubScreen(SubScreenRoutes.CAMERA_SCAN) },
-                onNavigateToAiSettings = { navController.navigateToSubScreen(SettingsRoutes.AI) },
-            )
-        }
-
-        subScreen(SubScreenRoutes.CAMERA_SCAN) { entry ->
-            CameraScanScreen(
-                onNavigateBack = { navController.popSubScreen(entry) },
-                onLogged = { navController.popSubScreen(entry) },
-                onNavigateToAiSettings = { navController.navigateToSubScreen(SettingsRoutes.AI) },
             )
         }
     }
