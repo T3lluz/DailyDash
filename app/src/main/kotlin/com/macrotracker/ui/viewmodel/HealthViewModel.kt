@@ -7,9 +7,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.macrotracker.data.health.BodyVitals
 import com.macrotracker.data.health.DailyHealthStats
+import com.macrotracker.data.health.DayHours
 import com.macrotracker.data.health.HealthActivity
 import com.macrotracker.data.health.HealthConnectRepository
 import com.macrotracker.data.health.HealthStats
+import com.macrotracker.data.health.heartRateCurve
 import com.macrotracker.data.health.pickFeaturedActivity
 import com.macrotracker.data.local.DailySummary
 import com.macrotracker.data.local.MacroLogEntity
@@ -24,14 +26,16 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
-import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
@@ -76,8 +80,8 @@ class HealthViewModel @Inject constructor(
 
         private const val TAG = "HealthViewModel"
 
-        /** How far back Trends can page, in weeks before this one. */
-        const val MAX_WEEKS_BACK = 11
+        /** How far back the Activity card reads: thirteen weeks, its longest range. */
+        const val ACTIVITY_DAYS = 91
     }
 
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd")
@@ -95,18 +99,20 @@ class HealthViewModel @Inject constructor(
     private val _activitiesState = MutableStateFlow<ActivitiesUiState>(ActivitiesUiState.Loading)
     val activitiesState: StateFlow<ActivitiesUiState> = _activitiesState
 
-    private val _healthHistory = MutableStateFlow<List<DailyHealthStats>>(emptyList())
-    val healthHistory: StateFlow<List<DailyHealthStats>> = _healthHistory
+    /**
+     * Every day's movement totals for the last [ACTIVITY_DAYS] days, oldest first and ending
+     * today. The Activity card cuts its week, month and three months out of it, and Today's
+     * day strip and the tiles their last seven days.
+     */
+    private val _activityDays = MutableStateFlow<List<DailyHealthStats>>(emptyList())
+    val activityDays: StateFlow<List<DailyHealthStats>> = _activityDays
 
-    /** The seven days before [healthHistory], for week-over-week deltas. */
-    private val _previousWeekHistory = MutableStateFlow<List<DailyHealthStats>>(emptyList())
-    val previousWeekHistory: StateFlow<List<DailyHealthStats>> = _previousWeekHistory
-
-    /** The last seven days to today, for Today's readings, whatever week Trends is paged to. */
-    private val _recentDays = MutableStateFlow<List<DailyHealthStats>>(emptyList())
-    val recentDays: StateFlow<List<DailyHealthStats>> = _recentDays
-
-    private var weekJob: Job? = null
+    /**
+     * A day by the hour for the body clock: today and yesterday on every load (the clock
+     * shows the last 24 hours), an older day when it is first picked in Today's strip.
+     */
+    private val _dayHours = MutableStateFlow<Map<LocalDate, DayHours>>(emptyMap())
+    val dayHours: StateFlow<Map<LocalDate, DayHours>> = _dayHours
 
     /** The day the snapshot on screen was read. */
     private var statsDay: LocalDate? = null
@@ -138,9 +144,6 @@ class HealthViewModel @Inject constructor(
 
     private val _macroInsights = MutableStateFlow<MacroRangeInsights?>(null)
     val macroInsights: StateFlow<MacroRangeInsights?> = _macroInsights
-
-    private val _selectedDate = MutableStateFlow(LocalDate.now())
-    val selectedDate: StateFlow<LocalDate> = _selectedDate
 
     /** Last night's sessions for the Daily Health hero (independent of trend detail panel). */
     private val _todaySleepSessions = MutableStateFlow<List<SleepSessionRecord>>(emptyList())
@@ -182,16 +185,6 @@ class HealthViewModel @Inject constructor(
     val readRefusedDespiteGrant: StateFlow<Boolean> =
         healthConnectRepository.readRefusedDespiteGrant
 
-    private val _weekStartDay = MutableStateFlow(
-        runCatching { DayOfWeek.of(settingsRepository.healthWeekStart()) }.getOrDefault(DayOfWeek.MONDAY),
-    )
-    val weekStartDay: StateFlow<DayOfWeek> = _weekStartDay
-
-    private val _weeksBack = MutableStateFlow(0)
-    val weeksBack: StateFlow<Int> = _weeksBack
-
-    val healthWidgetOrder: StateFlow<String> = settingsRepository.healthWidgetOrder
-
     private var lastResumeLoadMs = 0L
     private var macrosJob: Job? = null
     private var macroHistoryJob: Job? = null
@@ -219,86 +212,58 @@ class HealthViewModel @Inject constructor(
         loadHealthConnect(silent = true)
     }
 
-    fun updateHealthWidgetOrder(order: String) {
-        settingsRepository.updateHealthWidgetOrder(order)
-    }
-
-    fun setWeekStartDay(day: DayOfWeek) {
-        _weekStartDay.value = day
-        settingsRepository.saveHealthWeekStart(day.value)
-        reloadWeekOnly()
-    }
-
-    fun nextWeek() {
-        if (_weeksBack.value > 0) {
-            _weeksBack.value -= 1
-            reloadWeekOnly()
-        }
-    }
-
-    fun previousWeek() {
-        if (_weeksBack.value < MAX_WEEKS_BACK) {
-            _weeksBack.value += 1
-            reloadWeekOnly()
-        }
-    }
-
     /**
-     * Week navigation only needs Health Connect history — skip re-reading today's macros.
-     * The newest tap wins: a quick run of taps used to finish in any order.
-     */
-    private fun reloadWeekOnly() {
-        weekJob?.cancel()
-        weekJob = viewModelScope.launch {
-            if (settingsRepository.masterHealthConnectEnabled.value &&
-                healthConnectRepository.isAvailable() &&
-                healthConnectRepository.hasAnyPermissions()
-            ) {
-                loadWeekHistory()
-                followSelectionIntoWeek()
-            }
-        }
-    }
-
-    /** The picked day moves with the week, to the same weekday, so the day panel and detail chart follow. */
-    private fun followSelectionIntoWeek() {
-        val (start, end) = getWeekRange()
-        val picked = _selectedDate.value
-        if (!picked.isBefore(start) && !picked.isAfter(end)) return
-        val offset = ((picked.dayOfWeek.value - start.dayOfWeek.value) + 7) % 7
-        selectDate(minOf(start.plusDays(offset.toLong()), LocalDate.now()))
-    }
-
-    /**
-     * The tab stayed open past midnight: the picks that were "today" move to the new today,
-     * and the day's numbers reload. Picks of an older day stay where they are.
+     * The tab stayed open past midnight: a food pick that was "today" moves to the new
+     * today, and the day's numbers reload. Picks of an older day stay where they are.
      */
     fun rollToToday(day: LocalDate) {
         val yesterday = day.minusDays(1)
-        if (_selectedDate.value == yesterday) selectDate(day)
         if (_macroSelectedDate.value == yesterday.format(dateFormat)) selectMacroDate(day.format(dateFormat))
         loadData()
+        loadHealthConnect(silent = true)
     }
 
-    private fun getWeekRange(): Pair<LocalDate, LocalDate> {
+    private suspend fun loadActivityDays() {
         val today = LocalDate.now()
-        val startDay = _weekStartDay.value
-        var start = today.minusWeeks(_weeksBack.value.toLong())
-        while (start.dayOfWeek != startDay) {
-            start = start.minusDays(1)
-        }
-        val end = start.plusDays(6)
-        return Pair(start, end)
+        _activityDays.value = healthConnectRepository.readHistoryStatsBetween(
+            today.minusDays(ACTIVITY_DAYS - 1L),
+            today,
+            enrich = false,
+        )
     }
 
-    private suspend fun loadWeekHistory() {
-        val (start, end) = getWeekRange()
-        // One read for both weeks: the one on screen and the one before it.
-        val both = healthConnectRepository.readHistoryStatsBetween(start.minusDays(7), end)
-        val current = both.filter { !it.date.isBefore(start) }
-        _previousWeekHistory.value = both.filter { it.date.isBefore(start) }
-        _healthHistory.value = current
-        if (_weeksBack.value == 0) _recentDays.value = both.filter { !it.date.isAfter(LocalDate.now()) }.takeLast(7)
+    /** A past day by the hour, for the body clock when that day is picked in the strip. */
+    fun loadDayHours(date: LocalDate) {
+        if (date in _dayHours.value) return
+        viewModelScope.launch { readDayHours(date) }
+    }
+
+    private suspend fun readDayHours(date: LocalDate) {
+        val repo = healthConnectRepository
+        // A failed read is an empty hour list, but a cancelled one must stay cancelled:
+        // caught, it stored a day of nothing and the clock drew yesterday blank until the
+        // next load.
+        suspend fun <T> read(block: suspend () -> List<T>): List<T> = try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to read $date by the hour", e)
+            emptyList()
+        }
+        val hours = DayHours(
+            steps = read { repo.readHourlySteps(date) },
+            moveKcal = read { repo.readHourlyActiveCalories(date) },
+            heart = read {
+                if (repo.hasPermission(HealthConnectRepository.HEART_RATE_PERMISSION)) {
+                    heartRateCurve(repo.readHeartRateIntraday(date).map { it.time to it.beatsPerMinute }, ZoneId.systemDefault())
+                } else {
+                    emptyList()
+                }
+            },
+        )
+        currentCoroutineContext().ensureActive()
+        _dayHours.value = _dayHours.value + (date to hours)
     }
 
     /**
@@ -363,10 +328,6 @@ class HealthViewModel @Inject constructor(
         viewModelScope.launch {
             _macroSelectedLogs.value = repository.getLogsForDate(date)
         }
-    }
-
-    fun selectDate(date: LocalDate) {
-        _selectedDate.value = date
     }
 
     fun loadHealthConnect(
@@ -436,7 +397,7 @@ class HealthViewModel @Inject constructor(
                 // runCatching so one failing read reports itself instead of
                 // cancelling the workouts / week history running beside it.
                 val statsDeferred = async { runCatching { healthConnectRepository.readTodayStats() } }
-                val historyDeferred = async { runCatching { loadWeekHistory() } }
+                val historyDeferred = async { runCatching { loadActivityDays() } }
                 val todaySleepDeferred = async {
                     if (healthConnectRepository.hasPermission(HealthConnectRepository.SLEEP_PERMISSION)) {
                         healthConnectRepository.readSleepSessions(LocalDate.now())
@@ -471,7 +432,10 @@ class HealthViewModel @Inject constructor(
                 }
                 val hourlyDeferred = async {
                     try {
-                        _hourlySteps.value = healthConnectRepository.readHourlySteps()
+                        val today = LocalDate.now()
+                        readDayHours(today)
+                        _dayHours.value[today]?.let { _hourlySteps.value = it.steps }
+                        readDayHours(today.minusDays(1))
                         _usualHourlySteps.value = healthConnectRepository.readUsualHourlySteps()
                     } catch (e: CancellationException) {
                         throw e

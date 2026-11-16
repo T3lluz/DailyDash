@@ -42,6 +42,10 @@ data class SleepNightScore(
     val lightMinutes: Long,
     val awakeMinutes: Long,
     val label: String,
+    /** What the score is made of: time asleep (of 40), deep and REM (of 35), an unbroken night (of 25). */
+    val durationPoints: Int = 0,
+    val stagePoints: Int = 0,
+    val continuityPoints: Int = 0,
 )
 
 fun computeTodayActivity(
@@ -187,6 +191,9 @@ fun computeSleepNightScore(sessions: List<SleepSessionRecord>): SleepNightScore?
         lightMinutes = light,
         awakeMinutes = awake,
         label = label,
+        durationPoints = durationScore.roundToInt(),
+        stagePoints = architectureScore.roundToInt(),
+        continuityPoints = continuityScore.roundToInt(),
     )
 }
 

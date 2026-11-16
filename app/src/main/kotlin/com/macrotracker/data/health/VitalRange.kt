@@ -58,6 +58,11 @@ fun vitalsHeadline(standings: List<Pair<String, VitalStanding>>): String? {
             val (name, standing) = outside[0]
             "$name is ${if (standing == VitalStanding.ABOVE) "above" else "below"} your usual range"
         }
+        // Two that went the same way are named: "2 outside" read as an alarm when both were
+        // simply lower than usual.
+        outside.size == 2 && outside[0].second == outside[1].second ->
+            "${outside[0].first} and ${outside[1].first} are " +
+                "${if (outside[0].second == VitalStanding.ABOVE) "above" else "below"} your usual range"
         else -> "${outside.size} outside your usual range"
     }
 }

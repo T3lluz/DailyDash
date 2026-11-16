@@ -82,23 +82,6 @@ class HealthActivityTest {
         assertEquals("6:00 /km", formatPace(pace))
     }
 
-    @Test
-    fun widgetOrderInsertsActivitiesAfterDailyHealth() {
-        val old = "DAILY_HEALTH:true,BODY_STATS:true,HISTORY:true"
-        val migrated = SettingsRepository.migrateHealthWidgetOrder(old)
-        assertEquals(
-            "DAILY_HEALTH:true,ACTIVITIES:true,BODY_STATS:true,HISTORY:true",
-            migrated,
-        )
-        assertEquals(
-            migrated,
-            SettingsRepository.migrateHealthWidgetOrder(migrated),
-        )
-        val legacy = "BODY_STATS:true,HISTORY:true"
-        val fromLegacy = SettingsRepository.migrateHealthWidgetOrder(legacy)
-        assertTrue(fromLegacy.startsWith("DAILY_HEALTH:true,ACTIVITIES:true,"))
-    }
-
 
 
 

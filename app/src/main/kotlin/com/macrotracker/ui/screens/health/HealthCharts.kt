@@ -1,294 +1,244 @@
 package com.macrotracker.ui.screens.health
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.ui.graphics.TransformOrigin
-import kotlinx.coroutines.flow.first
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.setValue
+import com.macrotracker.ui.util.onFirstSeen
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.macrotracker.ui.theme.Surface
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.MacroMotion
+import com.macrotracker.ui.theme.SurfaceElevated
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
+import com.macrotracker.ui.theme.TextTertiary
 import com.macrotracker.ui.util.HapticHelper
+import com.macrotracker.ui.util.rememberReducedMotion
+import kotlin.math.ceil
+import kotlin.math.floor
+import kotlin.math.log10
 import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.pow
 
+/**
+ * The Health tab's one bar chart: a week of steps, a month of calories, two weeks of nights.
+ * Bars rise in a wave from the left the first time a [chartKey] shows. A tap picks a bar
+ * (the picked one again lets go) and a finger dragged along the chart reads each in turn.
+ * The scale tops out on a round number written in the right margin, so a small day never
+ * fills the chart; [goal] is a grey dashed line and [average] one in the chart's colour,
+ * each named in that margin.
+ */
 @Composable
-fun AnimatedHealthBarChart(
+fun RangeBarChart(
     values: List<Double>,
-    labels: List<String>,
-    selectedIndex: Int,
     color: Color,
-    avgValue: Double,
     haptics: HapticHelper,
-    valueFormatter: (Double) -> String,
-    onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    height: Dp = 176.dp,
+    /** A label under each bar; null leaves that slot blank (a month labels every week). */
+    labels: List<String?> = emptyList(),
+    selectedIndex: Int? = null,
+    onSelect: ((Int?) -> Unit)? = null,
+    average: Double? = null,
+    goal: Double? = null,
+    /** How the scale's top and middle are written ("10k", "8h"). */
+    axisLabel: (Double) -> String = ::compactNumber,
     chartKey: Any? = null,
+    /** A bar's own colour (a day over its calorie goal), where it isn't the chart's. */
+    barColor: ((Int) -> Color)? = null,
 ) {
-    val chartMax = max(values.maxOrNull() ?: 1.0, 1.0)
-    // The reveal plays for a new chart (week, metric), not for new numbers: keyed on the
-    // values too, today's steps ticking up collapsed and regrew every bar. It is read in
-    // the draw phase (scaleY), so it redraws the bars instead of recomposing the chart.
-    val reveal = remember(chartKey) { Animatable(0f) }
-    LaunchedEffect(chartKey) {
-        reveal.snapTo(0f)
-        reveal.animateTo(1f, MacroMotion.chartRevealTween())
+    val reduced = rememberReducedMotion()
+    // Keyed on what the chart is (metric, range), not its numbers: today's steps ticking up
+    // must not collapse and regrow every bar. Read only while drawing.
+    val reveal = remember(chartKey) { Animatable(if (reduced) 1f else 0f) }
+    // The wave waits until the chart has scrolled into view, or it would play to nobody.
+    var seen by remember { mutableStateOf(false) }
+    LaunchedEffect(chartKey, seen) {
+        if (seen && reveal.value < 1f) reveal.animateTo(1f, MacroMotion.chartRevealTween(650))
     }
+    val measurer = rememberTextMeasurer()
+    val picked by rememberUpdatedState(selectedIndex)
+    val select by rememberUpdatedState(onSelect)
+    val count = values.size
+    val top = remember(values, goal) { niceCeil(max(values.maxOrNull() ?: 0.0, goal ?: 0.0)) }
 
-    Box(
+    Canvas(
         modifier = modifier
             .fillMaxWidth()
-            .height(220.dp)
-            .clip(RoundedCornerShape(16.dp)),
+            .height(height)
+            .onFirstSeen { seen = true }
+            .then(
+                if (onSelect == null || count == 0) {
+                    Modifier
+                } else {
+                    Modifier
+                        .pointerInput(count) {
+                            detectTapGestures { at ->
+                                val i = barIndexAt(at.x, size.width.toFloat(), GUTTER.toPx(), count)
+                                haptics.tick()
+                                select?.invoke(if (i == picked) null else i)
+                            }
+                        }
+                        .pointerInput(count) {
+                            var last = -1
+                            detectHorizontalDragGestures(
+                                onDragStart = { last = -1 },
+                                onHorizontalDrag = { change, _ ->
+                                    val i = barIndexAt(change.position.x, size.width.toFloat(), GUTTER.toPx(), count)
+                                    if (i != last) {
+                                        haptics.tick()
+                                        select?.invoke(i)
+                                        last = i
+                                    }
+                                },
+                            )
+                        }
+                },
+            ),
     ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val top = 24.dp.toPx()
-            val bottom = size.height - 30.dp.toPx()
-            val chartH = bottom - top
-            for (i in 1..3) {
-                val y = bottom - chartH * (i / 4f)
-                drawLine(
-                    color = Border.copy(alpha = 0.28f),
-                    start = Offset(14f, y),
-                    end = Offset(size.width - 14f, y),
-                    strokeWidth = 1.dp.toPx(),
-                )
-            }
-            if (avgValue > 0) {
-                val y = bottom - chartH * ((avgValue / chartMax).toFloat().coerceIn(0f, 1f))
-                drawLine(
-                    color = color.copy(alpha = 0.55f),
-                    start = Offset(10f, y),
-                    end = Offset(size.width - 10f, y),
-                    strokeWidth = 1.5.dp.toPx(),
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 10f), 0f),
-                )
+        if (count == 0) return@Canvas
+        val gutter = GUTTER.toPx()
+        val plotW = size.width - gutter
+        val plotTop = 8.dp.toPx()
+        val plotBottom = size.height - 20.dp.toPx()
+        val plotH = plotBottom - plotTop
+        fun yOf(v: Double) = plotBottom - (v / top).toFloat().coerceIn(0f, 1f) * plotH
+
+        // Scale: the top and the middle, written in the margin on the right, unless a guide's
+        // name stands there.
+        val axisStyle = TextStyle(color = TextTertiary, fontSize = 9.sp)
+        val shownAverage = average?.takeIf { it > 0.0 && (goal == null || kotlin.math.abs(yOf(it) - yOf(goal)) > 12.dp.toPx()) }
+        val guideYs = listOfNotNull(goal?.takeIf { it > 0.0 }, shownAverage).map { yOf(it) }
+        listOf(top, top / 2).forEach { v ->
+            val y = yOf(v)
+            drawLine(Border.copy(alpha = 0.55f), Offset(0f, y), Offset(plotW, y), 1.dp.toPx())
+            if (guideYs.none { kotlin.math.abs(it - y) < 11.dp.toPx() }) {
+                val text = measurer.measure(axisLabel(v), axisStyle)
+                drawText(text, topLeft = Offset(size.width - text.size.width, y - text.size.height / 2f))
             }
         }
+        drawLine(Border, Offset(0f, plotBottom), Offset(plotW, plotBottom), 1.dp.toPx())
 
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 8.dp, vertical = 10.dp)
-                .pointerInput(values) {
-                    var last = -1
-                    detectDragGestures(
-                        onDragStart = {},
-                        onDrag = { change, _ ->
-                            if (values.isEmpty()) return@detectDragGestures
-                            val x = change.position.x.coerceIn(0f, size.width.toFloat())
-                            val idx = (x / (size.width / values.size)).toInt().coerceIn(0, values.lastIndex)
-                            if (idx != last) {
-                                haptics.tick()
-                                onSelect(idx)
-                                last = idx
-                            }
-                        },
-                    )
-                }
-                .pointerInput(values) {
-                    detectTapGestures { touch ->
-                        if (values.isEmpty()) return@detectTapGestures
-                        val idx = (touch.x / (size.width / values.size)).toInt().coerceIn(0, values.lastIndex)
-                        haptics.tick()
-                        onSelect(idx)
-                    }
-                },
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            values.forEachIndexed { index, value ->
-                val selected = index == selectedIndex
-                val fraction = (value / chartMax).toFloat().coerceIn(0f, 1f)
-                val targetHeight = (14 + fraction * 140).dp
-                val animatedHeight by animateDpAsState(
-                    targetValue = targetHeight,
-                    animationSpec = MacroMotion.entranceSpring(),
-                    label = "healthBar_$index",
-                )
-                val barAlpha by animateFloatAsState(
-                    targetValue = if (selected) 1f else 0.72f,
-                    animationSpec = MacroMotion.colorTween(),
-                    label = "healthBarAlpha_$index",
-                )
-
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 2.dp)
-                        .graphicsLayer { alpha = 0.35f + 0.65f * reveal.value },
-                ) {
-                    Text(
-                        text = if (value > 0 || selected) valueFormatter(value) else " ",
-                        fontSize = if (selected) 11.sp else 9.sp,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                        color = if (selected) color else TextSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(bottom = 4.dp),
-                    )
-                    Box(
-                        modifier = Modifier
-                            .width(if (selected) 26.dp else 18.dp)
-                            .height(animatedHeight)
-                            .graphicsLayer {
-                                scaleY = reveal.value
-                                transformOrigin = TransformOrigin(0.5f, 1f)
-                            }
-                            .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp, bottomStart = 4.dp, bottomEnd = 4.dp))
-                            .background(color.copy(alpha = if (selected) barAlpha else barAlpha * 0.45f)),
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        labels.getOrElse(index) { "?" },
-                        fontSize = 11.sp,
-                        color = if (selected) TextPrimary else TextSecondary,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                    )
-                }
+        val slot = plotW / count
+        val barW = min(slot * 0.62f, 22.dp.toPx()).coerceAtLeast(2.dp.toPx())
+        val corner = CornerRadius(min(barW / 2f, 5.dp.toPx()))
+        val stub = 2.dp.toPx()
+        val sel = picked
+        val grown = reveal.value
+        values.forEachIndexed { i, v ->
+            // Each bar starts a beat after the one before it.
+            val own = ((grown * (count + WAVE) - i) / WAVE).coerceIn(0f, 1f)
+            val cx = slot * (i + 0.5f)
+            val tone = barColor?.invoke(i) ?: color
+            val full = plotBottom - yOf(v)
+            val barH = if (v <= 0.0) stub else (full * own).coerceAtLeast(stub)
+            val alpha = when {
+                v <= 0.0 -> 1f
+                sel == null -> if (i == count - 1) 1f else 0.72f
+                i == sel -> 1f
+                else -> 0.34f
             }
+            drawRoundRect(
+                color = if (v <= 0.0) Border else tone.copy(alpha = alpha),
+                topLeft = Offset(cx - barW / 2f, plotBottom - barH),
+                size = Size(barW, barH),
+                cornerRadius = corner,
+            )
+        }
+
+        val dash = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx()))
+        fun guide(value: Double, name: String, tone: Color) {
+            val y = yOf(value)
+            drawLine(tone.copy(alpha = 0.8f), Offset(0f, y), Offset(plotW, y), 1.2.dp.toPx(), pathEffect = dash)
+            val text = measurer.measure(name, TextStyle(color = tone, fontSize = 9.sp, fontWeight = FontWeight.SemiBold))
+            drawText(text, topLeft = Offset(size.width - text.size.width, y - text.size.height / 2f))
+        }
+        goal?.takeIf { it > 0.0 }?.let { guide(it, "goal", TextSecondary) }
+        shownAverage?.let { guide(it, "avg", color) }
+
+        labels.forEachIndexed { i, label ->
+            if (label == null || i >= count) return@forEachIndexed
+            val on = i == sel
+            val text = measurer.measure(
+                label,
+                TextStyle(
+                    color = if (on) TextPrimary else TextTertiary,
+                    fontSize = 10.sp,
+                    fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
+                ),
+            )
+            val x = (slot * (i + 0.5f) - text.size.width / 2f).coerceIn(0f, max(0f, plotW - text.size.width))
+            drawText(text, topLeft = Offset(x, plotBottom + 5.dp.toPx()))
         }
     }
 }
 
-@Composable
-fun AnimatedMacroBarChart(
-    values: List<Int>,
-    labels: List<String>,
-    selectedIndex: Int,
-    color: Color,
-    avgValue: Double,
-    haptics: HapticHelper,
-    onSelect: (Int) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val maxValue = max(values.maxOrNull() ?: 1, 1)
-    // Plays for a new metric; new numbers (a range switch, a meal logged) ease the bars
-    // instead. Read in the draw phase, so the chart is not recomposed every frame.
-    val reveal = remember(color) { Animatable(0f) }
-    LaunchedEffect(color) {
-        reveal.snapTo(0f)
-        reveal.animateTo(1f, MacroMotion.chartRevealTween())
-    }
+/** Room on the right of a [RangeBarChart] for its scale. */
+private val GUTTER = 30.dp
 
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(168.dp)
-            .clip(RoundedCornerShape(14.dp)),
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            if (avgValue > 0) {
-                val top = 16.dp.toPx()
-                val bottom = size.height - 28.dp.toPx()
-                val y = bottom - (bottom - top) * (avgValue / maxValue).toFloat().coerceIn(0f, 1f)
-                drawLine(
-                    color = color.copy(alpha = 0.4f),
-                    start = Offset(8f, y),
-                    end = Offset(size.width - 8f, y),
-                    strokeWidth = 1.2.dp.toPx(),
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f), 0f),
-                )
-            }
-        }
-        val scroll = rememberScrollState()
-        val useScroll = values.size > 10
-        // 14 and 30 days scroll: open at the end, where today is.
-        LaunchedEffect(useScroll, values.size) {
-            if (!useScroll) return@LaunchedEffect
-            val end = snapshotFlow { scroll.maxValue }.first { it in 1 until Int.MAX_VALUE }
-            scroll.scrollTo(end)
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 8.dp, vertical = 8.dp)
-                .then(if (useScroll) Modifier.horizontalScroll(scroll) else Modifier),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            values.forEachIndexed { index, value ->
-                val selected = index == selectedIndex
-                val fraction = value.toFloat() / maxValue
-                val h = (10 + fraction * 110).dp
-                val animatedH by animateDpAsState(h, MacroMotion.entranceSpring(), label = "macroBar_$index")
-                Column(
-                    modifier = Modifier
-                        .then(if (useScroll) Modifier.width(22.dp) else Modifier.weight(1f))
-                        .clickable {
-                            haptics.tick()
-                            onSelect(index)
-                        },
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(if (useScroll) 1f else 0.7f)
-                            .height(animatedH)
-                            .graphicsLayer {
-                                scaleY = reveal.value
-                                transformOrigin = TransformOrigin(0.5f, 1f)
-                            }
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (selected) color else color.copy(alpha = 0.35f)),
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        labels.getOrElse(index) { "?" },
-                        fontSize = 10.sp,
-                        color = if (selected) TextPrimary else TextSecondary,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                        maxLines = 1,
-                    )
-                }
-            }
-        }
-    }
+/** How many bars are mid-rise at once as the wave crosses the chart. */
+private const val WAVE = 4f
+
+private fun barIndexAt(x: Float, width: Float, gutter: Float, count: Int): Int =
+    ((x / (width - gutter).coerceAtLeast(1f)) * count).toInt().coerceIn(0, count - 1)
+
+/** The next round number at or above [value] (1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8 or 10 times a power of ten). */
+fun niceCeil(value: Double): Double {
+    if (value <= 0.0) return 1.0
+    val magnitude = 10.0.pow(floor(log10(value)))
+    val lead = value / magnitude
+    val step = listOf(1.0, 1.2, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0).first { lead <= it + 1e-9 }
+    return step * magnitude
+}
+
+/** "12k", "2.5k", "850", "0.5": a scale's numbers, short enough for a chart's margin. */
+fun compactNumber(value: Double): String = when {
+    value >= 10_000 -> "${(value / 1000).let { if (it % 1.0 == 0.0) it.toInt().toString() else String.format(java.util.Locale.US, "%.1f", it) }}k"
+    value >= 1000 -> String.format(java.util.Locale.US, "%.1fk", value / 1000).replace(".0k", "k")
+    value >= 10 || value % 1.0 == 0.0 -> ceil(value).toInt().toString()
+    else -> String.format(java.util.Locale.US, "%.1f", value)
+}
+
+/**
+ * The reading under a finger on a line chart: a hairline at [x] and a small label over it,
+ * kept inside the chart's width. Shared by the day charts and a workout's heart rate.
+ */
+fun DrawScope.drawScrubBubble(x: Float, text: String, measurer: TextMeasurer, lineTop: Float = 0f, lineBottom: Float = size.height) {
+    drawLine(TextSecondary.copy(alpha = 0.7f), Offset(x, lineTop), Offset(x, lineBottom), 1.dp.toPx())
+    val layout = measurer.measure(
+        text,
+        TextStyle(color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum"),
+    )
+    val padX = 7.dp.toPx()
+    val padY = 3.dp.toPx()
+    val w = layout.size.width + padX * 2
+    val h = layout.size.height + padY * 2
+    val left = (x - w / 2f).coerceIn(0f, max(0f, size.width - w))
+    drawRoundRect(SurfaceElevated, topLeft = Offset(left, lineTop), size = Size(w, h), cornerRadius = CornerRadius(h / 2f))
+    drawText(layout, topLeft = Offset(left + padX, lineTop + padY))
 }

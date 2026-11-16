@@ -1,5 +1,22 @@
 package com.macrotracker.ui.screens.health
 
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.background
+import androidx.compose.runtime.CompositionLocalProvider
+import com.macrotracker.ui.components.textAlpha
+import com.macrotracker.ui.components.peekAlpha
+import com.macrotracker.ui.components.centerInVisible
+import com.macrotracker.ui.components.MediaCarousel
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.AnimatedContent
 import com.macrotracker.ui.components.WidgetStateSwitch
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
@@ -87,6 +104,7 @@ import com.macrotracker.ui.components.ContentSkeleton
 import com.macrotracker.ui.components.MacroTextField
 import com.macrotracker.ui.components.StatusCopy
 import com.macrotracker.ui.theme.AppIcons
+import com.macrotracker.ui.theme.HealthBodyTone
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.HealthBloodPressure
@@ -130,14 +148,13 @@ import kotlin.math.roundToInt
 import com.macrotracker.ui.components.Hairline
 
 /**
- * Body & Vitals — every body measurement and slow-moving vital Health Connect holds.
+ * Body & Vitals: every body measurement and slow-moving vital Health Connect holds.
  *
- * It opens as Apple's Vitals does: one sentence on whether last night's vitals sat inside
- * the person's usual range, and a column per vital with that range as a grey capsule and the
- * latest reading as a dot (blue inside it; green or amber outside, by which way is good).
- * Below, the vitals as a list (name, number, where it sits), then the body measures as
- * summary rows with their trend. Tap any row, or a column, to open its chart; drag across
- * the chart to read any day.
+ * It opens as Apple's Vitals does, with one sentence on whether the latest vitals sat inside
+ * the person's usual range. Then every measure is a card in a carousel (the reading large,
+ * where it sits, a dot on its usual range or its trend), and the history of the card in the
+ * middle stands under it with the usual range as a band. Hold a finger on the chart to read
+ * any day.
  *
  * What nothing writes but the app can work out is filled in and marked as an estimate:
  * resting, sleeping and daily heart rate from heart-rate readings, VO₂ max from runs or
@@ -167,15 +184,11 @@ fun VitalsSection(
         tiles.filter { it.kind !in VitalsGroup }.sortedBy { BodyGroup.indexOf(it.kind) }
     }
     val overview = remember(vitalTiles, now) { vitalTiles.filter { it.standing(now) != null } }
-    var open by rememberSaveable { mutableStateOf<String?>(null) }
     var askBirthYear by rememberSaveable { mutableStateOf(false) }
+    // The measure on the stage; the first one until another is picked.
+    var pickedKind by rememberSaveable { mutableStateOf<String?>(null) }
 
-    fun toggle(tile: VitalTile) {
-        haptics.tick()
-        open = if (open == tile.kind.name) null else tile.kind.name
-    }
-
-    HealthSection(delayMs = delayMs) {
+    HealthSection(delayMs = delayMs, tone = HealthBodyTone) {
         HealthHeader(
             title = "Body & Vitals",
             icon = AppIcons.Scale,
@@ -196,7 +209,7 @@ fun VitalsSection(
         WidgetStateSwitch(targetState = phase, label = "vitals") { shown ->
             Column {
                 when (shown) {
-                    0 -> ContentSkeleton(lines = 3, accent = Border)
+                    0 -> RoomLoading(tone = HealthBodyTone, bars = 4, modifier = Modifier.padding(top = 12.dp))
                     1 -> StatusCopy(
                         title = "Health Connect isn't sharing yet",
                         body = "Connect Health Connect above to see your weight, heart-rate variability, " +
@@ -217,50 +230,36 @@ fun VitalsSection(
                         },
                     )
                     else -> {
-                        if (vitalTiles.isNotEmpty()) {
-                            VitalsOverview(tiles = overview, now = now)
-                            vitalTiles.forEachIndexed { i, tile ->
-                                key(tile.kind) {
-                                    if (i > 0) InsetHairline() else Hairline()
-                                    VitalListRow(
-                                        tile = tile,
-                                        zone = zone,
-                                        now = now,
-                                        open = open == tile.kind.name,
-                                        onClick = if (tile.series.size >= 2) { { toggle(tile) } } else null,
-                                    )
-                                    VitalDetailPanel(
-                                        tile = tile,
-                                        visible = open == tile.kind.name,
-                                        zone = zone,
-                                        haptics = haptics,
-                                        birthYear = knownYear,
-                                        onEditBirthYear = { askBirthYear = true },
-                                    )
-                                }
-                            }
-                        }
-                        if (bodyTiles.isNotEmpty()) {
-                            HealthGroupLabel(if (vitalTiles.isEmpty()) "Measures" else "Body")
-                            bodyTiles.forEachIndexed { i, tile ->
-                                key(tile.kind) {
-                                    if (i > 0) InsetHairline()
-                                    VitalReadingRow(
-                                        tile = tile,
-                                        zone = zone,
-                                        open = open == tile.kind.name,
-                                        onClick = if (tile.series.size >= 2) { { toggle(tile) } } else null,
-                                    )
-                                    VitalDetailPanel(
-                                        tile = tile,
-                                        visible = open == tile.kind.name,
-                                        zone = zone,
-                                        haptics = haptics,
-                                        birthYear = knownYear,
-                                        onEditBirthYear = { askBirthYear = true },
-                                    )
-                                }
-                            }
+                        if (vitalTiles.isNotEmpty()) VitalsOverview(tiles = overview, now = now)
+                        val all = vitalTiles + bodyTiles
+                        val picked = all.firstOrNull { it.kind.name == pickedKind } ?: all.first()
+                        VitalCarousel(
+                            tiles = all,
+                            zone = zone,
+                            now = now,
+                            onFocus = { pickedKind = it.name },
+                        )
+                        Spacer(modifier = Modifier.height(14.dp))
+                        AnimatedContent(
+                            targetState = picked.kind,
+                            transitionSpec = { fadeIn(MacroMotion.fadeTween(180)) togetherWith fadeOut(MacroMotion.fadeTween(110)) },
+                            label = "vitalStage",
+                        ) { kind ->
+                            val tile = all.firstOrNull { it.kind == kind } ?: picked
+                            VitalDetail(
+                                tile = tile,
+                                zone = zone,
+                                haptics = haptics,
+                                birthYear = knownYear,
+                                onEditBirthYear = if (tile.usesAge) {
+                                    {
+                                        haptics.tick()
+                                        askBirthYear = true
+                                    }
+                                } else {
+                                    null
+                                },
+                            )
                         }
                     }
                 }
@@ -384,7 +383,9 @@ private data class VitalTile(
     val format: (Double) -> String,
 )
 
-private fun oneDecimal(v: Double): String = String.format(Locale.getDefault(), "%.1f", v)
+// One decimal mark across the tab: the rest of Health writes "8.03 km", and a phone set to
+// Norwegian wrote "49,8" here beside it.
+private fun oneDecimal(v: Double): String = String.format(Locale.US, "%.1f", v)
 private fun whole(v: Double): String = v.roundToInt().toString()
 
 /** Marks a tile worked out by the app rather than read from Health Connect. */
@@ -875,11 +876,11 @@ private fun readVitalTiles(v: BodyVitals, zone: ZoneId, birthYear: Int?, now: In
     }
 }
 
-private fun kcal(value: Double): String = String.format(Locale.getDefault(), "%,d", value.roundToInt())
+private fun kcal(value: Double): String = String.format(Locale.US, "%,d", value.roundToInt())
 
 /** "+0.3" / "−0.2": a change against a baseline, with its sign always shown. */
 private fun signedOneDecimal(v: Double): String =
-    String.format(Locale.getDefault(), "%+.1f", v).replace('-', '−')
+    String.format(Locale.US, "%+.1f", v).replace('-', '−')
 
 /** A night this far from the skin-temperature baseline is worth a word. */
 private const val SKIN_TEMP_NOTABLE = 0.5
@@ -964,70 +965,16 @@ private fun VitalsOverview(
     Spacer(modifier = Modifier.height(10.dp))
     Text(
         headline,
-        fontSize = 20.sp,
-        lineHeight = 25.sp,
-        fontWeight = FontWeight.SemiBold,
+        style = HealthDisplay,
+        fontSize = 22.sp,
+        lineHeight = 27.sp,
         color = TextPrimary,
     )
     Spacer(modifier = Modifier.height(12.dp))
 }
 
-/** A vital as a list row: icon and name, the number on the right, and where it sits under the name. */
-@Composable
-private fun VitalListRow(
-    tile: VitalTile,
-    zone: ZoneId,
-    now: Instant,
-    open: Boolean,
-    onClick: (() -> Unit)?,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(vertical = 12.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(tile.icon, contentDescription = null, tint = tile.color, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(ReadingRowTextInset - 16.dp))
-            Text(
-                tile.kind.label,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = tile.color,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-            tile.badge?.let {
-                Spacer(modifier = Modifier.width(6.dp))
-                EstimateBadge(it)
-            }
-            Spacer(modifier = Modifier.weight(1f))
-            Spacer(modifier = Modifier.width(8.dp))
-            HealthValueText(value = tile.value, unit = tile.unit, valueSize = 20.sp, unitSize = 13.sp)
-            if (onClick != null) {
-                Spacer(modifier = Modifier.width(4.dp))
-                ExpandChevron(open)
-            } else {
-                Spacer(modifier = Modifier.width(20.dp))
-            }
-        }
-        Text(
-            statusLine(tile, zone, now),
-            fontSize = 13.sp,
-            lineHeight = 17.sp,
-            color = TextSecondary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = ReadingRowTextInset, top = 2.dp),
-        )
-    }
-}
-
-/** "Typical · Usual 61 bpm · Yesterday": where it sits, what it's about, and when if not today. */
-private fun statusLine(tile: VitalTile, zone: ZoneId, now: Instant): AnnotatedString = buildAnnotatedString {
+/** "Typical · Usual 61 bpm": where a vital sits and what it's measured against. The row dates it. */
+private fun statusLine(tile: VitalTile, now: Instant): AnnotatedString = buildAnnotatedString {
     // Skin temperature's caption already says where it sits against the watch's baseline.
     val standing = tile.standing(now)?.takeIf { tile.kind != VitalKind.SKIN_TEMP }
     if (standing != null) {
@@ -1042,100 +989,148 @@ private fun statusLine(tile: VitalTile, zone: ZoneId, now: Instant): AnnotatedSt
             append(caption)
         }
     }
-    tile.lastAt?.let { whenLabel(it, zone) }?.takeIf { it != "Today" }?.let {
-        if (length > 0) append(" · ")
-        append(it)
+}
+
+/**
+ * Every measure as a card in the carousel Home's YouTube and Twitch use: the one in the
+ * middle open, its neighbours peeking in at the sides, a swipe turning exactly one. An open
+ * card is the measure's name and when it was read, the reading large, where it sits against
+ * the person's usual, and a dot on that range (or its trend where there is no range); a peek
+ * is the measure's glyph. The card in the middle is the one whose history stands under it.
+ */
+@Composable
+private fun VitalCarousel(
+    tiles: List<VitalTile>,
+    zone: ZoneId,
+    now: Instant,
+    onFocus: (VitalKind) -> Unit,
+) {
+    val room = LocalRoomColor.current
+    MediaCarousel(
+        items = tiles,
+        onOpen = {},
+        onFocus = { onFocus(it.kind) },
+        heightRatio = 0.52f,
+        maxHeight = 136.dp,
+        shape = RoundedCornerShape(26.dp),
+        peekWidth = 44.dp,
+    ) { tile, look ->
+        // A flat tint of the measure's colour over the room, as the rooms tint the page.
+        val fill = remember(tile.color, room) { lerp(room, tile.color, 0.17f) }
+        CompositionLocalProvider(LocalRoomColor provides fill) {
+            Box(modifier = Modifier.fillMaxSize().background(fill)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp, vertical = 14.dp)
+                        .graphicsLayer { alpha = look.textAlpha() },
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(tile.icon, contentDescription = null, tint = tile.color, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            tile.kind.label,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = tile.color,
+                            maxLines = 1,
+                            softWrap = false,
+                        )
+                        tile.badge?.let {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            EstimateBadge(it)
+                        }
+                        Spacer(modifier = Modifier.weight(1f))
+                        tile.lastAt?.let {
+                            Text(whenLabel(it, zone), fontSize = 12.sp, color = TextSecondary, maxLines = 1, softWrap = false)
+                        }
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            HealthValueText(value = tile.value, unit = tile.unit, valueSize = 36.sp, unitSize = 13.sp)
+                            Text(
+                                statusLine(tile, now),
+                                fontSize = 12.sp,
+                                color = TextSecondary,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        val latest = tile.current ?: tile.series.lastOrNull()?.value
+                        if (tile.range != null && latest != null) {
+                            RangeGauge(
+                                value = latest,
+                                range = tile.range,
+                                tone = tile.color,
+                                dot = tile.standing(now)?.let { standingColor(it, tile.better) } ?: tile.color,
+                                modifier = Modifier.size(width = 26.dp, height = 58.dp),
+                            )
+                        } else if (tile.series.size >= 2) {
+                            Sparkline(
+                                values = tile.series.takeLast(SPARK_POINTS).map { it.value },
+                                color = tile.color,
+                                modifier = Modifier.size(width = 64.dp, height = 40.dp),
+                                strokeWidthDp = 1.8f,
+                                signed = tile.signed,
+                                fill = false,
+                            )
+                        }
+                    }
+                }
+                // A peek: whose card it is, in the middle of the sliver that shows.
+                Icon(
+                    tile.icon,
+                    contentDescription = null,
+                    tint = tile.color,
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .centerInVisible(look)
+                        .graphicsLayer { alpha = look.peekAlpha() }
+                        .size(20.dp),
+                )
+            }
+        }
     }
 }
 
-/** A body measure as a summary row: the number with its change, the caption, and its trend. */
+/**
+ * A reading against the person's usual range, upright as Apple's Vitals draws it: a short
+ * scale, the usual range a band on it, the reading a dot. The dot grows into place.
+ */
 @Composable
-private fun VitalReadingRow(
-    tile: VitalTile,
-    zone: ZoneId,
-    open: Boolean,
-    onClick: (() -> Unit)?,
-) {
-    val change = tile.change
-    val changeText = tile.changeText?.takeIf { text -> text.any { it in '1'..'9' } }
-    HealthReadingRow(
-        title = tile.kind.label,
-        tone = tile.color,
-        icon = tile.icon,
-        value = tile.value,
-        unit = tile.unit,
-        valueNote = if (change != null && changeText != null) {
-            buildAnnotatedString {
-                withStyle(SpanStyle(color = deltaColor(change, tile.better, deadZone = 0.0))) {
-                    append(if (change > 0) "↑ " else "↓ ")
-                    append(changeText)
-                }
-            }
-        } else {
-            null
-        },
-        detail = tile.caption?.takeIf { it.isNotBlank() }?.let { caption ->
-            buildAnnotatedString {
-                if (tile.captionColor != null) {
-                    withStyle(SpanStyle(color = tile.captionColor, fontWeight = FontWeight.SemiBold)) { append(caption) }
-                } else {
-                    append(caption)
-                }
-            }
-        },
-        trailing = tile.lastAt?.let { whenLabel(it, zone) },
-        badge = tile.badge,
-        expanded = if (onClick != null) open else null,
-        onClick = onClick,
-        chart = when {
-            tile.bars -> {
-                { MiniBars(values = tile.series.map { it.value }, color = tile.color, modifier = Modifier.fillMaxSize()) }
-            }
-            tile.series.size >= 2 -> {
-                {
-                    Sparkline(
-                        values = tile.series.takeLast(SPARK_POINTS).map { it.value },
-                        color = tile.color,
-                        modifier = Modifier.fillMaxSize(),
-                        strokeWidthDp = 1.8f,
-                        signed = tile.signed,
-                    )
-                }
-            }
-            else -> null
-        },
-    )
-}
-
-/** A row's chart, folding open under it. */
-@Composable
-private fun VitalDetailPanel(
-    tile: VitalTile,
-    visible: Boolean,
-    zone: ZoneId,
-    haptics: HapticHelper,
-    birthYear: Int?,
-    onEditBirthYear: () -> Unit,
-) {
-    AnimatedVisibility(
-        visible = visible && tile.series.size >= 2,
-        enter = MacroMotion.expandEnter,
-        exit = MacroMotion.expandExit,
-    ) {
-        VitalDetail(
-            tile = tile,
-            zone = zone,
-            haptics = haptics,
-            birthYear = birthYear,
-            onEditBirthYear = if (tile.usesAge) {
-                {
-                    haptics.tick()
-                    onEditBirthYear()
-                }
-            } else {
-                null
-            },
+private fun RangeGauge(value: Double, range: UsualRange, tone: Color, dot: Color, modifier: Modifier = Modifier) {
+    val reduced = rememberReducedMotion()
+    val halo = LocalRoomColor.current
+    val settle = remember { Animatable(if (reduced) 1f else 0f) }
+    LaunchedEffect(Unit) { if (settle.value < 1f) settle.animateTo(1f, MacroMotion.chartRevealTween(700)) }
+    Canvas(modifier = modifier) {
+        // The scale runs a range's width past the range either way, or as far as the reading.
+        val span = (range.high - range.low).coerceAtLeast(1e-6)
+        val low = minOf(range.low - span, value - span * 0.2)
+        val high = maxOf(range.high + span, value + span * 0.2)
+        fun yOf(v: Double) = size.height - ((v - low) / (high - low)).toFloat() * size.height
+        val trackW = 8.dp.toPx()
+        val x = size.width / 2f
+        drawRoundRect(
+            Color.White.copy(alpha = 0.08f),
+            topLeft = Offset(x - trackW / 2f, 0f),
+            size = Size(trackW, size.height),
+            cornerRadius = CornerRadius(trackW / 2f),
         )
+        val bandTop = yOf(range.high)
+        drawRoundRect(
+            tone.copy(alpha = 0.42f),
+            topLeft = Offset(x - trackW / 2f, bandTop),
+            size = Size(trackW, (yOf(range.low) - bandTop).coerceAtLeast(trackW)),
+            cornerRadius = CornerRadius(trackW / 2f),
+        )
+        // The dot slides out from the middle of the range to where the reading is.
+        val y = yOf(range.mid + (value - range.mid) * settle.value).coerceIn(5.dp.toPx(), size.height - 5.dp.toPx())
+        drawCircle(halo, 7.5.dp.toPx(), Offset(x, y))
+        drawCircle(dot, 5.5.dp.toPx(), Offset(x, y))
     }
 }
 
@@ -1190,38 +1185,14 @@ private fun VitalDetail(
     birthYear: Int?,
     onEditBirthYear: (() -> Unit)?,
 ) {
-    // -1 = the latest reading, so new data moves the readout along with it.
-    var picked by remember(tile.kind) { mutableIntStateOf(-1) }
-    val dateFmt = remember { DateTimeFormatter.ofPattern("EEE d MMM") }
-    val index = if (picked in tile.series.indices) picked else tile.series.lastIndex
-    val point = tile.series.getOrNull(index) ?: return
+    if (tile.series.size < 2) return
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 4.dp, bottom = 16.dp),
+            .padding(top = 2.dp, bottom = 4.dp),
     ) {
-        Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.fillMaxWidth()) {
-            Text(
-                readout(tile, index),
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                point.time.atZone(zone).toLocalDate().format(dateFmt),
-                fontSize = 13.sp,
-                color = TextSecondary,
-            )
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        VitalTrendChart(
-            tile = tile,
-            selectedIndex = index,
-            haptics = haptics,
-            onSelect = { picked = if (it == tile.series.lastIndex) -1 else it },
-        )
+        VitalTrendChart(tile = tile, zone = zone, haptics = haptics)
         Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
             Text(
                 tile.series.first().time.atZone(zone).toLocalDate().format(DateTimeFormatter.ofPattern("d MMM")),
@@ -1310,18 +1281,19 @@ private fun VitalSummaryRow(tile: VitalTile) {
 /**
  * The tile's history on a time axis: a line (bars for daily totals), the
  * person's usual range as a band when there is a baseline, and reference
- * lines. Tap or drag to pick a reading.
+ * lines. The latest reading is marked; hold a finger on the chart to read any other.
  */
 @Composable
 private fun VitalTrendChart(
     tile: VitalTile,
-    selectedIndex: Int,
+    zone: ZoneId,
     haptics: HapticHelper,
-    onSelect: (Int) -> Unit,
 ) {
     val series = tile.series
+    val halo = LocalRoomColor.current
     val textMeasurer = rememberTextMeasurer()
-    val currentOnSelect by rememberUpdatedState(onSelect)
+    val scrub = rememberScrubX()
+    val dateFmt = remember { DateTimeFormatter.ofPattern("EEE d MMM") }
     val reduced = rememberReducedMotion()
     val reveal = remember(tile.kind) { Animatable(if (reduced) 1f else 0f) }
     LaunchedEffect(tile.kind) {
@@ -1368,33 +1340,13 @@ private fun VitalTrendChart(
         modifier = Modifier
             .fillMaxWidth()
             .height(150.dp)
-            .pointerInput(series) {
-                val inset = 10.dp.toPx()
-                detectTapGestures { offset ->
-                    val f = ((offset.x - inset) / (size.width - inset * 2)).coerceIn(0f, 1f)
-                    haptics.tick()
-                    currentOnSelect(nearest(f))
-                }
-            }
-            .pointerInput(series) {
-                val inset = 10.dp.toPx()
-                var last = -1
-                detectHorizontalDragGestures(
-                    onDragStart = { last = -1 },
-                    onHorizontalDrag = { change, _ ->
-                        val f = ((change.position.x - inset) / (size.width - inset * 2)).coerceIn(0f, 1f)
-                        val i = nearest(f)
-                        if (i != last) {
-                            haptics.tick()
-                            currentOnSelect(i)
-                            last = i
-                        }
-                    },
-                )
-            },
+            .scrubGesture(scrub, haptics = haptics, steps = series.size.coerceIn(2, 60)),
     ) {
         val left = 10.dp.toPx()
         val right = size.width - 10.dp.toPx()
+        // The reading under a finger, or the latest one.
+        val held = scrub.value?.let { sx -> nearest(((sx - left) / (right - left)).coerceIn(0f, 1f)) }
+        val selectedIndex = held ?: series.lastIndex
         val top = 10.dp.toPx()
         val bottom = size.height - 8.dp.toPx()
         val w = right - left
@@ -1498,7 +1450,7 @@ private fun VitalTrendChart(
                     lineTo(xOf(0), bottom)
                     close()
                 }
-                drawPath(area, Brush.verticalGradient(listOf(tile.color.copy(alpha = 0.20f), tile.color.copy(alpha = 0f))))
+                drawPath(area, tile.color.copy(alpha = 0.12f))
             }
             drawPath(
                 line,
@@ -1515,16 +1467,19 @@ private fun VitalTrendChart(
             }
         }
 
-        // Selected reading.
+        // The marked reading, and what it is when a finger asks.
         if (selectedIndex in series.indices) {
             val x = xOf(selectedIndex)
-            drawLine(TextTertiary.copy(alpha = 0.5f), Offset(x, top), Offset(x, bottom), 1.dp.toPx())
+            if (held != null) {
+                val day = series[selectedIndex].time.atZone(zone).toLocalDate().format(dateFmt)
+                drawScrubBubble(x, "${readout(tile, selectedIndex)} · $day", textMeasurer, lineBottom = bottom)
+            }
             val c = Offset(x, yOf(series[selectedIndex].value))
-            drawCircle(Surface, 5.dp.toPx(), c)
+            drawCircle(halo, 5.dp.toPx(), c)
             drawCircle(tile.color, 3.5.dp.toPx(), c)
             tile.lower.getOrNull(selectedIndex)?.let {
                 val d = Offset(x, yOf(it.value))
-                drawCircle(Surface, 4.dp.toPx(), d)
+                drawCircle(halo, 4.dp.toPx(), d)
                 drawCircle(tile.color.copy(alpha = 0.7f), 3.dp.toPx(), d)
             }
         }

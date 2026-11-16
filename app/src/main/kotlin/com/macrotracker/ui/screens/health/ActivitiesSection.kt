@@ -1,5 +1,9 @@
 package com.macrotracker.ui.screens.health
 
+import com.macrotracker.ui.util.rememberHaptics
+import com.macrotracker.ui.theme.Warning
+import com.macrotracker.ui.theme.Surface
+import androidx.compose.ui.text.rememberTextMeasurer
 import com.macrotracker.ui.components.WidgetStateSwitch
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
@@ -110,8 +114,8 @@ private val WorkoutBadgeSize = 40.dp
 private val WorkoutTextInset = WorkoutBadgeSize + 12.dp
 
 /**
- * Activity: the week of movement on top ([trends], ActivityTrends: steps, energy, distance
- * or floors a day, paged back by week from the header), then the workouts under it.
+ * Activity: movement on top ([trends], ActivityTrends: steps, energy, distance or floors
+ * over a week, a month or three months, picked in the header), then the workouts under it.
  * Trends and Activities were two cards that both drew the week; this is the one place for it.
  */
 @Composable
@@ -123,29 +127,31 @@ fun ActivitySection(
     onRetry: () -> Unit = onRequestPermission,
     /** Health Connect's own screens, where a source like Garmin Connect is checked. */
     onOpenHealthConnect: () -> Unit = onRequestPermission,
-    /** Which week the chart shows ("This week · Sep 28 – Oct 4"). */
-    weekLabel: String,
-    weekControls: @Composable () -> Unit,
+    /** What the chart covers ("Last 7 days · 10 – 16 Nov"). */
+    rangeLabel: String,
+    rangeControl: @Composable () -> Unit,
     trends: @Composable () -> Unit,
-    delayMs: Long = 40L,
+    modifier: Modifier = Modifier,
 ) {
-    HealthSection(delayMs = delayMs) {
+    HealthSection(modifier = modifier, tone = HealthActivityTone) {
         HealthHeader(
             title = "Activity",
             icon = AppIcons.Activity,
             accent = HealthActivityTone,
-            subtitle = weekLabel,
+            subtitle = rangeLabel,
             modifier = Modifier.padding(bottom = 14.dp),
         ) {
-            weekControls()
+            rangeControl()
         }
         trends()
         Spacer(modifier = Modifier.height(18.dp))
         Hairline()
+        // With nothing recent the one label says so, where "Workouts" stood over "Latest workout".
+        val olderOnly = (state as? ActivitiesUiState.Success)?.olderOnly == true
         HealthGroupLabel(
-            "Workouts",
+            if (olderOnly) "Latest workout" else "Workouts",
             trailing = when {
-                (state as? ActivitiesUiState.Success)?.olderOnly == true -> "None this month or last"
+                olderOnly -> "None this month or last"
                 state is ActivitiesUiState.Success && state.activities.isNotEmpty() -> "This month and last"
                 else -> null
             },
@@ -156,7 +162,7 @@ fun ActivitySection(
         WidgetStateSwitch(targetState = state, contentKey = { it::class }, label = "activities") { shown ->
             Column {
                 when (shown) {
-                    is ActivitiesUiState.Loading -> ContentSkeleton(lines = 5, accent = Border)
+                    is ActivitiesUiState.Loading -> RoomLoading(tone = HealthActivityTone, bars = 4)
                     is ActivitiesUiState.PermissionRequired -> {
                         StatusCopy(
                             title = "Show workouts from Garmin",
@@ -205,6 +211,7 @@ fun ActivitySection(
                                 activities = shown.activities,
                                 haptics = haptics,
                                 onExpandActivity = onExpandActivity,
+                                labelLatest = !shown.olderOnly,
                             )
                         }
                     }
@@ -293,6 +300,8 @@ private fun ActivitiesList(
     activities: List<HealthActivity>,
     haptics: HapticHelper,
     onExpandActivity: (HealthActivity) -> Unit,
+    /** False when the section's own label already says "Latest workout". */
+    labelLatest: Boolean = true,
 ) {
     val latest = pickFeaturedActivity(activities)
     val rest = remember(activities, latest?.id) {
@@ -302,8 +311,10 @@ private fun ActivitiesList(
     var showAll by rememberSaveable { mutableStateOf(false) }
 
     if (latest != null) {
-        HealthGroupLabel("Latest workout")
-        Spacer(modifier = Modifier.height(8.dp))
+        if (labelLatest) {
+            HealthGroupLabel("Latest workout")
+            Spacer(modifier = Modifier.height(8.dp))
+        }
         LatestWorkout(latest)
     }
 
@@ -364,8 +375,8 @@ private fun LatestWorkout(activity: HealthActivity) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     activity.title,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    style = HealthDisplay,
+                    fontSize = 20.sp,
                     color = TextPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -379,7 +390,7 @@ private fun LatestWorkout(activity: HealthActivity) {
                 )
             }
         }
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(16.dp))
         WorkoutDetails(activity, limit = MaxWorkoutStats)
     }
 }
@@ -389,9 +400,9 @@ private fun LatestWorkout(activity: HealthActivity) {
 private fun WorkoutDetails(activity: HealthActivity, limit: Int = Int.MAX_VALUE) {
     WorkoutStatsGrid(workoutStats(activity).take(limit))
     if (activity.hrSamples.size >= 2) {
-        Hairline()
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(18.dp))
         WorkoutHeartRate(activity.hrSamples, maxHr = activity.maxHr)
+        WorkoutZones(activity.hrSamples, maxHr = activity.maxHr)
     }
     if (activity.laps.size >= 2) {
         Spacer(modifier = Modifier.height(14.dp))
@@ -496,13 +507,13 @@ private fun ShowMoreRow(expanded: Boolean, hiddenCount: Int, onClick: () -> Unit
             if (expanded) "Show less" else "Show $hiddenCount more",
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
-            color = Primary,
+            color = TimeTone,
         )
         Spacer(modifier = Modifier.width(4.dp))
         Icon(
             imageVector = if (expanded) AppIcons.ChevronUp else AppIcons.ChevronDown,
             contentDescription = null,
-            tint = Primary,
+            tint = TimeTone,
             modifier = Modifier.size(18.dp),
         )
     }
@@ -516,7 +527,7 @@ private fun isRide(type: Int): Boolean =
     type == ExerciseSessionRecord.EXERCISE_TYPE_BIKING || type == ExerciseSessionRecord.EXERCISE_TYPE_BIKING_STATIONARY
 
 private fun workoutStats(activity: HealthActivity): List<WorkoutStat> = buildList {
-    add(WorkoutStat("Workout time", formatActivityDuration(activity.duration), null, TimeTone))
+    add(WorkoutStat("Time", formatActivityDuration(activity.duration), null, TimeTone))
     distanceParts(activity.distanceKm)?.let { (v, u) -> add(WorkoutStat("Distance", v, u, DistanceTone)) }
     val speed = activity.avgSpeedKmh?.takeIf { it > 0 }
     val pace = formatPace(activity.avgPaceMinPerKm)?.removeSuffix(" /km")
@@ -526,17 +537,17 @@ private fun workoutStats(activity: HealthActivity): List<WorkoutStat> = buildLis
         pace != null -> add(WorkoutStat("Avg pace", pace, "/km", DistanceTone))
     }
     activity.caloriesKcal?.takeIf { it >= 1.0 }?.let {
-        add(WorkoutStat("Active energy", String.format(Locale.US, "%,d", it.roundToInt()), "kcal", EnergyTone))
+        add(WorkoutStat("Energy", String.format(Locale.US, "%,d", it.roundToInt()), "kcal", EnergyTone))
     }
-    activity.avgHr?.takeIf { it > 0 }?.let { add(WorkoutStat("Avg heart rate", "$it", "bpm", EnergyTone)) }
+    activity.avgHr?.takeIf { it > 0 }?.let { add(WorkoutStat("Avg heart", "$it", "bpm", EnergyTone)) }
     activity.elevationGainM?.takeIf { it >= 1.0 }?.let {
-        add(WorkoutStat("Elevation gain", "${it.roundToInt()}", "m", ClimbTone))
+        add(WorkoutStat("Climb", "${it.roundToInt()}", "m", ClimbTone))
     }
     activity.steps?.takeIf { it > 0 }?.let {
         add(WorkoutStat("Steps", String.format(Locale.US, "%,d", it), null, TimeTone))
     }
     activity.maxHr?.takeIf { it > 0 && activity.hrSamples.size < 2 }?.let {
-        add(WorkoutStat("Max heart rate", "$it", "bpm", EnergyTone))
+        add(WorkoutStat("Max heart", "$it", "bpm", EnergyTone))
     }
 }
 
@@ -545,31 +556,84 @@ private fun distanceParts(km: Double?): Pair<String, String>? {
     return if (km < 1.0) "${(km * 1000).roundToInt()}" to "m" else String.format(Locale.US, "%.2f", km) to "km"
 }
 
-/** Two to a row, a label over a big number in its colour, hairlines between the rows. */
+/** Three to a row: a big number in its colour with what it is under it, and nothing between them. */
 @Composable
 private fun WorkoutStatsGrid(stats: List<WorkoutStat>) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        stats.chunked(2).forEach { row ->
-            Hairline()
-            Row(modifier = Modifier.fillMaxWidth()) {
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        stats.chunked(3).forEach { row ->
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 row.forEach { stat ->
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(vertical = 10.dp),
-                    ) {
-                        Text(stat.label, fontSize = 13.sp, color = TextSecondary, maxLines = 1)
+                    Column(modifier = Modifier.weight(1f)) {
                         HealthValueText(
                             value = stat.value,
                             unit = stat.unit,
-                            valueSize = 24.sp,
-                            unitSize = 14.sp,
+                            valueSize = 21.sp,
+                            unitSize = 12.sp,
                             color = stat.tone,
                             unitColor = stat.tone,
                         )
+                        Text(stat.label, fontSize = 12.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
-                if (row.size == 1) Spacer(modifier = Modifier.weight(1f))
+                repeat(3 - row.size) { Spacer(modifier = Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+/** Minutes of the workout in each of five heart-rate zones, as shares of [peak]. */
+private fun zoneMinutes(samples: List<ActivityHrPoint>, peak: Long): List<Long> {
+    val seconds = LongArray(5)
+    samples.zipWithNext { a, b ->
+        // The readings are thinned to a few dozen, so they sit minutes apart; a gap longer
+        // than that is the watch being off, not time in a zone.
+        val span = Duration.between(a.time, b.time).seconds.coerceIn(0L, ZONE_GAP_SECONDS)
+        val share = a.bpm.toDouble() / peak
+        val zone = when {
+            share < 0.6 -> 0
+            share < 0.7 -> 1
+            share < 0.8 -> 2
+            share < 0.9 -> 3
+            else -> 4
+        }
+        seconds[zone] += span
+    }
+    return seconds.map { it / 60 }
+}
+
+private const val ZONE_GAP_SECONDS = 600L
+
+private val ZoneTones = listOf(HealthVitalsTone, HealthNutritionTone, Warning, HealthActivityTone, HealthHeartTone)
+
+/** Where the workout's time went: one bar split by heart-rate zone, easy on the left, flat out on the right. */
+@Composable
+private fun WorkoutZones(samples: List<ActivityHrPoint>, maxHr: Long?) {
+    val peak = maxOf(maxHr ?: 0L, samples.maxOf { it.bpm }, 170L)
+    val minutes = remember(samples, peak) { zoneMinutes(samples, peak) }
+    if (minutes.sum() <= 0L) return
+    Spacer(modifier = Modifier.height(12.dp))
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(10.dp)
+            .clip(CircleShape),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        minutes.forEachIndexed { i, m ->
+            if (m > 0) Box(modifier = Modifier.weight(m.toFloat()).height(10.dp).background(ZoneTones[i]))
+        }
+    }
+    Spacer(modifier = Modifier.height(6.dp))
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        minutes.forEachIndexed { i, m ->
+            if (m > 0) {
+                Text(
+                    "Z${i + 1} ${formatMinutesCompact(m)}",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = ZoneTones[i],
+                    maxLines = 1,
+                )
             }
         }
     }
@@ -592,10 +656,14 @@ private fun WorkoutHeartRate(samples: List<ActivityHrPoint>, maxHr: Long?) {
     LaunchedEffect(samples) {
         if (reveal.value < 1f) reveal.animateTo(1f, MacroMotion.chartRevealTween(700))
     }
+    val measurer = rememberTextMeasurer()
+    val scrub = rememberScrubX()
+    val halo = LocalRoomColor.current
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
-            .height(72.dp),
+            .height(84.dp)
+            .scrubGesture(scrub, haptics = rememberHaptics(), steps = 40),
     ) {
         val minB = samples.minOf { it.bpm }.toFloat()
         val maxB = samples.maxOf { it.bpm }.toFloat().coerceAtLeast(minB + 1f)
@@ -617,8 +685,8 @@ private fun WorkoutHeartRate(samples: List<ActivityHrPoint>, maxHr: Long?) {
             close()
         }
         clipRect(right = size.width * reveal.value + 2.dp.toPx()) {
-            drawPath(area, Brush.verticalGradient(listOf(EnergyTone.copy(alpha = 0.28f), EnergyTone.copy(alpha = 0f))))
-            drawPath(line, EnergyTone, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+            drawPath(area, EnergyTone.copy(alpha = 0.18f))
+            drawPath(line, EnergyTone, style = Stroke(2.4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
         }
         val avgY = yOf(avg.toFloat())
         drawLine(
@@ -628,6 +696,15 @@ private fun WorkoutHeartRate(samples: List<ActivityHrPoint>, maxHr: Long?) {
             1.dp.toPx(),
             pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 5.dp.toPx()), 0f),
         )
+        // Under a finger: the reading nearest it and how far into the workout that was.
+        scrub.value?.let { sx ->
+            val s = samples.minByOrNull { kotlin.math.abs(xOf(it) - sx) } ?: return@let
+            val at = Offset(xOf(s), yOf(s.bpm.toFloat()))
+            val into = formatActivityDuration(Duration.between(samples.first().time, s.time))
+            drawScrubBubble(at.x, "$into · ${s.bpm} bpm", measurer)
+            drawCircle(halo, 6.dp.toPx(), at)
+            drawCircle(EnergyTone, 4.dp.toPx(), at)
+        }
     }
     Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
         Text("Start", fontSize = 12.sp, color = TextTertiary, modifier = Modifier.weight(1f))

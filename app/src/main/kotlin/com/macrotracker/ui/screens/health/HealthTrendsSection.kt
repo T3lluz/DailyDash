@@ -4,10 +4,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -16,41 +13,33 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.macrotracker.data.health.ActivityRange
 import com.macrotracker.data.health.DailyHealthStats
+import com.macrotracker.data.health.RangeBar
 import com.macrotracker.data.health.percentChange
-import com.macrotracker.ui.theme.Border
-import com.macrotracker.ui.theme.SelectedFill
+import com.macrotracker.data.health.rangeBars
+import com.macrotracker.data.health.rangeSummary
 import com.macrotracker.ui.theme.MacroMotion
-import com.macrotracker.ui.theme.Primary
-import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.HapticHelper
-import com.macrotracker.ui.viewmodel.HealthViewModel
-import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle as JavaTextStyle
 import java.util.Locale
 import kotlin.math.abs
-import com.macrotracker.ui.theme.AppIcons
 
-/** The measures the Activity card charts by week: the day's movement, which nothing else on the tab trends. */
+/** The measures the Activity card charts: the day's movement, which nothing else on the tab trends. */
 val ActivityTrendMetrics = listOf(
     HealthMetric.STEPS,
     HealthMetric.CALORIES,
@@ -58,112 +47,66 @@ val ActivityTrendMetrics = listOf(
     HealthMetric.FLOORS_CLIMBED,
 )
 
-/** "This week · Sep 28 – Oct 4": which week the Activity card's chart is on. */
-fun activityWeekLabel(healthHistory: List<DailyHealthStats>, weeksBack: Int): String {
-    val week = when (weeksBack) {
-        0 -> "This week"
-        1 -> "Last week"
-        else -> "$weeksBack weeks ago"
+/** "Last 7 days · 10 – 16 Nov": what the Activity card's chart covers. */
+fun activityRangeLabel(range: ActivityRange, today: LocalDate): String {
+    val first = today.minusDays(range.days - 1L)
+    val name = when (range) {
+        ActivityRange.DAY -> return "Today · against a usual day"
+        ActivityRange.WEEK -> "Last 7 days"
+        ActivityRange.MONTH -> "Last 30 days"
+        ActivityRange.QUARTER -> "Last 13 weeks"
     }
-    val range = if (healthHistory.isNotEmpty()) {
-        val fmt = DateTimeFormatter.ofPattern("MMM d")
-        "${healthHistory.first().date.format(fmt)} – ${healthHistory.last().date.format(fmt)}"
-    } else {
-        null
-    }
-    return listOfNotNull(week, range).joinToString(" · ")
+    return "$name · ${spanLabel(first, today)}"
 }
 
-/** The Activity card's header controls: back and forward a week, and the day weeks start on. */
-@Composable
-fun ActivityWeekControls(
-    weeksBack: Int,
-    weekStartDay: DayOfWeek,
-    haptics: HapticHelper,
-    onPreviousWeek: () -> Unit,
-    onNextWeek: () -> Unit,
-    onWeekStartDaySelected: (DayOfWeek) -> Unit,
-) {
-    val canGoBack = weeksBack < HealthViewModel.MAX_WEEKS_BACK
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        IconButton(
-            onClick = {
-                haptics.tick()
-                onPreviousWeek()
-            },
-            enabled = canGoBack,
-            modifier = Modifier.size(32.dp),
-        ) {
-            Icon(
-                AppIcons.ChevronLeft,
-                contentDescription = "Previous week",
-                tint = if (canGoBack) Primary else Border,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-        IconButton(
-            onClick = {
-                haptics.tick()
-                onNextWeek()
-            },
-            enabled = weeksBack > 0,
-            modifier = Modifier.size(32.dp),
-        ) {
-            Icon(
-                AppIcons.ChevronRight,
-                contentDescription = "Next week",
-                tint = if (weeksBack > 0) Primary else Border,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-        Spacer(modifier = Modifier.width(4.dp))
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .background(SelectedFill)
-                .clickable {
-                    haptics.tick()
-                    onWeekStartDaySelected(
-                        if (weekStartDay == DayOfWeek.MONDAY) DayOfWeek.SUNDAY else DayOfWeek.MONDAY,
-                    )
-                }
-                .padding(horizontal = 10.dp, vertical = 6.dp),
-        ) {
-            Text(
-                if (weekStartDay == DayOfWeek.MONDAY) "Mon" else "Sun",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Primary,
-            )
-        }
-    }
+/** "10 – 16 Nov", or "28 Oct – 3 Nov" across a month. */
+private fun spanLabel(first: LocalDate, last: LocalDate): String {
+    val dayMonth = DateTimeFormatter.ofPattern("d MMM")
+    return if (first.month == last.month) "${first.dayOfMonth} – ${last.format(dayMonth)}" else "${first.format(dayMonth)} – ${last.format(dayMonth)}"
+}
+
+/** The daily goal a measure is drawn against, where it has one. */
+private fun HealthMetric.dailyGoal(): Double? = when (this) {
+    HealthMetric.STEPS -> DEFAULT_STEP_GOAL.toDouble()
+    HealthMetric.CALORIES -> DEFAULT_ACTIVE_CAL_GOAL
+    else -> null
 }
 
 /**
- * The week of movement, the top of the Activity card: steps, active energy, distance or
- * floors a day, with the week's average against the one before, the picked day, and the
- * best day, total and days at goal. Heart, sleep and the vitals are charted where they
- * live (Sleep, Body & Vitals), so they aren't charted here again.
+ * The movement chart, the top of the Activity card: steps, active energy, distance or floors
+ * over the last week or month by the day, or three months by the week. It opens on the
+ * range's daily average against the stretch before it; tap or drag across the bars and the
+ * number becomes that day's (or week's). Under it the best day, the total and the days at
+ * goal. Heart, sleep and the vitals are charted where they live, so they aren't charted here.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ActivityTrends(
-    healthHistory: List<DailyHealthStats>,
-    /** The seven days before [healthHistory], for "vs last week". */
-    previousWeek: List<DailyHealthStats> = emptyList(),
-    selectedDate: LocalDate,
+    /** Daily totals, oldest first, ending today. */
+    days: List<DailyHealthStats>,
+    today: LocalDate,
+    range: ActivityRange,
     selectedMetric: HealthMetric,
-    weeksBack: Int,
     haptics: HapticHelper,
     enabled: (HealthMetric) -> Boolean,
-    onDateSelected: (LocalDate) -> Unit,
     onMetricSelected: (HealthMetric) -> Unit,
     metricsReady: Boolean = true,
+    /** Today's steps by the hour and a usual day's, for the Day range. */
+    hourlySteps: List<Long> = emptyList(),
+    usualHourlySteps: List<Double> = emptyList(),
 ) {
-    fun weekHas(metric: HealthMetric): Boolean =
-        healthHistory.any { it.stats.valueOf(metric) > 0 }
-
-    val availableMetrics = ActivityTrendMetrics.filter { enabled(it) && weekHas(it) }
+    if (range == ActivityRange.DAY) {
+        DayPace(
+            hourlySteps = hourlySteps,
+            usualHourlySteps = usualHourlySteps,
+            today = days.lastOrNull { it.date == today }?.stats,
+            yesterday = days.lastOrNull { it.date == today.minusDays(1) }?.stats,
+        )
+        return
+    }
+    val availableMetrics = ActivityTrendMetrics.filter { metric ->
+        enabled(metric) && days.any { it.stats.valueOf(metric) > 0 }
+    }
 
     // Only once the metrics have loaded: before that every one reads as off, and the saved
     // pick was replaced by whatever happened to be first.
@@ -173,48 +116,22 @@ fun ActivityTrends(
         }
     }
 
-    val activeMetric = if (selectedMetric in availableMetrics) {
-        selectedMetric
-    } else {
-        availableMetrics.firstOrNull() ?: selectedMetric
-    }
-    val color = activeMetric.tint()
-    val labels = healthHistory.map {
-        try {
-            it.date.dayOfWeek.getDisplayName(JavaTextStyle.NARROW, Locale.getDefault())
-        } catch (_: Exception) {
-            "?"
-        }
-    }
-    val validStats = healthHistory.filter { it.stats.valueOf(activeMetric) > 0 }
-    val avgValue = if (validStats.isNotEmpty()) {
-        validStats.sumOf { it.stats.valueOf(activeMetric) } / validStats.size
-    } else {
-        0.0
-    }
-    val selectedIndex = healthHistory.indexOfFirst { it.date == selectedDate }.coerceAtLeast(0)
-    val chartKey = remember(weeksBack, activeMetric, healthHistory.firstOrNull()?.date) {
-        "${weeksBack}_${activeMetric}_${healthHistory.firstOrNull()?.date}"
-    }
-    val previousAvg = previousWeek.map { it.stats.valueOf(activeMetric) }.filter { it > 0 }
-        .takeIf { it.isNotEmpty() }?.average()
-    val vsLastWeek = previousAvg?.let { percentChange(avgValue, it) }
-
     Column(modifier = Modifier.fillMaxWidth()) {
         if (availableMetrics.isEmpty()) {
             Text(
-                if (weeksBack == 0) "No steps or movement from Health Connect this week yet." else "No steps or movement from Health Connect that week.",
+                "No steps or movement from Health Connect in the last three months.",
                 color = TextSecondary,
                 fontSize = 14.sp,
                 modifier = Modifier.padding(vertical = 14.dp),
             )
             return@Column
         }
+        val activeMetric = if (selectedMetric in availableMetrics) selectedMetric else availableMetrics.first()
 
         FlowRow(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             availableMetrics.forEach { metric ->
                 HealthChip(
@@ -229,178 +146,194 @@ fun ActivityTrends(
                 )
             }
         }
+        Spacer(modifier = Modifier.height(14.dp))
 
-        Spacer(modifier = Modifier.height(12.dp))
+        AnimatedContent(
+            targetState = activeMetric to range,
+            transitionSpec = { fadeIn(MacroMotion.fadeTween(160)) togetherWith fadeOut(MacroMotion.fadeTween(100)) },
+            label = "activityChart",
+        ) { (metric, shownRange) ->
+            RangeChart(days = days, today = today, metric = metric, range = shownRange, haptics = haptics)
+        }
+    }
+}
 
-        if (avgValue > 0) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 10.dp),
-            ) {
-                Icon(
-                    painter = painterResource(activeMetric.iconRes()),
-                    contentDescription = null,
-                    tint = color.copy(alpha = 0.85f),
-                    modifier = Modifier.size(14.dp),
-                )
-                Spacer(modifier = Modifier.width(6.dp))
+@Composable
+private fun RangeChart(
+    days: List<DailyHealthStats>,
+    today: LocalDate,
+    metric: HealthMetric,
+    range: ActivityRange,
+    haptics: HapticHelper,
+) {
+    val totals = remember(days, metric) { days.associate { it.date to it.stats.valueOf(metric) } }
+    val bars = remember(totals, range, today) { rangeBars(totals, range, today) }
+    val summary = remember(totals, range, today) { rangeSummary(totals, range, today) }
+    var picked by remember { mutableStateOf<Int?>(null) }
+    val bar = picked?.let { bars.getOrNull(it) }
+    val unit = formatMetricUnit(metric)
+    val weekly = range.bucketDays > 1
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "Avg ${formatMetricValue(activeMetric, avgValue, compact = true)} ${formatMetricUnit(activeMetric)}".trim(),
+                    when {
+                        bar == null -> "Daily average"
+                        weekly -> "${spanLabel(bar.start, bar.end)} · daily average"
+                        bar.start == today -> "Today"
+                        else -> bar.start.format(DateTimeFormatter.ofPattern("EEE d MMM"))
+                    },
                     fontSize = 13.sp,
                     color = TextSecondary,
-                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
                 )
-                if (vsLastWeek != null) {
+                HealthValueText(
+                    value = formatMetricValue(metric, bar?.value ?: summary.average).let { if (it == "—") "0" else it },
+                    unit = unit.ifBlank { null },
+                    valueSize = 32.sp,
+                    unitSize = 15.sp,
+                )
+            }
+            if (bar == null) {
+                summary.previousAverage?.let { percentChange(summary.average, it) }?.let { change ->
                     DeltaPill(
-                        text = "${String.format(Locale.US, "%.0f", abs(vsLastWeek))}% vs last week",
-                        change = vsLastWeek,
-                        better = activeMetric.better(),
+                        text = "${String.format(Locale.US, "%.0f", abs(change))}% vs " + when (range) {
+                            ActivityRange.DAY, ActivityRange.WEEK -> "previous 7 days"
+                            ActivityRange.MONTH -> "previous 30 days"
+                            ActivityRange.QUARTER -> "previous 13 weeks"
+                        },
+                        change = change,
+                        better = metric.better(),
+                        modifier = Modifier.padding(bottom = 6.dp),
+                    )
+                }
+            } else if (summary.average > 0 && bar.value > 0) {
+                val change = (bar.value - summary.average) / summary.average * 100
+                DeltaPill(
+                    text = "${String.format(Locale.US, "%.0f", abs(change))}% vs average",
+                    change = change,
+                    better = metric.better(),
+                    modifier = Modifier.padding(bottom = 6.dp),
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(10.dp))
+        RangeBarChart(
+            values = bars.map { it.value },
+            color = metric.tint(),
+            haptics = haptics,
+            labels = barLabels(bars, range),
+            selectedIndex = picked,
+            onSelect = { picked = it },
+            average = summary.average.takeIf { summary.activeDays >= 2 },
+            goal = metric.dailyGoal(),
+            chartKey = metric to range,
+        )
+        RangeSummaryTiles(metric = metric, range = range, summary = summary, totals = totals, today = today)
+    }
+}
+
+/**
+ * Today so far: the step count, what a usual day has by now, and the day's running total
+ * drawn against a usual day's. Hold a finger on it to read any hour.
+ */
+@Composable
+private fun DayPace(
+    hourlySteps: List<Long>,
+    usualHourlySteps: List<Double>,
+    today: com.macrotracker.data.health.HealthStats?,
+    yesterday: com.macrotracker.data.health.HealthStats?,
+) {
+    val steps = maxOf(hourlySteps.sum(), today?.steps ?: 0L)
+    val pace = remember(hourlySteps, usualHourlySteps) {
+        val now = java.time.LocalTime.now()
+        com.macrotracker.data.health.stepPace(hourlySteps, usualHourlySteps, now.hour + now.minute / 60.0)
+    }
+    val line = stepsChartLine(pace, steps, DEFAULT_STEP_GOAL)
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text("Steps so far", fontSize = 13.sp, color = TextSecondary, maxLines = 1)
+        HealthValueText(
+            value = String.format(Locale.US, "%,d", steps),
+            unit = "steps",
+            valueSize = 32.sp,
+            unitSize = 15.sp,
+        )
+        line.detail?.let { Text(it, fontSize = 13.sp, color = TextSecondary, modifier = Modifier.padding(top = 2.dp)) }
+        Spacer(modifier = Modifier.height(14.dp))
+        StepPaceChart(
+            todayHourly = hourlySteps,
+            usualHourly = usualHourlySteps,
+            goal = DEFAULT_STEP_GOAL,
+            tone = HealthMetric.STEPS.tint(),
+            height = 150.dp,
+        )
+        // The day's other totals, each against yesterday's.
+        if (today != null) {
+            Spacer(modifier = Modifier.height(14.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(HealthMetric.DISTANCE, HealthMetric.CALORIES, HealthMetric.FLOORS_CLIMBED).forEach { metric ->
+                    val reading = readingValue(metric, today.valueOf(metric))
+                    val before = yesterday?.valueOf(metric)?.takeIf { it > 0 }?.let { readingValue(metric, it) }
+                    HealthStatTile(
+                        label = readingName(metric),
+                        value = "${reading.value} ${reading.unit}",
+                        sub = before?.let { "yesterday ${it.value}" },
+                        modifier = Modifier.weight(1f),
                     )
                 }
             }
         }
-
-        AnimatedContent(
-            targetState = activeMetric,
-            transitionSpec = {
-                fadeIn(MacroMotion.fadeTween(160)) togetherWith fadeOut(MacroMotion.fadeTween(100))
-            },
-            label = "chartType",
-        ) { metric ->
-            val metricValues = healthHistory.map { it.stats.valueOf(metric) }
-            val metricAvg = metricValues.filter { it > 0 }.let { if (it.isEmpty()) 0.0 else it.average() }
-            AnimatedHealthBarChart(
-                values = metricValues,
-                labels = labels,
-                selectedIndex = selectedIndex,
-                color = metric.tint(),
-                avgValue = metricAvg,
-                haptics = haptics,
-                valueFormatter = { formatMetricValue(metric, it, compact = true) },
-                onSelect = { idx -> healthHistory.getOrNull(idx)?.let { onDateSelected(it.date) } },
-                chartKey = chartKey,
-            )
-        }
-
-        val selectedDayStats = healthHistory.find { it.date == selectedDate }
-        if (selectedDayStats != null) {
-            Spacer(modifier = Modifier.height(16.dp))
-            val dayName = if (selectedDate == LocalDate.now()) {
-                "Today"
-            } else {
-                selectedDate.format(DateTimeFormatter.ofPattern("EEE, MMM d"))
-            }
-            val selectedDayValue = selectedDayStats.stats.valueOf(activeMetric)
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    painter = painterResource(activeMetric.iconRes()),
-                    contentDescription = null,
-                    tint = color,
-                    modifier = Modifier.size(16.dp),
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(dayName, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary)
-            }
-            if (selectedDayValue > 0) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Bottom,
-                ) {
-                    Row(verticalAlignment = Alignment.Bottom) {
-                        Text(
-                            formatMetricValue(activeMetric, selectedDayValue),
-                            fontSize = 34.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary,
-                            lineHeight = 36.sp,
-                        )
-                        val unit = formatMetricUnit(activeMetric)
-                        if (unit.isNotBlank()) {
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                unit,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = TextSecondary,
-                                modifier = Modifier.padding(bottom = 6.dp),
-                            )
-                        }
-                    }
-                    if (avgValue > 0) {
-                        val diff = ((selectedDayValue - avgValue) / avgValue * 100)
-                        DeltaPill(
-                            text = "${String.format(Locale.US, "%.0f", abs(diff))}% vs avg",
-                            change = diff,
-                            better = activeMetric.better(),
-                            modifier = Modifier.padding(bottom = 8.dp),
-                        )
-                    }
-                }
-            }
-        }
-
-        WeekSummaryTiles(week = healthHistory, metric = activeMetric)
     }
 }
 
-/** Best day, week total or range, and days at goal for the metric on show. */
+/** A week names each day; a month and three months date about four bars, the newest among them. */
+private fun barLabels(bars: List<RangeBar>, range: ActivityRange): List<String?> = when (range) {
+    ActivityRange.WEEK -> bars.map { it.start.dayOfWeek.getDisplayName(JavaTextStyle.NARROW, Locale.getDefault()) }
+    else -> {
+        val every = if (range == ActivityRange.MONTH) 7 else 4
+        val fmt = DateTimeFormatter.ofPattern("d MMM")
+        bars.mapIndexed { i, bar -> if ((bars.lastIndex - i) % every == 0) bar.end.format(fmt) else null }
+    }
+}
+
+/** Best day, the range's total, and days at goal (or days with a reading) for the measure on show. */
 @Composable
-private fun WeekSummaryTiles(week: List<DailyHealthStats>, metric: HealthMetric) {
-    val days = week.filter { it.stats.valueOf(metric) > 0 }
-    if (days.size < 2) return
-    val dayFmt = DateTimeFormatter.ofPattern("EEE")
+private fun RangeSummaryTiles(
+    metric: HealthMetric,
+    range: ActivityRange,
+    summary: com.macrotracker.data.health.RangeSummary,
+    totals: Map<LocalDate, Double>,
+    today: LocalDate,
+) {
+    if (summary.activeDays < 2) return
     val unit = formatMetricUnit(metric)
-    fun withUnit(v: Double) = "${formatMetricValue(metric, v, compact = true)} $unit".trim()
-    val best = when (metric.better()) {
-        Better.LOWER -> days.minBy { it.stats.valueOf(metric) }
-        else -> days.maxBy { it.stats.valueOf(metric) }
-    }
-    val summable = metric == HealthMetric.STEPS || metric == HealthMetric.CALORIES ||
-        metric == HealthMetric.DISTANCE || metric == HealthMetric.FLOORS_CLIMBED
-    val goalDays = when (metric) {
-        HealthMetric.STEPS -> days.count { it.stats.steps >= DEFAULT_STEP_GOAL }
-        HealthMetric.SLEEP -> days.count { it.stats.sleepMinutes >= DEFAULT_SLEEP_GOAL_MINUTES * 0.9 }
-        else -> null
-    }
+    // The chart already says steps; a tile has no room to say it again.
+    fun withUnit(v: Double) = formatMetricValue(metric, v, compact = true) + if (metric == HealthMetric.STEPS) "" else " $unit"
+    val goal = metric.dailyGoal()
+    val first = today.minusDays(range.days - 1L)
+    val atGoal = goal?.let { g -> totals.count { (date, v) -> !date.isBefore(first) && !date.isAfter(today) && v >= g } }
 
     Spacer(modifier = Modifier.height(12.dp))
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        HealthStatTile(
-            label = if (metric.better() == Better.NEITHER) "Highest" else "Best day",
-            value = best.date.format(dayFmt),
-            sub = withUnit(best.stats.valueOf(metric)),
-            modifier = Modifier.weight(1f),
-        )
-        if (summable) {
+        summary.best?.let { (date, value) ->
             HealthStatTile(
-                label = "Week total",
-                value = withUnit(days.sumOf { it.stats.valueOf(metric) }),
-                sub = "${days.size} days",
-                modifier = Modifier.weight(1f),
-            )
-        } else {
-            val values = days.map { it.stats.valueOf(metric) }
-            HealthStatTile(
-                label = "Range",
-                value = "${formatMetricValue(metric, values.min(), compact = true)}–" +
-                    formatMetricValue(metric, values.max(), compact = true),
-                sub = unit.ifBlank { "${days.size} days" },
+                label = "Best day",
+                value = withUnit(value),
+                sub = date.format(DateTimeFormatter.ofPattern(if (range == ActivityRange.WEEK) "EEEE" else "EEE d MMM")),
                 modifier = Modifier.weight(1f),
             )
         }
         HealthStatTile(
-            label = if (goalDays != null) "At goal" else "Days logged",
-            value = "${goalDays ?: days.size} of ${week.size}",
-            sub = when (metric) {
-                HealthMetric.STEPS -> "${String.format(Locale.US, "%,d", DEFAULT_STEP_GOAL)} steps"
-                HealthMetric.SLEEP -> "${DEFAULT_SLEEP_GOAL_MINUTES / 60}h a night"
-                else -> "this week"
-            },
+            label = "Total",
+            value = withUnit(summary.total),
+            sub = "${summary.activeDays} days",
+            modifier = Modifier.weight(1f),
+        )
+        HealthStatTile(
+            label = if (atGoal != null) "At goal" else "Active days",
+            value = "${atGoal ?: summary.activeDays} of ${range.days}",
+            sub = goal?.let { "${compactNumber(it)} $unit a day".trim() },
             modifier = Modifier.weight(1f),
         )
     }

@@ -188,9 +188,12 @@ fun <T> MediaCarousel(
     shape: Shape = MediaCarouselShape,
     /** How wide a neighbour peeks in; narrower leaves the focused item more room for words. */
     peekWidth: Dp = CarouselDefaults.MaxSmallItemSize,
+    /** Told which item is in the middle, at first and each time a swipe lands on another. */
+    onFocus: ((T) -> Unit)? = null,
     content: @Composable (item: T, look: MediaItemLook) -> Unit,
 ) {
     if (items.isEmpty()) return
+    val focus by rememberUpdatedState(onFocus)
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         // Glides to a new height when the count crosses one, two or three (a stream going
         // off air), rather than jumping the list under the finger.
@@ -202,6 +205,7 @@ fun <T> MediaCarousel(
 
         if (items.size == 1) {
             val only = items.first()
+            LaunchedEffect(only) { focus?.invoke(only) }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -226,6 +230,11 @@ fun <T> MediaCarousel(
                     .distinctUntilChanged()
                     .drop(1)
                     .collect { if (state.isScrollInProgress) haptics.tick() }
+            }
+            LaunchedEffect(state) {
+                snapshotFlow { state.currentItem }
+                    .distinctUntilChanged()
+                    .collect { index -> latest.getOrNull(index)?.let { focus?.invoke(it) } }
             }
 
             HorizontalCenteredHeroCarousel(

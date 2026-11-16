@@ -427,9 +427,15 @@ fun minutesFromEvening(instant: Instant, date: LocalDate, zone: ZoneId): Int {
 }
 
 /** "23:40" for an offset from 18:00. */
-fun formatEveningOffset(offset: Int): String {
+fun formatEveningOffset(offset: Int, h24: Boolean = true): String {
     val total = ((18 * 60 + offset) % (24 * 60) + 24 * 60) % (24 * 60)
-    return String.format(java.util.Locale.US, "%02d:%02d", total / 60, total % 60)
+    val h = total / 60
+    val m = total % 60
+    return if (h24) {
+        String.format(java.util.Locale.US, "%02d:%02d", h, m)
+    } else {
+        String.format(java.util.Locale.US, "%d:%02d %s", if (h % 12 == 0) 12 else h % 12, m, if (h < 12) "am" else "pm")
+    }
 }
 
 fun computeSleepConsistency(

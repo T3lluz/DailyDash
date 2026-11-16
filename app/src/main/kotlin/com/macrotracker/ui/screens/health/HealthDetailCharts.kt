@@ -2,21 +2,14 @@ package com.macrotracker.ui.screens.health
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -26,45 +19,32 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.drawText
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.health.connect.client.records.SleepSessionRecord
-import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.MacroMotion
-import com.macrotracker.ui.theme.Surface
-import com.macrotracker.ui.theme.TextPrimary
-import com.macrotracker.ui.theme.TextSecondary
-import com.macrotracker.ui.util.HapticHelper
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import kotlin.math.roundToInt
 import com.macrotracker.ui.theme.SleepStageAwake
 import com.macrotracker.ui.theme.SleepStageDeep
 import com.macrotracker.ui.theme.SleepStageLight
 import com.macrotracker.ui.theme.SleepStageRem
+import com.macrotracker.ui.theme.TextSecondary
+import com.macrotracker.ui.theme.TextTertiary
+import com.macrotracker.ui.util.HapticHelper
+import com.macrotracker.ui.util.onFirstSeen
+import com.macrotracker.ui.util.rememberClockFormatter
+import com.macrotracker.ui.util.rememberReducedMotion
+import java.time.Instant
+import java.time.ZoneId
+import kotlin.math.roundToInt
 
-private val SleepAwake = SleepStageAwake
-private val SleepRem = SleepStageRem
-private val SleepLight = SleepStageLight
-private val SleepDeep = SleepStageDeep
-
-/** Lane index for Apple-style chart: 0 Awake (top) → 3 Deep (bottom). */
+/** Lane of the night chart: 0 awake (top), then REM, light and deep (bottom). */
 private fun sleepStageLane(stage: Int): Int? = when (stage) {
     SleepSessionRecord.STAGE_TYPE_AWAKE,
     SleepSessionRecord.STAGE_TYPE_AWAKE_IN_BED,
@@ -78,405 +58,141 @@ private fun sleepStageLane(stage: Int): Int? = when (stage) {
     else -> null
 }
 
-internal fun sleepStageColor(stage: Int): Color = when (sleepStageLane(stage)) {
-    0 -> SleepAwake
-    1 -> SleepRem
-    2 -> SleepLight
-    3 -> SleepDeep
-    else -> SleepLight
+private val LaneColors = listOf(SleepStageAwake, SleepStageRem, SleepStageLight, SleepStageDeep)
+private val LaneNames = listOf("Awake", "REM", "Light", "Deep")
+
+internal fun sleepStageColor(stage: Int): Color = LaneColors[sleepStageLane(stage) ?: 2]
+
+internal fun sleepStageName(stage: Int): String = sleepStageLane(stage)?.let { LaneNames[it] } ?: "Sleep"
+
+/** A stretch of one stage, neighbours of the same stage joined. */
+private data class SleepSegment(val lane: Int, val startMs: Long, val endMs: Long) {
+    val minutes: Long get() = ((endMs - startMs) / 60_000L).coerceAtLeast(0)
 }
 
-private fun sleepStageName(stage: Int): String = when (sleepStageLane(stage)) {
-    0 -> "Awake"
-    1 -> "REM"
-    2 -> "Light"
-    3 -> "Deep"
-    else -> "Sleep"
-}
-
-/** One strip of the night's stage mix with a legend of minutes and shares under it. */
-@Composable
-fun SleepStageMix(
-    deepMinutes: Long,
-    lightMinutes: Long,
-    remMinutes: Long,
-    awakeMinutes: Long,
-    modifier: Modifier = Modifier,
-) {
-    val parts = listOf(
-        Triple("Deep", deepMinutes, SleepDeep),
-        Triple("Light", lightMinutes, SleepLight),
-        Triple("REM", remMinutes, SleepRem),
-        Triple("Awake", awakeMinutes, SleepAwake),
-    )
-    val total = parts.sumOf { it.second }.coerceAtLeast(1L)
-    Column(modifier = modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(12.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(Border.copy(alpha = 0.3f)),
-        ) {
-            parts.forEach { (_, mins, color) ->
-                if (mins <= 0L) return@forEach
-                Box(
-                    modifier = Modifier
-                        .weight(mins.toFloat())
-                        .fillMaxHeight()
-                        .background(color.copy(alpha = 0.9f)),
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            parts.filter { it.second > 0 }.forEach { (label, mins, color) ->
-                val pct = (mins * 100f / total).roundToInt()
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(color),
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(label, fontSize = 11.sp, color = TextSecondary)
-                    }
-                    Text(
-                        "${formatMinutesCompact(mins)} · $pct%",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary,
-                    )
-                }
-            }
+private fun mergeSleepStages(stages: List<SleepSessionRecord.Stage>): List<SleepSegment> {
+    val out = ArrayList<SleepSegment>(stages.size)
+    stages.sortedBy { it.startTime }.forEach { stage ->
+        val lane = sleepStageLane(stage.stage) ?: return@forEach
+        val start = stage.startTime.toEpochMilli()
+        val end = stage.endTime.toEpochMilli()
+        val last = out.lastOrNull()
+        if (last != null && last.lane == lane && start <= last.endMs + 60_000L) {
+            out[out.lastIndex] = last.copy(endMs = maxOf(last.endMs, end))
+        } else {
+            out += SleepSegment(lane, start, end)
         }
     }
+    return out
 }
 
-/** The night's hypnogram on its own, for cards that show their own summary above it. */
+private val LaneHeight = 38.dp
+private val LaneLabelWidth = 86.dp
+
+/**
+ * The night stage by stage: four lanes, awake at the top and deep at the bottom, each stretch
+ * of a stage a block in its colour with a thin riser where the night moves between stages.
+ * Beside each lane its name, how long the night spent in it and its share, so the chart is
+ * its own legend. Hold a finger on it to read a stretch. It draws itself in from bedtime the
+ * first time it is seen.
+ */
 @Composable
 fun SleepNightHypnogram(
     sessions: List<SleepSessionRecord>,
     haptics: HapticHelper,
 ) {
-    val segments = remember(sessions) {
-        mergeSleepStages(
-            sessions.flatMap { it.stages }
-                .sortedBy { it.startTime }
-                .filter { sleepStageLane(it.stage) != null },
-        )
-    }
+    val segments = remember(sessions) { mergeSleepStages(sessions.flatMap { it.stages }) }
     if (segments.isEmpty()) return
-    val reveal = remember(sessions) { Animatable(0f) }
-    LaunchedEffect(sessions) {
-        reveal.snapTo(0f)
-        reveal.animateTo(1f, MacroMotion.chartRevealTween(700))
+    val reduced = rememberReducedMotion()
+    var seen by remember { mutableStateOf(false) }
+    val reveal = remember(sessions) { Animatable(if (reduced) 1f else 0f) }
+    LaunchedEffect(sessions, seen) {
+        if (seen && reveal.value < 1f) reveal.animateTo(1f, MacroMotion.chartRevealTween(800))
     }
-    SleepStagesHypnogram(segments = segments, reveal = { reveal.value }, haptics = haptics)
-}
 
-/**
- * Merged contiguous same-lane segments for a cleaner timeline.
- */
-private data class SleepSegment(
-    val stage: Int,
-    val startMs: Long,
-    val endMs: Long,
-) {
-    val lane: Int get() = sleepStageLane(stage) ?: 2
-    val color: Color get() = sleepStageColor(stage)
-    val name: String get() = sleepStageName(stage)
-    val minutes: Long get() = ((endMs - startMs) / 60_000L).coerceAtLeast(0)
-}
-
-private fun mergeSleepStages(stages: List<SleepSessionRecord.Stage>): List<SleepSegment> {
-    if (stages.isEmpty()) return emptyList()
-    val sorted = stages.sortedBy { it.startTime }
-    val out = ArrayList<SleepSegment>(sorted.size)
-    var curStage = sorted.first().stage
-    var curLane = sleepStageLane(curStage)
-    var start = sorted.first().startTime.toEpochMilli()
-    var end = sorted.first().endTime.toEpochMilli()
-    for (i in 1 until sorted.size) {
-        val s = sorted[i]
-        val lane = sleepStageLane(s.stage)
-        val s0 = s.startTime.toEpochMilli()
-        val s1 = s.endTime.toEpochMilli()
-        if (lane != null && lane == curLane && s0 <= end + 60_000L) {
-            end = maxOf(end, s1)
-        } else {
-            if (curLane != null) out += SleepSegment(curStage, start, end)
-            curStage = s.stage
-            curLane = lane
-            start = s0
-            end = s1
-        }
-    }
-    if (curLane != null) out += SleepSegment(curStage, start, end)
-    return out
-}
-
-@Composable
-private fun SleepStagesHypnogram(
-    segments: List<SleepSegment>,
-    // Read inside the draw block: as a plain Float, the Sleep card recomposed every frame
-    // of the reveal.
-    reveal: () -> Float,
-    haptics: HapticHelper,
-) {
-    var touchX by remember { mutableStateOf<Float?>(null) }
-    val textMeasurer = rememberTextMeasurer()
-    val minTime = segments.first().startMs
-    val maxTime = segments.last().endMs
-    val timeRange = (maxTime - minTime).coerceAtLeast(1L)
-    val laneLabels = listOf(
-        "Awake" to SleepAwake,
-        "REM" to SleepRem,
-        "Light" to SleepLight,
-        "Deep" to SleepDeep,
-    )
+    val start = segments.first().startMs
+    val end = segments.last().endMs
+    val span = (end - start).coerceAtLeast(1L)
+    val laneMinutes = remember(segments) { (0..3).map { lane -> segments.filter { it.lane == lane }.sumOf { it.minutes } } }
+    val total = laneMinutes.sum().coerceAtLeast(1L)
+    val clock = rememberClockFormatter()
     val zone = remember { ZoneId.systemDefault() }
-    val timeFmt = remember { DateTimeFormatter.ofPattern("h:mm a") }
+    fun time(ms: Long) = Instant.ofEpochMilli(ms).atZone(zone).format(clock)
+    val measurer = rememberTextMeasurer()
+    val scrub = rememberScrubX()
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(modifier = Modifier.fillMaxWidth().height(188.dp)) {
-            // Labels drawn to match lane centers exactly
+    Column(modifier = Modifier.fillMaxWidth().onFirstSeen { seen = true }) {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.width(LaneLabelWidth)) {
+                LaneNames.forEachIndexed { lane, name ->
+                    Column(modifier = Modifier.height(LaneHeight), verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center) {
+                        Text(name, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = LaneColors[lane], maxLines = 1)
+                        Text(
+                            "${formatMinutesCompact(laneMinutes[lane]).replace("—", "0m")} · ${(laneMinutes[lane] * 100f / total).roundToInt()}%",
+                            fontSize = 10.5.sp,
+                            color = TextSecondary,
+                            maxLines = 1,
+                        )
+                    }
+                }
+            }
             Canvas(
                 modifier = Modifier
-                    .width(46.dp)
-                    .fillMaxHeight(),
-            ) {
-                val padY = 14.dp.toPx()
-                val graphH = size.height - padY * 2
-                val laneH = graphH / 4f
-                laneLabels.forEachIndexed { i, (label, color) ->
-                    val layout = textMeasurer.measure(
-                        label,
-                        TextStyle(
-                            color = color,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                        ),
-                    )
-                    val cy = padY + i * laneH + laneH / 2f
-                    drawText(
-                        layout,
-                        topLeft = Offset(
-                            size.width - layout.size.width - 4.dp.toPx(),
-                            cy - layout.size.height / 2f,
-                        ),
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.width(4.dp))
-            Box(
-                modifier = Modifier
                     .weight(1f)
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(18.dp)),
+                    .height(LaneHeight * 4)
+                    .scrubGesture(scrub, haptics = haptics, steps = 48),
             ) {
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight()
-                        .pointerInput(segments) {
-                            var lastIdx = -1
-                            fun idxAt(x: Float): Int {
-                                val t = minTime + ((x / size.width.toFloat()) * timeRange).toLong()
-                                return segments.indexOfFirst { t in it.startMs..it.endMs }
-                            }
-                            detectDragGestures(
-                                onDragStart = {
-                                    touchX = it.x.coerceIn(0f, size.width.toFloat())
-                                    val idx = idxAt(touchX!!)
-                                    if (idx >= 0) {
-                                        haptics.tick()
-                                        lastIdx = idx
-                                    }
-                                },
-                                onDrag = { change, _ ->
-                                    val x = change.position.x.coerceIn(0f, size.width.toFloat())
-                                    touchX = x
-                                    val idx = idxAt(x)
-                                    if (idx >= 0 && idx != lastIdx) {
-                                        haptics.tick()
-                                        lastIdx = idx
-                                    }
-                                },
-                                onDragEnd = { touchX = null },
-                                onDragCancel = { touchX = null },
-                            )
-                        }
-                        .pointerInput(segments) {
-                            detectTapGestures(
-                                onPress = {
-                                    touchX = it.x.coerceIn(0f, size.width.toFloat())
-                                    haptics.tick()
-                                    tryAwaitRelease()
-                                    touchX = null
-                                },
-                            )
-                        },
-                ) {
-                    val width = size.width
-                    val height = size.height
-                    val padY = 14.dp.toPx()
-                    val padX = 6.dp.toPx()
-                    val graphH = height - padY * 2
-                    val graphW = width - padX * 2
-                    val laneH = graphH / 4f
-                    // Thicker bars — Apple Health presence
-                    val barInset = laneH * 0.22f
-                    val barH = laneH - barInset * 2
-                    val progress = reveal().coerceIn(0f, 1f)
+                val laneH = size.height / 4f
+                val blockH = laneH * 0.58f
+                fun xOf(ms: Long) = (ms - start).toFloat() / span * size.width
+                fun midY(lane: Int) = laneH * lane + laneH / 2f
 
-                    fun xOf(epochMs: Long): Float =
-                        padX + ((epochMs - minTime).toFloat() / timeRange) * graphW * progress
+                // A rail per lane, so an empty lane still reads as one.
+                for (lane in 0..3) {
+                    drawLine(Color.White.copy(alpha = 0.06f), Offset(0f, midY(lane)), Offset(size.width, midY(lane)), 1.dp.toPx())
+                }
 
-                    fun laneCenterY(lane: Int): Float = padY + lane * laneH + laneH / 2f
-
-                    // Soft lane bands + hairline separators
-                    for (i in 0 until 4) {
-                        val y = padY + i * laneH
-                        drawRect(
-                            color = laneLabels[i].second.copy(alpha = 0.06f),
-                            topLeft = Offset(padX, y),
-                            size = Size(graphW, laneH),
-                        )
-                        if (i > 0) {
-                            drawLine(
-                                Border.copy(alpha = 0.28f),
-                                Offset(padX, y),
-                                Offset(padX + graphW, y),
-                                1.dp.toPx(),
-                            )
-                        }
-                    }
-
-                    val activeIdx = touchX?.let { tx ->
-                        val t = minTime + (((tx - padX).coerceIn(0f, graphW) / graphW) * timeRange).toLong()
-                        segments.indexOfFirst { t in it.startMs..it.endMs }
-                    } ?: -1
-
-                    // Bars (dim non-active while scrubbing)
-                    segments.forEachIndexed { index, seg ->
-                        val x0 = xOf(seg.startMs)
-                        val x1 = xOf(seg.endMs)
-                        val top = padY + seg.lane * laneH + barInset
-                        val dimmed = activeIdx >= 0 && index != activeIdx
-                        drawRoundRect(
-                            color = seg.color.copy(alpha = if (dimmed) 0.28f else 0.92f),
-                            topLeft = Offset(x0, top),
-                            size = Size((x1 - x0).coerceAtLeast(2.5.dp.toPx()), barH),
-                            cornerRadius = CornerRadius(3.dp.toPx()),
-                        )
-                        if (index == activeIdx) {
-                            drawRoundRect(
-                                color = Color.White.copy(alpha = 0.85f),
-                                topLeft = Offset(x0, top),
-                                size = Size((x1 - x0).coerceAtLeast(2.5.dp.toPx()), barH),
-                                cornerRadius = CornerRadius(3.dp.toPx()),
-                                style = Stroke(1.4.dp.toPx()),
-                            )
-                        }
-                    }
-
-                    // Spine timeline — step path through bar centers
-                    if (segments.isNotEmpty()) {
-                        val spine = Path()
-                        var prevLane: Int? = null
-                        segments.forEachIndexed { index, seg ->
-                            val x0 = xOf(seg.startMs)
-                            val x1 = xOf(seg.endMs)
-                            val y = laneCenterY(seg.lane)
-                            if (index == 0) {
-                                spine.moveTo(x0, y)
-                            } else if (prevLane != null && prevLane != seg.lane) {
-                                spine.lineTo(x0, laneCenterY(prevLane))
-                                spine.lineTo(x0, y)
-                            }
-                            spine.lineTo(x1, y)
-                            prevLane = seg.lane
-                        }
-                        // Soft under-glow then crisp spine
-                        drawPath(
-                            spine,
-                            color = Color.White.copy(alpha = 0.18f),
-                            style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
-                        )
-                        drawPath(
-                            spine,
-                            color = Color.White.copy(alpha = 0.72f),
-                            style = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
-                        )
-                    }
-
-                    // Scrub cursor + tooltip
-                    val tx = touchX
-                    if (tx != null && activeIdx in segments.indices) {
-                        val seg = segments[activeIdx]
-                        val cy = laneCenterY(seg.lane)
-                        val cursorX = tx.coerceIn(padX, padX + graphW)
+                val held = scrub.value?.let { sx ->
+                    val at = start + (sx / size.width * span).toLong()
+                    segments.indexOfFirst { at in it.startMs..it.endMs }.takeIf { it >= 0 }
+                }
+                clipRect(right = size.width * reveal.value) {
+                    // Risers first, so the blocks sit on top of their ends.
+                    for (i in 1 until segments.size) {
+                        val seg = segments[i]
+                        val before = segments[i - 1]
+                        if (seg.startMs - before.endMs > 5 * 60_000L) continue
                         drawLine(
-                            Color.White.copy(alpha = 0.55f),
-                            Offset(cursorX, padY),
-                            Offset(cursorX, padY + graphH),
-                            1.2.dp.toPx(),
+                            LaneColors[seg.lane].copy(alpha = 0.45f),
+                            Offset(xOf(seg.startMs), midY(before.lane)),
+                            Offset(xOf(seg.startMs), midY(seg.lane)),
+                            1.5.dp.toPx(),
                         )
-                        drawCircle(Color.White, 5.dp.toPx(), Offset(cursorX, cy))
-                        drawCircle(seg.color, 3.dp.toPx(), Offset(cursorX, cy))
-
-                        val startLabel = Instant.ofEpochMilli(seg.startMs).atZone(zone).format(timeFmt)
-                        val endLabel = Instant.ofEpochMilli(seg.endMs).atZone(zone).format(timeFmt)
-                        val label = "${seg.name} · ${seg.minutes}m\n$startLabel – $endLabel"
-                        val layout = textMeasurer.measure(
-                            label,
-                            TextStyle(
-                                color = TextPrimary,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                textAlign = TextAlign.Center,
-                            ),
-                        )
-                        val tw = layout.size.width + 16.dp.toPx()
-                        val th = layout.size.height + 10.dp.toPx()
-                        var tipX = cursorX - tw / 2f
-                        tipX = tipX.coerceIn(padX, width - tw - 4.dp.toPx())
-                        // Prefer above cursor; flip below if near top lane
-                        var tipY = 6.dp.toPx()
-                        if (seg.lane == 0) tipY = (padY + graphH - th - 4.dp.toPx()).coerceAtLeast(6.dp.toPx())
-                        drawRoundRect(Surface, Offset(tipX, tipY), Size(tw, th), CornerRadius(10.dp.toPx()))
-                        drawRoundRect(
-                            seg.color.copy(alpha = 0.45f),
-                            Offset(tipX, tipY),
-                            Size(tw, th),
-                            CornerRadius(10.dp.toPx()),
-                            style = Stroke(1.dp.toPx()),
-                        )
-                        drawText(layout, topLeft = Offset(tipX + 8.dp.toPx(), tipY + 5.dp.toPx()))
                     }
+                    segments.forEachIndexed { i, seg ->
+                        val left = xOf(seg.startMs)
+                        val wide = (xOf(seg.endMs) - left).coerceAtLeast(3.dp.toPx())
+                        drawRoundRect(
+                            color = LaneColors[seg.lane].copy(alpha = if (held != null && held != i) 0.3f else 1f),
+                            topLeft = Offset(left, midY(seg.lane) - blockH / 2f),
+                            size = Size(wide, blockH),
+                            cornerRadius = CornerRadius(minOf(5.dp.toPx(), wide / 2f)),
+                        )
+                    }
+                }
+                if (held != null) {
+                    val seg = segments[held]
+                    val x = scrub.value!!.coerceIn(0f, size.width)
+                    drawScrubBubble(x, "${LaneNames[seg.lane]} ${seg.minutes}m · ${time(seg.startMs)}", measurer)
                 }
             }
         }
-
-        // Time axis: start · mid · end
-        val startZ = Instant.ofEpochMilli(minTime).atZone(zone)
-        val midZ = Instant.ofEpochMilli(minTime + timeRange / 2).atZone(zone)
-        val endZ = Instant.ofEpochMilli(maxTime).atZone(zone)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 50.dp, top = 8.dp, end = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(startZ.format(timeFmt), fontSize = 10.sp, color = TextSecondary)
-            Text(midZ.format(timeFmt), fontSize = 10.sp, color = TextSecondary)
-            Text(endZ.format(timeFmt), fontSize = 10.sp, color = TextSecondary)
+        Row(modifier = Modifier.fillMaxWidth().padding(start = LaneLabelWidth, top = 4.dp)) {
+            Text(time(start), fontSize = 10.sp, color = TextTertiary)
+            Spacer(modifier = Modifier.weight(1f))
+            Text(time(start + span / 2), fontSize = 10.sp, color = TextTertiary)
+            Spacer(modifier = Modifier.weight(1f))
+            Text(time(end), fontSize = 10.sp, color = TextTertiary)
         }
     }
 }

@@ -48,6 +48,10 @@ class VitalRangeTest {
             "2 outside your usual range",
             vitalsHeadline(listOf("HRV" to VitalStanding.BELOW, "Resting HR" to VitalStanding.ABOVE)),
         )
+        assertEquals(
+            "Resting HR and Sleeping HR are below your usual range",
+            vitalsHeadline(listOf("Resting HR" to VitalStanding.BELOW, "Sleeping HR" to VitalStanding.BELOW)),
+        )
         assertEquals("SpO₂ is within your usual range", vitalsHeadline(listOf("SpO₂" to VitalStanding.TYPICAL)))
     }
 }

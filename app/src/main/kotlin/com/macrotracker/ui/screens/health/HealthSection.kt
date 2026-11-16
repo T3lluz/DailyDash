@@ -1,5 +1,10 @@
 package com.macrotracker.ui.screens.health
 
+import androidx.compose.ui.draw.clip
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -23,18 +28,39 @@ import androidx.compose.ui.unit.sp
 import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.theme.TextSecondary
 
-// Every Health section is one card, and nothing inside it gets a box of its own: lists and
-// grids split with hairlines, stat tiles are a label over a number, charts sit straight on
-// the card. Boxes inside boxes were most of what made the tab feel busy.
+// Every Health section is one room: a flat dark tint of its subject's colour with no edge,
+// and nothing inside it gets a box of its own. Lists and grids split with hairlines, stat
+// tiles are a label over a number, charts stand straight on the room.
 
-/** One Health section: a card, the same one Home uses, with its content laid straight on it. */
+private val RoomShape = RoundedCornerShape(28.dp)
+
+/**
+ * One Health section. With a [tone] it is a room in that colour; without one it is the
+ * plain card Home uses (a loading or empty state that has no subject yet).
+ */
 @Composable
 fun HealthSection(
     modifier: Modifier = Modifier,
     delayMs: Long = 0L,
+    tone: Color? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    MacroCard(modifier = modifier, delayMs = delayMs, content = content)
+    if (tone == null) {
+        MacroCard(modifier = modifier, delayMs = delayMs, content = content)
+        return
+    }
+    val fill = roomColor(tone)
+    CompositionLocalProvider(LocalRoomColor provides fill) {
+        Column(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(vertical = 6.dp)
+                .clip(RoomShape)
+                .background(fill)
+                .padding(horizontal = 18.dp, vertical = 18.dp),
+            content = content,
+        )
+    }
 }
 
 /**
@@ -54,13 +80,13 @@ fun HealthHeader(
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (icon != null) {
-                    Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(17.dp))
+                    Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(7.dp))
                 }
                 Text(
                     title,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    style = HealthDisplay,
+                    fontSize = 19.sp,
                     color = accent,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

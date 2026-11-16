@@ -220,6 +220,29 @@ object MacroMotion {
     }
 
     /**
+     * The Health tab opening: its blocks rise into place one after another, top down, once.
+     * The body clock then paints the day in by itself.
+     */
+    object HealthEntrance {
+        const val MS = 950
+    }
+
+    /**
+     * Health's body clock. While the day is read a light sweeps the empty face; then it draws
+     * itself in with one turn of the hand. A tap on the face
+     * reads that time for [PEEK_MS]; a finger held still for [HOLD_MS] takes the face over
+     * (sooner, and a scroll that starts on it would be read as a hold).
+     */
+    object BodyClock {
+        const val TURN_MS = 1300
+        const val PEEK_MS = 2600L
+        const val HOLD_MS = 110L
+
+        /** One sweep of the light that circles the face while the day is being read. */
+        const val SEEK_MS = 1500L
+    }
+
+    /**
      * Home's Body Stats chart moving on by itself (steps → heart → Move → sleep) until the
      * person picks one: slow enough to read each, a plain crossfade between them.
      */

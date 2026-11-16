@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,6 +33,9 @@ import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.Surface
 import com.macrotracker.ui.theme.TextTertiary
+import com.macrotracker.ui.util.rememberClock24
+import com.macrotracker.ui.util.rememberHaptics
+import com.macrotracker.ui.util.rememberClockFormatter
 import com.macrotracker.ui.util.rememberReducedMotion
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -57,10 +61,16 @@ fun HeartDayChart(
     val low = min(curve.minOfOrNull { it.bpm } ?: 60.0, restingBpm?.toDouble() ?: Double.MAX_VALUE) - 6
     val high = (curve.maxOfOrNull { it.bpm } ?: 100.0) + 6
     val span = max(high - low, 10.0)
+    val measurer = rememberTextMeasurer()
+    val scrub = rememberScrubX()
+    val h24 = rememberClock24()
+    val halo = LocalRoomColor.current
+    val haptics = rememberHaptics()
     Canvas(
         modifier = modifier
             .fillMaxWidth()
-            .height(height),
+            .height(height)
+            .scrubGesture(scrub, haptics = haptics, steps = 48),
     ) {
         val w = size.width
         val h = size.height - 6.dp.toPx()
@@ -90,9 +100,18 @@ fun HeartDayChart(
         if (reveal.value >= 1f) {
             curve.lastOrNull()?.let { last ->
                 val at = Offset(x(last.hour + 1 / 8.0), y(last.bpm))
-                drawCircle(Surface, 6.dp.toPx(), at)
+                drawCircle(halo, 6.dp.toPx(), at)
                 drawCircle(tone, 4.dp.toPx(), at)
             }
+        }
+        // Under a finger: the nearest quarter hour's reading.
+        scrub.value?.let { sx ->
+            val hour = sx / w * 24.0
+            val p = curve.minByOrNull { kotlin.math.abs(it.hour + 1 / 8.0 - hour) } ?: return@let
+            val at = Offset(x(p.hour + 1 / 8.0), y(p.bpm))
+            drawScrubBubble(at.x, "${clockOf(p.hour, h24)} · ${p.bpm.toInt()} bpm", measurer)
+            drawCircle(halo, 6.dp.toPx(), at)
+            drawCircle(tone, 4.dp.toPx(), at)
         }
     }
     HourAxis()
@@ -146,7 +165,7 @@ fun SleepStagesStrip(
             }
         }
     }
-    val fmt = remember { DateTimeFormatter.ofPattern("HH:mm") }
+    val fmt = rememberClockFormatter()
     Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
         Text(start.atZone(zone).format(fmt), fontSize = 9.sp, color = TextTertiary)
         Spacer(modifier = Modifier.weight(1f))
@@ -168,8 +187,9 @@ private fun stageLane(stage: Int): Int = when (stage) {
 /** 00 · 06 · 12 · 18 under a whole-day chart. */
 @Composable
 fun HourAxis(modifier: Modifier = Modifier) {
+    val names = if (rememberClock24()) listOf("00", "06", "12", "18") else listOf("12 am", "6 am", "12 pm", "6 pm")
     Row(modifier = modifier.fillMaxWidth().padding(top = 4.dp)) {
-        listOf("00", "06", "12", "18").forEach {
+        names.forEach {
             Text(it, fontSize = 9.sp, color = TextTertiary, modifier = Modifier.weight(1f))
         }
     }

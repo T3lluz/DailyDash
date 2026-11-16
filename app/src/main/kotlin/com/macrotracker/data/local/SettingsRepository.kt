@@ -311,13 +311,9 @@ class SettingsRepository @Inject constructor(
     private val _homeWidgetOrder = MutableStateFlow(loadHomeWidgetOrder())
     val homeWidgetOrder: StateFlow<String> = _homeWidgetOrder
 
-    // Layout preferences for Health Screen
-    private val _healthWidgetOrder = MutableStateFlow(loadHealthWidgetOrder())
-    val healthWidgetOrder: StateFlow<String> = _healthWidgetOrder
-
     /**
      * Section order and visibility on the server screen, in the same `ID:visible,…` form
-     * as Home and Health. Blank means the built-in order; sections added later are
+     * as Home. Blank means the built-in order; sections added later are
      * appended by `parseWidgetConfig`.
      */
     private val _serverSectionOrder = MutableStateFlow(prefs.getString(KEY_SERVER_SECTION_ORDER, "") ?: "")
@@ -414,9 +410,7 @@ class SettingsRepository @Inject constructor(
     }
 
     /** Empty [fullName] means All repos. Persist `owner/name` when focusing one repo. */
-    /** Health's picks that should outlast a restart: the week's first day and Food trends' view. */
-    fun healthWeekStart(): Int = prefs.getInt(KEY_HEALTH_WEEK_START, 1)
-    fun saveHealthWeekStart(isoDay: Int) = prefs.edit { putInt(KEY_HEALTH_WEEK_START, isoDay) }
+    /** Health's picks that should outlast a restart: Food trends' view. */
     fun foodTrendsRange(): Int = prefs.getInt(KEY_FOOD_TRENDS_RANGE, 7)
     fun saveFoodTrendsRange(days: Int) = prefs.edit { putInt(KEY_FOOD_TRENDS_RANGE, days) }
     fun foodTrendsMetric(): String = prefs.getString(KEY_FOOD_TRENDS_METRIC, "calories") ?: "calories"
@@ -431,11 +425,6 @@ class SettingsRepository @Inject constructor(
     fun updateHomeWidgetOrder(order: String) {
         prefs.edit { putString("home_widget_order", order) }
         _homeWidgetOrder.value = order
-    }
-
-    fun updateHealthWidgetOrder(order: String) {
-        prefs.edit { putString("health_widget_order", order) }
-        _healthWidgetOrder.value = order
     }
 
     fun updateServerSectionOrder(order: String) {
@@ -538,17 +527,6 @@ class SettingsRepository @Inject constructor(
         return migrated
     }
 
-    private fun loadHealthWidgetOrder(): String {
-        val default =
-            "DAILY_HEALTH:true,SLEEP:true,ACTIVITIES:true,VITALS:true,FOOD:true"
-        val raw = prefs.getString("health_widget_order", default) ?: default
-        val migrated = migrateHealthWidgetOrder(raw)
-        if (migrated != raw) {
-            prefs.edit { putString("health_widget_order", migrated) }
-        }
-        return migrated
-    }
-
     companion object {
         const val KEY_SERVER_SECTION_ORDER = "server_section_order"
         const val KEY_AI_PROVIDER = "ai_provider"
@@ -561,7 +539,6 @@ class SettingsRepository @Inject constructor(
         const val KEY_WIND_UNIT = "wind_unit"
         const val KEY_GITHUB_TOKEN = "github_token"
         const val KEY_GITHUB_FOCUS_REPO = "github_focus_repo"
-        const val KEY_HEALTH_WEEK_START = "health_week_start"
         const val KEY_FOOD_TRENDS_RANGE = "food_trends_range"
         const val KEY_FOOD_TRENDS_METRIC = "food_trends_metric"
         const val KEY_DASHBOARD_SERVER_URL = "dashboard_server_url"
@@ -604,24 +581,6 @@ class SettingsRepository @Inject constructor(
                     result.replaceRange(calendar.range, "${calendar.value},UPCOMING:true")
                 } else {
                     "$result,UPCOMING:true"
-                }
-            }
-            return result
-        }
-
-        /** Keep Daily Health first; insert Activities after it for older installs. */
-        fun migrateHealthWidgetOrder(order: String): String {
-            var result = order
-            if (!result.contains("DAILY_HEALTH")) {
-                result = "DAILY_HEALTH:true,$result"
-            }
-            if (!result.contains("ACTIVITIES")) {
-                result = when {
-                    result.contains("DAILY_HEALTH:true") ->
-                        result.replaceFirst("DAILY_HEALTH:true", "DAILY_HEALTH:true,ACTIVITIES:true")
-                    result.contains("DAILY_HEALTH:false") ->
-                        result.replaceFirst("DAILY_HEALTH:false", "DAILY_HEALTH:false,ACTIVITIES:true")
-                    else -> "ACTIVITIES:true,$result"
                 }
             }
             return result

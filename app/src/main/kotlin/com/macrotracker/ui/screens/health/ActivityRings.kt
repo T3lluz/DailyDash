@@ -1,5 +1,10 @@
 package com.macrotracker.ui.screens.health
 
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.unit.Dp
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
@@ -40,19 +45,26 @@ data class RingSpec(val progress: Float, val tone: Color)
  * it is; progress is read only while drawing.
  */
 @Composable
-fun ActivityRings(rings: List<RingSpec>, modifier: Modifier = Modifier) {
+fun ActivityRings(
+    rings: List<RingSpec>,
+    modifier: Modifier = Modifier,
+    /** The thinnest a ring is drawn; the day strip's small rings go under the default. */
+    minStroke: Dp = 7.dp,
+    /** How long the rings take to grow; the day strip's are quicker. */
+    growMs: Int = 900,
+) {
     val reduced = rememberReducedMotion()
     val progress = remember(rings.size) { List(rings.size) { Animatable(0f) } }
     LaunchedEffect(rings.map { it.progress }) {
         rings.forEachIndexed { i, ring ->
             val target = ring.progress.coerceIn(0f, MAX_LAPS)
             launch {
-                if (reduced) progress[i].snapTo(target) else progress[i].animateTo(target, MacroMotion.chartRevealTween(900))
+                if (reduced) progress[i].snapTo(target) else progress[i].animateTo(target, MacroMotion.chartRevealTween(growMs))
             }
         }
     }
     Canvas(modifier = modifier) {
-        val stroke = (size.minDimension * 0.115f).coerceIn(7.dp.toPx(), 20.dp.toPx())
+        val stroke = (size.minDimension * 0.115f).coerceIn(minStroke.toPx(), 20.dp.toPx())
         val gap = stroke * 0.16f
         rings.forEachIndexed { i, ring ->
             val radius = size.minDimension / 2f - stroke / 2f - i * (stroke + gap)
@@ -140,16 +152,31 @@ internal fun pointOn(center: Offset, radius: Float, degrees: Float): Offset {
 data class RingReadout(val label: String, val value: String, val goal: String, val tone: Color)
 
 @Composable
-fun RingReadouts(readouts: List<RingReadout>, modifier: Modifier = Modifier, valueSize: Int = 24) {
+fun RingReadouts(
+    readouts: List<RingReadout>,
+    modifier: Modifier = Modifier,
+    valueSize: Int = 24,
+    /** With a handler each readout is a button (Today's open the chart for that ring). */
+    onClick: ((Int) -> Unit)? = null,
+) {
     Column(modifier = modifier, verticalArrangement = Arrangement.SpaceEvenly) {
-        readouts.forEach { r ->
-            Column {
+        readouts.forEachIndexed { index, r ->
+            Column(
+                modifier = if (onClick == null) {
+                    Modifier
+                } else {
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { onClick(index) }
+                },
+            ) {
                 Text(r.label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = TextPrimary, maxLines = 1)
                 Row {
                     Text(
                         r.value,
+                        style = HealthDisplay,
                         fontSize = valueSize.sp,
-                        fontWeight = FontWeight.Bold,
                         color = r.tone,
                         maxLines = 1,
                         lineHeight = (valueSize + 2).sp,

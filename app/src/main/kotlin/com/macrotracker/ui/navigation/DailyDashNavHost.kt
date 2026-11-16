@@ -1,5 +1,12 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.macrotracker.ui.navigation
 
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import com.macrotracker.ui.screens.UsageScreen
 import com.macrotracker.ui.screens.ConsoleScreen
 import androidx.compose.animation.EnterTransition
@@ -78,6 +85,43 @@ fun DailyDashNavHost(
     /** False when no AI provider is configured — the AI tab is hidden, so nothing may link to it. */
     aiAvailable: Boolean = true,
 ) {
+    // Estimating a meal and scanning a label are cards that slide up over Food, not screens.
+    var foodSheet by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
+    foodSheet?.let { which ->
+        androidx.compose.material3.ModalBottomSheet(
+            onDismissRequest = { foodSheet = null },
+            sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = com.macrotracker.ui.theme.Background,
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp),
+        ) {
+            androidx.compose.foundation.layout.Box(
+                modifier = androidx.compose.ui.Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.9f),
+            ) {
+                if (which == "meal") {
+                    MealChatScreen(
+                        onNavigateBack = { foodSheet = null },
+                        onNavigateToCameraScan = { foodSheet = "scan" },
+                        onNavigateToAiSettings = {
+                            foodSheet = null
+                            navController.navigateToSubScreen(SettingsRoutes.AI)
+                        },
+                    )
+                } else {
+                    CameraScanScreen(
+                        onNavigateBack = { foodSheet = null },
+                        onLogged = { foodSheet = null },
+                        onNavigateToAiSettings = {
+                            foodSheet = null
+                            navController.navigateToSubScreen(SettingsRoutes.AI)
+                        },
+                    )
+                }
+            }
+        }
+    }
+
     NavHost(
         navController = navController,
         startDestination = startDestination,
@@ -139,14 +183,14 @@ fun DailyDashNavHost(
                 onNavigateToServers = { navController.navigateToSubScreen(SettingsRoutes.SERVER_DASHBOARD) },
                 onOpenHermes = { navController.navigateToTab(Screen.AI.route) },
                 onOpenConsole = { navController.navigateToSubScreen(SubScreenRoutes.CONSOLE) },
-                onOpenMealChat = { navController.navigateToSubScreen(SubScreenRoutes.MEAL_CHAT) },
+                onOpenMealChat = { foodSheet = "meal" },
             )
         }
 
         composable(Screen.Health.route) {
             HealthScreen(
-                onNavigateToCameraScan = { navController.navigateToSubScreen(SubScreenRoutes.CAMERA_SCAN) },
-                onOpenMealChat = { navController.navigateToSubScreen(SubScreenRoutes.MEAL_CHAT) },
+                onNavigateToCameraScan = { foodSheet = "scan" },
+                onOpenMealChat = { foodSheet = "meal" },
             )
         }
 

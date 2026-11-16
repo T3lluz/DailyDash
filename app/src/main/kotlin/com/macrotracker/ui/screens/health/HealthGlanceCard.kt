@@ -45,6 +45,7 @@ import com.macrotracker.ui.components.CardHeader
 import com.macrotracker.ui.components.HubHeaderAction
 import com.macrotracker.ui.components.MacroCard
 import com.macrotracker.ui.theme.AppIcons
+import com.macrotracker.ui.util.rememberClockFormatter
 import com.macrotracker.ui.theme.HealthDistance
 import com.macrotracker.ui.theme.HealthHeartRate
 import com.macrotracker.ui.theme.HealthMove
@@ -276,7 +277,7 @@ private fun GlanceChartPanel(
         }
         GlanceChart.SLEEP -> {
             val zone = ZoneId.systemDefault()
-            val clock = DateTimeFormatter.ofPattern("HH:mm")
+            val clock = rememberClockFormatter()
             val main = sleepSessions.maxByOrNull { it.endTime.toEpochMilli() - it.startTime.toEpochMilli() }
             PaceLine(
                 headline = "Slept ${formatMinutesCompact(sleepMin)}",
@@ -325,6 +326,7 @@ private fun GlanceChartPanel(
                 goal = activity.activeCalGoal.roundToLong(),
                 tone = HealthMove,
                 height = CHART_HEIGHT,
+                unit = "kcal",
             )
             GlanceChart.SLEEP -> SleepStagesStrip(sessions = sleepSessions, height = CHART_HEIGHT)
         }

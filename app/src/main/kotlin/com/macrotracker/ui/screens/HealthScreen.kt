@@ -1,11 +1,38 @@
 package com.macrotracker.ui.screens
 
 import com.macrotracker.ui.navigation.CardFocus
-import com.macrotracker.ui.screens.health.sleepTileOf
-import com.macrotracker.ui.screens.health.buildMetricTiles
-import com.macrotracker.ui.screens.health.MetricTilesSection
-import kotlinx.coroutines.launch
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import com.macrotracker.ui.screens.health.RoomLoading
+import com.macrotracker.ui.screens.health.riseIn
+import com.macrotracker.ui.theme.HealthActivityTone
+import com.macrotracker.ui.util.rememberReducedMotion
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Icon
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import com.macrotracker.ui.screens.health.HealthDisplay
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import com.macrotracker.data.health.ActivityRange
+import com.macrotracker.ui.components.WidgetExpandFooter
+import com.macrotracker.ui.components.WidgetExpandSection
+import com.macrotracker.ui.screens.health.ActivityRings
+import com.macrotracker.ui.screens.health.HealthGroupLabel
+import com.macrotracker.ui.screens.health.HealthSegmented
+import com.macrotracker.ui.screens.health.RangeBarChart
+import com.macrotracker.ui.screens.health.RingReadout
+import com.macrotracker.ui.screens.health.RingReadouts
+import com.macrotracker.ui.screens.health.RingSpec
+import com.macrotracker.ui.screens.health.activityRangeLabel
 import android.content.ActivityNotFoundException
 import com.macrotracker.ui.theme.NutritionProtein
 import android.content.Context
@@ -20,7 +47,6 @@ import com.macrotracker.ui.components.FoodLogList
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -33,8 +59,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -60,13 +84,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.macrotracker.ui.screens.health.ActivitySection
 import com.macrotracker.ui.screens.health.ActivityTrends
-import com.macrotracker.ui.screens.health.ActivityWeekControls
-import com.macrotracker.ui.screens.health.activityWeekLabel
-import com.macrotracker.ui.screens.health.AnimatedMacroBarChart
 import com.macrotracker.ui.screens.health.DailyHealthSection
 import com.macrotracker.ui.screens.health.HealthMetric
-import com.macrotracker.ui.screens.health.HealthMetricEntry
-import com.macrotracker.ui.screens.health.HealthChip
 import com.macrotracker.ui.screens.health.HealthStatTile
 import com.macrotracker.ui.screens.health.HealthHeader
 import com.macrotracker.ui.screens.health.HealthSection
@@ -76,11 +95,8 @@ import com.macrotracker.ui.screens.health.computeSleepNightScore
 import com.macrotracker.data.health.readinessFrom
 import com.macrotracker.data.local.DailySummary
 import com.macrotracker.data.local.MacroLogEntity
-import com.macrotracker.ui.components.ContentSkeleton
 import com.macrotracker.ui.components.HealthConnectCard
-import com.macrotracker.ui.components.LoadingRow
 import com.macrotracker.ui.components.WidgetScrollBox
-import com.macrotracker.ui.components.MacroProgressBar
 import com.macrotracker.ui.components.FoodLogForm
 import com.macrotracker.ui.components.PillButton
 import com.macrotracker.ui.components.RipplePullToRefreshBox
@@ -88,18 +104,11 @@ import com.macrotracker.ui.components.rippleAnchor
 import com.macrotracker.ui.components.ScreenHeader
 import com.macrotracker.ui.components.TabContentBottomPadding
 import com.macrotracker.ui.components.ScreenHeaderSpacer
-import com.macrotracker.ui.components.WidgetEditor
-import com.macrotracker.ui.components.draggableWidgetItems
-import com.macrotracker.ui.components.encodeWidgetConfig
-import com.macrotracker.ui.components.parseWidgetConfig
-import com.macrotracker.ui.components.rememberDraggableWidgetListState
 import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.NutritionCalories
 import com.macrotracker.ui.theme.HealthNutritionTone
-import com.macrotracker.ui.theme.Primary
-import com.macrotracker.ui.theme.Success
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.util.HapticHelper
@@ -116,10 +125,13 @@ import java.time.format.TextStyle as JavaTextStyle
 import java.util.Locale
 import kotlin.math.roundToInt
 import com.macrotracker.ui.theme.AppIcons
-import com.macrotracker.ui.components.Hairline
 
 
-@OptIn(ExperimentalLayoutApi::class)
+/**
+ * The Health tab: one page in one order. The body clock stands at the top, then a room per
+ * subject (Sleep, Activity, Body & Vitals, Food). The sections used to be cards that could be
+ * dragged about and hidden; the page is composed as a whole now, so they can't.
+ */
 @Composable
 fun HealthScreen(
     onNavigateToCameraScan: () -> Unit,
@@ -136,18 +148,13 @@ fun HealthScreen(
     val macroSelectedDate by healthViewModel.macroSelectedDate.collectAsState()
     val macroSelectedLogs by healthViewModel.macroSelectedLogs.collectAsState()
     val macroHistoryLoading by healthViewModel.macroHistoryLoading.collectAsState()
-    val healthHistory by healthViewModel.healthHistory.collectAsState()
-    val healthWidgetOrder by healthViewModel.healthWidgetOrder.collectAsState()
+    val activityDays by healthViewModel.activityDays.collectAsState()
+    val dayHours by healthViewModel.dayHours.collectAsState()
     val healthConnectState by healthViewModel.healthConnectState.collectAsState()
     val readRefusedDespiteGrant by healthViewModel.readRefusedDespiteGrant.collectAsState()
     val activitiesState by healthViewModel.activitiesState.collectAsState()
-
-    val selectedDate by healthViewModel.selectedDate.collectAsState()
     val todaySleepSessions by healthViewModel.todaySleepSessions.collectAsState()
-    val weekStartDay by healthViewModel.weekStartDay.collectAsState()
-    val weeksBack by healthViewModel.weeksBack.collectAsState()
     val macroInsights by healthViewModel.macroInsights.collectAsState()
-    val previousWeekHistory by healthViewModel.previousWeekHistory.collectAsState()
     val vitalsState by healthViewModel.vitalsState.collectAsState()
     val birthYear by healthViewModel.birthYear.collectAsState()
     val sleepNights by healthViewModel.sleepNights.collectAsState()
@@ -157,35 +164,15 @@ fun HealthScreen(
     val refreshing by healthViewModel.refreshing.collectAsState()
 
     var selectedMetric by rememberSaveable { mutableStateOf(HealthMetric.STEPS) }
-    var isEditMode by rememberSaveable { mutableStateOf(false) }
+    var activityRange by rememberSaveable { mutableStateOf(ActivityRange.WEEK) }
 
     var foodName by rememberSaveable { mutableStateOf("") }
     var calories by rememberSaveable { mutableStateOf("") }
     var protein by rememberSaveable { mutableStateOf("") }
     val haptics = rememberHaptics()
 
-    val defaultHealthWidgets = remember {
-        listOf(
-            // One section per thing, each shown once: the day, the night, movement and
-            // workouts, the heart and body, then food. Today's readings, Trends and Food
-            // trends were folded into these (WidgetEditor's MergedWidgetIds).
-            Triple("DAILY_HEALTH", "Today", AppIcons.HeartFilled),
-            Triple("GLANCE", "At a glance", AppIcons.Grid),
-            Triple("SLEEP", "Sleep", AppIcons.Moon),
-            Triple("ACTIVITIES", "Activity", AppIcons.Activity),
-            Triple("VITALS", "Body & Vitals", AppIcons.Scale),
-            Triple("FOOD", "Food", AppIcons.Restaurant),
-        )
-    }
-    val parsedConfigs = remember(healthWidgetOrder) {
-        parseWidgetConfig(healthWidgetOrder, defaultHealthWidgets)
-    }
-
     // Health Connect data states from the new ViewModel
-    val heartRateState by dashboardViewModel.heartRateState.collectAsState()
     val restingHeartRateState by dashboardViewModel.restingHeartRateState.collectAsState()
-    val oxygenSaturationState by dashboardViewModel.oxygenSaturationState.collectAsState()
-    val respiratoryRateState by dashboardViewModel.respiratoryRateState.collectAsState()
     val stepsState by dashboardViewModel.stepsState.collectAsState()
     val distanceState by dashboardViewModel.distanceState.collectAsState()
     val floorsClimbedState by dashboardViewModel.floorsClimbedState.collectAsState()
@@ -244,20 +231,7 @@ fun HealthScreen(
     }
     val todayFormatted = remember(today) { today.format(DateTimeFormatter.ofPattern("EEEE, MMM d")) }
 
-    val visibleConfigs = remember(parsedConfigs) {
-        parsedConfigs.filter { it.isVisible }
-    }
     val listState = rememberLazyListState()
-    val dragState = rememberDraggableWidgetListState(
-        items = visibleConfigs,
-        lazyListState = listState,
-        itemKey = { it.id },
-        onReorder = { reordered ->
-            val hidden = parsedConfigs.filter { !it.isVisible }
-            healthViewModel.updateHealthWidgetOrder(encodeWidgetConfig(reordered + hidden))
-        },
-        haptics = haptics,
-    )
     val tickersPaused by remember { derivedStateOf { listState.isScrollInProgress } }
 
     // Readiness comes from what the Sleep and Body & Vitals reads already
@@ -268,51 +242,29 @@ fun HealthScreen(
     val readiness = remember(vitals, lastNightScore) {
         vitals?.let { readinessFrom(it, lastNightScore) }
     }
-    // Rolling seven days for the Today's readings sparklines, whatever week Trends shows.
-    val lastSevenDays by healthViewModel.recentDays.collectAsState()
-    // Today's activity numbers beyond the rings (distance, floors); TodayReadings picks them.
-    val todayReadings = remember(stepsState, distanceState, floorsClimbedState, activeCaloriesState) {
-        listOf(
-            HealthMetricEntry(HealthMetric.STEPS, stepsState),
-            HealthMetricEntry(HealthMetric.DISTANCE, distanceState),
-            HealthMetricEntry(HealthMetric.FLOORS_CLIMBED, floorsClimbedState),
-            HealthMetricEntry(HealthMetric.CALORIES, activeCaloriesState),
-        )
-    }
 
-    // "At a glance": last night and a tile per measure, each opening the section with the rest.
-    val glanceSleep = remember(sleepNights, today) { sleepTileOf(sleepNights.lastOrNull(), today) }
-    val glanceTiles = remember(
-        vitals, stepsState, activeCaloriesState, distanceState, floorsClimbedState,
-        restingHeartRateState, oxygenSaturationState, respiratoryRateState, lastSevenDays, today,
-    ) {
-        buildMetricTiles(
-            vitals = vitals,
-            steps = stepsState,
-            energy = activeCaloriesState,
-            distance = distanceState,
-            floors = floorsClimbedState,
-            restingFallback = restingHeartRateState,
-            oxygenFallback = oxygenSaturationState,
-            breathingFallback = respiratoryRateState,
-            history = lastSevenDays,
-            today = today,
-        )
-    }
-    val scrollScope = rememberCoroutineScope()
-    val openSection: (String) -> Unit = { id ->
-        val index = visibleConfigs.indexOfFirst { it.id == id }
-        // The header is the list's first item.
-        if (index >= 0) scrollScope.launch { listState.animateScrollToItem(index + 1) }
-    }
     // An island tap about a section (last night, steps, food) brings that section into view.
     val focusSection by CardFocus.health.collectAsState()
-    LaunchedEffect(focusSection, visibleConfigs) {
+    LaunchedEffect(focusSection) {
         val id = focusSection ?: return@LaunchedEffect
-        val index = visibleConfigs.indexOfFirst { it.id == id }
+        // The header is the list's first item; the sections follow in SectionOrder.
+        val index = SectionOrder.indexOf(id)
         if (index >= 0) listState.animateScrollToItem(index + 1)
         CardFocus.healthDone()
     }
+
+    // The entrance: once, the first time the tab opens. Coming back to it finds it done.
+    val reduced = rememberReducedMotion()
+    var entered by rememberSaveable { mutableStateOf(false) }
+    val entrance = remember { Animatable(if (entered || reduced) 1f else 0f) }
+    LaunchedEffect(Unit) {
+        if (entrance.value < 1f) entrance.animateTo(1f, tween(MacroMotion.HealthEntrance.MS, easing = LinearEasing))
+        entered = true
+    }
+    val rise = { entrance.value }
+
+    val hcLoading = healthConnectState is HealthConnectUiState.Loading
+    val hcStats = (healthConnectState as? HealthConnectUiState.Success)?.stats
 
     CompositionLocalProvider(LocalTickersPaused provides tickersPaused) {
     RipplePullToRefreshBox(
@@ -328,7 +280,6 @@ fun HealthScreen(
     ) { rippleOrigin ->
     LazyColumn(
         state = listState,
-        userScrollEnabled = !dragState.isDragActive,
         modifier = Modifier
             .fillMaxSize()
             .background(Background)
@@ -342,14 +293,9 @@ fun HealthScreen(
                 title = "Health",
                 subtitle = todayFormatted,
                 modifier = Modifier.rippleAnchor(rippleOrigin),
-                trailing = {
-                    IconButton(onClick = { haptics.tick(); isEditMode = !isEditMode }) {
-                        Icon(AppIcons.Edit, contentDescription = "Edit Widgets", tint = Primary)
-                    }
-                },
             )
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             when (val hc = healthConnectState) {
                 is HealthConnectUiState.PermissionRequired -> {
@@ -396,237 +342,207 @@ fun HealthScreen(
             }
         }
 
-        if (isEditMode) {
-            item(key = "editor") {
-                WidgetEditor(
-                    configs = parsedConfigs,
-                    onConfigsChanged = { newConfigs ->
-                        healthViewModel.updateHealthWidgetOrder(encodeWidgetConfig(newConfigs))
+        item(key = "DAILY_HEALTH", contentType = "DAILY_HEALTH") {
+            // Without Health Connect there is no day to draw; the card above says why.
+            if (healthConnectState is HealthConnectUiState.Loading || healthConnectState is HealthConnectUiState.Success) {
+                DailyHealthSection(
+                    stats = hcStats,
+                    stepsToday = stepsState.today?.toLong(),
+                    activeCaloriesToday = activeCaloriesState.today?.toDouble(),
+                    distanceToday = distanceState.today?.toDouble(),
+                    floorsToday = floorsClimbedState.today?.toDouble(),
+                    restingFallback = restingHeartRateState.today?.toLong(),
+                    readiness = readiness,
+                    hourlySteps = hourlySteps,
+                    usualHourlySteps = usualHourlySteps,
+                    days = activityDays,
+                    nights = sleepNights,
+                    dayHours = dayHours,
+                    today = today,
+                    loading = hcLoading,
+                    nightsLoaded = sleepLoaded,
+                    notShared = missingPermissions.map { it.label },
+                    haptics = haptics,
+                    rise = rise,
+                    onAllow = {
+                        haptics.tick()
+                        requestHealthAccess()
                     },
-                    onClose = { isEditMode = false },
+                    onPickDay = { healthViewModel.loadDayHours(it) },
                 )
             }
-        } else {
-            draggableWidgetItems(
-                state = dragState,
-                itemKey = { it.id },
-                haptics = haptics,
-            ) { _, config, _ ->
-                    when (config.id) {
-                    "DAILY_HEALTH" -> {
-                        val hcStats = (healthConnectState as? HealthConnectUiState.Success)?.stats
-                        DailyHealthSection(
-                            stats = hcStats,
-                            summary = summary,
-                            detailedSleep = todaySleepSessions,
-                            heartRateBpm = heartRateState.value.takeIf { heartRateState.isEnabled },
-                            restingHrBpm = restingHeartRateState.value.takeIf { restingHeartRateState.isEnabled },
-                            stepsToday = stepsState.today?.toLong(),
-                            activeCaloriesToday = activeCaloriesState.today?.toDouble(),
-                            distanceToday = distanceState.today?.toDouble(),
-                            floorsToday = floorsClimbedState.today?.toDouble(),
-                            readiness = readiness,
-                            hourlySteps = hourlySteps,
-                            usualHourlySteps = usualHourlySteps,
-                            loading = healthConnectState is HealthConnectUiState.Loading,
-                            readings = todayReadings,
-                            history = lastSevenDays,
-                            notShared = missingPermissions.map { it.label },
-                            onAllow = {
-                                haptics.tick()
-                                requestHealthAccess()
-                            },
-                        )
-                    }
-                    "GLANCE" -> {
-                        MetricTilesSection(
-                            sleep = glanceSleep,
-                            tiles = glanceTiles,
-                            haptics = haptics,
-                            loading = healthConnectState is HealthConnectUiState.Loading || !metricsLoaded,
-                            onOpen = openSection,
-                        )
-                    }
-                    "SLEEP" -> {
-                        SleepSection(
-                            nights = sleepNights,
-                            loaded = sleepLoaded,
-                            haptics = haptics,
-                            onRequestPermission = {
-                                requestHealthAccess()
-                            },
-                        )
-                    }
-                    "VITALS" -> {
-                        VitalsSection(
-                            state = vitalsState,
-                            haptics = haptics,
-                            onRequestPermission = {
-                                requestHealthAccess()
-                            },
-                            birthYear = birthYear,
-                            onSetBirthYear = healthViewModel::setBirthYear,
-                        )
-                    }
-                    "ACTIVITIES" -> {
-                        ActivitySection(
-                            state = activitiesState,
-                            haptics = haptics,
-                            onRequestPermission = {
-                                requestHealthAccess()
-                            },
-                            onRetry = { healthViewModel.retryHealthConnect() },
-                            onOpenHealthConnect = { openHealthConnectSettings(context) },
-                            onExpandActivity = { healthViewModel.onActivityExpanded(it) },
-                            weekLabel = activityWeekLabel(healthHistory, weeksBack),
-                            weekControls = {
-                                ActivityWeekControls(
-                                    weeksBack = weeksBack,
-                                    weekStartDay = weekStartDay,
-                                    haptics = haptics,
-                                    onPreviousWeek = { healthViewModel.previousWeek() },
-                                    onNextWeek = { healthViewModel.nextWeek() },
-                                    onWeekStartDaySelected = { healthViewModel.setWeekStartDay(it) },
-                                )
-                            },
-                            trends = {
-                                if (healthHistory.isEmpty()) {
-                                    // Hold the chart's place while the week loads, so the
-                                    // workouts below don't jump when it lands.
-                                    if (healthConnectState is HealthConnectUiState.Loading || healthConnectState is HealthConnectUiState.Success) {
-                                        ContentSkeleton(lines = 4, accent = Border)
-                                    } else {
-                                        Text(
-                                            "Your weeks of steps and movement show here once Health Connect shares them.",
-                                            fontSize = 13.sp,
-                                            color = TextSecondary,
-                                        )
-                                    }
-                                } else {
-                                    ActivityTrends(
-                                        metricsReady = metricsLoaded,
-                                        healthHistory = healthHistory,
-                                        previousWeek = previousWeekHistory,
-                                        selectedDate = selectedDate,
-                                        selectedMetric = selectedMetric,
-                                        weeksBack = weeksBack,
-                                        haptics = haptics,
-                                        enabled = { metric ->
-                                            when (metric) {
-                                                HealthMetric.STEPS -> stepsState.isEnabled
-                                                HealthMetric.DISTANCE -> distanceState.isEnabled
-                                                HealthMetric.FLOORS_CLIMBED -> floorsClimbedState.isEnabled
-                                                HealthMetric.CALORIES -> activeCaloriesState.isEnabled
-                                                else -> false
-                                            }
-                                        },
-                                        onDateSelected = { healthViewModel.selectDate(it) },
-                                        onMetricSelected = { selectedMetric = it },
-                                    )
-                                }
-                            },
-                        )
-                    }
-                    "FOOD" -> {
-                        // One card for food: today against the goals, the form to log more, then
-                        // the weeks (7/14/30 days) with the picked day's log under the chart.
-                        HealthSection(delayMs = 100) {
-                            HealthHeader(
-                                title = "Food",
-                                icon = AppIcons.Restaurant,
-                                accent = HealthNutritionTone,
-                                modifier = Modifier.padding(bottom = 16.dp),
-                            ) {
-                                PillButton(
-                                    icon = AppIcons.Camera,
-                                    label = "Scan label",
-                                    emphasized = true,
-                                    onClick = onNavigateToCameraScan,
-                                    modifier = Modifier.padding(start = 8.dp),
-                                )
-                            }
-                            val s = summary
-                            if (s == null) {
-                                ContentSkeleton(lines = 2, accent = Border)
-                            } else {
-                                val hcStats = (healthConnectState as? HealthConnectUiState.Success)?.stats
-                                val calProgress = if (s.calorieGoal > 0) s.totalCalories.toFloat() / s.calorieGoal else 0f
-                                val protProgress = if (s.proteinGoal > 0) s.totalProtein.toFloat() / s.proteinGoal else 0f
-                                MacroProgressBar(
-                                    progress = calProgress,
-                                    label = "${s.totalCalories} / ${s.calorieGoal} kcal",
-                                    color = if (calProgress > 1f) Error else NutritionCalories,
-                                )
-                                MacroProgressBar(
-                                    progress = protProgress,
-                                    label = "${s.totalProtein} / ${s.proteinGoal} g protein",
-                                    color = NutritionProtein,
-                                )
+        }
 
-                                val calRemaining = (s.calorieGoal - s.totalCalories).coerceAtLeast(0)
-                                val proteinRemaining = (s.proteinGoal - s.totalProtein).coerceAtLeast(0)
-                                Spacer(modifier = Modifier.height(12.dp))
-                                // What's left, and the day's balance against what has been burned:
-                                // one line each, where Burned and In / Out used to say it twice.
-                                val burnedOut = hcStats?.totalCaloriesBurned?.takeIf { it > 0 }
-                                    ?: hcStats?.activeCaloriesBurned?.takeIf { it > 0 }
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    HealthStatTile(
-                                        label = "Left today",
-                                        value = "$calRemaining kcal",
-                                        sub = "${proteinRemaining}g protein",
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    if (burnedOut != null && s.totalCalories > 0) {
-                                        val out = burnedOut.roundToInt()
-                                        val net = s.totalCalories - out
-                                        HealthStatTile(
-                                            label = "Energy balance",
-                                            value = when {
-                                                net > 0 -> "+$net kcal"
-                                                net < 0 -> "$net kcal"
-                                                else -> "Even"
-                                            },
-                                            sub = "${s.totalCalories} in · $out out",
-                                            modifier = Modifier.weight(1f),
-                                        )
-                                    }
-                                }
-                            }
-                            FoodLogForm(
-                                name = foodName,
-                                onNameChange = { foodName = it },
-                                calories = calories,
-                                onCaloriesChange = { calories = it },
-                                protein = protein,
-                                onProteinChange = { protein = it },
-                                onAdd = { name, cal, prot -> healthViewModel.addLog(name, cal, prot) },
-                                onAskAi = onOpenMealChat,
-                                modifier = Modifier.padding(top = 16.dp),
-                            )
-                            Spacer(modifier = Modifier.height(18.dp))
-                            Hairline()
-                            Spacer(modifier = Modifier.height(14.dp))
-                            MacroTrends(
-                                rangeDays = macroRangeDays,
-                                metric = macroMetric,
-                                macroHistory = macroHistory,
-                                selectedDate = macroSelectedDate,
-                                selectedLogs = macroSelectedLogs,
-                                todayLogs = logs,
-                                loading = macroHistoryLoading,
-                                macroInsights = macroInsights,
-                                haptics = haptics,
-                                onRangeDaysSelected = { healthViewModel.setMacroRangeDays(it) },
-                                onMetricSelected = { healthViewModel.setMacroMetric(it) },
-                                onDateSelected = { healthViewModel.selectMacroDate(it) },
-                                onDeleteLog = { healthViewModel.deleteLog(it) },
+        item(key = "SLEEP", contentType = "SLEEP") {
+            SleepSection(
+                nights = sleepNights,
+                loaded = sleepLoaded,
+                haptics = haptics,
+                modifier = Modifier.riseIn(4, rise),
+                onRequestPermission = { requestHealthAccess() },
+            )
+        }
+
+        item(key = "ACTIVITIES", contentType = "ACTIVITIES") {
+            ActivitySection(
+                state = activitiesState,
+                haptics = haptics,
+                modifier = Modifier.riseIn(5, rise),
+                onRequestPermission = { requestHealthAccess() },
+                onRetry = { healthViewModel.retryHealthConnect() },
+                onOpenHealthConnect = { openHealthConnectSettings(context) },
+                onExpandActivity = { healthViewModel.onActivityExpanded(it) },
+                rangeLabel = activityRangeLabel(activityRange, today),
+                rangeControl = {
+                    HealthSegmented(
+                        options = ActivityRange.entries.map { it to it.label },
+                        selected = activityRange,
+                        onSelect = {
+                            haptics.tick()
+                            activityRange = it
+                        },
+                    )
+                },
+                trends = {
+                    if (activityDays.isEmpty()) {
+                        // Hold the chart's place while the days load, so the
+                        // workouts below don't jump when they land.
+                        if (hcLoading || healthConnectState is HealthConnectUiState.Success) {
+                            RoomLoading(tone = HealthActivityTone, bars = 5)
+                        } else {
+                            Text(
+                                "Steps and movement show here once Health Connect shares them.",
+                                fontSize = 13.sp,
+                                color = TextSecondary,
                             )
                         }
+                    } else {
+                        ActivityTrends(
+                            metricsReady = metricsLoaded,
+                            days = activityDays,
+                            today = today,
+                            range = activityRange,
+                            selectedMetric = selectedMetric,
+                            haptics = haptics,
+                            enabled = { metric ->
+                                when (metric) {
+                                    HealthMetric.STEPS -> stepsState.isEnabled
+                                    HealthMetric.DISTANCE -> distanceState.isEnabled
+                                    HealthMetric.FLOORS_CLIMBED -> floorsClimbedState.isEnabled
+                                    HealthMetric.CALORIES -> activeCaloriesState.isEnabled
+                                    else -> false
+                                }
+                            },
+                            onMetricSelected = { selectedMetric = it },
+                            hourlySteps = hourlySteps,
+                            usualHourlySteps = usualHourlySteps,
+                        )
                     }
+                },
+            )
+        }
+
+        item(key = "VITALS", contentType = "VITALS") {
+            VitalsSection(
+                state = vitalsState,
+                haptics = haptics,
+                onRequestPermission = { requestHealthAccess() },
+                birthYear = birthYear,
+                onSetBirthYear = healthViewModel::setBirthYear,
+            )
+        }
+
+        item(key = "FOOD", contentType = "FOOD") {
+            // Half-typed entries keep the form open when you come back to it.
+            var logging by rememberSaveable {
+                mutableStateOf(foodName.isNotEmpty() || calories.isNotEmpty() || protein.isNotEmpty())
+            }
+            // Someone who doesn't log food gets one quiet line, not a room of empty rings.
+            val unused = !logging && logs.isEmpty() && macroHistory.none { it.totalCalories > 0 || it.totalProtein > 0 }
+            HealthSection(tone = HealthNutritionTone) {
+                HealthHeader(
+                    title = "Food",
+                    icon = AppIcons.Restaurant,
+                    accent = HealthNutritionTone,
+                    subtitle = if (unused) "Nothing logged in the last $macroRangeDays days" else null,
+                ) {
+                    if (unused) {
+                        PillButton(
+                            icon = AppIcons.Add,
+                            label = "Log food",
+                            emphasized = true,
+                            accent = HealthNutritionTone,
+                            onClick = { logging = true },
+                        )
+                    } else {
+                        PillButton(
+                            icon = AppIcons.Camera,
+                            label = "Scan label",
+                            emphasized = true,
+                            accent = HealthNutritionTone,
+                            onClick = onNavigateToCameraScan,
+                            modifier = Modifier.padding(start = 8.dp),
+                        )
+                    }
+                }
+                if (!unused) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    val s = summary
+                    if (s == null) {
+                        RoomLoading(tone = HealthNutritionTone, bars = 3)
+                    } else {
+                        FoodToday(
+                            summary = s,
+                            meals = logs.size,
+                            burned = hcStats?.totalCaloriesBurned?.takeIf { it > 0 }
+                                ?: hcStats?.activeCaloriesBurned?.takeIf { it > 0 },
+                        )
+                    }
+                    WidgetExpandSection(visible = logging) {
+                        FoodComposer(
+                            name = foodName,
+                            onName = { foodName = it },
+                            calories = calories,
+                            onCalories = { calories = it },
+                            protein = protein,
+                            onProtein = { protein = it },
+                            onAdd = { name, cal, prot ->
+                                haptics.confirm()
+                                healthViewModel.addLog(name, cal, prot)
+                                foodName = ""
+                                calories = ""
+                                protein = ""
+                            },
+                            onAskAi = { haptics.tick(); onOpenMealChat() },
+                            onScan = { haptics.tick(); onNavigateToCameraScan() },
+                            modifier = Modifier.padding(top = 14.dp),
+                        )
+                    }
+                    WidgetExpandFooter(
+                        expanded = logging,
+                        onToggle = { logging = !logging },
+                        accentColor = HealthNutritionTone,
+                        expandLabel = "Log food",
+                        collapseLabel = "Done",
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    MacroTrends(
+                        rangeDays = macroRangeDays,
+                        metric = macroMetric,
+                        macroHistory = macroHistory,
+                        selectedDate = macroSelectedDate,
+                        selectedLogs = macroSelectedLogs,
+                        todayLogs = logs,
+                        loading = macroHistoryLoading,
+                        macroInsights = macroInsights,
+                        calorieGoal = summary?.calorieGoal ?: 0,
+                        proteinGoal = summary?.proteinGoal ?: 0,
+                        haptics = haptics,
+                        onRangeDaysSelected = { healthViewModel.setMacroRangeDays(it) },
+                        onMetricSelected = { healthViewModel.setMacroMetric(it) },
+                        onDateSelected = { healthViewModel.selectMacroDate(it) },
+                        onDeleteLog = { healthViewModel.deleteLog(it) },
+                    )
                 }
             }
         }
@@ -635,9 +551,171 @@ fun HealthScreen(
     }
 }
 
-// ── Macro Trends ──────────────────────────────────────────────────────
+/** The page's sections in the order they stand, by the names the island's taps use. */
+private val SectionOrder = listOf("DAILY_HEALTH", "SLEEP", "ACTIVITIES", "VITALS", "FOOD")
 
-@OptIn(ExperimentalLayoutApi::class)
+// ── Log food ──────────────────────────────────────────────────────────
+
+/**
+ * Logging a meal in the room's own look: what it was, then calories and protein as two tiles
+ * with the number set large, the two ways to have it worked out for you (a card that slides
+ * up to estimate it with AI, another to scan its label), and one button to log it.
+ */
+@Composable
+private fun FoodComposer(
+    name: String,
+    onName: (String) -> Unit,
+    calories: String,
+    onCalories: (String) -> Unit,
+    protein: String,
+    onProtein: (String) -> Unit,
+    onAdd: (String, Int, Int) -> Unit,
+    onAskAi: () -> Unit,
+    onScan: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    fun number(text: String) = text.replace(',', '.').toDoubleOrNull()?.roundToInt() ?: 0
+    val ready = number(calories) > 0 || number(protein) > 0
+    val tile = RoundedCornerShape(20.dp)
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        androidx.compose.foundation.layout.Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(tile)
+                .background(Color.White.copy(alpha = 0.06f))
+                .padding(horizontal = 16.dp, vertical = 15.dp),
+        ) {
+            if (name.isEmpty()) Text("What did you eat?", fontSize = 16.sp, color = TextSecondary)
+            BasicTextField(
+                value = name,
+                onValueChange = onName,
+                singleLine = true,
+                textStyle = TextStyle(color = TextPrimary, fontSize = 16.sp),
+                cursorBrush = SolidColor(HealthNutritionTone),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(
+                Triple("Calories", "kcal", NutritionCalories) to (calories to onCalories),
+                Triple("Protein", "g", NutritionProtein) to (protein to onProtein),
+            ).forEach { (what, field) ->
+                val (label, unit, tone) = what
+                val (value, onValue) = field
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(tile)
+                        .background(tone.copy(alpha = 0.12f))
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                ) {
+                    Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = tone)
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        androidx.compose.foundation.layout.Box(modifier = Modifier.weight(1f)) {
+                            if (value.isEmpty()) Text("0", style = HealthDisplay, fontSize = 30.sp, color = TextSecondary.copy(alpha = 0.5f))
+                            BasicTextField(
+                                value = value,
+                                onValueChange = { typed -> onValue(typed.filter { it.isDigit() || it == '.' || it == ',' }.take(6)) },
+                                singleLine = true,
+                                textStyle = HealthDisplay.copy(color = TextPrimary, fontSize = 30.sp),
+                                cursorBrush = SolidColor(tone),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                        Text(unit, fontSize = 13.sp, color = TextSecondary, modifier = Modifier.padding(bottom = 5.dp))
+                    }
+                }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(
+                Triple(AppIcons.Sparkles, "Estimate with AI", onAskAi),
+                Triple(AppIcons.Camera, "Scan label", onScan),
+            ).forEach { (icon, label, action) ->
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(tile)
+                        .background(HealthNutritionTone.copy(alpha = 0.14f))
+                        .clickable(onClick = action)
+                        .padding(vertical = 14.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(icon, contentDescription = null, tint = HealthNutritionTone, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(7.dp))
+                    Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = HealthNutritionTone, maxLines = 1)
+                }
+            }
+        }
+        Text(
+            "Log it",
+            style = HealthDisplay,
+            fontSize = 17.sp,
+            color = if (ready) Color.Black else TextSecondary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(tile)
+                .background(if (ready) HealthNutritionTone else Color.White.copy(alpha = 0.06f))
+                .clickable(enabled = ready) { onAdd(name, number(calories), number(protein)) }
+                .padding(vertical = 15.dp),
+        )
+    }
+}
+
+// ── Food ──────────────────────────────────────────────────────────────
+
+/**
+ * Today's food as two rings, calories outside and protein inside, with their numbers beside
+ * them the way Today sets its rings, then the day's balance against what has been burned
+ * (or how many meals are logged, until Health Connect says what was burned).
+ */
+@Composable
+private fun FoodToday(summary: DailySummary, meals: Int, burned: Double?) {
+    val calProgress = if (summary.calorieGoal > 0) summary.totalCalories.toFloat() / summary.calorieGoal else 0f
+    val protProgress = if (summary.proteinGoal > 0) summary.totalProtein.toFloat() / summary.proteinGoal else 0f
+    val over = calProgress > 1.15f
+    val fmt = { n: Int -> String.format(Locale.US, "%,d", n) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ActivityRings(
+            rings = listOf(
+                RingSpec(calProgress, if (over) Error else NutritionCalories),
+                RingSpec(protProgress, NutritionProtein),
+            ),
+            modifier = Modifier.size(116.dp),
+        )
+        Spacer(modifier = Modifier.width(22.dp))
+        RingReadouts(
+            readouts = listOf(
+                RingReadout("Calories", fmt(summary.totalCalories), "/${fmt(summary.calorieGoal)} kcal", if (over) Error else NutritionCalories),
+                RingReadout("Protein", "${summary.totalProtein}", "/${summary.proteinGoal} g", NutritionProtein),
+                if (burned != null && summary.totalCalories > 0) {
+                    val net = summary.totalCalories - burned.roundToInt()
+                    RingReadout("Balance", (if (net > 0) "+" else "") + fmt(net), " kcal", TextPrimary)
+                } else {
+                    val left = (summary.calorieGoal - summary.totalCalories).coerceAtLeast(0)
+                    RingReadout("Left today", fmt(left), " kcal · $meals ${if (meals == 1) "meal" else "meals"}", TextPrimary)
+                },
+            ),
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight(),
+            valueSize = 22,
+        )
+    }
+}
+
+/**
+ * Food over 7, 14 or 30 days: calories or protein a day against the goal, with the picked
+ * day's log under the chart (today's by default).
+ */
 @Composable
 private fun MacroTrends(
     rangeDays: Int,
@@ -649,6 +727,8 @@ private fun MacroTrends(
     todayLogs: List<MacroLogEntity>,
     loading: Boolean,
     macroInsights: com.macrotracker.ui.screens.health.MacroRangeInsights?,
+    calorieGoal: Int,
+    proteinGoal: Int,
     haptics: HapticHelper,
     onRangeDaysSelected: (Int) -> Unit,
     onMetricSelected: (String) -> Unit,
@@ -656,121 +736,111 @@ private fun MacroTrends(
     onDeleteLog: (String) -> Unit,
 ) {
     val dateFormat = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd") }
-    val today = LocalDate.now()
+    val today = rememberToday()
     val dates = remember(rangeDays, today) {
-        (0 until rangeDays).map { i ->
-            today.minusDays((rangeDays - 1 - i).toLong()).format(dateFormat)
-        }
+        (0 until rangeDays).map { i -> today.minusDays((rangeDays - 1 - i).toLong()) }
     }
-    val metricValues = dates.map { date ->
-        val day = macroHistory.find { it.date == date }
-        if (metric == "calories") day?.totalCalories ?: 0 else day?.totalProtein ?: 0
+    val calories = metric == "calories"
+    val byDate = remember(macroHistory) { macroHistory.associateBy { it.date } }
+    val values = dates.map { date ->
+        val day = byDate[date.format(dateFormat)]
+        (if (calories) day?.totalCalories else day?.totalProtein)?.toDouble() ?: 0.0
     }
-    val selectedMacro = macroHistory.find { it.date == selectedDate }
-    val barColor = if (metric == "calories") NutritionCalories else NutritionProtein
-    val selectedIndex = dates.indexOf(selectedDate).coerceAtLeast(0)
-    val labels = dates.map { date ->
-        try {
-            LocalDate.parse(date).dayOfWeek.getDisplayName(JavaTextStyle.NARROW, Locale.getDefault())
-        } catch (_: Exception) {
-            "?"
-        }
-    }
-    val avgMetric = metricValues.filter { it > 0 }.let { if (it.isEmpty()) 0.0 else it.average() }
+    val tone = if (calories) NutritionCalories else NutritionProtein
+    val goal = (if (calories) calorieGoal else proteinGoal).takeIf { it > 0 }?.toDouble()
+    val todayKey = today.format(dateFormat)
+    val pickedToday = selectedDate == todayKey
+    val pickedIndex = dates.indexOfFirst { it.format(dateFormat) == selectedDate }.takeIf { it >= 0 && !pickedToday }
+    val logged = values.count { it > 0.0 }
 
     Column {
-        Column {
-            Text(
-                "Over time",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = TextSecondary,
-                modifier = Modifier.padding(bottom = 10.dp),
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            HealthSegmented(
+                options = listOf("calories" to "Calories", "protein" to "Protein"),
+                selected = metric,
+                onSelect = {
+                    haptics.tick()
+                    onMetricSelected(it)
+                },
             )
+            Spacer(modifier = Modifier.weight(1f))
+            HealthSegmented(
+                options = listOf(7 to "7D", 14 to "14D", 30 to "30D"),
+                selected = rangeDays,
+                onSelect = {
+                    haptics.tick()
+                    onRangeDaysSelected(it)
+                },
+            )
+        }
+        Spacer(modifier = Modifier.height(14.dp))
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 12.dp)) {
-                listOf(7, 14, 30).forEach { option ->
-                    HealthChip(
-                        label = "${option} days",
-                        selected = option == rangeDays,
-                        color = barColor,
-                        onClick = {
-                            haptics.tick()
-                            onRangeDaysSelected(option)
-                        },
-                    )
-                }
+        if (logged == 0) {
+            if (loading) {
+                RoomLoading(tone = HealthNutritionTone, bars = 3)
+            } else {
+                Text("Nothing logged in the last $rangeDays days.", fontSize = 13.sp, color = TextSecondary)
             }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 12.dp)) {
-                listOf("calories" to "Calories", "protein" to "Protein").forEach { (key, label) ->
-                    HealthChip(
-                        label = label,
-                        selected = metric == key,
-                        color = if (key == "calories") NutritionCalories else NutritionProtein,
-                        icon = if (key == "calories") AppIcons.Flame else AppIcons.Dumbbell,
-                        onClick = {
-                            haptics.tick()
-                            onMetricSelected(key)
-                        },
-                    )
-                }
-            }
-
+        } else {
             macroInsights?.let { insights ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     HealthStatTile(
-                        "Avg",
-                        if (metric == "calories") {
+                        "Daily average",
+                        if (calories) {
                             String.format(Locale.US, "%,.0f kcal", insights.avgCalories)
                         } else {
-                            String.format(Locale.US, "%,.0fg", insights.avgProtein)
+                            String.format(Locale.US, "%,.0f g", insights.avgProtein)
                         },
                         Modifier.weight(1f),
                     )
                     HealthStatTile(
-                        "Adherence",
-                        buildString {
-                            val value = if (metric == "calories") insights.calorieAdherence else insights.proteinAdherence
-                            append(if (value != null) "${(value * 100).toInt()}%" else "—")
-                        },
+                        "On target",
+                        (if (calories) insights.calorieAdherence else insights.proteinAdherence)
+                            ?.let { "${(it * 100).toInt()}%" } ?: "—",
                         Modifier.weight(1f),
                     )
                     HealthStatTile(
                         "Logged",
-                        "${insights.loggedDays}/${insights.rangeDays}",
+                        "${insights.loggedDays} of ${insights.rangeDays} days",
                         Modifier.weight(1f),
                     )
                 }
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
             }
 
-            AnimatedMacroBarChart(
-                values = metricValues,
-                labels = labels,
-                selectedIndex = selectedIndex,
-                color = barColor,
-                avgValue = avgMetric,
+            RangeBarChart(
+                values = values,
+                color = tone,
                 haptics = haptics,
-                onSelect = { idx -> dates.getOrNull(idx)?.let(onDateSelected) },
+                height = 150.dp,
+                labels = dates.mapIndexed { i, date ->
+                    when {
+                        rangeDays <= 14 -> date.dayOfWeek.getDisplayName(JavaTextStyle.NARROW, Locale.getDefault())
+                        (dates.lastIndex - i) % 7 == 0 -> date.format(DateTimeFormatter.ofPattern("d MMM"))
+                        else -> null
+                    }
+                },
+                selectedIndex = pickedIndex,
+                onSelect = { i -> onDateSelected(i?.let { dates[it].format(dateFormat) } ?: todayKey) },
+                goal = goal,
+                average = values.filter { it > 0.0 }.takeIf { it.size >= 2 }?.average(),
+                chartKey = metric to rangeDays,
+                // A day well over the calorie goal stands out, as the ring does.
+                barColor = if (calories && goal != null) {
+                    { i -> if (values[i] > goal * 1.15) Error else tone }
+                } else {
+                    null
+                },
             )
-
-            if (loading) {
-                LoadingRow(color = Primary) {
-                    Text("Loading trends…", fontSize = 13.sp, color = TextSecondary)
-                }
-            }
         }
 
         // Today's log under the chart while today is picked (its totals are at the top of the
         // card), and a past day's totals and log when one is picked instead.
-        val pickedToday = selectedDate == today.format(dateFormat)
         if (pickedToday && todayLogs.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("Logged today", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary)
+            HealthGroupLabel("Logged today", trailing = if (todayLogs.size == 1) "1 meal" else "${todayLogs.size} meals")
             FoodLogList(logs = todayLogs, onDelete = onDeleteLog)
         }
         AnimatedVisibility(
@@ -778,46 +848,36 @@ private fun MacroTrends(
             enter = MacroMotion.expandEnter,
             exit = MacroMotion.expandExit,
         ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 10.dp)) {
-                Icon(AppIcons.CalendarDays, contentDescription = null, tint = HealthNutritionTone, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
+            Column(modifier = Modifier.fillMaxWidth()) {
+                val picked = byDate[selectedDate]
                 val displayDate = try {
-                    LocalDate.parse(selectedDate).format(DateTimeFormatter.ofPattern("EEEE, MMM d"))
-                } catch (_: Exception) { selectedDate }
-                Text(displayDate, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                HealthStatTile("Calories", "${selectedMacro?.totalCalories ?: 0} kcal", Modifier.weight(1f))
-                HealthStatTile("Protein", "${selectedMacro?.totalProtein ?: 0}g", Modifier.weight(1f))
-                HealthStatTile("Meals", "${selectedLogs.size}", Modifier.weight(1f))
-            }
-
-            Text(
-                "Food logged",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary,
-                modifier = Modifier.padding(bottom = 8.dp),
-            )
-            if (selectedLogs.isEmpty()) {
-                Text(
-                    "No food logged that day.",
-                    color = TextSecondary,
-                    fontSize = 13.sp,
-                )
-            } else {
-                WidgetScrollBox {
-                    FoodLogList(logs = selectedLogs, onDelete = onDeleteLog)
+                    LocalDate.parse(selectedDate).format(DateTimeFormatter.ofPattern("EEEE d MMM"))
+                } catch (_: Exception) {
+                    selectedDate
+                }
+                HealthGroupLabel(displayDate, trailing = if (selectedLogs.size == 1) "1 meal" else "${selectedLogs.size} meals")
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    HealthStatTile("Calories", "${picked?.totalCalories ?: 0} kcal", Modifier.weight(1f))
+                    HealthStatTile("Protein", "${picked?.totalProtein ?: 0} g", Modifier.weight(1f))
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+                if (selectedLogs.isEmpty()) {
+                    Text(
+                        "Nothing logged that day.",
+                        color = TextSecondary,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                } else {
+                    WidgetScrollBox {
+                        FoodLogList(logs = selectedLogs, onDelete = onDeleteLog)
+                    }
                 }
             }
-        }
         }
     }
 }

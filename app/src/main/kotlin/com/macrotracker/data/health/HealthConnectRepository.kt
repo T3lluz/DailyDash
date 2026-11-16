@@ -768,9 +768,15 @@ class HealthConnectRepository @Inject constructor(
 
     /**
      * Historical daily stats. Aggregates bulk metrics, then enriches with
-     * overnight sleep + sparse vitals via range reads (not N×day IPC).
+     * overnight sleep + sparse vitals via range reads (not N×day IPC). A long
+     * range that only needs the day's totals (the Activity card's three months)
+     * passes [enrich] false and skips those two record reads.
      */
-    suspend fun readHistoryStatsBetween(startDate: LocalDate, endDate: LocalDate): List<DailyHealthStats> =
+    suspend fun readHistoryStatsBetween(
+        startDate: LocalDate,
+        endDate: LocalDate,
+        enrich: Boolean = true,
+    ): List<DailyHealthStats> =
         withContext(Dispatchers.IO) {
             val hc = client ?: return@withContext emptyList()
             val zone = ZoneId.systemDefault()
@@ -832,8 +838,10 @@ class HealthConnectRepository @Inject constructor(
 
                 perDay.forEach { (date, accumulator) -> dailyStatsMap[date] = accumulator.toStats() }
 
-                enrichHistoryWithSleep(hc, startDate, endDate, zone, dailyStatsMap)
-                enrichHistoryWithSparseVitals(hc, startDate, endDate, zone, dailyStatsMap)
+                if (enrich) {
+                    enrichHistoryWithSleep(hc, startDate, endDate, zone, dailyStatsMap)
+                    enrichHistoryWithSparseVitals(hc, startDate, endDate, zone, dailyStatsMap)
+                }
             }
 
             val days = ChronoUnit.DAYS.between(startDate, endDate).toInt() + 1
@@ -1576,13 +1584,13 @@ class HealthConnectRepository @Inject constructor(
         }
     }
 
-    /** Active calories in each hour of today (24 entries, zero where nothing was burned). */
-    suspend fun readHourlyActiveCalories(): List<Double> = withContext(Dispatchers.IO) {
+    /** Active calories in each hour of [date] (24 entries, zero where nothing was burned). */
+    suspend fun readHourlyActiveCalories(date: LocalDate = LocalDate.now()): List<Double> = withContext(Dispatchers.IO) {
         val hc = client ?: return@withContext emptyList()
         if (!hasPermission(ACTIVE_CALORIES_PERMISSION)) return@withContext emptyList()
         val zone = ZoneId.systemDefault()
-        val start = LocalDate.now(zone).atStartOfDay(zone).toInstant()
-        val end = Instant.now()
+        val start = date.atStartOfDay(zone).toInstant()
+        val end = date.plusDays(1).atStartOfDay(zone).toInstant().coerceAtMost(Instant.now())
         if (!start.isBefore(end)) return@withContext emptyList()
         try {
             val hours = DoubleArray(24)

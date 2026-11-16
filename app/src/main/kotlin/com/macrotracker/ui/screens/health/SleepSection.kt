@@ -1,5 +1,8 @@
 package com.macrotracker.ui.screens.health
 
+import com.macrotracker.ui.util.rememberReducedMotion
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.Icon
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -43,6 +46,12 @@ import androidx.compose.ui.unit.sp
 import com.macrotracker.data.health.computeSleepConsistency
 import com.macrotracker.data.health.formatEveningOffset
 import com.macrotracker.data.health.minutesFromEvening
+import com.macrotracker.data.health.sleepDayLabel
+import com.macrotracker.ui.util.onFirstSeen
+import com.macrotracker.ui.util.rememberClock24
+import com.macrotracker.ui.util.rememberClockFormatter
+import java.time.Duration
+import java.time.Instant
 import com.macrotracker.ui.components.ContentSkeleton
 import com.macrotracker.ui.components.WidgetExpandFooter
 import com.macrotracker.ui.components.WidgetExpandSection
@@ -64,9 +73,13 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 /**
- * Sleep — last night in full (score, schedule, stage mix, hypnogram) above a
- * two-week schedule chart. Tap or drag a night in the chart to read that
- * night instead; everything above follows it.
+ * Sleep: how long the newest night was, set large, with its score as a ring; the night stage
+ * by stage with each stage's time and share beside its lane (hold a finger on it to read a
+ * stretch); then every night of
+ * the last two weeks as a bar against the goal. Tap or drag across the bars to read another
+ * night; everything above follows it. "Score and schedule" opens what the score is made of
+ * and when the nights began and ended, with their regularity and sleep debt. The night on a
+ * clock face is the body clock's, at the top of the tab.
  */
 @Composable
 fun SleepSection(
@@ -74,9 +87,10 @@ fun SleepSection(
     loaded: Boolean,
     haptics: HapticHelper,
     onRequestPermission: () -> Unit,
-    delayMs: Long = 30L,
+    modifier: Modifier = Modifier,
 ) {
     val zone = remember { ZoneId.systemDefault() }
+    val h24 = rememberClock24()
     val goal = DEFAULT_SLEEP_GOAL_MINUTES
     // A picked night is kept by its date, and only while the night it was picked against is
     // still the newest: a list index used to survive in saved state and, once a new night
@@ -84,29 +98,31 @@ fun SleepSection(
     var pickedDay by rememberSaveable { mutableLongStateOf(NO_PICK) }
     var pickedAgainst by rememberSaveable { mutableLongStateOf(NO_PICK) }
     val newestDay = nights.lastOrNull()?.date?.toEpochDay() ?: NO_PICK
-    val selectedIndex = nights.indexOfFirst { it.date.toEpochDay() == pickedDay }
+    val pickedIndex = nights.indexOfFirst { it.date.toEpochDay() == pickedDay }
         .takeIf { it >= 0 && pickedAgainst == newestDay }
-        ?: nights.lastIndex
+    val selectedIndex = pickedIndex ?: nights.lastIndex
     val night = nights.getOrNull(selectedIndex)
     val consistency = remember(nights) { computeSleepConsistency(nights.map { it.toSpan() }, goal, zone) }
-    // The night at a glance by default; its stats, hypnogram and the two weeks open on request.
     var detailed by rememberSaveable { mutableStateOf(false) }
+    val pick: (Int?) -> Unit = { i ->
+        pickedDay = if (i == null || i == nights.lastIndex) NO_PICK else nights[i].date.toEpochDay()
+        pickedAgainst = newestDay
+    }
 
-    HealthSection(delayMs = delayMs) {
+    HealthSection(modifier = modifier, tone = HealthSleep) {
         HealthHeader(
             title = "Sleep",
             icon = AppIcons.Moon,
             accent = HealthSleep,
-            subtitle = night?.let { nightSubtitle(it) } ?: "Last night and the two weeks before",
+            subtitle = night?.let { nightSubtitle(it, newest = selectedIndex == nights.lastIndex) },
             modifier = Modifier.padding(bottom = 12.dp),
         )
 
         when {
-            !loaded && nights.isEmpty() -> ContentSkeleton(lines = 4, accent = Border)
+            !loaded && nights.isEmpty() -> RoomLoading(tone = HealthSleep, bars = 5)
             nights.isEmpty() || night == null -> StatusCopy(
                 title = "No sleep recorded",
-                body = "Nights from your watch or phone show up here once they sync to Health Connect " +
-                    "and Sleep is shared with DailyDash.",
+                body = "Nights from your watch or phone show once they sync to Health Connect.",
                 actionLabel = "Allow access",
                 onAction = {
                     haptics.tick()
@@ -122,70 +138,88 @@ fun SleepSection(
                     contentKey = { it.date },
                     label = "sleepNight",
                 ) { shown ->
-                    NightDetail(night = shown, zone = zone, haptics = haptics, detailed = detailed)
+                    NightSummary(night = shown, zone = zone, haptics = haptics)
                 }
 
-                WidgetExpandSection(visible = detailed) {
-                Column {
                 if (nights.size >= 2) {
                     Spacer(modifier = Modifier.height(18.dp))
                     HealthSectionLabel(
                         text = "Last ${nights.size} nights",
                         trailing = consistency?.let { "avg ${formatMinutesCompact(it.avgAsleepMinutes)}" },
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    SleepScheduleChart(
-                        nights = nights,
-                        selectedIndex = selectedIndex,
-                        goalMinutes = goal,
-                        zone = zone,
+                    Spacer(modifier = Modifier.height(6.dp))
+                    RangeBarChart(
+                        values = nights.map { it.asleepMinutes / 60.0 },
+                        color = HealthSleep,
                         haptics = haptics,
-                        onSelect = { i ->
-                            pickedDay = if (i == nights.lastIndex) NO_PICK else nights[i].date.toEpochDay()
-                            pickedAgainst = newestDay
+                        height = 124.dp,
+                        labels = nights.map {
+                            it.date.minusDays(1).dayOfWeek.getDisplayName(JavaTextStyle.NARROW, Locale.getDefault())
                         },
+                        selectedIndex = pickedIndex,
+                        onSelect = pick,
+                        goal = goal / 60.0,
+                        axisLabel = { "${compactNumber(it)}h" },
+                        chartKey = "sleepNights",
                     )
                 }
 
-                consistency?.takeIf { it.nights >= 3 }?.let { c ->
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        HealthStatTile(
-                            label = "Bedtime",
-                            value = formatEveningOffset(c.avgBedtimeOffset),
-                            sub = "±${c.bedtimeSpreadMinutes} min",
-                            modifier = Modifier.weight(1f),
-                        )
-                        HealthStatTile(
-                            label = "Wake",
-                            value = formatEveningOffset(c.avgWakeOffset),
-                            sub = "average",
-                            modifier = Modifier.weight(1f),
-                        )
-                        HealthStatTile(
-                            label = "Sleep debt",
-                            value = if (c.weekDebtMinutes <= 0) "None" else formatMinutesCompact(c.weekDebtMinutes),
-                            sub = "last 7 nights",
-                            modifier = Modifier.weight(1f),
-                        )
+                WidgetExpandSection(visible = detailed) {
+                    Column {
+                        NightDetail(night = night)
+                        if (nights.size >= 2) {
+                            Spacer(modifier = Modifier.height(18.dp))
+                            HealthSectionLabel(text = "Bedtime to waking")
+                            Spacer(modifier = Modifier.height(8.dp))
+                            SleepScheduleChart(
+                                nights = nights,
+                                selectedIndex = selectedIndex,
+                                goalMinutes = goal,
+                                zone = zone,
+                                haptics = haptics,
+                                onSelect = { pick(it) },
+                            )
+                        }
+                        consistency?.takeIf { it.nights >= 3 }?.let { c ->
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                HealthStatTile(
+                                    label = "Bedtime",
+                                    value = formatEveningOffset(c.avgBedtimeOffset, h24),
+                                    sub = "±${c.bedtimeSpreadMinutes} min",
+                                    modifier = Modifier.weight(1f),
+                                )
+                                HealthStatTile(
+                                    label = "Wake",
+                                    value = formatEveningOffset(c.avgWakeOffset, h24),
+                                    sub = "average",
+                                    modifier = Modifier.weight(1f),
+                                )
+                                HealthStatTile(
+                                    label = "Sleep debt",
+                                    value = if (c.weekDebtMinutes <= 0) "None" else formatMinutesCompact(c.weekDebtMinutes),
+                                    sub = "last 7 nights",
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                "${c.nightsAtGoal} of ${c.nights} nights near your ${goal / 60}h goal",
+                                fontSize = 12.sp,
+                                color = TextTertiary,
+                            )
+                        }
                     }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        "${c.nightsAtGoal} of ${c.nights} nights near your ${goal / 60}h goal",
-                        fontSize = 11.sp,
-                        color = TextTertiary,
-                    )
                 }
-                }
-                }
+                // The bar gives its own haptic.
                 WidgetExpandFooter(
                     expanded = detailed,
-                    onToggle = { haptics.tick(); detailed = !detailed },
+                    onToggle = { detailed = !detailed },
                     accentColor = HealthSleep,
-                    expandLabel = "Stages and two weeks",
+                    expandLabel = "Score and schedule",
                     collapseLabel = "Less",
                 )
             }
@@ -195,72 +229,119 @@ fun SleepSection(
 
 private const val NO_PICK = Long.MIN_VALUE
 
-private fun nightSubtitle(night: SleepNight): String {
-    val today = LocalDate.now()
-    val day = when (night.date) {
-        today -> "Last night"
-        today.minusDays(1) -> "Night before last"
-        else -> night.date.minusDays(1).format(DateTimeFormatter.ofPattern("EEE d MMM"))
-    }
-    return night.score?.let { "$day · ${it.label}" } ?: day
+/** "3 am" for an hour mark on the schedule's 12-hour axis; [offset] is minutes from 18:00. */
+private fun formatHourOnly(offset: Int): String {
+    val h = (((18 * 60 + offset) / 60) % 24 + 24) % 24
+    return "${if (h % 12 == 0) 12 else h % 12} ${if (h < 12) "am" else "pm"}"
 }
 
+private fun nightSubtitle(night: SleepNight, newest: Boolean): String {
+    val day = sleepDayLabel(
+        sleepDay = night.date,
+        today = LocalDate.now(),
+        newest = newest,
+        hoursSinceWake = Duration.between(night.wake, Instant.now()).toHours(),
+    )
+    val over = night.asleepMinutes - DEFAULT_SLEEP_GOAL_MINUTES
+    val against = when {
+        over >= 15 -> "${formatMinutesCompact(over)} over your goal"
+        over <= -15 -> "${formatMinutesCompact(-over)} short of your goal"
+        else -> "right on your goal"
+    }
+    return "$day · $against"
+}
+
+/**
+ * The night at a glance: how long was slept, set large, with when it began and ended; the
+ * score as a ring beside it; then the night itself, stage by stage, and the stages' shares.
+ */
 @Composable
-private fun NightDetail(night: SleepNight, zone: ZoneId, haptics: HapticHelper, detailed: Boolean) {
-    val timeFmt = remember { DateTimeFormatter.ofPattern("HH:mm") }
+private fun NightSummary(night: SleepNight, zone: ZoneId, haptics: HapticHelper) {
+    val timeFmt = rememberClockFormatter()
     val score = night.score
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            SleepClockDial(night = night, zone = zone, modifier = Modifier.size(156.dp))
-            Spacer(modifier = Modifier.width(22.dp))
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                if (score != null) {
-                    Column {
-                        Text("Sleep score", fontSize = 12.sp, color = TextSecondary)
-                        Row {
-                            Text(
-                                "${score.score}",
-                                fontSize = 28.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary,
-                                modifier = Modifier.alignByBaseline(),
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                score.label,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = HealthSleep,
-                                modifier = Modifier.alignByBaseline(),
-                            )
-                        }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    formatMinutesCompact(night.asleepMinutes),
+                    style = HealthDisplay,
+                    fontSize = 46.sp,
+                    lineHeight = 50.sp,
+                    color = TextPrimary,
+                    maxLines = 1,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(AppIcons.Moon, contentDescription = null, tint = HealthSleep, modifier = Modifier.size(13.dp))
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text(night.bedtime.atZone(zone).format(timeFmt), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = TextSecondary)
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Icon(AppIcons.Sunrise, contentDescription = null, tint = HealthSleep, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text(night.wake.atZone(zone).format(timeFmt), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = TextSecondary)
+                    if (night.sessions.size > 1) {
+                        Text("  ·  ${night.sessions.size} sessions", fontSize = 12.sp, color = TextTertiary)
                     }
                 }
-                ClockTime("Bedtime", night.bedtime.atZone(zone).format(timeFmt))
-                ClockTime(
-                    "Woke",
-                    night.wake.atZone(zone).format(timeFmt),
-                    note = night.sessions.size.takeIf { it > 1 }?.let { "$it sessions" },
-                )
+            }
+            if (score != null) {
+                Spacer(modifier = Modifier.width(12.dp))
+                ScoreRing(score = score.score, label = score.label)
             }
         }
-
-        // The stage mix is on the Sleep tile above this card; here it opens with the rest.
-        WidgetExpandSection(visible = detailed) {
-        Column {
         if (score != null && night.hasStages) {
-            Spacer(modifier = Modifier.height(16.dp))
-            SleepStageMix(
-                deepMinutes = score.deepMinutes,
-                lightMinutes = score.lightMinutes,
-                remMinutes = score.remMinutes,
-                awakeMinutes = score.awakeMinutes,
-            )
+            Spacer(modifier = Modifier.height(14.dp))
+            SleepNightHypnogram(sessions = night.sessions, haptics = haptics)
         }
-        Spacer(modifier = Modifier.height(18.dp))
+    }
+}
+
+/** The sleep score as a ring that fills to it, the number inside and its word under. */
+@Composable
+private fun ScoreRing(score: Int, label: String) {
+    val reduced = rememberReducedMotion()
+    val grown = remember { androidx.compose.animation.core.Animatable(if (reduced) score / 100f else 0f) }
+    var seen by remember { mutableStateOf(false) }
+    LaunchedEffect(score, seen) { if (seen) grown.animateTo(score / 100f, MacroMotion.chartRevealTween(900)) }
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.onFirstSeen { seen = true }) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(72.dp)) {
+            Canvas(modifier = Modifier.matchParentSize()) {
+                val stroke = 7.dp.toPx()
+                val inset = stroke / 2f
+                val arc = Size(size.width - stroke, size.height - stroke)
+                drawArc(HealthSleep.copy(alpha = 0.2f), -90f, 360f, false, Offset(inset, inset), arc, style = Stroke(stroke))
+                drawArc(
+                    HealthSleep,
+                    -90f,
+                    360f * grown.value,
+                    false,
+                    Offset(inset, inset),
+                    arc,
+                    style = Stroke(stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round),
+                )
+            }
+            Text("$score", style = HealthDisplay, fontSize = 24.sp, color = TextPrimary)
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = HealthSleep)
+    }
+}
+
+/** Opened: what the score is made of and the night's efficiency. */
+@Composable
+private fun NightDetail(night: SleepNight) {
+    val score = night.score
+    Column(modifier = Modifier.fillMaxWidth()) {
+        if (score != null && score.durationPoints + score.stagePoints + score.continuityPoints > 0) {
+            Spacer(modifier = Modifier.height(18.dp))
+            HealthSectionLabel(text = "What made the score")
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                ScorePart("Time asleep", score.durationPoints, 40, Modifier.weight(1f))
+                ScorePart("Deep and REM", score.stagePoints, 35, Modifier.weight(1f))
+                ScorePart("Unbroken", score.continuityPoints, 25, Modifier.weight(1f))
+            }
+        }
+        Spacer(modifier = Modifier.height(16.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             HealthStatTile(
                 label = "In bed",
@@ -279,12 +360,25 @@ private fun NightDetail(night: SleepNight, zone: ZoneId, haptics: HapticHelper, 
                 modifier = Modifier.weight(1f),
             )
         }
+    }
+}
 
-        if (score != null && night.hasStages) {
-            Spacer(modifier = Modifier.height(16.dp))
-            SleepNightHypnogram(sessions = night.sessions, haptics = haptics)
-        }
-        }
+/** One part of the sleep score: its name, its points of the most it can give, and a meter. */
+@Composable
+private fun ScorePart(label: String, points: Int, of: Int, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        Text(label, fontSize = 12.sp, color = TextSecondary, maxLines = 1)
+        Spacer(modifier = Modifier.height(2.dp))
+        HealthValueText(value = "$points", unit = "/$of", valueSize = 18.sp, unitSize = 12.sp)
+        Spacer(modifier = Modifier.height(6.dp))
+        Canvas(modifier = Modifier.fillMaxWidth().height(4.dp)) {
+            val r = CornerRadius(size.height / 2f)
+            drawRoundRect(Border, cornerRadius = r)
+            drawRoundRect(
+                HealthSleep,
+                size = Size(size.width * (points.toFloat() / of).coerceIn(0f, 1f), size.height),
+                cornerRadius = r,
+            )
         }
     }
 }
@@ -324,6 +418,7 @@ private fun SleepScheduleChart(
     onSelect: (Int) -> Unit,
 ) {
     val textMeasurer = rememberTextMeasurer()
+    val h24 = rememberClock24()
     val spans = remember(nights) {
         nights.map {
             minutesFromEvening(it.bedtime, it.date, zone) to minutesFromEvening(it.wake, it.date, zone)
@@ -392,7 +487,7 @@ private fun SleepScheduleChart(
                 val y = yOf(tick)
                 drawLine(Border.copy(alpha = 0.35f), Offset(left, y), Offset(right, y), 1.dp.toPx())
                 val layout = textMeasurer.measure(
-                    formatEveningOffset(tick),
+                    if (h24) formatEveningOffset(tick) else formatHourOnly(tick),
                     TextStyle(color = TextTertiary, fontSize = 9.sp),
                 )
                 drawText(layout, topLeft = Offset(left - layout.size.width - 6.dp.toPx(), y - layout.size.height / 2f))
@@ -423,8 +518,8 @@ private fun SleepScheduleChart(
                 val selected = i == selectedIndex
                 val alpha = when {
                     selected -> 1f
-                    metGoal -> 0.75f
-                    else -> 0.38f
+                    metGoal -> 0.55f
+                    else -> 0.3f
                 }
                 drawRoundRect(
                     color = HealthSleep.copy(alpha = alpha),
@@ -432,15 +527,6 @@ private fun SleepScheduleChart(
                     size = Size(barW, barH),
                     cornerRadius = CornerRadius(barW / 2f),
                 )
-                if (selected) {
-                    drawRoundRect(
-                        color = TextPrimary.copy(alpha = 0.9f),
-                        topLeft = Offset(cx - barW / 2f - 2.dp.toPx(), y0 - 2.dp.toPx()),
-                        size = Size(barW + 4.dp.toPx(), barH + 4.dp.toPx()),
-                        cornerRadius = CornerRadius(barW / 2f + 2.dp.toPx()),
-                        style = Stroke(1.5.dp.toPx()),
-                    )
-                }
             }
         }
         Row(

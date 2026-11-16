@@ -24,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -40,6 +41,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.macrotracker.ui.theme.AppIcons
+import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Border
 import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.SelectedFill
@@ -123,8 +125,11 @@ fun Sparkline(
     markLast: Boolean = true,
     strokeWidthDp: Float = 2f,
     signed: Boolean = false,
+    /** The person's usual range, drawn as a faint band behind the line (low to high). */
+    band: ClosedFloatingPointRange<Double>? = null,
 ) {
     val reduced = rememberReducedMotion()
+    val halo = LocalRoomColor.current
     val reveal = remember { Animatable(if (reduced) 1f else 0f) }
     LaunchedEffect(Unit) {
         if (reveal.value < 1f) reveal.animateTo(1f, MacroMotion.chartRevealTween(600))
@@ -137,14 +142,23 @@ fun Sparkline(
             }
             return@Canvas
         }
-        val min = points.minOf { it.value }
-        val max = points.maxOf { it.value }
+        val min = minOf(points.minOf { it.value }, band?.start ?: Double.MAX_VALUE)
+        val max = maxOf(points.maxOf { it.value }, band?.endInclusive ?: -Double.MAX_VALUE)
         val span = (max - min).takeIf { it > 1e-9 } ?: 1.0
         val padY = 3.dp.toPx()
         val h = size.height - padY * 2
         val lastIndex = (values.size - 1).coerceAtLeast(1)
         fun xOf(i: Int) = size.width * i / lastIndex
         fun yOf(v: Double) = padY + h - ((v - min) / span).toFloat() * h
+        band?.let {
+            val top = yOf(it.endInclusive)
+            drawRoundRect(
+                color.copy(alpha = 0.13f),
+                topLeft = Offset(0f, top),
+                size = Size(size.width, (yOf(it.start) - top).coerceAtLeast(1f)),
+                cornerRadius = CornerRadius(3.dp.toPx()),
+            )
+        }
         val visible = (points.size * reveal.value).toInt().coerceIn(2, points.size)
         val shown = points.take(visible)
 
@@ -160,10 +174,7 @@ fun Sparkline(
                 lineTo(xOf(shown.first().index), size.height)
                 close()
             }
-            drawPath(
-                area,
-                Brush.verticalGradient(listOf(color.copy(alpha = 0.22f), color.copy(alpha = 0f))),
-            )
+            drawPath(area, color.copy(alpha = 0.10f))
         }
         drawPath(
             line,
@@ -173,41 +184,8 @@ fun Sparkline(
         if (markLast && visible == points.size) {
             val last = points.last()
             val c = Offset(xOf(last.index), yOf(last.value))
-            drawCircle(Surface, 3.5.dp.toPx(), c)
+            drawCircle(halo, 3.5.dp.toPx(), c)
             drawCircle(color, 2.5.dp.toPx(), c)
-        }
-    }
-}
-
-/** Mini bars for daily totals (hydration, active minutes). Zero days draw as a stub. */
-@Composable
-fun MiniBars(
-    values: List<Double>,
-    color: Color,
-    modifier: Modifier = Modifier,
-    highlightLast: Boolean = true,
-) {
-    val reduced = rememberReducedMotion()
-    val reveal = remember { Animatable(if (reduced) 1f else 0f) }
-    LaunchedEffect(Unit) {
-        if (reveal.value < 1f) reveal.animateTo(1f, MacroMotion.chartRevealTween(600))
-    }
-    Canvas(modifier = modifier) {
-        val grow = reveal.value
-        if (values.isEmpty()) return@Canvas
-        val max = values.maxOrNull()?.takeIf { it > 0 } ?: 1.0
-        val gap = 2.dp.toPx()
-        val w = ((size.width - gap * (values.size - 1)) / values.size).coerceAtLeast(1f)
-        val stub = 2.dp.toPx()
-        values.forEachIndexed { i, v ->
-            val barH = if (v <= 0) stub else (size.height * (v / max).toFloat() * grow).coerceAtLeast(stub)
-            val last = highlightLast && i == values.lastIndex
-            drawRoundRect(
-                color = if (v <= 0) Border else color.copy(alpha = if (last) 1f else 0.45f),
-                topLeft = Offset(i * (w + gap), size.height - barH),
-                size = Size(w, barH),
-                cornerRadius = CornerRadius(w / 3f),
-            )
         }
     }
 }
@@ -268,6 +246,47 @@ fun HealthChip(
 }
 
 /**
+ * A short set of choices as one control (W · M · 3M): the picked one on a light fill, the
+ * rest plain, all inside one darker track.
+ */
+@Composable
+fun <T> HealthSegmented(
+    options: List<Pair<T, String>>,
+    selected: T,
+    onSelect: (T) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .clip(CircleShape)
+            .background(Background)
+            .padding(3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        options.forEach { (value, label) ->
+            val on = value == selected
+            val fill by animateFloatAsState(
+                targetValue = if (on) 1f else 0f,
+                animationSpec = MacroMotion.colorTween(),
+                label = "healthSegment",
+            )
+            Text(
+                label,
+                fontSize = 12.sp,
+                fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
+                color = if (on) TextPrimary else TextSecondary,
+                maxLines = 1,
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .drawBehind { drawRect(SelectedFill.copy(alpha = SelectedFill.alpha * 1.6f * fill)) }
+                    .clickable { onSelect(value) }
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            )
+        }
+    }
+}
+
+/**
  * A label over a value, nothing around it: a row of these reads as one line of facts, as
  * Apple Health sets them, where a row of boxes read as a spreadsheet.
  */
@@ -284,6 +303,7 @@ fun HealthStatTile(
         Spacer(modifier = Modifier.height(2.dp))
         Text(
             value,
+            style = HealthDisplay,
             fontSize = 18.sp,
             fontWeight = FontWeight.SemiBold,
             color = accent ?: TextPrimary,
