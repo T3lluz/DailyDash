@@ -65,6 +65,7 @@ class PhoneSnapshot @Inject constructor(
     @param:ApplicationContext private val context: Context,
     private val health: HealthConnectRepository,
     private val calendar: CalendarRepository,
+    private val settings: com.macrotracker.data.local.SettingsRepository,
 ) {
     /**
      * Album art is the heavy part of a report. It is encoded again only when the picture
@@ -128,7 +129,7 @@ class PhoneSnapshot @Inject constructor(
                 if (today != null || more != null) {
                     val h = today ?: JSONObject()
                     more?.keys()?.forEach { k -> h.put(k, more.get(k)) }
-                    h.put("stepsGoal", STEP_GOAL)
+                    h.put("stepsGoal", settings.healthGoals.value.steps)
                     out.put("health", h)
                 }
             }
@@ -560,9 +561,6 @@ class PhoneSnapshot @Inject constructor(
         java.security.MessageDigest.getInstance("SHA-1").digest(s.toByteArray()).joinToString("") { "%02x".format(it) }
 
     companion object {
-        /** The step goal the Health tab measures against. */
-        const val STEP_GOAL = 10_000L
-
         /** Bumped when the dashboard can rely on something new; 2 = art ids, media lane, inline commands. */
         const val HUB_VERSION = 2
 

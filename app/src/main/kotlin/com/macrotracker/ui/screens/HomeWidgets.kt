@@ -194,7 +194,6 @@ private fun HomeBodyStatsWidget(viewModel: HomeViewModel, isVisible: Boolean, on
                     hourlySteps = hs.hourlySteps,
                     usualHourlySteps = hs.usualHourlySteps,
                     heartRate = hs.heartRate,
-                    hourlyMoveKcal = hs.hourlyMoveKcal,
                     sleepSessions = hs.sleepSessions,
                     sleepScore = hs.sleepScore,
                     lastUpdatedAt = hs.lastUpdatedAt,

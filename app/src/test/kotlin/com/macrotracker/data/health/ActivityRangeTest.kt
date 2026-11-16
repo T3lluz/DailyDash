@@ -57,4 +57,48 @@ class ActivityRangeTest {
         // The sleep day of Sunday the 15th began on Saturday evening.
         assertEquals("Saturday night", sleepDayLabel(today.minusDays(1), today, newest = false, hoursSinceWake = 30))
     }
+
+    @Test
+    fun yearIsFiftyTwoWeeksEndingToday() {
+        val bars = rangeBars(totals(0 to 300.0, 363 to 70.0, 364 to 999.0), ActivityRange.YEAR, today)
+        assertEquals(52, bars.size)
+        assertEquals(today.minusDays(363), bars.first().start)
+        assertEquals(70.0, bars.first().value, 0.0)
+        assertEquals(today, bars.last().end)
+    }
+
+    private fun day(back: Int, steps: Long = 0, kcal: Double = 0.0, km: Double = 0.0, floors: Double = 0.0, rhr: Long = 0) =
+        DailyHealthStats(
+            today.minusDays(back.toLong()),
+            HealthStats(steps = steps, totalCaloriesBurned = kcal, distance = km, floorsClimbed = floors, restingHeartRate = rhr),
+        )
+
+    @Test
+    fun bestsPickTheRecordDayOfEachMeasure() {
+        val days = listOf(
+            day(9, steps = 12_000, rhr = 52),
+            day(8, steps = 11_000, kcal = 2_900.0, rhr = 49),
+            day(7, steps = 10_500, km = 9.4),
+            day(6, steps = 3_000, floors = 14.0, rhr = 49),
+            day(5, steps = 12_000, rhr = 20),
+        ).sortedBy { it.date }
+        val bests = healthBests(days, stepGoal = 10_000).associateBy { it.kind }
+        // A tie goes to the newer day.
+        assertEquals(today.minusDays(5), bests.getValue(BestKind.STEPS).date)
+        assertEquals(2_900.0, bests.getValue(BestKind.CALORIES).value, 0.0)
+        assertEquals(9.4, bests.getValue(BestKind.DISTANCE).value, 0.0)
+        assertEquals(14.0, bests.getValue(BestKind.FLOORS).value, 0.0)
+        // 20 bpm isn't a reading; of the two 49s, the newer.
+        assertEquals(49.0, bests.getValue(BestKind.RESTING_HR).value, 0.0)
+        assertEquals(today.minusDays(6), bests.getValue(BestKind.RESTING_HR).date)
+        // Three days in a row at goal, ending a week ago.
+        assertEquals(3.0, bests.getValue(BestKind.STREAK).value, 0.0)
+        assertEquals(today.minusDays(7), bests.getValue(BestKind.STREAK).date)
+    }
+
+    @Test
+    fun bestsLeaveOutWhatWasNeverRead() {
+        val bests = healthBests(listOf(day(1, steps = 4_000), day(0, steps = 500)), stepGoal = 10_000)
+        assertEquals(listOf(BestKind.STEPS), bests.map { it.kind })
+    }
 }

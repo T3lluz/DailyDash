@@ -7,11 +7,11 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZonedDateTime
 
-// The body clock: a day on a 24-hour face, midnight at the top. Live, it is the last 24
-// hours ending now, so it is full at any time of day and whenever the night was; a past day
-// is its midnight to midnight. Everything is placed by its hour of the day, and carries how
-// far through the window it sits so the face can draw the day in order and fade what is old.
-// Pure, so BodyClockTest pins it.
+// The body clock: a day on a 24-hour face, midnight at the top. Live, it is today from
+// midnight to now with last night's sleep whole, so a day that has not begun shows the night
+// and nothing else; a past day is its midnight to midnight. Everything is placed by its hour
+// of the day, and carries where the hand's one turn reaches it so the face can draw the day
+// in order. Pure, so BodyClockTest pins it.
 
 /** One day by the hour: steps and active kcal in 24 slots from midnight, heart rate in quarter hours. */
 data class DayHours(
@@ -20,7 +20,7 @@ data class DayHours(
     val heart: List<HrPoint> = emptyList(),
 )
 
-/** One hour on the face. [at] is 0 for the oldest thing in the window and 1 for the newest. */
+/** One hour on the face. [at] is how far through its turn (0–1) the hand is when it draws this in. */
 data class ClockSlot(val hour: Int, val steps: Long, val moveKcal: Double, val at: Float)
 
 data class ClockBeat(val hour: Double, val bpm: Double, val at: Float)
@@ -29,7 +29,7 @@ data class ClockBeat(val hour: Double, val bpm: Double, val at: Float)
 data class ClockSleep(val hour: Double, val hours: Double, val stage: Int?, val at: Float)
 
 data class BodyClock(
-    /** True for the last 24 hours ending now; false for a day that is over. */
+    /** True for today, still running; false for a day that is over. */
     val live: Boolean,
     /** Where now is on the face (0–24); 24 for a day that is over. */
     val nowHour: Double,
@@ -80,35 +80,44 @@ private fun ringDistance(a: Double, b: Double): Double {
 }
 
 /**
- * The last 24 hours ending at [now]: today up to this hour, and yesterday's hours after it.
- * The hour in hand is today's, so the face never shows the same hour twice.
+ * Today so far at [now]: its hours from midnight up to the one in hand, and the hours still to
+ * come empty. Sleep is last night's whole, so the part before midnight stays on the rim; it
+ * reaches back to [SLEEP_DAY_START_HOUR] yesterday and never further than 24 hours, so the
+ * rim never holds the same time of day twice.
  */
 fun liveBodyClock(
     now: ZonedDateTime,
     today: DayHours?,
-    yesterday: DayHours?,
     sessions: List<SleepSessionRecord>,
 ): BodyClock {
     val nowHour = now.hour + now.minute / 60.0
+    // The hand's turn starts at now and comes round to it again, so the day's first hours are drawn first.
     fun at(hoursOld: Double) = (1.0 - hoursOld / 24.0).toFloat().coerceIn(0f, 1f)
     val slots = (0 until 24).map { hour ->
-        val fromToday = hour <= now.hour
-        val day = if (fromToday) today else yesterday
-        val hoursOld = if (fromToday) nowHour - (hour + 0.5) else nowHour + 24 - (hour + 0.5)
-        ClockSlot(hour, day?.steps?.getOrNull(hour) ?: 0L, day?.moveKcal?.getOrNull(hour) ?: 0.0, at(hoursOld.coerceAtLeast(0.0)))
+        val reached = hour <= now.hour
+        val hoursOld = if (reached) nowHour - (hour + 0.5) else nowHour + 24 - (hour + 0.5)
+        ClockSlot(
+            hour = hour,
+            steps = if (reached) today?.steps?.getOrNull(hour) ?: 0L else 0L,
+            moveKcal = if (reached) today?.moveKcal?.getOrNull(hour) ?: 0.0 else 0.0,
+            at = at(hoursOld.coerceAtLeast(0.0)),
+        )
     }
-    val beats = yesterday?.heart.orEmpty().filter { it.hour > nowHour }.map { ClockBeat(it.hour, it.bpm, at(nowHour + 24 - it.hour)) } +
-        today?.heart.orEmpty().filter { it.hour <= nowHour }.map { ClockBeat(it.hour, it.bpm, at(nowHour - it.hour)) }
+    val beats = today?.heart.orEmpty().filter { it.hour <= nowHour }.map { ClockBeat(it.hour, it.bpm, at(nowHour - it.hour)) }
     val end = now.toInstant()
-    val start = end.minus(Duration.ofHours(24))
+    val turn = end.minus(Duration.ofHours(24))
+    val evening = now.toLocalDate().minusDays(1).atTime(SLEEP_DAY_START_HOUR, 0).atZone(now.zone).toInstant()
     return BodyClock(
         live = true,
         nowHour = nowHour,
         slots = slots,
         beats = beats,
-        sleep = sleepOnFace(sessions, start, end, now.zone),
+        sleep = sleepOnFace(sessions, if (evening.isAfter(turn)) evening else turn, end, now.zone, turnFrom = turn),
     )
 }
+
+/** A night belongs to the day it ends in from this hour the evening before (as `readSleepNights` groups them). */
+private const val SLEEP_DAY_START_HOUR = 18
 
 /** A day that is over (or any whole day): its midnight to midnight. */
 fun dayBodyClock(day: LocalDate, hours: DayHours?, sessions: List<SleepSessionRecord>, zone: ZoneId): BodyClock {
@@ -125,9 +134,18 @@ fun dayBodyClock(day: LocalDate, hours: DayHours?, sessions: List<SleepSessionRe
     )
 }
 
-/** Every stage (or stageless session) that falls inside the window, cut to it. */
-private fun sleepOnFace(sessions: List<SleepSessionRecord>, start: Instant, end: Instant, zone: ZoneId): List<ClockSleep> {
-    val window = Duration.between(start, end).toMillis().coerceAtLeast(1L).toFloat()
+/**
+ * Every stage (or stageless session) that falls inside the window, cut to it. [turnFrom] is
+ * where the hand's turn starts when that is earlier than the window.
+ */
+private fun sleepOnFace(
+    sessions: List<SleepSessionRecord>,
+    start: Instant,
+    end: Instant,
+    zone: ZoneId,
+    turnFrom: Instant = start,
+): List<ClockSleep> {
+    val window = Duration.between(turnFrom, end).toMillis().coerceAtLeast(1L).toFloat()
     fun piece(from: Instant, to: Instant, stage: Int?): ClockSleep? {
         val a = if (from.isBefore(start)) start else from
         val b = if (to.isAfter(end)) end else to
@@ -137,7 +155,7 @@ private fun sleepOnFace(sessions: List<SleepSessionRecord>, start: Instant, end:
             hour = local.hour + local.minute / 60.0 + local.second / 3600.0,
             hours = Duration.between(a, b).toMillis() / 3_600_000.0,
             stage = stage,
-            at = (Duration.between(start, a).toMillis() / window).coerceIn(0f, 1f),
+            at = (Duration.between(turnFrom, a).toMillis() / window).coerceIn(0f, 1f),
         )
     }
     return sessions.flatMap { session ->

@@ -34,6 +34,7 @@ class SettingsViewModel @Inject constructor(
 ) : ViewModel() {
 
     val aiProvider: StateFlow<AiProvider> = settings.aiProvider
+    val healthGoals: StateFlow<com.macrotracker.data.health.HealthGoals> = settings.healthGoals
     val geminiApiKey: StateFlow<String> = settings.geminiApiKey
     val openAiApiKey: StateFlow<String> = settings.openAiApiKey
     val anthropicApiKey: StateFlow<String> = settings.anthropicApiKey

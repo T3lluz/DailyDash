@@ -23,7 +23,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.macrotracker.ui.util.rememberIsResumed
 import com.macrotracker.ui.util.rememberReducedMotion
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
+import com.macrotracker.data.health.HealthGoals
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.PlatformTextStyle
@@ -92,6 +94,9 @@ fun roomColor(tone: Color): Color = lerp(Background, tone, 0.10f)
  * the gap under a handle). A room provides its own.
  */
 val LocalRoomColor = staticCompositionLocalOf { Surface }
+
+/** The person's daily goals ([HealthGoals]), provided once for the app by MainScreen. */
+val LocalHealthGoals = compositionLocalOf { HealthGoals() }
 
 /** How many blocks rise in one after another when the tab first opens. */
 private const val RISE_BLOCKS = 6f

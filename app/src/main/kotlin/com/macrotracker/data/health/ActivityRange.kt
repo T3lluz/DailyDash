@@ -3,21 +3,22 @@ package com.macrotracker.data.health
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
-// The Activity card's ranges, cut out of one list of daily totals. Pure, so
-// ActivityRangeTest pins them.
+// The Activity card's ranges, cut out of one list of daily totals, and the bests over all of
+// it. Pure, so ActivityRangeTest pins them.
 
 /**
  * How far back the Activity card looks: today by the hour, a week and a month by the day,
- * three months by the week.
+ * three months and a year (52 weeks) by the week.
  */
 enum class ActivityRange(val label: String, val days: Int, val bucketDays: Int) {
     DAY("D", 1, 1),
     WEEK("W", 7, 1),
     MONTH("M", 30, 1),
     QUARTER("3M", 91, 7),
+    YEAR("Y", 364, 7),
 }
 
-/** One bar: a day, or a week's daily average in the three-month range. */
+/** One bar: a day, or a week's daily average in the three-month and year ranges. */
 data class RangeBar(
     val start: LocalDate,
     val end: LocalDate,
@@ -96,3 +97,44 @@ fun sleepDayLabel(sleepDay: LocalDate, today: LocalDate, newest: Boolean, hoursS
 
 /** A sleep that ended this recently still counts as the day's sleep, whatever its sleep day. */
 const val LAST_SLEEP_HOURS = 20L
+
+/** What a best is of. */
+enum class BestKind { STEPS, CALORIES, DISTANCE, FLOORS, RESTING_HR, STREAK }
+
+/** A personal best: the day it was set (a streak's last day) and its value (a streak's length in days). */
+data class HealthBest(val kind: BestKind, val value: Double, val date: LocalDate)
+
+/**
+ * The bests across [days] (oldest first): the most steps, calories burned, distance and floors in a day,
+ * the lowest resting heart rate, and the longest run of days at [stepGoal]. A measure with no
+ * reading is left out, and a streak counts from two days. A tie keeps the newer day.
+ */
+fun healthBests(days: List<DailyHealthStats>, stepGoal: Long): List<HealthBest> {
+    fun most(kind: BestKind, floor: Double, of: (HealthStats) -> Double): HealthBest? =
+        days.filter { of(it.stats) > floor }
+            .maxWithOrNull(compareBy<DailyHealthStats> { of(it.stats) }.thenBy { it.date })
+            ?.let { HealthBest(kind, of(it.stats), it.date) }
+    val resting = days.filter { it.stats.restingHeartRate in RESTING_HR_READING }
+        .minWithOrNull(compareBy<DailyHealthStats> { it.stats.restingHeartRate }.thenByDescending { it.date })
+        ?.let { HealthBest(BestKind.RESTING_HR, it.stats.restingHeartRate.toDouble(), it.date) }
+    var run = 0
+    var streak: HealthBest? = null
+    var previous: LocalDate? = null
+    days.sortedBy { it.date }.forEach { day ->
+        val follows = previous?.plusDays(1) == day.date
+        run = if (stepGoal > 0 && day.stats.steps >= stepGoal) (if (follows) run + 1 else 1) else 0
+        previous = day.date
+        if (run >= 2 && run >= (streak?.value ?: 0.0)) streak = HealthBest(BestKind.STREAK, run.toDouble(), day.date)
+    }
+    return listOfNotNull(
+        most(BestKind.STEPS, 0.0) { it.steps.toDouble() },
+        most(BestKind.CALORIES, 0.0) { it.totalCaloriesBurned },
+        most(BestKind.DISTANCE, 0.1) { it.distance },
+        most(BestKind.FLOORS, 0.0) { it.floorsClimbed },
+        resting,
+        streak,
+    )
+}
+
+/** Resting heart rates a watch could really have read. */
+private val RESTING_HR_READING = 30L..120L

@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.health.connect.client.records.SleepSessionRecord
 import com.macrotracker.R
+import com.macrotracker.data.health.HealthGoals
 import com.macrotracker.data.health.HealthStats
 import com.macrotracker.data.health.HrPoint
 import com.macrotracker.data.health.StepPace
@@ -74,7 +75,6 @@ import kotlin.math.roundToLong
 enum class GlanceChart(val label: String, val tone: Color, val icon: ImageVector) {
     STEPS("Steps", HealthSteps, AppIcons.Walk),
     HEART("Heart", HealthHeartRate, AppIcons.HeartPulse),
-    MOVE("Move", HealthMove, AppIcons.Flame),
     SLEEP("Sleep", HealthSleep, AppIcons.Moon),
 }
 
@@ -82,7 +82,7 @@ enum class GlanceChart(val label: String, val tone: Color, val icon: ImageVector
  * Home's Body Stats, after Apple Fitness and Health's highlights rather than a grid of
  * boxes: gradient rings with their numbers beside them in each ring's colour, then one
  * chart with a sentence over it that moves through the day's steps against a usual day,
- * heart rate, Move and last night's sleep on its own every few seconds, until one is
+ * heart rate and last night's sleep on its own every few seconds, until one is
  * picked from the chips. It opens on last night in the morning. Readings follow as a line
  * of text; the chevron opens Health.
  */
@@ -92,20 +92,22 @@ fun HealthGlanceCard(
     hourlySteps: List<Long>,
     usualHourlySteps: List<Double>,
     heartRate: List<HrPoint>,
-    hourlyMoveKcal: List<Double>,
     sleepSessions: List<SleepSessionRecord>,
     sleepScore: SleepNightScore?,
     lastUpdatedAt: Instant?,
     onOpen: () -> Unit,
 ) {
     val haptics = rememberHaptics()
-    val activity = remember(stats) {
+    val goals = LocalHealthGoals.current
+    val activity = remember(stats, goals) {
         computeTodayActivity(
             stats = stats,
             stepsToday = stats.steps,
-            activeCalToday = stats.activeCaloriesBurned,
+            caloriesToday = stats.totalCaloriesBurned,
             distanceToday = stats.distance,
             floorsToday = stats.floorsClimbed,
+            stepGoal = goals.steps,
+            calorieGoal = goals.caloriesKcal.toDouble(),
         )
     }
     val sleepMin = sleepScore?.totalMinutes ?: stats.sleepMinutes
@@ -117,7 +119,6 @@ fun HealthGlanceCard(
     val charts = buildList {
         if (hourlySteps.sum() > 0L || pace != null) add(GlanceChart.STEPS)
         if (heartRate.size >= 2) add(GlanceChart.HEART)
-        if (hourlyMoveKcal.sum() > 0.0) add(GlanceChart.MOVE)
         if (sleepSessions.isNotEmpty()) add(GlanceChart.SLEEP)
     }
     val morning = remember { LocalTime.now().hour < MORNING_ENDS_HOUR }
@@ -162,14 +163,14 @@ fun HealthGlanceCard(
             ActivityRings(
                 rings = listOf(
                     RingSpec(activity.stepProgress, HealthSteps),
-                    RingSpec((sleepMin.toFloat() / DEFAULT_SLEEP_GOAL_MINUTES), HealthSleep),
-                    RingSpec(activity.moveProgress, HealthMove),
+                    RingSpec((sleepMin.toFloat() / goals.sleepMinutes), HealthSleep),
+                    RingSpec(activity.calorieProgress, HealthMove),
                 ),
                 modifier = Modifier.size(124.dp),
             )
             Spacer(modifier = Modifier.width(20.dp))
             RingReadouts(
-                readouts = todayReadouts(activity, sleepMin),
+                readouts = todayReadouts(activity, sleepMin, goals.sleepMinutes),
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight(),
@@ -209,7 +210,6 @@ fun HealthGlanceCard(
                     hourlySteps = hourlySteps,
                     usualHourlySteps = usualHourlySteps,
                     heartRate = heartRate,
-                    hourlyMoveKcal = hourlyMoveKcal,
                     sleepSessions = sleepSessions,
                     sleepScore = sleepScore,
                     sleepMin = sleepMin,
@@ -251,7 +251,6 @@ private fun GlanceChartPanel(
     hourlySteps: List<Long>,
     usualHourlySteps: List<Double>,
     heartRate: List<HrPoint>,
-    hourlyMoveKcal: List<Double>,
     sleepSessions: List<SleepSessionRecord>,
     sleepScore: SleepNightScore?,
     sleepMin: Long,
@@ -265,14 +264,6 @@ private fun GlanceChartPanel(
             PaceLine(
                 headline = day?.let { "Averaging ${it.average} bpm today" } ?: "Heart rate",
                 detail = day?.let { "${it.low}–${it.high} bpm" + (resting?.let { r -> " · resting $r" } ?: "") },
-            )
-        }
-        GlanceChart.MOVE -> {
-            val left = (activity.activeCalGoal - activity.activeCalories).roundToInt()
-            PaceLine(
-                headline = if (left <= 0) "Move ring closed" else "${fmt(left)} kcal left to close Move",
-                detail = "${fmt(activity.activeCalories.roundToLong())} active kcal" +
-                    (stats.totalCaloriesBurned.takeIf { it > 0 }?.let { " · ${fmt(it.roundToLong())} burned in all" } ?: ""),
             )
         }
         GlanceChart.SLEEP -> {
@@ -320,14 +311,6 @@ private fun GlanceChartPanel(
                 tone = HealthHeartRate,
                 height = CHART_HEIGHT,
             )
-            GlanceChart.MOVE -> StepPaceChart(
-                todayHourly = hourlyMoveKcal.map { it.roundToLong() },
-                usualHourly = emptyList(),
-                goal = activity.activeCalGoal.roundToLong(),
-                tone = HealthMove,
-                height = CHART_HEIGHT,
-                unit = "kcal",
-            )
             GlanceChart.SLEEP -> SleepStagesStrip(sessions = sleepSessions, height = CHART_HEIGHT)
         }
     }
@@ -336,7 +319,11 @@ private fun GlanceChartPanel(
 private val CHART_HEIGHT = 72.dp
 
 /** The three rings' numbers in Apple Fitness's order and wording. */
-internal fun todayReadouts(activity: TodayActivitySnapshot, sleepMin: Long): List<RingReadout> = listOf(
+internal fun todayReadouts(
+    activity: TodayActivitySnapshot,
+    sleepMin: Long,
+    sleepGoalMinutes: Long = HealthGoals.DEFAULT_SLEEP_MINUTES,
+): List<RingReadout> = listOf(
     RingReadout(
         label = "Steps",
         value = String.format(Locale.US, "%,d", activity.steps),
@@ -346,13 +333,13 @@ internal fun todayReadouts(activity: TodayActivitySnapshot, sleepMin: Long): Lis
     RingReadout(
         label = "Sleep",
         value = if (sleepMin > 0) formatMinutesCompact(sleepMin) else "0h",
-        goal = "/${DEFAULT_SLEEP_GOAL_MINUTES / 60}h",
+        goal = "/${formatGoalMinutes(sleepGoalMinutes)}",
         tone = HealthSleep,
     ),
     RingReadout(
-        label = "Move",
-        value = "${activity.activeCalories.roundToInt()}",
-        goal = "/${activity.activeCalGoal.roundToInt()} kcal",
+        label = "Calories",
+        value = String.format(Locale.US, "%,d", activity.calories.roundToInt()),
+        goal = "/${String.format(Locale.US, "%,d", activity.calorieGoal.roundToInt())}",
         tone = HealthMove,
     ),
 )

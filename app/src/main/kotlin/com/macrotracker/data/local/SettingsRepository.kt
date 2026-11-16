@@ -2,6 +2,7 @@ package com.macrotracker.data.local
 
 import android.content.Context
 import androidx.core.content.edit
+import com.macrotracker.data.health.HealthGoals
 import com.macrotracker.data.remote.AiProvider
 import com.macrotracker.data.remote.AnthropicModels
 import com.macrotracker.data.remote.AiModels
@@ -301,6 +302,25 @@ class SettingsRepository @Inject constructor(
     private val _birthYear = MutableStateFlow(healthPrefs.getInt(KEY_BIRTH_YEAR, 0))
     val birthYear: StateFlow<Int> = _birthYear
 
+    /** Daily goals for steps, calories and sleep (see [HealthGoals]). */
+    private val _healthGoals = MutableStateFlow(
+        HealthGoals(
+            steps = healthPrefs.getLong(KEY_GOAL_STEPS, HealthGoals.DEFAULT_STEPS),
+            caloriesKcal = healthPrefs.getInt(KEY_GOAL_CALORIES, HealthGoals.DEFAULT_CALORIES_KCAL),
+            sleepMinutes = healthPrefs.getLong(KEY_GOAL_SLEEP, HealthGoals.DEFAULT_SLEEP_MINUTES),
+        ).clamped(),
+    )
+    val healthGoals: StateFlow<HealthGoals> = _healthGoals
+
+    /** The Activity card's ask for Health Connect's full history was turned down. */
+    private val _historyAskDismissed = MutableStateFlow(healthPrefs.getBoolean(KEY_HISTORY_ASK_DISMISSED, false))
+    val historyAskDismissed: StateFlow<Boolean> = _historyAskDismissed
+
+    fun setHistoryAskDismissed(dismissed: Boolean) {
+        healthPrefs.edit { putBoolean(KEY_HISTORY_ASK_DISMISSED, dismissed) }
+        _historyAskDismissed.value = dismissed
+    }
+
     private val _githubToken = MutableStateFlow(prefs.getString(KEY_GITHUB_TOKEN, "") ?: "")
     val githubToken: StateFlow<String> = _githubToken
 
@@ -444,6 +464,16 @@ class SettingsRepository @Inject constructor(
         _birthYear.value = value
     }
 
+    fun setHealthGoals(goals: HealthGoals) {
+        val value = goals.clamped()
+        healthPrefs.edit {
+            putLong(KEY_GOAL_STEPS, value.steps)
+            putInt(KEY_GOAL_CALORIES, value.caloriesKcal)
+            putLong(KEY_GOAL_SLEEP, value.sleepMinutes)
+        }
+        _healthGoals.value = value
+    }
+
     fun setWeatherEnabled(enabled: Boolean) {
         prefs.edit { putBoolean("weather_enabled", enabled) }
         _weatherEnabled.value = enabled
@@ -561,6 +591,10 @@ class SettingsRepository @Inject constructor(
         const val KEY_DASHBOARD_CALS = "dashboard_cals"
         const val KEY_DASHBOARD_CAL_MINE = "dashboard_cal_mine"
         const val KEY_BIRTH_YEAR = "birth_year"
+        const val KEY_GOAL_STEPS = "goal_steps"
+        const val KEY_GOAL_CALORIES = "goal_calories_kcal"
+        const val KEY_GOAL_SLEEP = "goal_sleep_minutes"
+        const val KEY_HISTORY_ASK_DISMISSED = "history_ask_dismissed"
         const val TECH_SUPPORT_AUTO = "auto"
         const val TECH_SUPPORT_HERMES = "hermes"
         const val TECH_SUPPORT_PHONE = "phone"

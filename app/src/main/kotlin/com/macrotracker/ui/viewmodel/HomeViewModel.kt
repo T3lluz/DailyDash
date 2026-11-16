@@ -74,7 +74,6 @@ sealed class WeatherUiState {
 private data class HomeHealthExtras(
     val usualSteps: List<Double>,
     val heartRate: List<HrPoint>,
-    val moveKcal: List<Double>,
 )
 
 sealed class HomeHealthState {
@@ -94,8 +93,6 @@ sealed class HomeHealthState {
         val usualHourlySteps: List<Double> = emptyList(),
         /** Today's heart rate in quarter hours, for the card's heart chart. */
         val heartRate: List<HrPoint> = emptyList(),
-        /** Active calories per hour of today, for the Move chart. */
-        val hourlyMoveKcal: List<Double> = emptyList(),
         /** Last night's sessions with their stages, for the sleep chart. */
         val sleepSessions: List<SleepSessionRecord> = emptyList(),
     ) : HomeHealthState()
@@ -423,7 +420,6 @@ class HomeViewModel @Inject constructor(
                         emptyList()
                     }
                 }
-                val move = async { healthConnectRepository.readHourlyActiveCalories() }
                 val hourly = async {
                     if (healthConnectRepository.hasPermission(HealthConnectRepository.STEPS_PERMISSION)) {
                         healthConnectRepository.readHourlySteps()
@@ -439,7 +435,7 @@ class HomeViewModel @Inject constructor(
                     }
                 }
                 Triple(healthConnectRepository.readTodayStats(), hourly.await(), sleep.await()) to
-                    HomeHealthExtras(usual.await(), heart.await(), move.await())
+                    HomeHealthExtras(usual.await(), heart.await())
             }
             val (stats, hourly, sessions) = reads
             // A read of 0 right after a real count is Health Connect catching up; keep the count.
@@ -456,7 +452,6 @@ class HomeViewModel @Inject constructor(
                     sleepScore = computeSleepNightScore(sessions),
                     usualHourlySteps = extras.usualSteps,
                     heartRate = extras.heartRate,
-                    hourlyMoveKcal = extras.moveKcal,
                     sleepSessions = sessions,
                 )
             }

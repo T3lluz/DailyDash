@@ -8,6 +8,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -61,6 +62,7 @@ import com.macrotracker.data.health.HealthStats
 import com.macrotracker.data.health.HrPoint
 import com.macrotracker.data.health.LAST_SLEEP_HOURS
 import com.macrotracker.data.health.Readiness
+import com.macrotracker.data.health.HealthGoals
 import com.macrotracker.data.health.goalStreak
 import com.macrotracker.data.health.stepPace
 import com.macrotracker.ui.components.ContentSkeleton
@@ -105,7 +107,6 @@ fun DailyHealthSection(
      * wins instead of the card rendering a zero.
      */
     stepsToday: Long?,
-    activeCaloriesToday: Double?,
     distanceToday: Double?,
     floorsToday: Double?,
     /** Today's resting heart rate read on its own, for when the batch has none. */
@@ -118,7 +119,7 @@ fun DailyHealthSection(
     /** Daily totals, oldest first, ending today. */
     days: List<DailyHealthStats>,
     nights: List<SleepNight>,
-    /** The days read by the hour so far: today and yesterday, and any day picked in the strip. */
+    /** The days read by the hour so far: today, and any day picked in the strip. */
     dayHours: Map<LocalDate, DayHours>,
     today: LocalDate,
     loading: Boolean,
@@ -131,15 +132,37 @@ fun DailyHealthSection(
     rise: () -> Float = { 1f },
     onAllow: () -> Unit,
     onPickDay: (LocalDate) -> Unit,
+    onSetGoals: (HealthGoals) -> Unit,
 ) {
-    val activity = remember(stats, stepsToday, activeCaloriesToday, distanceToday, floorsToday) {
+    val goals = LocalHealthGoals.current
+    val activity = remember(stats, stepsToday, distanceToday, floorsToday, goals) {
         computeTodayActivity(
             stats = stats,
             stepsToday = stepsToday?.takeIf { it > 0L } ?: stats?.steps,
-            activeCalToday = activeCaloriesToday?.takeIf { it > 0.0 } ?: stats?.activeCaloriesBurned,
+            caloriesToday = stats?.totalCaloriesBurned,
             distanceToday = distanceToday?.takeIf { it > 0.0 } ?: stats?.distance,
             floorsToday = floorsToday?.takeIf { it > 0.0 } ?: stats?.floorsClimbed,
+            stepGoal = goals.steps,
+            calorieGoal = goals.caloriesKcal.toDouble(),
         )
+    }
+    // A hold on a meter opens the goals, on that meter's goal first.
+    var goalsOpenOn by rememberSaveable { mutableStateOf<String?>(null) }
+    goalsOpenOn?.let { first ->
+        HealthGoalsSheet(
+            goals = goals,
+            days = days,
+            nights = nights,
+            today = today,
+            first = GoalKind.entries.firstOrNull { it.name == first },
+            haptics = haptics,
+            onChange = onSetGoals,
+            onDismiss = { goalsOpenOn = null },
+        )
+    }
+    fun openGoals(kind: GoalKind) {
+        haptics.gestureStart()
+        goalsOpenOn = kind.name
     }
     // The night that counts for today: last night, or for someone who sleeps into the day,
     // the sleep they last woke from while that is still recent.
@@ -157,9 +180,9 @@ fun DailyHealthSection(
             val date = today.minusDays(back.toLong())
             val day = byDate[date]?.stats
             if (back == 0) {
-                DayRings(date, activity.steps, activity.activeCalories, todaySleepMin)
+                DayRings(date, activity.steps, activity.calories, todaySleepMin)
             } else {
-                DayRings(date, day?.steps ?: 0L, day?.activeCaloriesBurned ?: 0.0, nightByDate[date]?.asleepMinutes ?: 0L)
+                DayRings(date, day?.steps ?: 0L, day?.totalCaloriesBurned ?: 0.0, nightByDate[date]?.asleepMinutes ?: 0L)
             }
         }
     }
@@ -185,7 +208,7 @@ fun DailyHealthSection(
     val isToday = picked.date == today
     LaunchedEffect(picked.date) { if (!isToday) onPickDay(picked.date) }
 
-    // Now, to the minute, while the tab is in front: the hand and the last 24 hours follow it.
+    // Now, to the minute, while the tab is in front: the hand and the day so far follow it.
     var now by remember { mutableStateOf(ZonedDateTime.now()) }
     LaunchedWhileResumed {
         while (true) {
@@ -198,7 +221,6 @@ fun DailyHealthSection(
             liveBodyClock(
                 now = now,
                 today = dayHours[today],
-                yesterday = dayHours[today.minusDays(1)],
                 sessions = nights.takeLast(3).flatMap { it.sessions },
             )
         } else {
@@ -215,9 +237,9 @@ fun DailyHealthSection(
         stepPace(hourlySteps, usualHourlySteps, now.hour + now.minute / 60.0)
     }
 
-    // Read and ready to draw: the live clock needs both days and the nights, a past day its own hours.
+    // Read and ready to draw: the live clock needs today's hours and the nights, a past day its own hours.
     val ready = if (isToday) {
-        nightsLoaded && today in dayHours && today.minusDays(1) in dayHours
+        nightsLoaded && today in dayHours
     } else {
         picked.date in dayHours
     }
@@ -244,7 +266,7 @@ fun DailyHealthSection(
             picked = picked.date,
             today = today,
             stepGoal = activity.stepGoal,
-            moveGoal = activity.activeCalGoal,
+            moveGoal = activity.calorieGoal,
             onPick = { date ->
                 haptics.tick()
                 pickedEpochDay = if (date == today) TODAY_PICK else date.toEpochDay()
@@ -327,6 +349,7 @@ fun DailyHealthSection(
                 progress = if (ready) picked.steps.toFloat() / activity.stepGoal.coerceAtLeast(1L) else 0f,
                 selected = focus == ClockLayer.STEPS,
                 onClick = { pick(ClockLayer.STEPS) },
+                onLongClick = { openGoals(GoalKind.STEPS) },
                 modifier = Modifier.weight(1f),
             )
             Meter(
@@ -334,21 +357,23 @@ fun DailyHealthSection(
                 icon = AppIcons.Moon,
                 tone = HealthSleep,
                 value = if (!ready) "–" else if (picked.sleepMinutes > 0) formatMinutesCompact(picked.sleepMinutes) else "0h",
-                sub = "of ${DEFAULT_SLEEP_GOAL_MINUTES / 60}h",
-                progress = if (ready) picked.sleepMinutes.toFloat() / DEFAULT_SLEEP_GOAL_MINUTES else 0f,
+                sub = "of ${formatGoalMinutes(goals.sleepMinutes)}",
+                progress = if (ready) picked.sleepMinutes.toFloat() / goals.sleepMinutes else 0f,
                 selected = focus == ClockLayer.SLEEP,
                 onClick = { pick(ClockLayer.SLEEP) },
+                onLongClick = { openGoals(GoalKind.SLEEP) },
                 modifier = Modifier.weight(1f),
             )
             Meter(
-                label = "Move",
+                label = "Calories",
                 icon = AppIcons.Flame,
                 tone = HealthMove,
                 value = fmt(picked.moveKcal.roundToInt().toLong()),
-                sub = "of ${activity.activeCalGoal.roundToInt()} kcal",
-                progress = if (ready) (picked.moveKcal / activity.activeCalGoal).toFloat() else 0f,
+                sub = "of ${compactNumber(activity.calorieGoal)} kcal",
+                progress = if (ready) (picked.moveKcal / activity.calorieGoal).toFloat() else 0f,
                 selected = focus == ClockLayer.MOVE,
                 onClick = { pick(ClockLayer.MOVE) },
+                onLongClick = { openGoals(GoalKind.CALORIES) },
                 modifier = Modifier.weight(1f),
             )
             Meter(
@@ -443,7 +468,7 @@ private fun ClockMiddle(
             ClockLayer.SLEEP -> {
                 caption = "Asleep"
                 big = if (day.sleepMinutes > 0) formatMinutesCompact(day.sleepMinutes) else formatMinutesCompact((clock.asleepHours * 60).toLong())
-                sub = score?.let { "score $it" } ?: "of ${DEFAULT_SLEEP_GOAL_MINUTES / 60}h"
+                sub = score?.let { "score $it" } ?: "of ${formatGoalMinutes(LocalHealthGoals.current.sleepMinutes)}"
                 tone = HealthSleep
             }
             ClockLayer.HEART -> {
@@ -456,9 +481,9 @@ private fun ClockMiddle(
                 tone = HealthHeartTone
             }
             ClockLayer.MOVE -> {
-                caption = "Move"
+                caption = "Burned"
                 big = fmt(day.moveKcal.roundToInt().toLong())
-                sub = "of ${activity.activeCalGoal.roundToInt()} kcal"
+                sub = "of ${compactNumber(activity.calorieGoal)} kcal"
                 tone = HealthMove
             }
         }
@@ -511,6 +536,8 @@ private fun Meter(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    /** A hold: the meter's goal. */
+    onLongClick: (() -> Unit)? = null,
 ) {
     val fill by animateFloatAsState(
         targetValue = if (selected) 1f else 0f,
@@ -528,7 +555,13 @@ private fun Meter(
             .pressSink(press)
             .clip(RoundedCornerShape(20.dp))
             .drawBehind { drawRect(tone.copy(alpha = 0.09f + 0.13f * fill)) }
-            .clickable(interactionSource = press, indication = LocalIndication.current, onClick = onClick)
+            .combinedClickable(
+                interactionSource = press,
+                indication = LocalIndication.current,
+                onLongClickLabel = onLongClick?.let { "Set goal" },
+                onLongClick = onLongClick,
+                onClick = onClick,
+            )
             .padding(horizontal = 10.dp, vertical = 11.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -570,7 +603,7 @@ private const val TODAY_PICK = Long.MIN_VALUE
 private const val MORNING_ENDS_HOUR = 11
 
 /** One day of the strip: what its three rings are drawn from. */
-private data class DayRings(val date: LocalDate, val steps: Long, val moveKcal: Double, val sleepMinutes: Long)
+private data class DayRings(val date: LocalDate, val steps: Long, /** The day's whole burn. */ val moveKcal: Double, val sleepMinutes: Long)
 
 /**
  * The week as seven small sets of rings under their weekday, today last. The picked day
@@ -620,7 +653,7 @@ private fun DayStrip(
                 ActivityRings(
                     rings = listOf(
                         RingSpec(day.steps.toFloat() / stepGoal.coerceAtLeast(1L), HealthSteps),
-                        RingSpec(day.sleepMinutes.toFloat() / DEFAULT_SLEEP_GOAL_MINUTES, HealthSleep),
+                        RingSpec(day.sleepMinutes.toFloat() / LocalHealthGoals.current.sleepMinutes, HealthSleep),
                         RingSpec((day.moveKcal / moveGoal).toFloat(), HealthMove),
                     ),
                     modifier = Modifier.size(34.dp),

@@ -147,6 +147,8 @@ object AppIcons {
     val MapPin: ImageVector by lazy { icon("MapPin") { s("M20 10 c0 4.993 -5.539 10.193 -7.399 11.799 a1 1 0 0 1 -1.202 0 C9.539 20.193 4 14.993 4 10 a8 8 0 0 1 16 0"); s("M9 10 a3 3 0 1 0 6 0 a3 3 0 1 0 -6 0") } }
     /** Lucide `map-pin-off` */
     val MapPinOff: ImageVector by lazy { icon("MapPinOff") { s("M12.75 7.09 a3 3 0 0 1 2.16 2.16"); s("M17.072 17.072 c-1.634 2.17 -3.527 3.912 -4.471 4.727 a1 1 0 0 1 -1.202 0 C9.539 20.193 4 14.993 4 10 a8 8 0 0 1 1.432 -4.568"); s("m2 2 l20 20"); s("M8.475 2.818 A8 8 0 0 1 20 10 c0 1.183 -0.31 2.377 -0.81 3.533"); s("M9.13 9.13 a3 3 0 0 0 3.74 3.74") } }
+    /** Lucide `minus` */
+    val Minus: ImageVector by lazy { icon("Minus") { s("M5 12 h14") } }
     /** Lucide `moon` */
     val Moon: ImageVector by lazy { icon("Moon") { s("M20.985 12.486 a9 9 0 1 1 -9.473 -9.472 c0.405 -0.022 0.617 0.46 0.402 0.803 a6 6 0 0 0 8.268 8.268 c0.344 -0.215 0.825 -0.004 0.803 0.401") } }
     /** Lucide `mountain` */

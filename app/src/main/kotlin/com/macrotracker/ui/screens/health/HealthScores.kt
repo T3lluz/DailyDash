@@ -1,23 +1,23 @@
 package com.macrotracker.ui.screens.health
 
 import androidx.health.connect.client.records.SleepSessionRecord
+import com.macrotracker.data.health.HealthGoals
 import com.macrotracker.data.health.HealthStats
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.roundToInt
 
-const val DEFAULT_ACTIVE_CAL_GOAL = 500.0
 const val DEFAULT_EXERCISE_MINUTES_GOAL = 30.0
 
-/** Apple-style Activity progress for today. */
+/** Today's movement against its goals. Calories are the day's whole burn, resting included. */
 data class TodayActivitySnapshot(
     val steps: Long,
     val stepGoal: Long,
     val stepProgress: Float,
-    val activeCalories: Double,
-    val activeCalGoal: Double,
-    val moveProgress: Float,
+    val calories: Double,
+    val calorieGoal: Double,
+    val calorieProgress: Float,
     val exerciseMinutes: Double,
     val exerciseGoal: Double,
     val exerciseProgress: Float,
@@ -51,27 +51,27 @@ data class SleepNightScore(
 fun computeTodayActivity(
     stats: HealthStats?,
     stepsToday: Long?,
-    activeCalToday: Double?,
+    caloriesToday: Double?,
     distanceToday: Double?,
     floorsToday: Double?,
     stepGoal: Long = DEFAULT_STEP_GOAL,
-    activeCalGoal: Double = DEFAULT_ACTIVE_CAL_GOAL,
+    calorieGoal: Double = HealthGoals.DEFAULT_CALORIES_KCAL.toDouble(),
     exerciseGoal: Double = DEFAULT_EXERCISE_MINUTES_GOAL,
 ): TodayActivitySnapshot {
     val steps = stepsToday ?: stats?.steps ?: 0L
-    val active = activeCalToday ?: stats?.activeCaloriesBurned ?: 0.0
+    val calories = caloriesToday ?: stats?.totalCaloriesBurned ?: 0.0
     val distance = distanceToday ?: stats?.distance ?: 0.0
     val floors = floorsToday ?: stats?.floorsClimbed ?: 0.0
     val walkMin = if (steps > 0) steps / 120.0 else 0.0
-    val exerciseMin = maxOf(walkMin * 0.35, active / 12.0)
+    val exerciseMin = walkMin * 0.35
 
     return TodayActivitySnapshot(
         steps = steps,
         stepGoal = stepGoal,
         stepProgress = (steps.toFloat() / stepGoal).coerceIn(0f, 1.25f),
-        activeCalories = active,
-        activeCalGoal = activeCalGoal,
-        moveProgress = (active / activeCalGoal).toFloat().coerceIn(0f, 1.25f),
+        calories = calories,
+        calorieGoal = calorieGoal,
+        calorieProgress = (calories / calorieGoal).toFloat().coerceIn(0f, 1.25f),
         exerciseMinutes = exerciseMin,
         exerciseGoal = exerciseGoal,
         exerciseProgress = (exerciseMin / exerciseGoal).toFloat().coerceIn(0f, 1.25f),
@@ -211,6 +211,9 @@ private fun stageBandScore(
     val factor = exp(-((dist * 100.0) / 10.0).let { it * it } / 50.0)
     return (maxPts * factor).coerceIn(0.0, maxPts)
 }
+
+/** A goal in hours: "8h", or "7h 30m" when it isn't on the hour. */
+fun formatGoalMinutes(minutes: Long): String = if (minutes % 60 == 0L) "${minutes / 60}h" else formatMinutesCompact(minutes)
 
 fun formatMinutesCompact(minutes: Long): String {
     if (minutes <= 0) return "—"

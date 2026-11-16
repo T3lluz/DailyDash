@@ -80,6 +80,8 @@
     <uses-permission android:name="android.permission.health.READ_BODY_WATER_MASS" />
     <uses-permission android:name="android.permission.health.READ_BLOOD_GLUCOSE" />
     <uses-permission android:name="android.permission.health.READ_SKIN_TEMPERATURE" />
+    <!-- Data older than the 30 days before the first grant: the Activity card's year and bests. -->
+    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_HISTORY" />
     <!-- Tilesmith widgets refresh in the background; asked for only when a widget shows health data. -->
     <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
 

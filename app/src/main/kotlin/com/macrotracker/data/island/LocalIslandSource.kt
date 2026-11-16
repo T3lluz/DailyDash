@@ -268,7 +268,8 @@ class LocalIslandSource @Inject constructor(
     )
 
     private fun steps(steps: Long): IslandItem {
-        val left = STEP_GOAL - steps
+        val goal = settings.healthGoals.value.steps
+        val left = goal - steps
         return item(
             kind = "steps",
             tone = if (left <= 0) "accent" else "quiet",
@@ -278,7 +279,7 @@ class LocalIslandSource @Inject constructor(
             short = if (steps < 10_000) grouped(steps) else thousands(steps),
             sub = "${grouped(steps)} today",
             route = "health",
-            ring = (steps * 100f / STEP_GOAL).coerceIn(0f, 100f),
+            ring = (steps * 100f / goal).coerceIn(0f, 100f),
         )
     }
 
@@ -392,7 +393,6 @@ class LocalIslandSource @Inject constructor(
         const val WEATHER_FRESH_MS = 3L * 60 * 60 * 1000
         const val HEALTH_TIMEOUT_MS = 4_000L
         const val HEALTH_CACHE_MS = 5 * 60_000L
-        const val STEP_GOAL = 10_000L
         /** How far ahead the next event shows: the rest of a working day. */
         const val NEXT_EVENT_MINUTES = 8 * 60L
         const val TWITCH_PURPLE = "#9146ff"

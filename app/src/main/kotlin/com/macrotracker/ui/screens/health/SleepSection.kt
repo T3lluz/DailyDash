@@ -91,7 +91,7 @@ fun SleepSection(
 ) {
     val zone = remember { ZoneId.systemDefault() }
     val h24 = rememberClock24()
-    val goal = DEFAULT_SLEEP_GOAL_MINUTES
+    val goal = LocalHealthGoals.current.sleepMinutes
     // A picked night is kept by its date, and only while the night it was picked against is
     // still the newest: a list index used to survive in saved state and, once a new night
     // synced and the list shifted, land on an older night than the one on screen.
@@ -114,7 +114,7 @@ fun SleepSection(
             title = "Sleep",
             icon = AppIcons.Moon,
             accent = HealthSleep,
-            subtitle = night?.let { nightSubtitle(it, newest = selectedIndex == nights.lastIndex) },
+            subtitle = night?.let { nightSubtitle(it, newest = selectedIndex == nights.lastIndex, goal = goal) },
             modifier = Modifier.padding(bottom = 12.dp),
         )
 
@@ -207,7 +207,7 @@ fun SleepSection(
                             }
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                "${c.nightsAtGoal} of ${c.nights} nights near your ${goal / 60}h goal",
+                                "${c.nightsAtGoal} of ${c.nights} nights near your ${formatGoalMinutes(goal)} goal",
                                 fontSize = 12.sp,
                                 color = TextTertiary,
                             )
@@ -235,14 +235,14 @@ private fun formatHourOnly(offset: Int): String {
     return "${if (h % 12 == 0) 12 else h % 12} ${if (h < 12) "am" else "pm"}"
 }
 
-private fun nightSubtitle(night: SleepNight, newest: Boolean): String {
+private fun nightSubtitle(night: SleepNight, newest: Boolean, goal: Long): String {
     val day = sleepDayLabel(
         sleepDay = night.date,
         today = LocalDate.now(),
         newest = newest,
         hoursSinceWake = Duration.between(night.wake, Instant.now()).toHours(),
     )
-    val over = night.asleepMinutes - DEFAULT_SLEEP_GOAL_MINUTES
+    val over = night.asleepMinutes - goal
     val against = when {
         over >= 15 -> "${formatMinutesCompact(over)} over your goal"
         over <= -15 -> "${formatMinutesCompact(-over)} short of your goal"

@@ -397,7 +397,11 @@ private fun MainScreenScaffold(
         val serverViewModel: ServerViewModel = hiltViewModel()
         val islandVisible = currentRoute == Screen.Home.route || currentRoute == Screen.Health.route ||
             currentRoute == Screen.Settings.route
-        CompositionLocalProvider(LocalIslandClearance provides islandClearance(islandItems, activity, islandVisible)) {
+        val healthGoals by hiltViewModel<SettingsViewModel>().healthGoals.collectAsState()
+        CompositionLocalProvider(
+            LocalIslandClearance provides islandClearance(islandItems, activity, islandVisible),
+            com.macrotracker.ui.screens.health.LocalHealthGoals provides healthGoals,
+        ) {
             DailyDashNavHost(
                 navController = navController,
                 modifier = navHostModifier

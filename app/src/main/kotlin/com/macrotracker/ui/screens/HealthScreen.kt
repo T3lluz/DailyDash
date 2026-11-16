@@ -24,6 +24,7 @@ import com.macrotracker.ui.screens.health.HealthDisplay
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import com.macrotracker.data.health.ActivityRange
+import com.macrotracker.data.health.HealthConnectRepository
 import com.macrotracker.ui.components.WidgetExpandFooter
 import com.macrotracker.ui.components.WidgetExpandSection
 import com.macrotracker.ui.screens.health.ActivityRings
@@ -85,6 +86,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.macrotracker.ui.screens.health.ActivitySection
 import com.macrotracker.ui.screens.health.ActivityTrends
+import com.macrotracker.ui.screens.health.ActivityBests
+import com.macrotracker.ui.screens.health.HistoryAsk
 import com.macrotracker.ui.screens.health.DailyHealthSection
 import com.macrotracker.ui.screens.health.HealthMetric
 import com.macrotracker.ui.screens.health.HealthStatTile
@@ -164,6 +167,8 @@ fun HealthScreen(
     val hourlySteps by healthViewModel.hourlySteps.collectAsState()
     val usualHourlySteps by healthViewModel.usualHourlySteps.collectAsState()
     val refreshing by healthViewModel.refreshing.collectAsState()
+    val missingNewPermissions by healthViewModel.missingNewPermissions.collectAsState()
+    val historyAskDismissed by healthViewModel.historyAskDismissed.collectAsState()
 
     var selectedMetric by rememberSaveable { mutableStateOf(HealthMetric.STEPS) }
     var activityRange by rememberSaveable { mutableStateOf(ActivityRange.WEEK) }
@@ -347,7 +352,6 @@ fun HealthScreen(
                 DailyHealthSection(
                     stats = hcStats,
                     stepsToday = stepsState.today?.toLong(),
-                    activeCaloriesToday = activeCaloriesState.today?.toDouble(),
                     distanceToday = distanceState.today?.toDouble(),
                     floorsToday = floorsClimbedState.today?.toDouble(),
                     restingFallback = restingHeartRateState.today?.toLong(),
@@ -368,6 +372,7 @@ fun HealthScreen(
                         requestHealthAccess()
                     },
                     onPickDay = { healthViewModel.loadDayHours(it) },
+                    onSetGoals = healthViewModel::setHealthGoals,
                 )
             }
         }
@@ -379,6 +384,16 @@ fun HealthScreen(
                 haptics = haptics,
                 modifier = Modifier.riseIn(4, rise),
                 onRequestPermission = { requestHealthAccess() },
+            )
+        }
+
+        item(key = "VITALS", contentType = "VITALS") {
+            VitalsSection(
+                state = vitalsState,
+                haptics = haptics,
+                onRequestPermission = { requestHealthAccess() },
+                birthYear = birthYear,
+                onSetBirthYear = healthViewModel::setBirthYear,
             )
         }
 
@@ -403,6 +418,19 @@ fun HealthScreen(
                     )
                 },
                 trends = {
+                    if (HealthConnectRepository.HISTORY_PERMISSION in missingNewPermissions && !historyAskDismissed) {
+                        HistoryAsk(
+                            onAllow = {
+                                haptics.tick()
+                                requestHealthAccess()
+                            },
+                            onDismiss = {
+                                haptics.tick()
+                                healthViewModel.dismissHistoryAsk()
+                            },
+                            modifier = Modifier.padding(bottom = 14.dp),
+                        )
+                    }
                     if (activityDays.isEmpty()) {
                         // Hold the chart's place while the days load, so the
                         // workouts below don't jump when they land.
@@ -436,18 +464,9 @@ fun HealthScreen(
                             hourlySteps = hourlySteps,
                             usualHourlySteps = usualHourlySteps,
                         )
+                        ActivityBests(days = activityDays, today = today, modifier = Modifier.padding(top = 18.dp))
                     }
                 },
-            )
-        }
-
-        item(key = "VITALS", contentType = "VITALS") {
-            VitalsSection(
-                state = vitalsState,
-                haptics = haptics,
-                onRequestPermission = { requestHealthAccess() },
-                birthYear = birthYear,
-                onSetBirthYear = healthViewModel::setBirthYear,
             )
         }
 
@@ -482,7 +501,7 @@ fun HealthScreen(
 }
 
 /** The page's sections in the order they stand, by the names the island's taps use. */
-private val SectionOrder = listOf("DAILY_HEALTH", "SLEEP", "ACTIVITIES", "VITALS", "FOOD")
+private val SectionOrder = listOf("DAILY_HEALTH", "SLEEP", "VITALS", "ACTIVITIES", "FOOD")
 
 /**
  * Health Connect's own permission screen. Re-granting there is the only thing

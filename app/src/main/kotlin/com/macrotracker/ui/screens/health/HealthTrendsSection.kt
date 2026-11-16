@@ -1,6 +1,22 @@
 package com.macrotracker.ui.screens.health
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import com.macrotracker.data.health.BestKind
+import com.macrotracker.data.health.HealthBest
+import com.macrotracker.data.health.healthBests
+import com.macrotracker.ui.theme.AppIcons
+import com.macrotracker.ui.theme.HealthActivityTone
+import com.macrotracker.ui.theme.HealthHeartTone
+import com.macrotracker.ui.theme.TextPrimary
+import kotlin.math.roundToLong
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -26,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.macrotracker.data.health.ActivityRange
 import com.macrotracker.data.health.DailyHealthStats
+import com.macrotracker.data.health.HealthGoals
 import com.macrotracker.data.health.RangeBar
 import com.macrotracker.data.health.percentChange
 import com.macrotracker.data.health.rangeBars
@@ -55,6 +72,8 @@ fun activityRangeLabel(range: ActivityRange, today: LocalDate): String {
         ActivityRange.WEEK -> "Last 7 days"
         ActivityRange.MONTH -> "Last 30 days"
         ActivityRange.QUARTER -> "Last 13 weeks"
+        // A year's span doesn't fit beside the range control.
+        ActivityRange.YEAR -> return "Last 52 weeks"
     }
     return "$name · ${spanLabel(first, today)}"
 }
@@ -66,9 +85,9 @@ private fun spanLabel(first: LocalDate, last: LocalDate): String {
 }
 
 /** The daily goal a measure is drawn against, where it has one. */
-private fun HealthMetric.dailyGoal(): Double? = when (this) {
-    HealthMetric.STEPS -> DEFAULT_STEP_GOAL.toDouble()
-    HealthMetric.CALORIES -> DEFAULT_ACTIVE_CAL_GOAL
+private fun HealthMetric.dailyGoal(goals: HealthGoals): Double? = when (this) {
+    HealthMetric.STEPS -> goals.steps.toDouble()
+    HealthMetric.CALORIES -> goals.caloriesKcal.toDouble()
     else -> null
 }
 
@@ -119,7 +138,7 @@ fun ActivityTrends(
     Column(modifier = Modifier.fillMaxWidth()) {
         if (availableMetrics.isEmpty()) {
             Text(
-                "No steps or movement from Health Connect in the last three months.",
+                "No steps or movement from Health Connect in the last year.",
                 color = TextSecondary,
                 fontSize = 14.sp,
                 modifier = Modifier.padding(vertical = 14.dp),
@@ -202,6 +221,7 @@ private fun RangeChart(
                             ActivityRange.DAY, ActivityRange.WEEK -> "previous 7 days"
                             ActivityRange.MONTH -> "previous 30 days"
                             ActivityRange.QUARTER -> "previous 13 weeks"
+                            ActivityRange.YEAR -> "previous 52 weeks"
                         },
                         change = change,
                         better = metric.better(),
@@ -227,7 +247,7 @@ private fun RangeChart(
             selectedIndex = picked,
             onSelect = { picked = it },
             average = summary.average.takeIf { summary.activeDays >= 2 },
-            goal = metric.dailyGoal(),
+            goal = metric.dailyGoal(LocalHealthGoals.current),
             chartKey = metric to range,
         )
         RangeSummaryTiles(metric = metric, range = range, summary = summary, totals = totals, today = today)
@@ -250,7 +270,8 @@ private fun DayPace(
         val now = java.time.LocalTime.now()
         com.macrotracker.data.health.stepPace(hourlySteps, usualHourlySteps, now.hour + now.minute / 60.0)
     }
-    val line = stepsChartLine(pace, steps, DEFAULT_STEP_GOAL)
+    val stepGoal = LocalHealthGoals.current.steps
+    val line = stepsChartLine(pace, steps, stepGoal)
     Column(modifier = Modifier.fillMaxWidth()) {
         Text("Steps so far", fontSize = 13.sp, color = TextSecondary, maxLines = 1)
         HealthValueText(
@@ -264,7 +285,7 @@ private fun DayPace(
         StepPaceChart(
             todayHourly = hourlySteps,
             usualHourly = usualHourlySteps,
-            goal = DEFAULT_STEP_GOAL,
+            goal = stepGoal,
             tone = HealthMetric.STEPS.tint(),
             height = 150.dp,
         )
@@ -287,9 +308,16 @@ private fun DayPace(
     }
 }
 
-/** A week names each day; a month and three months date about four bars, the newest among them. */
+/**
+ * A week names each day; a month and three months date about four bars, the newest among
+ * them; a year names the month of every thirteenth week.
+ */
 private fun barLabels(bars: List<RangeBar>, range: ActivityRange): List<String?> = when (range) {
     ActivityRange.WEEK -> bars.map { it.start.dayOfWeek.getDisplayName(JavaTextStyle.NARROW, Locale.getDefault()) }
+    ActivityRange.YEAR -> {
+        val fmt = DateTimeFormatter.ofPattern("MMM")
+        bars.mapIndexed { i, bar -> if ((bars.lastIndex - i) % 13 == 0) bar.end.format(fmt) else null }
+    }
     else -> {
         val every = if (range == ActivityRange.MONTH) 7 else 4
         val fmt = DateTimeFormatter.ofPattern("d MMM")
@@ -310,7 +338,7 @@ private fun RangeSummaryTiles(
     val unit = formatMetricUnit(metric)
     // The chart already says steps; a tile has no room to say it again.
     fun withUnit(v: Double) = formatMetricValue(metric, v, compact = true) + if (metric == HealthMetric.STEPS) "" else " $unit"
-    val goal = metric.dailyGoal()
+    val goal = metric.dailyGoal(LocalHealthGoals.current)
     val first = today.minusDays(range.days - 1L)
     val atGoal = goal?.let { g -> totals.count { (date, v) -> !date.isBefore(first) && !date.isAfter(today) && v >= g } }
 
@@ -336,5 +364,91 @@ private fun RangeSummaryTiles(
             sub = goal?.let { "${compactNumber(it)} $unit a day".trim() },
             modifier = Modifier.weight(1f),
         )
+    }
+}
+
+/**
+ * The bests of the year read: the most steps, calories, distance and floors in a day, the lowest
+ * resting heart rate and the longest run at the step goal, three to a row, each with the day it
+ * was set. One set in the last week is named in its colour.
+ */
+@Composable
+fun ActivityBests(days: List<DailyHealthStats>, today: LocalDate, modifier: Modifier = Modifier) {
+    val stepGoal = LocalHealthGoals.current.steps
+    val bests = remember(days, stepGoal) { healthBests(days, stepGoal) }
+    if (bests.size < 2) return
+    val since = days.firstOrNull { it.stats.steps > 0 }?.date
+    Column(modifier = modifier.fillMaxWidth()) {
+        HealthGroupLabel(
+            "Bests",
+            trailing = since?.let { "Since ${it.format(DateTimeFormatter.ofPattern(if (it.year == today.year) "d MMM" else "d MMM yyyy"))}" },
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        bests.chunked(3).forEach { row ->
+            Row(modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { best -> BestTile(best, today, Modifier.weight(1f)) }
+                repeat(3 - row.size) { Spacer(modifier = Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BestTile(best: HealthBest, today: LocalDate, modifier: Modifier = Modifier) {
+    val (label, tone) = when (best.kind) {
+        BestKind.STEPS -> "Most steps" to HealthMetric.STEPS.tint()
+        BestKind.CALORIES -> "Most burned" to HealthMetric.CALORIES.tint()
+        BestKind.DISTANCE -> "Furthest" to HealthMetric.DISTANCE.tint()
+        BestKind.FLOORS -> "Most floors" to HealthMetric.FLOORS_CLIMBED.tint()
+        BestKind.RESTING_HR -> "Lowest resting" to HealthHeartTone
+        BestKind.STREAK -> "Longest streak" to HealthMetric.STEPS.tint()
+    }
+    val value = when (best.kind) {
+        BestKind.STEPS -> String.format(Locale.US, "%,d", best.value.roundToLong())
+        BestKind.CALORIES -> String.format(Locale.US, "%,d kcal", best.value.roundToLong())
+        BestKind.DISTANCE -> String.format(Locale.US, "%.1f km", best.value)
+        BestKind.FLOORS -> "${best.value.roundToLong()} floors"
+        BestKind.RESTING_HR -> "${best.value.roundToLong()} bpm"
+        BestKind.STREAK -> "${best.value.roundToLong()} days"
+    }
+    val fresh = !best.date.isBefore(today.minusDays(6))
+    val day = when {
+        best.kind == BestKind.STREAK && best.date >= today.minusDays(1) -> "Going now"
+        best.date == today -> "Today"
+        best.date == today.minusDays(1) -> "Yesterday"
+        best.kind == BestKind.STREAK -> "To " + best.date.format(DateTimeFormatter.ofPattern("d MMM"))
+        else -> best.date.format(DateTimeFormatter.ofPattern(if (best.date.year == today.year) "EEE d MMM" else "d MMM yyyy"))
+    }
+    HealthStatTile(
+        label = label,
+        value = value,
+        sub = if (fresh) "New · $day" else day,
+        accent = if (fresh) tone else null,
+        modifier = modifier,
+    )
+}
+
+/**
+ * The one-line ask for Health Connect's full history, which an earlier grant didn't include:
+ * Health Connect hands an app only a month back from when it was first allowed without it.
+ */
+@Composable
+fun HistoryAsk(onAllow: () -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(HealthActivityTone.copy(alpha = 0.12f))
+            .padding(start = 14.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(AppIcons.History, contentDescription = null, tint = HealthActivityTone, modifier = Modifier.size(18.dp))
+        Spacer(modifier = Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text("Your whole history", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1)
+            Text("For the year and your bests", fontSize = 12.sp, color = TextSecondary, maxLines = 1)
+        }
+        FoodChip(text = "Allow", onClick = onAllow, tone = Color.Black, fill = HealthActivityTone)
+        FoodRoundButton(AppIcons.Close, "Not now", onClick = onDismiss, size = 34.dp, modifier = Modifier.padding(start = 4.dp))
     }
 }

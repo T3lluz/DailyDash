@@ -45,7 +45,8 @@ fun HealthStats.valueOf(metric: HealthMetric): Double = when (metric) {
     HealthMetric.STEPS -> steps.toDouble()
     HealthMetric.HEART_RATE -> avgHeartRate.toDouble()
     HealthMetric.SLEEP -> sleepMinutes / 60.0
-    HealthMetric.CALORIES -> activeCaloriesBurned
+    // The day's whole burn: Garmin shares no active energy.
+    HealthMetric.CALORIES -> totalCaloriesBurned
     HealthMetric.RESTING_HEART_RATE -> restingHeartRate.toDouble()
     HealthMetric.OXYGEN_SATURATION -> oxygenSaturation
     HealthMetric.RESPIRATORY_RATE -> respiratoryRate
@@ -70,7 +71,7 @@ fun HealthMetric.chipLabel(): String = when (this) {
     HealthMetric.STEPS -> "Steps"
     HealthMetric.HEART_RATE -> "HR"
     HealthMetric.SLEEP -> "Sleep"
-    HealthMetric.CALORIES -> "Active"
+    HealthMetric.CALORIES -> "Calories"
     HealthMetric.RESTING_HEART_RATE -> "Resting"
     HealthMetric.OXYGEN_SATURATION -> "SpO₂"
     HealthMetric.RESPIRATORY_RATE -> "Resp"

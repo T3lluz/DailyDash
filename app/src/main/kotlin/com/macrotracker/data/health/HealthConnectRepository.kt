@@ -43,6 +43,7 @@ import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -154,8 +155,18 @@ class HealthConnectRepository @Inject constructor(
          */
         val SKIN_TEMPERATURE_PERMISSION = HealthPermission.getReadPermission(SkinTemperatureRecord::class)
 
+        /**
+         * Data from before the 30 days ahead of the first grant, which Health Connect otherwise
+         * keeps back: the Activity card's year and its bests. Asked for only where Health Connect
+         * has it ([requestablePermissions]).
+         */
+        const val HISTORY_PERMISSION = HealthPermission.PERMISSION_READ_HEALTH_DATA_HISTORY
+
         /** Reads while the app is in the background: what a Tilesmith widget's refresh runs as. */
         const val BACKGROUND_PERMISSION = HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND
+
+        /** Permissions added after the person first allowed Health Connect, which the Health tab asks for once. */
+        val NEW_PERMISSIONS = listOf(HISTORY_PERMISSION)
 
         /** How far back Body & Vitals reads: long enough for a weight trend. */
         const val VITALS_HISTORY_DAYS = 90L
@@ -279,9 +290,35 @@ class HealthConnectRepository @Inject constructor(
         }
     }
 
-    /** What the permission sheet asks for: [PERMISSIONS], and skin temperature where Health Connect has it. */
-    fun requestablePermissions(): Set<String> =
-        if (skinTemperatureAvailable) PERMISSIONS + SKIN_TEMPERATURE_PERMISSION else PERMISSIONS
+    /** Whether this Health Connect can hand over data older than the 30 days before the first grant. Asked once. */
+    @OptIn(ExperimentalFeatureAvailabilityApi::class)
+    val historyReadAvailable: Boolean by lazy {
+        val hc = client ?: return@lazy false
+        try {
+            hc.features.getFeatureStatus(HealthConnectFeatures.FEATURE_READ_HEALTH_DATA_HISTORY) ==
+                HealthConnectFeatures.FEATURE_STATUS_AVAILABLE
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to check for history reads: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * What the permission sheet asks for: [PERMISSIONS], plus skin temperature and the full
+     * history where Health Connect has them.
+     */
+    fun requestablePermissions(): Set<String> = buildSet {
+        addAll(PERMISSIONS)
+        if (skinTemperatureAvailable) add(SKIN_TEMPERATURE_PERMISSION)
+        if (historyReadAvailable) add(HISTORY_PERMISSION)
+    }
+
+    /** Asked for since the person last allowed everything: what a "more from Health Connect" prompt asks for. */
+    suspend fun missingNewPermissions(): Set<String> {
+        if (!hasAnyPermissions()) return emptySet()
+        val granted = getGrantedPermissions()
+        return NEW_PERMISSIONS.filter { it in requestablePermissions() && it !in granted }.toSet()
+    }
 
     // ── "Granted, but refused" detection ──────────────────────────────────
     //
@@ -756,7 +793,10 @@ class HealthConnectRepository @Inject constructor(
             0L
         }
 
-        val stats = accumulator.toStats(sleepMinutes)
+        val read = accumulator.toStats(sleepMinutes)
+        val today = LocalDate.now(zone)
+        val written = if (TOTAL_CALORIES_PERMISSION in granted) writtenDailyTotals(hc, today, today, zone)[today] else null
+        val stats = read.copy(totalCaloriesBurned = maxOf(read.totalCaloriesBurned, written ?: 0.0))
         // Sparse vitals are latest-sample reads, not aggregates — each is already
         // independently guarded and returns null when it has nothing.
         stats.copy(
@@ -837,6 +877,13 @@ class HealthConnectRepository @Inject constructor(
                 }
 
                 perDay.forEach { (date, accumulator) -> dailyStatsMap[date] = accumulator.toStats() }
+
+                if (TOTAL_CALORIES_PERMISSION in granted) {
+                    writtenDailyTotals(hc, startDate, endDate, zone).forEach { (date, kcal) ->
+                        val day = dailyStatsMap[date] ?: HealthStats()
+                        if (kcal > day.totalCaloriesBurned) dailyStatsMap[date] = day.copy(totalCaloriesBurned = kcal)
+                    }
+                }
 
                 if (enrich) {
                     enrichHistoryWithSleep(hc, startDate, endDate, zone, dailyStatsMap)
@@ -1609,6 +1656,33 @@ class HealthConnectRepository @Inject constructor(
             Log.w(TAG, "Failed to read hourly active calories: ${e.message}")
             noteReadFailure(e)
             emptyList()
+        }
+    }
+
+    // ── Total burn as written ──────────────────────────────────────────────
+
+    /**
+     * Each day's total burn as its writer recorded it: each app's records summed by the day they
+     * start, and the app with the most taken (two apps writing the same day are the same burn,
+     * not twice it). Garmin writes one record per day, midnight to 23:59:59, holding the day so
+     * far; Health Connect's aggregate spreads that over the whole day, so up to now it gave about
+     * half of what Garmin said at midday. The day's figure is the larger of the two.
+     */
+    private suspend fun writtenDailyTotals(hc: HealthConnectClient, start: LocalDate, end: LocalDate, zone: ZoneId): Map<LocalDate, Double> {
+        val from = start.atStartOfDay(zone).toInstant()
+        val to = end.plusDays(1).atStartOfDay(zone).toInstant()
+        return try {
+            hc.readAll<TotalCaloriesBurnedRecord>(TimeRangeFilter.between(from, to))
+                .filter { !it.startTime.isBefore(from) }
+                .groupBy { it.startTime.atZone(zone).toLocalDate() }
+                .mapValues { (_, records) ->
+                    records.groupBy { it.metadata.dataOrigin.packageName }.values.maxOf { app -> app.sumOf { it.energy.inKilocalories } }
+                }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to read the total burn: ${e.message}")
+            emptyMap()
         }
     }
 

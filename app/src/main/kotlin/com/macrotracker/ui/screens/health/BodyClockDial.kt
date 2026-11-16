@@ -69,9 +69,9 @@ enum class ClockLayer { STEPS, SLEEP, HEART, MOVE }
 /**
  * The body clock: a day on a 24-hour face, midnight at the top. Sleep runs round the rim in
  * the colours of its stages, each hour's steps stand on the ring inside it, and heart rate is
- * the line inside that. Live, the face is the last 24 hours: a hand marks now, what is older
- * fades as it nears the hand again, and a ring beats at the latest heart rate. It draws
- * itself in once, a full turn of the hand.
+ * the line inside that. Live, the face is today so far with last night's sleep: a hand marks
+ * now, the hours still to come stand empty, and a ring beats at the latest heart rate. It
+ * draws itself in once, a full turn of the hand.
  *
  * Hold a finger on the face and move it round to read any time of day; a tap reads that time
  * for a moment. [focus] dims every layer but one (and swaps steps for active energy on
@@ -364,9 +364,6 @@ private fun DrawScope.drawFace(geo: DialGeometry, measurer: androidx.compose.ui.
     }
 }
 
-/** How strongly something that far through the window is drawn: the newest full, the oldest fainter. */
-private fun ageAlpha(at: Float, live: Boolean): Float = if (live) 0.55f + 0.45f * at else 1f
-
 private fun DrawScope.drawClock(
     clock: BodyClock,
     geo: DialGeometry,
@@ -383,7 +380,7 @@ private fun DrawScope.drawClock(
     val sleepAlpha = layer(ClockLayer.SLEEP)
     clock.sleep.forEachIndexed { i, s ->
         if (s.at > reveal) return@forEachIndexed
-        val color = (s.stage?.let { sleepStageColor(it) } ?: HealthSleep).copy(alpha = ageAlpha(s.at, clock.live) * sleepAlpha)
+        val color = (s.stage?.let { sleepStageColor(it) } ?: HealthSleep).copy(alpha = sleepAlpha)
         val start = hourAngle(s.hour)
         val sweep = (s.hours / 24.0 * 360.0).toFloat().coerceAtLeast(0.6f)
         val opens = i == 0 || kotlin.math.abs(ringGap(clock.sleep[i - 1].hour + clock.sleep[i - 1].hours, s.hour)) > 0.1
@@ -415,7 +412,7 @@ private fun DrawScope.drawClock(
         val tall = max(3.dp.toPx(), room * (v / top).toFloat().coerceIn(0f, 1f))
         val mid = base + tall / 2f
         drawArc(
-            color = tone.copy(alpha = ageAlpha(slot.at, clock.live) * stepsAlpha),
+            color = tone.copy(alpha = stepsAlpha),
             startAngle = hourAngle(slot.hour.toDouble()) + HOUR_GAP,
             sweepAngle = 15f - HOUR_GAP * 2,
             useCenter = false,
@@ -439,7 +436,7 @@ private fun DrawScope.drawClock(
     runs.forEach { run ->
         if (run.size < 2) return@forEach
         val points = run.map { pointOn(center, geo.heartRadius(it.bpm, range, this), hourAngle(it.hour + QUARTER / 2)) }
-        val alpha = ageAlpha(run.map { it.at }.average().toFloat(), clock.live) * heartAlpha
+        val alpha = heartAlpha
         val area = Path().apply {
             moveTo(points.first().x, points.first().y)
             points.drop(1).forEach { lineTo(it.x, it.y) }

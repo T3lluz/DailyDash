@@ -242,6 +242,12 @@ object MacroMotion {
         const val SEEK_MS = 1500L
     }
 
+    /** A held minus or plus (the goals sheet): one step at once, then a run after a pause. */
+    object HoldRepeat {
+        const val START_MS = 420L
+        const val EVERY_MS = 90L
+    }
+
     /**
      * Home's Body Stats chart moving on by itself (steps → heart → Move → sleep) until the
      * person picks one: slow enough to read each, a plain crossfade between them.

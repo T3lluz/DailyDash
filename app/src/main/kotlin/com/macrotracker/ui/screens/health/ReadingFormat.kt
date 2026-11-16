@@ -14,7 +14,7 @@ data class ReadingValue(val value: String, val unit: String)
 fun readingName(metric: HealthMetric): String = when (metric) {
     HealthMetric.STEPS -> "Steps"
     HealthMetric.DISTANCE -> "Distance"
-    HealthMetric.CALORIES -> "Active energy"
+    HealthMetric.CALORIES -> "Calories burned"
     HealthMetric.FLOORS_CLIMBED -> "Floors climbed"
     HealthMetric.HEART_RATE -> "Heart rate"
     HealthMetric.RESTING_HEART_RATE -> "Resting heart rate"

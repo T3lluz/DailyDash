@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.macrotracker.data.health.BodyVitals
 import com.macrotracker.data.health.DailyHealthStats
 import com.macrotracker.data.health.DayHours
+import com.macrotracker.data.health.HealthGoals
 import com.macrotracker.data.health.HealthActivity
 import com.macrotracker.data.health.HealthConnectRepository
 import com.macrotracker.data.health.HealthStats
@@ -80,8 +81,11 @@ class HealthViewModel @Inject constructor(
 
         private const val TAG = "HealthViewModel"
 
-        /** How far back the Activity card reads: thirteen weeks, its longest range. */
-        const val ACTIVITY_DAYS = 91
+        /** How far back the Activity card reads: 52 weeks, its longest range, and where its bests come from. */
+        const val ACTIVITY_DAYS = 364
+
+        /** Read first, so the week, month and three months draw before the rest of the year lands. */
+        private const val ACTIVITY_FIRST_DAYS = 91
     }
 
     private val dateFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd")
@@ -112,8 +116,8 @@ class HealthViewModel @Inject constructor(
     val activityDays: StateFlow<List<DailyHealthStats>> = _activityDays
 
     /**
-     * A day by the hour for the body clock: today and yesterday on every load (the clock
-     * shows the last 24 hours), an older day when it is first picked in Today's strip.
+     * A day by the hour for the body clock: today on every load, an older day when it is
+     * first picked in Today's strip.
      */
     private val _dayHours = MutableStateFlow<Map<LocalDate, DayHours>>(emptyMap())
     val dayHours: StateFlow<Map<LocalDate, DayHours>> = _dayHours
@@ -181,6 +185,20 @@ class HealthViewModel @Inject constructor(
 
     fun setBirthYear(year: Int) = settingsRepository.setBirthYear(year)
 
+    /** The person's daily goals; the tab reads them through `LocalHealthGoals`. */
+    fun setHealthGoals(goals: HealthGoals) = settingsRepository.setHealthGoals(goals)
+
+    /**
+     * Permissions the app asks for now that an earlier grant didn't include (the full
+     * history), for the Activity card's one-line ask. Empty once given or turned down there.
+     */
+    private val _missingNewPermissions = MutableStateFlow<Set<String>>(emptySet())
+    val missingNewPermissions: StateFlow<Set<String>> = _missingNewPermissions
+
+    val historyAskDismissed: StateFlow<Boolean> = settingsRepository.historyAskDismissed
+
+    fun dismissHistoryAsk() = settingsRepository.setHistoryAskDismissed(true)
+
     /**
      * Health Connect is refusing reads for permissions it reports as granted —
      * the AppOp behind them has desynced from the grant. Only re-granting in
@@ -229,11 +247,20 @@ class HealthViewModel @Inject constructor(
 
     private suspend fun loadActivityDays() {
         val today = LocalDate.now()
-        _activityDays.value = healthConnectRepository.readHistoryStatsBetween(
-            today.minusDays(ACTIVITY_DAYS - 1L),
-            today,
-            enrich = false,
-        )
+        val recentStart = today.minusDays(ACTIVITY_FIRST_DAYS - 1L)
+        val recent = healthConnectRepository.readHistoryStatsBetween(recentStart, today, enrich = false)
+        // Keep the older part of a year already on screen while the recent part refreshes.
+        _activityDays.value = _activityDays.value.filter { it.date.isBefore(recentStart) } + recent
+        // The rest of the year in quarters: one long aggregate is slow and gives nothing back until it's done.
+        val older = mutableListOf<DailyHealthStats>()
+        var end = recentStart.minusDays(1)
+        val first = today.minusDays(ACTIVITY_DAYS - 1L)
+        while (!end.isBefore(first)) {
+            val start = maxOf(first, end.minusDays(ACTIVITY_FIRST_DAYS - 1L))
+            older.addAll(0, healthConnectRepository.readHistoryStatsBetween(start, end, enrich = false))
+            end = start.minusDays(1)
+        }
+        _activityDays.value = older + recent
     }
 
     /** A past day by the hour, for the body clock when that day is picked in the strip. */
@@ -379,6 +406,7 @@ class HealthViewModel @Inject constructor(
         }
 
         val hasPerms = permissionsGranted || healthConnectRepository.hasAnyPermissions()
+        _missingNewPermissions.value = if (hasPerms) healthConnectRepository.missingNewPermissions() else emptySet()
         if (!hasPerms) {
             _healthConnectState.value = HealthConnectUiState.PermissionRequired
             _activitiesState.value = ActivitiesUiState.PermissionRequired
@@ -440,7 +468,6 @@ class HealthViewModel @Inject constructor(
                         val today = LocalDate.now()
                         readDayHours(today)
                         _dayHours.value[today]?.let { _hourlySteps.value = it.steps }
-                        readDayHours(today.minusDays(1))
                         _usualHourlySteps.value = healthConnectRepository.readUsualHourlySteps()
                     } catch (e: CancellationException) {
                         throw e

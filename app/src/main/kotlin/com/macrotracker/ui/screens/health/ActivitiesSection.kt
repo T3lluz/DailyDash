@@ -60,7 +60,6 @@ import com.macrotracker.data.health.exerciseTypeLabel
 import com.macrotracker.data.health.formatActivityDuration
 import com.macrotracker.data.health.formatActivityWhen
 import com.macrotracker.data.health.formatPace
-import com.macrotracker.data.health.pickFeaturedActivity
 import com.macrotracker.ui.components.ContentSkeleton
 import com.macrotracker.ui.components.StatusCopy
 import com.macrotracker.ui.components.WidgetScrollBox
@@ -100,9 +99,6 @@ private const val CollapsedRowCount = 3
 
 /** Minutes a week the WHO recommends at moderate intensity. */
 private const val WEEKLY_ACTIVE_GOAL_MINUTES = 150L
-
-/** Grid cells the latest workout shows; the rest are one tap away in its row. */
-private const val MaxWorkoutStats = 6
 
 private val TimeTone = HealthActivityTone
 private val DistanceTone = HealthVitalsTone
@@ -146,13 +142,13 @@ fun ActivitySection(
         trends()
         Spacer(modifier = Modifier.height(18.dp))
         Hairline()
-        // With nothing recent the one label says so, where "Workouts" stood over "Latest workout".
         val olderOnly = (state as? ActivitiesUiState.Success)?.olderOnly == true
+        val count = (state as? ActivitiesUiState.Success)?.activities?.size ?: 0
         HealthGroupLabel(
-            if (olderOnly) "Latest workout" else "Workouts",
+            "Workouts",
             trailing = when {
                 olderOnly -> "None this month or last"
-                state is ActivitiesUiState.Success && state.activities.isNotEmpty() -> "This month and last"
+                count > 0 -> "$count this month and last"
                 else -> null
             },
         )
@@ -211,7 +207,6 @@ fun ActivitySection(
                                 activities = shown.activities,
                                 haptics = haptics,
                                 onExpandActivity = onExpandActivity,
-                                labelLatest = !shown.olderOnly,
                             )
                         }
                     }
@@ -295,38 +290,22 @@ private fun WeekReadout(label: String, value: String, unit: String?, tone: Color
 
 // ── Latest workout and history ────────────────────────────────────────────
 
+/**
+ * Every workout as a row, newest first, each folded until tapped: its name, when and its
+ * headline number, opening to its stats, heart rate, zones and laps.
+ */
 @Composable
 private fun ActivitiesList(
     activities: List<HealthActivity>,
     haptics: HapticHelper,
     onExpandActivity: (HealthActivity) -> Unit,
-    /** False when the section's own label already says "Latest workout". */
-    labelLatest: Boolean = true,
 ) {
-    val latest = pickFeaturedActivity(activities)
-    val rest = remember(activities, latest?.id) {
-        if (latest == null) activities else activities.filter { it.id != latest.id }
-    }
+    val workouts = remember(activities) { activities.sortedByDescending { it.startTime } }
     var expandedId by rememberSaveable { mutableStateOf<String?>(null) }
     var showAll by rememberSaveable { mutableStateOf(false) }
 
-    if (latest != null) {
-        if (labelLatest) {
-            HealthGroupLabel("Latest workout")
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-        LatestWorkout(latest)
-    }
-
-    if (rest.isEmpty()) return
-
-    val visible = if (showAll) rest else rest.take(CollapsedRowCount)
-    val canExpand = rest.size > CollapsedRowCount
-
-    HealthGroupLabel(
-        "Earlier",
-        trailing = if (rest.size == 1) "1 workout" else "${rest.size} workouts",
-    )
+    val visible = if (showAll) workouts else workouts.take(CollapsedRowCount)
+    val canExpand = workouts.size > CollapsedRowCount
 
     val rows: @Composable () -> Unit = {
         visible.forEachIndexed { i, activity ->
@@ -356,42 +335,13 @@ private fun ActivitiesList(
         Hairline()
         ShowMoreRow(
             expanded = showAll,
-            hiddenCount = rest.size - CollapsedRowCount,
+            hiddenCount = workouts.size - CollapsedRowCount,
             onClick = {
                 haptics.tick()
                 if (showAll) expandedId = null
                 showAll = !showAll
             },
         )
-    }
-}
-
-@Composable
-private fun LatestWorkout(activity: HealthActivity) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            WorkoutBadge(activity.exerciseType, size = 48.dp)
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    activity.title,
-                    style = HealthDisplay,
-                    fontSize = 20.sp,
-                    color = TextPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    "${formatActivityWhen(activity.startTime)} · ${activity.sourceLabel}",
-                    fontSize = 13.sp,
-                    color = TextSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-        WorkoutDetails(activity, limit = MaxWorkoutStats)
     }
 }
 
