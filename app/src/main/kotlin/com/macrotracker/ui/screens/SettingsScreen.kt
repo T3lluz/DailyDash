@@ -84,6 +84,7 @@ fun SettingsScreen(
     onNavigateToServers: () -> Unit = {},
     onNavigateToPermissions: () -> Unit = {},
     onNavigateToUsage: () -> Unit = {},
+    onNavigateToLaptop: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
     usageViewModel: com.macrotracker.ui.viewmodel.UsageViewModel = hiltViewModel(),
     goalsViewModel: GoalsViewModel = hiltViewModel(),
@@ -201,6 +202,14 @@ fun SettingsScreen(
                     else -> SettingsStatusTone.PLAIN
                 },
                 onClick = onNavigateToServers,
+            )
+            SettingsRowDivider()
+            SettingsNavRow(
+                icon = AppIcons.Laptop,
+                tint = Primary,
+                title = "Laptop",
+                summary = "Its screen, a trackpad and this keyboard",
+                onClick = onNavigateToLaptop,
             )
         }
 

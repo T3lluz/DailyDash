@@ -49,6 +49,9 @@ object SubScreenRoutes {
     /** A shell on the dashboard server (ConsoleScreen). */
     const val CONSOLE = "console"
 
+    /** The laptop from the phone: its screen, a trackpad and the phone's keyboard (LinkScreen). */
+    const val LINK = "laptop"
+
     /** Git and pull requests for the repos on the server (GitScreen). */
     const val GIT = "git"
 

@@ -45,6 +45,7 @@ private val SubScreens = setOf(
     SubScreenRoutes.TILESMITH_PATTERN,
     SubScreenRoutes.USAGE,
     SubScreenRoutes.CONSOLE,
+    SubScreenRoutes.LINK,
     SubScreenRoutes.GIT,
     OnboardingRoutes.PERMISSIONS,
     OnboardingRoutes.TUTORIAL,
@@ -176,6 +177,7 @@ fun DailyDashNavHost(
                 onNavigateToServers = { navController.navigateToSubScreen(SettingsRoutes.SERVERS) },
                 onNavigateToPermissions = { navController.navigateToSubScreen(SettingsRoutes.PERMISSIONS) },
                 onNavigateToUsage = { navController.navigateToSubScreen(SubScreenRoutes.USAGE) },
+                onNavigateToLaptop = { navController.navigateToSubScreen(SubScreenRoutes.LINK) },
             )
         }
 
@@ -263,6 +265,10 @@ fun DailyDashNavHost(
 
         subScreen(SubScreenRoutes.CONSOLE) { entry ->
             ConsoleScreen(onNavigateBack = { navController.popSubScreen(entry) })
+        }
+
+        subScreen(SubScreenRoutes.LINK) { entry ->
+            com.macrotracker.ui.screens.link.LinkScreen(onNavigateBack = { navController.popSubScreen(entry) })
         }
 
         subScreen(SubScreenRoutes.WIDGETS) { entry ->

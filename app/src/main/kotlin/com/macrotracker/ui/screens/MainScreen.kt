@@ -197,6 +197,7 @@ fun MainScreen(
         when (where) {
             "console" -> navController.navigateToSubScreen(SubScreenRoutes.CONSOLE)
             "usage" -> navController.navigateToSubScreen(SubScreenRoutes.USAGE)
+            "laptop" -> navController.navigateToSubScreen(SubScreenRoutes.LINK)
             // A tab asked for from outside opens on the tab itself, not on a sub-screen left open over it.
             "hermes", "ai", "new-chat" -> {
                 // the launcher's "New chat": the AI tab takes an empty share as a new chat
@@ -467,7 +468,7 @@ private fun MainScreenScaffold(
 }
 
 /** Routes whose screen is a platform view, kept out of the chrome's haze source. */
-private val PlatformViewRoutes = setOf(SubScreenRoutes.CONSOLE, SubScreenRoutes.CAMERA_SCAN)
+private val PlatformViewRoutes = setOf(SubScreenRoutes.CONSOLE, SubScreenRoutes.CAMERA_SCAN, SubScreenRoutes.LINK)
 
 @Composable
 private fun MainBottomBar(

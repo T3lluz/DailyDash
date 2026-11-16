@@ -313,6 +313,31 @@ object MacroMotion {
 
     /** The navbar's activity tab rising out of the pill and settling back into it: a touch of give, no wobble. */
     /** The band of light across a word that is happening (ShimmerText): one pass every 1.6 s. */
+    /** The laptop remote (LinkScreen): its glass controls, its buttons, and two-finger momentum. */
+    object Link {
+        /** The full-screen controls unfolding from their handle, and folding back. */
+        fun <T> panel() = spring<T>(dampingRatio = 0.84f, stiffness = 520f)
+
+        /** Each control arrives a beat after the one before it. */
+        fun <T> arrive(index: Int): FiniteAnimationSpec<T> = tween(220, delayMillis = 40 + index * 28, easing = FastOutSlowInEasing)
+        fun <T> leave(): FiniteAnimationSpec<T> = tween(110, easing = FastOutSlowInEasing)
+
+        /** A button giving under the finger. */
+        fun <T> press() = spring<T>(dampingRatio = 0.62f, stiffness = 900f)
+        const val PRESSED_SCALE = 0.9f
+
+        /** The laptop's picture fading in once the first frame is decoded. */
+        fun <T> picture(): FiniteAnimationSpec<T> = tween(320, easing = FastOutSlowInEasing)
+
+        /** How long the full-screen controls stay open untouched, and a message stays up. */
+        const val CONTROLS_STAY_MS = 6_000L
+        const val TOAST_MS = 2_600L
+
+        /** Two-finger scroll keeps going after the fingers lift, losing this share of its speed each frame. */
+        const val FLING_KEEP = 0.955f
+        const val FLING_FRAME_MS = 16L
+    }
+
     fun shimmerSpec(): InfiniteRepeatableSpec<Float> = infiniteRepeatable(tween(1600, easing = LinearEasing), RepeatMode.Restart)
 
     fun <T> navTabSpring() = spring<T>(dampingRatio = 0.82f, stiffness = 420f)

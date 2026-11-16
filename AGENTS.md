@@ -133,6 +133,42 @@ com.macrotracker/
                               never a fresh fix. Settings: Connections → Phone hub (notification access, usage access,
                               what to share). The food log is not shared: the hub sends health, never macros.
     update/                ← GitHub Releases in-app updater (see "In-app updates")
+    link/                  ← The laptop remote (Settings → Laptop, `EXTRA_OPEN` `laptop`, LinkScreen in
+                              ui/screens/link). The laptop runs `tandem` (its own repo, ~/Projects/tandem). Screen,
+                              sound and touches go straight between the two over the tailnet; the dashboard's
+                              bridge is only where they meet. `LinkDirectory` asks the bridge who is around
+                              (`/_api/link/hosts` with the phone hub's token, laptop_link.py there) and gets each
+                              laptop with a ticket; shown in the hello, the ticket lets this phone in without a
+                              prompt on the laptop. A laptop the bridge doesn't list is reached by its address, and
+                              then the laptop asks its owner once. `LinkSession` holds one TCP connection (port
+                              47600: a kind byte, a length, a payload; JSON, H.264 and AAC, the format in tandem's
+                              server.py) while the screen is in front, tries the laptop's addresses in order and
+                              reconnects by itself. `LinkPrefs` keeps the laptop picked, a token made once and how
+                              the trackpad behaves. `LinkVideo` decodes into a SurfaceTexture it owns and the
+                              screen's TextureView borrows it (`setSurfaceTexture`), so a rotation keeps the
+                              picture; `LinkAudio` plays the laptop's sound, brought up to a phone's level (`lift`:
+                              a laptop mixed for headphones arrives some 20 dB low; peaks go to 3 dB under full,
+                              no clipping; the sheet's "Bring quiet sound up"). Turning it on raises a zeroed
+                              media volume, and pins the sound to the speaker while this phone's own audio is
+                              being sent to the laptop, so it never loops back.
+                              LinkScreen, not connected: the laptops as cards (`Finder`), a tap connects, and the
+                              picked card says how connecting is going. Upright: the laptop's screen in the top
+                              third (tap to click there, pinch to zoom, the view follows the pointer through
+                              `PreviewGeometry`, read only in the layer block), a trackpad (`Modifier.trackpad` in
+                              LinkInput.kt: tap, hold to drag, two fingers scroll with momentum), mouse buttons,
+                              and a dock whose every switch has its name under it; More is a sheet (`LinkSheet`:
+                              media keys, what goes between the two, which monitor, picture quality, trackpad
+                              settings). `LinkKeyView` is an unseen view the phone's keyboard types into; it
+                              rises by itself when the laptop says a click landed in a text field. On its side:
+                              the laptop's screen fills the phone, system bars hidden, the whole surface a
+                              trackpad or a touchscreen, and the controls are one `chromeGlass` panel that
+                              unfolds from its handle and folds away by itself. The picture is the glass's
+                              `hazeSource`, so the panel, the status pill and the round buttons blur the laptop's
+                              screen as the navbar blurs a page. Motion is `MacroMotion.Link`. The switches that
+                              are easy to mix up (the laptop's sound here, this phone's sound there) say what
+                              they did in a toast. The dashboard's laptop page can flip the laptop's sound here too (a
+                              `set` message, and `laptopSound` in the welcome for its "start with sound"). The laptop's commands (the phone's sound on the laptop, the
+                              phone in a window there) are scrcpy on the laptop; the app only asks for them.
     links/                 ← AppLinks + OpenWithActivity: mail, calendar (incl. `content://com.android.calendar`), YouTube,
                               Twitch and GitHub links (`LinkKind.forUrl`, LinkKindTest) ask once which app opens them (a
                               sheet listing the service's apps, then browsers) and keep the pick (prefs `app_links`;
