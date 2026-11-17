@@ -30,6 +30,8 @@ data class LinkConfig(
     val levelSound: Boolean = true,
     /** The preview starts zoomed so the laptop's screen fills its height, following the pointer. */
     val fillPreview: Boolean = true,
+    /** The laptop's screen is shown. Off, the remote is a trackpad and keyboard, and the laptop sends no picture. */
+    val showPicture: Boolean = true,
 )
 
 /**
@@ -67,6 +69,7 @@ class LinkPrefs @Inject constructor(
             putBoolean("autoKeyboard", next.autoKeyboard)
             putBoolean("fillPreview", next.fillPreview)
             putBoolean("levelSound", next.levelSound)
+            putBoolean("showPicture", next.showPicture)
         }
     }
 
@@ -82,6 +85,7 @@ class LinkPrefs @Inject constructor(
             autoKeyboard = prefs.getBoolean("autoKeyboard", d.autoKeyboard),
             fillPreview = prefs.getBoolean("fillPreview", d.fillPreview),
             levelSound = prefs.getBoolean("levelSound", d.levelSound),
+            showPicture = prefs.getBoolean("showPicture", d.showPicture),
         )
     }
 

@@ -202,6 +202,35 @@ com.macrotracker/
                               can flip the laptop's sound here too (a `set` message, and `laptopSound` in the
                               welcome for its "start with sound"). The laptop's commands (the phone's sound on the
                               laptop, the phone in a window there) are scrcpy on the laptop; the app only asks for them.
+                              The screen folds away (`LinkConfig.showPicture`): the button at the header's far right
+                              (`ScreenToggle`, LinkScreenToggle.kt: Lucide's panel-top, its chevron up while the screen
+                              shows and down while folded) or More → Screen.
+                              Folded, the screen takes no room at all, the laptop records nothing, the pill names the
+                              monitor the pointer is on (tandem's `ptr` reports), sideways is one big trackpad, and the
+                              laptop's sound still comes, from ffmpeg on the laptop. Over the pad
+                              stand the shortcuts (`ShortcutRow`, LinkShortcutRow.kt): a row that scrolls sideways under
+                              the screen, and a grid four across while it is folded, the same tiles flying from one to the
+                              other (one custom layout: each tile's place is an `Animatable`, read while placing; its own
+                              scroll, and `carry` keeps the row's scroll from jumping as it turns). `LinkShortcut`s of four kinds
+                              (an app by its desktop id, a web page, a key with its modifiers, words to type), kept on
+                              this phone by `LinkShortcutStore` with their pictures (an app's icon as the laptop sent it,
+                              a site's biggest icon fetched once, as a desktop browser). A hold opens a tile's menu
+                              (Change, Arrange, Remove); a finger that moves on from the hold drags it to the nearest
+                              place, row or grid, and the shelf arranges as a home screen does (wiggle, drag, cross, Done),
+                              scrolling under a tile held at its edge. `LinkShortcutSheet` makes or changes one: on top the tile as it will stand, its
+                              name typed in place and what it does in words (`describeShortcut`, keys as keycaps); Ask
+                              AI with the app's `AiPill` and picker (`LinkShortcutAi`: the laptop's bindings and apps,
+                              the shortcut so far and the earlier asks go with the ask; it streams, `shortcutProgress`
+                              and the thinking's heading make the live line; one shortcut comes back as JSON with a
+                              sentence about it, or a no with up to three asks that come close; `parseShortcutAnswer`
+                              keeps only real apps and pressable keys; LinkShortcutsTest), a follow-up changes what it
+                              made ("make it 4"); or pick an app, a site (its own icon and name fetched as the address is
+                              typed), one of the laptop's own bindings by what it does (`catalog` from tandem: Hyprland's
+                              descriptions, "Switch to workspace 3" is Super + 3) or keys put together here. A name
+                              follows the picks until one is typed. Try it runs the shortcut before it is kept; Add or
+                              Save stays at the foot. The sheet holds still under a scroll (`KeepSheetStill`): what the page
+                              can't scroll is dropped, not handed to the sheet, which dragged and sprang back. Tone `LinkShortcutTone`. A tandem
+                              without these says so in `caps`; the phone then offers sites, keys and text only.
     links/                 ← AppLinks + OpenWithActivity: mail, calendar (incl. `content://com.android.calendar`), YouTube,
                               Twitch and GitHub links (`LinkKind.forUrl`, LinkKindTest) ask once which app opens them (a
                               sheet listing the service's apps, then browsers) and keep the pick (prefs `app_links`;

@@ -90,8 +90,21 @@ data class LinkState(
     val pingMs: Int? = null,
     /** The last try failed and this phone has no VPN up: Tailscale is off, so the laptop can't be reached. */
     val tailscaleOff: Boolean = false,
+    /** What the laptop's tandem can do beyond the first version: `catalog`, `launch`, `pointer`, `warp`, `sound`. */
+    val caps: Set<String> = emptySet(),
 ) {
+    /** The laptop can go without its picture: it reports the pointer and sends the sound alone. */
+    val canHidePicture: Boolean get() = "pointer" in caps && "sound" in caps
+
     val shownMonitor: LinkMonitor? get() = monitors.firstOrNull { it.name == (shown ?: monitor) }
+}
+
+/** Where the laptop's pointer is on its desk, in the layout's pixels (see [LinkMonitor]). */
+data class LinkPointer(val x: Float, val y: Float)
+
+/** The monitor of [monitors] that [p] is on, if any. */
+internal fun monitorUnder(monitors: List<LinkMonitor>, p: LinkPointer?): LinkMonitor? = p?.let {
+    monitors.firstOrNull { m -> m.layoutWidth > 0 && p.x >= m.x && p.x < m.x + m.layoutWidth && p.y >= m.y && p.y < m.y + m.layoutHeight }
 }
 
 sealed interface LinkEvent {
@@ -123,6 +136,15 @@ class LinkSession @Inject constructor(
     private val _state = MutableStateFlow(LinkState())
     val state: StateFlow<LinkState> = _state
 
+    /** What the laptop offers to make a shortcut of, once asked for ([requestCatalog]). */
+    private val _catalog = MutableStateFlow<LinkCatalog?>(null)
+    val catalog: StateFlow<LinkCatalog?> = _catalog
+    @Volatile private var catalogAsked = 0L
+
+    /** The laptop's pointer on its desk, while the picture is off and the laptop reports it. */
+    private val _pointer = MutableStateFlow<LinkPointer?>(null)
+    val pointer: StateFlow<LinkPointer?> = _pointer
+
     private val _events = MutableSharedFlow<LinkEvent>(extraBufferCapacity = 16, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     val events: SharedFlow<LinkEvent> = _events
 
@@ -153,6 +175,9 @@ class LinkSession @Inject constructor(
         video.release()
         audio.stop()
         _state.update { LinkState(laptopSound = it.laptopSound) }
+        _catalog.value = null
+        catalogAsked = 0L
+        _pointer.value = null
     }
 
     /** After the host changed, or to try again by hand. */
@@ -349,12 +374,12 @@ class LinkSession @Inject constructor(
                         status = LinkStatus.Online, failure = null, tailscaleOff = false, laptop = m.optString("host"),
                         monitors = monitors(m.optJSONArray("monitors")),
                         phoneAudio = m.optBoolean("phoneAudio"), mirror = m.optBoolean("mirror"),
+                        caps = m.optJSONArray("caps")?.let { a -> (0 until a.length()).map { a.optString(it) }.toSet() }.orEmpty(),
                     )
                 }
-                val cfg = prefs.config.value
-                // back after a dropped link: a monitor that was pinned stays pinned
-                val pinned = _state.value.takeIf { !it.followPointer }?.monitor ?: "auto"
-                send("""{"t":"video","on":true,"monitor":"$pinned","quality":"${cfg.quality}"}""")
+                // the picture, or with it off, where the pointer is (a tandem that can't say shows the picture)
+                if (prefs.config.value.showPicture || !_state.value.canHidePicture) askForPicture() else send("""{"t":"pointer","on":true}""")
+                catalogAsked = 0L
                 // the laptop's setting "start with sound" turns it on from the first frame
                 if (m.optBoolean("laptopSound") && !_state.value.laptopSound) _state.update { it.copy(laptopSound = true) }
                 if (_state.value.laptopSound) {
@@ -402,6 +427,12 @@ class LinkSession @Inject constructor(
                 cursorX = m.optDouble("x", 0.5).toFloat()
                 cursorY = m.optDouble("y", 0.5).toFloat()
             }
+            "ptr" -> _pointer.value = LinkPointer(m.optDouble("x").toFloat(), m.optDouble("y").toFloat())
+            "monitors" -> m.optJSONArray("monitors")?.let { a -> _state.update { it.copy(monitors = monitors(a)) } }
+            // the list first, then the apps' icons a few at a time; both are read away from this
+            // thread, which carries the picture, and dropped if the link changed meanwhile
+            "catalog" -> offThread { mine -> catalogOf(m).let { c -> if (mine == generation) _catalog.value = c } }
+            "icons" -> offThread { mine -> withIcons(m.optJSONObject("icons"), m.optBoolean("done")).let { c -> if (c != null && mine == generation) _catalog.value = c } }
             "state" -> {
                 _state.update { it.copy(phoneAudio = m.optBoolean("phoneAudio"), mirror = m.optBoolean("mirror")) }
                 routeLaptopSound()
@@ -443,6 +474,58 @@ class LinkSession @Inject constructor(
             .mapNotNull { it.hostAddress }
     } catch (_: Exception) {
         emptyList()
+    }
+
+    /** Runs [block] on the one worker the catalog has, in the order the messages came, told which link it started on. */
+    private fun offThread(block: (Int) -> Unit) {
+        val mine = generation
+        catalogWorker.execute { runCatching { block(mine) } }
+    }
+
+    private val catalogWorker = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "link-catalog").apply { isDaemon = true } }
+
+    private fun app(id: String, name: String, b64: String?, coming: Boolean = false): LinkApp {
+        val png = b64?.takeIf { it.isNotEmpty() }?.let { runCatching { android.util.Base64.decode(it, android.util.Base64.DEFAULT) }.getOrNull() }
+        val bitmap = png?.let { runCatching { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size) }.getOrNull() }
+        return LinkApp(id, name, png, bitmap, hasIcon = png != null || coming)
+    }
+
+    /** The catalog with the icons of [icons] (by app id) put on its apps; null when there is no catalog yet. */
+    private fun withIcons(icons: JSONObject?, done: Boolean): LinkCatalog? {
+        val have = _catalog.value ?: return null
+        if ((icons == null || icons.length() == 0) && !done) return null
+        // after the last batch, an app the list said had an icon but that never came was one the
+        // laptop couldn't draw this time: it keeps hasIcon, so it is tried again another visit
+        return LinkCatalog(
+            have.apps.map { a -> if (icons != null && icons.has(a.id)) app(a.id, a.name, icons.optString(a.id), coming = true) else a },
+            have.binds, have.at, iconsDone = have.iconsDone || done,
+        )
+    }
+
+    private fun catalogOf(m: JSONObject): LinkCatalog {
+        // a list asked for again keeps the icons it already has until their batches come back
+        val before = _catalog.value?.apps.orEmpty().associateBy { it.id }
+        val apps = m.optJSONArray("apps")?.let { a ->
+            (0 until a.length()).mapNotNull { i ->
+                val o = a.optJSONObject(i) ?: return@mapNotNull null
+                val id = o.optString("id")
+                when (val icon = o.opt("icon")) {
+                    // this tandem sends the icons after the list: true says one is coming
+                    is Boolean -> before[id]?.takeIf { icon && it.png != null }?.let { LinkApp(id, o.optString("name"), it.png, it.bitmap, true) }
+                        ?: LinkApp(id, o.optString("name"), hasIcon = icon)
+                    // an older one sends them with it
+                    else -> app(id, o.optString("name"), o.optString("icon"))
+                }
+            }.filter { it.id.isNotBlank() && it.name.isNotBlank() }
+        }.orEmpty()
+        val binds = m.optJSONArray("binds")?.let { a ->
+            (0 until a.length()).mapNotNull { i ->
+                val o = a.optJSONObject(i) ?: return@mapNotNull null
+                val mods = o.optJSONArray("mods")?.let { ms -> (0 until ms.length()).map { ms.optString(it) } }.orEmpty()
+                LinkBind(o.optString("label"), o.optString("key"), LinkKeys.ordered(mods), o.optString("cap"))
+            }.filter { it.label.isNotBlank() && it.key.isNotBlank() }
+        }.orEmpty()
+        return LinkCatalog(apps, binds)
     }
 
     // ── out ──
@@ -547,6 +630,50 @@ class LinkSession @Inject constructor(
         audio.level = on
     }
 
+    /** Asks the laptop for its picture, at the saved quality; a monitor that was pinned stays pinned. */
+    private fun askForPicture() {
+        val pinned = _state.value.takeIf { !it.followPointer }?.monitor ?: "auto"
+        send("""{"t":"video","on":true,"monitor":"$pinned","quality":"${prefs.config.value.quality}"}""")
+    }
+
+    /**
+     * Shows the laptop's screen, or hides it: then the laptop sends no picture at all (the
+     * sound still comes when it is on) and says where its pointer is instead, for the map.
+     */
+    fun setPicture(on: Boolean) {
+        prefs.update { it.copy(showPicture = on) }
+        if (on) {
+            send("""{"t":"pointer","on":false}""")
+            _state.update { it.copy(videoError = null) }
+            askForPicture()
+        } else {
+            send("""{"t":"video","on":false}""")
+            send("""{"t":"pointer","on":true}""")
+            video.release()
+        }
+    }
+
+    /** Asks for the laptop's apps and bindings, unless they came within the last two minutes. */
+    fun requestCatalog() {
+        if (CATALOG !in _state.value.caps) return
+        val now = System.currentTimeMillis()
+        val have = _catalog.value
+        if (have != null && now - have.at < 120_000L) return
+        if (now - catalogAsked < 10_000L) return
+        catalogAsked = now
+        send("""{"t":"catalog"}""")
+    }
+
+    /** Does what [s] says on the laptop. */
+    fun run(s: LinkShortcut) {
+        when (s.kind) {
+            LinkShortcutKind.APP -> sendJson(JSONObject().put("t", "launch").put("app", s.app))
+            LinkShortcutKind.SITE -> openOnLaptop(s.url)
+            LinkShortcutKind.KEYS -> key(s.key, s.mods)
+            LinkShortcutKind.TEXT -> text(s.text)
+        }
+    }
+
     /** The picture stopped (its recorder died): ask for it again, as it was. */
     fun retryVideo() {
         // the error goes at once, so the cover shows the spinner while the laptop starts the picture
@@ -565,5 +692,7 @@ class LinkSession @Inject constructor(
         private const val READ_TIMEOUT_MS = 12_000
         private const val PENDING_TIMEOUT_MS = 150_000
         const val RECONNECT_GRACE_MS = 20_000L
+        const val CATALOG = "catalog"
+        const val POINTER = "pointer"
     }
 }

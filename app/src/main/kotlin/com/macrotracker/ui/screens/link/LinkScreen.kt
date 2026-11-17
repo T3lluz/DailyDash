@@ -9,7 +9,9 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -40,23 +42,21 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
@@ -65,7 +65,6 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -73,6 +72,9 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.macrotracker.data.link.LinkConfig
 import com.macrotracker.data.link.LinkEvent
+import com.macrotracker.data.link.LinkSession
+import com.macrotracker.data.link.LinkShortcut
+import com.macrotracker.data.link.monitorUnder
 import com.macrotracker.data.link.LinkState
 import com.macrotracker.data.link.LinkStatus
 import com.macrotracker.ui.components.chromeGlass
@@ -112,6 +114,7 @@ import kotlin.math.max
 @Composable
 fun LinkScreen(
     onNavigateBack: () -> Unit,
+    onAiSettings: () -> Unit = {},
     viewModel: LinkViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -134,12 +137,21 @@ fun LinkScreen(
     var mods by remember { mutableStateOf(setOf<String>()) }
     var toast by remember { mutableStateOf<String?>(null) }
     var sheet by remember { mutableStateOf(false) }
+    // the shortcut row being arranged; the sheet open on a shortcut is the view-model's (`shortcutSheet`)
+    var arranging by remember { mutableStateOf(false) }
+    fun openShortcut(s: LinkShortcut?) {
+        viewModel.shortcutSheet = ShortcutSheetState(s, LinkSession.CATALOG in state.caps)
+    }
     // the keyboard came up by itself, so it may go down by itself
     var raisedForField by remember { mutableStateOf(false) }
     val geometry = remember { PreviewGeometry() }
 
     BackHandler {
-        if (landscape && viewModel.orientation == 1) viewModel.orientation = 2 else onNavigateBack()
+        when {
+            arranging -> arranging = false
+            landscape && viewModel.orientation == 1 -> viewModel.orientation = 2
+            else -> onNavigateBack()
+        }
     }
 
     // Connected while the screen is in front; a rotation keeps the connection.
@@ -219,9 +231,14 @@ fun LinkScreen(
         }
     }
     LaunchedEffect(imeVisible) { if (!imeVisible) raisedForField = false }
+    LaunchedEffect(online) { if (online) viewModel.fillMissingIcons() }
     // The keyboard belongs to the state it was raised in: the list's address field, or the laptop.
     LaunchedEffect(online) {
-        if (!online) sheet = false
+        // the shortcut sheet is kept: it shows again when the link is back (from Settings → AI, say)
+        if (!online) {
+            sheet = false
+            arranging = false
+        }
         raisedForField = false
         keyView?.hideKeyboard()
     }
@@ -296,6 +313,8 @@ fun LinkScreen(
                     laptopName = laptopName, imeVisible = imeVisible, mods = mods, onMods = { mods = it }, onKey = ::pressed,
                     actions = actions, onKeyboard = ::toggleKeyboard, onMore = { sheet = true },
                     onSideways = { viewModel.orientation = 1 }, onNavigateBack = onNavigateBack,
+                    arranging = arranging, onArranging = { arranging = it },
+                    onAddShortcut = { openShortcut(null) }, onEditShortcut = { openShortcut(it) },
                 )
             }
         }
@@ -315,6 +334,14 @@ fun LinkScreen(
         LinkSheet(
             viewModel = viewModel, state = state, config = config, laptopName = laptopName, actions = actions,
             onDismiss = { sheet = false },
+        )
+    }
+    val shortcutSheet = viewModel.shortcutSheet
+    if (shortcutSheet != null && online) {
+        LinkShortcutSheet(
+            viewModel = viewModel, state = state, laptopName = laptopName, sheet = shortcutSheet,
+            onAiSettings = onAiSettings,
+            onDismiss = { viewModel.shortcutSheet = null },
         )
     }
 }
@@ -347,9 +374,19 @@ private fun Upright(
     onMore: () -> Unit,
     onSideways: () -> Unit,
     onNavigateBack: () -> Unit,
+    arranging: Boolean,
+    onArranging: (Boolean) -> Unit,
+    onAddShortcut: () -> Unit,
+    onEditShortcut: (LinkShortcut) -> Unit,
 ) {
     val session = viewModel.session
     val haptics = rememberHaptics()
+    val scope = rememberCoroutineScope()
+    val shortcuts by viewModel.shortcuts.collectAsState()
+    // the last shortcut gone (from the row, its menu or its sheet), there is nothing left to arrange
+    LaunchedEffect(shortcuts.isEmpty()) { if (shortcuts.isEmpty() && arranging) onArranging(false) }
+    // a tandem that can't report the pointer or send the sound alone always shows the picture
+    val showPicture = config.showPicture || !state.canHidePicture
     var clipMenu by remember { mutableStateOf(false) }
     val reconnecting = state.status == LinkStatus.Reconnecting
     var padDown by remember { mutableStateOf(false) }
@@ -374,22 +411,41 @@ private fun Upright(
                 settledShape = shape
             }
         }
-        val pictureHeight = animateDpAsState(if (zoomedIn) most else settledShape, MacroMotion.Link.panel(), label = "picture")
+        val open = if (zoomedIn) most else settledShape
+        // folded away, the screen takes no room at all: the shortcuts and the trackpad have it
+        val pictureHeight = animateDpAsState(if (showPicture) open else 0.dp, MacroMotion.Link.panel(), label = "picture")
+        // the pill names the monitor the pointer is on while there is no picture to name
+        val pointer = session.pointer.collectAsState()
+        val pointerOn by remember(state.monitors) { derivedStateOf { monitorUnder(state.monitors, pointer.value) } }
         Column(Modifier.fillMaxSize().navigationBarsPadding().imePadding()) {
-            // The header: back, which laptop and screen (opens the sheet), and zoom. Nothing sits on the picture.
+            // The header: back, which laptop and screen (opens the sheet), zoom, and at the far right the
+            // button that folds the screen away and brings it back. Nothing sits on the picture.
             Row(
                 Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 RoundButton(AppIcons.ArrowBack, "Back") { onNavigateBack() }
                 Spacer(Modifier.width(8.dp))
-                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                    StatusPill(state, laptopName, onClick = onMore)
+                // the pill keeps to its own width at the start; the buttons stand at the far end
+                Box(Modifier.weight(1f)) {
+                    StatusPill(state, laptopName, monitor = if (showPicture) state.shownMonitor else pointerOn ?: state.shownMonitor, onClick = onMore)
                 }
-                Spacer(Modifier.width(8.dp))
-                val zoomed = geometry.zoomState.floatValue > 1.01f
-                RoundButton(if (zoomed) AppIcons.ZoomOut else AppIcons.ZoomIn, if (zoomed) "Show the whole screen" else "Zoom in") {
-                    viewModel.zoom = if (zoomed) 1f else max(geometry.fillZoom, 2f)
+                AnimatedVisibility(
+                    visible = showPicture,
+                    enter = fadeIn(MacroMotion.fadeTween()) + expandHorizontally(MacroMotion.Link.panel()),
+                    exit = fadeOut(MacroMotion.fadeTween()) + shrinkHorizontally(MacroMotion.Link.panel()),
+                ) {
+                    Row {
+                        Spacer(Modifier.width(8.dp))
+                        val zoomed = geometry.zoomState.floatValue > 1.01f
+                        RoundButton(if (zoomed) AppIcons.ZoomOut else AppIcons.ZoomIn, if (zoomed) "Show the whole screen" else "Zoom in") {
+                            viewModel.zoom = if (zoomed) 1f else max(geometry.fillZoom, 2f)
+                        }
+                    }
+                }
+                if (state.canHidePicture) {
+                    Spacer(Modifier.width(8.dp))
+                    ScreenToggle(showPicture, onToggle = { session.setPicture(!showPicture) })
                 }
             }
             // The laptop's screen, edge to edge for the most picture.
@@ -397,33 +453,53 @@ private fun Upright(
                 Modifier
                     .fillMaxWidth()
                     .layout { measurable, constraints ->
-                        val h = pictureHeight.value.roundToPx()
+                        val h = pictureHeight.value.roundToPx().coerceAtLeast(0)
                         val placeable = measurable.measure(constraints.copy(minHeight = h, maxHeight = h))
                         layout(placeable.width, h) { placeable.place(0, 0) }
-                    }
-                    .background(Color.Black),
+                    },
             ) {
-                LinkPreview(
-                    session = session, geometry = geometry,
-                    zoom = viewModel.zoom, fill = config.fillPreview,
-                    error = state.videoError, note = if (reconnecting) "Reconnecting" else null,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .hazeSource(hazeState)
-                        .pointerInput(session) {
-                            detectTapGestures(onTap = { at ->
-                                geometry.toScreen(at)?.let { p ->
-                                    haptics.tick()
-                                    session.pointAt(p.x, p.y, click = true)
-                                }
-                            })
-                        }
-                        .pointerInput(session) {
-                            detectTransformGestures { _, pan, change, _ ->
-                                if (change != 1f) viewModel.zoom = (geometry.zoom * change).coerceIn(1f, 8f)
-                                geometry.nudge(pan)
+                // the picture fades as its box closes, and fades in as it opens
+                FadingPicture(showPicture) {
+                    LinkPreview(
+                        session = session, geometry = geometry,
+                        zoom = viewModel.zoom, fill = config.fillPreview,
+                        error = state.videoError, note = if (reconnecting) "Reconnecting" else null,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black)
+                            .hazeSource(hazeState)
+                            .pointerInput(session) {
+                                detectTapGestures(onTap = { at ->
+                                    geometry.toScreen(at)?.let { p ->
+                                        haptics.tick()
+                                        session.pointAt(p.x, p.y, click = true)
+                                    }
+                                })
                             }
-                        },
+                            .pointerInput(session) {
+                                detectTransformGestures { _, pan, change, _ ->
+                                    if (change != 1f) viewModel.zoom = (geometry.zoom * change).coerceIn(1f, 8f)
+                                    geometry.nudge(pan)
+                                }
+                            },
+                    )
+                }
+            }
+
+            // the shortcuts, over the pad; out of the way while typing
+            AnimatedVisibility(
+                visible = !imeVisible,
+                enter = expandVertically(MacroMotion.slideTween()) + fadeIn(MacroMotion.fadeTween()),
+                exit = shrinkVertically(MacroMotion.slideTween()) + fadeOut(MacroMotion.fadeTween()),
+            ) {
+                // a row under the screen; with the screen folded away, a grid four across
+                ShortcutRow(
+                    shortcuts = shortcuts, store = viewModel.shortcutStore,
+                    arranging = arranging, onArranging = onArranging,
+                    onRun = { session.run(it) }, onAdd = onAddShortcut, onEdit = onEditShortcut,
+                    onRemove = { viewModel.removeShortcut(it.id) },
+                    grid = !showPicture,
+                    modifier = Modifier.padding(top = 6.dp),
                 )
             }
 
@@ -499,7 +575,12 @@ private fun Sideways(
     }
 
     Box(Modifier.fillMaxSize()) {
-        LinkPreview(
+        if (!config.showPicture && state.canHidePicture) {
+            LinkTrackpad(
+                viewModel = viewModel, config = config, hint = !viewModel.touched && !imeVisible, buttons = !imeVisible,
+                modifier = Modifier.fillMaxSize().hazeSource(hazeState).padding(12.dp),
+            )
+        } else LinkPreview(
             session = session, geometry = geometry, zoom = 1f, fill = false, error = state.videoError,
             note = if (state.status == LinkStatus.Reconnecting) "Reconnecting" else null,
             modifier = Modifier
@@ -527,9 +608,12 @@ private fun Sideways(
         ) {
             if (open) {
                 val touch = viewModel.touchMode
-                PanelButton(0, if (touch) AppIcons.Scan else AppIcons.MousePointer, if (touch) "Touch" else "Trackpad", LinkHandsTone, on = touch) {
-                    used++
-                    viewModel.touchMode = !touch
+                // with no picture to touch, the whole phone is the trackpad
+                if (config.showPicture || !state.canHidePicture) {
+                    PanelButton(0, if (touch) AppIcons.Scan else AppIcons.MousePointer, if (touch) "Touch" else "Trackpad", LinkHandsTone, on = touch) {
+                        used++
+                        viewModel.touchMode = !touch
+                    }
                 }
                 PanelButton(1, AppIcons.Keyboard, "Keyboard", LinkHandsTone, on = imeVisible) { used++; onKeyboard() }
                 PanelButton(2, if (state.laptopSound) AppIcons.LaptopSound else AppIcons.LaptopSoundOff, "Sound", LinkSoundTone, on = state.laptopSound) {
@@ -557,4 +641,15 @@ private fun Sideways(
             }
         }
     }
+}
+
+/** The laptop's picture fading out as its box closes and in as it opens. */
+@Composable
+private fun FadingPicture(visible: Boolean, content: @Composable () -> Unit) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(MacroMotion.Link.picture()),
+        exit = fadeOut(MacroMotion.fadeTween()),
+        modifier = Modifier.fillMaxSize(),
+    ) { content() }
 }

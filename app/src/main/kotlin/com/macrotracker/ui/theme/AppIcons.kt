@@ -316,6 +316,12 @@ object AppIcons {
     val LaptopSoundOff: ImageVector by lazy { icon("LaptopSoundOff") { s("M5 4 h14 a2 2 0 0 1 2 2 v8 a2 2 0 0 1 -2 2 h-14 a2 2 0 0 1 -2 -2 v-8 a2 2 0 0 1 2 -2 z"); s("M2 20 h20"); s("M7 8.6 h1.4 l2.6 -2.1 v7 l-2.6 -2.1 h-1.4 z"); s("M13.5 8.5 l3 3"); s("M16.5 8.5 l-3 3") } }
     /** A clipboard with arrows both ways: what is copied, between the two. After Lucide's `clipboard` and `arrow-down-up`. */
     val ClipboardSwap: ImageVector by lazy { icon("ClipboardSwap") { s("M9 2 h6 a1 1 0 0 1 1 1 v2 a1 1 0 0 1 -1 1 h-6 a1 1 0 0 1 -1 -1 v-2 a1 1 0 0 1 1 -1 z"); s("M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"); s("M10 17.5 V10"); s("M8 12 l2 -2 l2 2"); s("M14 10 v7.5"); s("M12 15.5 l2 2 l2 -2") } }
+    /** Lucide `type`: words typed out */
+    val TypeText: ImageVector by lazy { icon("TypeText") { s("M12 4v16"); s("M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2"); s("M9 20h6") } }
+    /** A filled square: stop what is running */
+    val Stop: ImageVector by lazy { icon("Stop") { f("M7 5 h10 a2 2 0 0 1 2 2 v10 a2 2 0 0 1 -2 2 H7 a2 2 0 0 1 -2 -2 V7 a2 2 0 0 1 2 -2 z") } }
+    /** Lucide `app-window`: an app, before its own icon has arrived */
+    val AppWindow: ImageVector by lazy { icon("AppWindow") { s("M4 4 h16 a2 2 0 0 1 2 2 v12 a2 2 0 0 1 -2 2 h-16 a2 2 0 0 1 -2 -2 v-12 a2 2 0 0 1 2 -2 z"); s("M10 4v4"); s("M2 8h20"); s("M6 4v4") } }
     /** Lucide `move`: arrows four ways, for dragging */
     val Move: ImageVector by lazy { icon("Move") { s("M12 2v20"); s("m15 19-3 3-3-3"); s("m19 9 3 3-3 3"); s("M2 12h20"); s("m5 9-3 3 3 3"); s("m9 5 3-3 3 3") } }
     /** Lucide `zoom-in` */

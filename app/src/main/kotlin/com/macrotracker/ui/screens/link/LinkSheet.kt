@@ -98,25 +98,33 @@ internal fun LinkSheet(
 
             HealthSection(tone = LinkScreenTone) {
                 RoomTitle(AppIcons.Monitor, "Screen", LinkScreenTone)
-                if (state.monitors.size > 1) {
+                val picture = config.showPicture || !state.canHidePicture
+                if (state.canHidePicture) {
+                    ToggleRow("Show the screen", "Off: trackpad and keyboard only", config.showPicture, LinkScreenTone) {
+                        session.setPicture(!config.showPicture)
+                    }
+                }
+                if (state.monitors.size > 1 && picture) {
                     MonitorMap(state) { name -> session.showMonitor(name) }
                     Spacer(Modifier.height(8.dp))
                     ToggleRow("Follow the pointer", "Show whichever screen the pointer is on", state.followPointer, LinkScreenTone) {
                         session.showMonitor(if (state.followPointer) state.monitor else null)
                     }
                 }
-                Spacer(Modifier.height(10.dp))
-                Text("Picture", color = TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 8.dp))
-                Segmented(
-                    listOf("low" to "Light", "mid" to "Balanced", "high" to "Sharp"),
-                    picked = state.quality ?: config.quality, tone = LinkScreenTone,
-                ) { session.setQuality(it) }
-                Spacer(Modifier.height(6.dp))
-                val picked = mapOf("low" to "Light", "mid" to "Balanced", "high" to "Sharp")[config.quality] ?: "your pick"
-                Text(
-                    if ((state.quality ?: config.quality) != config.quality) "Lighter while the connection is slow. It goes back to $picked by itself." else "Light suits mobile data.",
-                    color = TextTertiary, fontSize = 12.sp,
-                )
+                if (picture) {
+                    Spacer(Modifier.height(10.dp))
+                    Text("Picture", color = TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 8.dp))
+                    Segmented(
+                        listOf("low" to "Light", "mid" to "Balanced", "high" to "Sharp"),
+                        picked = state.quality ?: config.quality, tone = LinkScreenTone,
+                    ) { session.setQuality(it) }
+                    Spacer(Modifier.height(6.dp))
+                    val picked = mapOf("low" to "Light", "mid" to "Balanced", "high" to "Sharp")[config.quality] ?: "your pick"
+                    Text(
+                        if ((state.quality ?: config.quality) != config.quality) "Lighter while the connection is slow. It goes back to $picked by itself." else "Light suits mobile data.",
+                        color = TextTertiary, fontSize = 12.sp,
+                    )
+                }
             }
 
             HealthSection(tone = LinkSoundTone) {

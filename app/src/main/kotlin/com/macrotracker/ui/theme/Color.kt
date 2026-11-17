@@ -113,6 +113,8 @@ val LinkScreenTone = HealthVitalsTone
 val LinkSoundTone = HealthActivityTone
 val LinkPhoneTone = HealthBodyTone
 val LinkHandsTone = HealthNutritionTone
+/** The remote's shortcuts: a warm yellow none of the other rooms use. */
+val LinkShortcutTone = Color(0xFFF5C451)
 
 /** Sleep stages: shades of the sleep indigo, deep darkest, with awake the one warm note. */
 val SleepStageAwake = Color(0xFFE8A28C)

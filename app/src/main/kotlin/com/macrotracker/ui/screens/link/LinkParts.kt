@@ -85,9 +85,15 @@ import dev.chrisbanes.haze.HazeState
 internal fun shortLabel(label: String?, name: String?): String =
     label?.substringBefore(" · ")?.ifBlank { null } ?: name.orEmpty()
 
-/** Gives a little under the finger and springs back; the scale is read in the layer, never in composition. */
+/**
+ * Gives a little under the finger and springs back; the scale is read in the layer, never in
+ * composition. Turned off ([enabled] false), it neither gives nor ticks, and reads as off.
+ */
 @Composable
-internal fun Modifier.pressable(label: String, onClick: () -> Unit): Modifier {
+internal fun Modifier.pressable(label: String, onClick: () -> Unit): Modifier = pressable(label, enabled = true, onClick = onClick)
+
+@Composable
+internal fun Modifier.pressable(label: String, enabled: Boolean, onClick: () -> Unit): Modifier {
     val haptics = rememberHaptics()
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
@@ -97,7 +103,7 @@ internal fun Modifier.pressable(label: String, onClick: () -> Unit): Modifier {
             scaleX = scale.value
             scaleY = scale.value
         }
-        .clickable(interactionSource = source, indication = null, role = Role.Button, onClickLabel = label) { haptics.tick(); onClick() }
+        .clickable(interactionSource = source, indication = null, enabled = enabled, role = Role.Button, onClickLabel = label) { haptics.tick(); onClick() }
 }
 
 /** A round button of the remote's header. */
@@ -113,7 +119,14 @@ internal fun RoundButton(icon: ImageVector, label: String, modifier: Modifier = 
  * from the side the picture came from, so the pill moves with the swipe. Opens the sheet.
  */
 @Composable
-internal fun StatusPill(state: LinkState, laptopName: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun StatusPill(
+    state: LinkState,
+    laptopName: String,
+    modifier: Modifier = Modifier,
+    /** The monitor to name: the one the picture shows, or with the screen hidden, the one the pointer is on. */
+    monitor: com.macrotracker.data.link.LinkMonitor? = state.shownMonitor,
+    onClick: () -> Unit,
+) {
     val back = state.status == LinkStatus.Reconnecting
     Row(
         modifier.pressable("Laptop and screen", onClick).clip(RoundedCornerShape(50)).background(Surface).padding(start = 14.dp, end = 16.dp, top = 11.dp, bottom = 11.dp),
@@ -125,7 +138,7 @@ internal fun StatusPill(state: LinkState, laptopName: String, modifier: Modifier
         Text(laptopName, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
         // the separator stays put; only the monitor's name slides, inside its own space
         Text(" · ", color = TextTertiary, fontSize = 13.sp, maxLines = 1)
-        val shown = state.shownMonitor
+        val shown = monitor
         AnimatedContent(
             targetState = shown,
             transitionSpec = {

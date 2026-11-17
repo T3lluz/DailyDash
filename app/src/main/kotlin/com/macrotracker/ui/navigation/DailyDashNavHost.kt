@@ -291,7 +291,10 @@ fun DailyDashNavHost(
         }
 
         subScreen(SubScreenRoutes.LINK) { entry ->
-            com.macrotracker.ui.screens.link.LinkScreen(onNavigateBack = { navController.popSubScreen(entry) })
+            com.macrotracker.ui.screens.link.LinkScreen(
+                onNavigateBack = { navController.popSubScreen(entry) },
+                onAiSettings = { navController.navigateToSubScreen(SettingsRoutes.AI) },
+            )
         }
 
         subScreen(SubScreenRoutes.WIDGETS) { entry ->

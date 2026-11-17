@@ -391,6 +391,16 @@ object MacroMotion {
         const val CONTROLS_STAY_MS = 6_000L
         const val TOAST_MS = 2_600L
 
+        /** A shortcut moving to its new place as one is dragged past it, or one is added or taken away. */
+        fun <T> reorder() = spring<T>(dampingRatio = 0.86f, stiffness = 620f)
+
+        /** How long a shortcut stays lit after a tap: long enough to see, gone before the next tap. */
+        const val FLASH_MS = 420
+
+        /** The shortcuts wiggling while they are arranged: one sway a quarter of a second. */
+        fun wiggle(): InfiniteRepeatableSpec<Float> = infiniteRepeatable(tween(260, easing = LinearEasing), RepeatMode.Restart)
+
+
         /** Two-finger scroll keeps going after the fingers lift, losing this share of its speed each frame. */
         const val FLING_KEEP = 0.955f
         const val FLING_FRAME_MS = 16L
