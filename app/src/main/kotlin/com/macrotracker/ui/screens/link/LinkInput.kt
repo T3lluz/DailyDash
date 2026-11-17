@@ -52,6 +52,8 @@ fun Modifier.trackpad(
     onTick: () -> Unit,
     onHold: () -> Unit,
     onTouched: () -> Unit = {},
+    /** Where the fingers are on the pad (their middle), and null once they lift. */
+    onFinger: (Offset?) -> Unit = {},
 ): Modifier = pointerInput(session, speed, naturalScroll) {
     val slop = viewConfiguration.touchSlop
     val notch = DP_PER_NOTCH * density
@@ -61,6 +63,7 @@ fun Modifier.trackpad(
             val down = awaitFirstDown(requireUnconsumed = false)
             roll?.cancel()   // a finger on the pad stops the page, as it does on a phone
             onTouched()
+            onFinger(down.position)
             val startedAt = SystemClock.uptimeMillis()
             var fingers = 1
             var travelled = Offset.Zero
@@ -73,59 +76,67 @@ fun Modifier.trackpad(
             var speedY = 0f
             var scrolledAt = 0L
             down.consume()
-            while (true) {
-                val waiting = !moved && !dragging && fingers == 1
-                val event: PointerEvent? = if (waiting) {
-                    val left = HOLD_TO_DRAG_MS - (SystemClock.uptimeMillis() - startedAt)
-                    if (left <= 0) null else withTimeoutOrNull(left) { awaitPointerEvent() }
-                } else {
-                    awaitPointerEvent()
-                }
-                if (event == null) {
-                    dragging = true
-                    onHold()
-                    session.button("left", true)
-                    continue
-                }
-                val pressed = event.changes.filter { it.pressed }
-                if (pressed.isEmpty()) break
-                if (pressed.size > fingers) fingers = pressed.size
-                if (pressed.size == 1 && (fingers == 1 || dragging)) {
-                    val change = pressed[0]
-                    val delta = change.positionChange()
-                    travelled += delta
-                    if (!moved && hypot(travelled.x, travelled.y) > slop) moved = true
-                    if (moved || dragging) {
-                        val ms = (change.uptimeMillis - change.previousUptimeMillis).coerceIn(1, 40)
-                        val dpPerMs = hypot(delta.x, delta.y) / density / ms
-                        // slow strokes stay precise, fast ones cross the screen
-                        val gain = speed * (0.75f + 1.5f * dpPerMs.coerceAtMost(2.5f))
-                        session.move(delta.x / density * gain, delta.y / density * gain)
+            // a gesture cut short (the pad leaves the screen, its settings change) still lets the cloth go
+            try {
+                while (true) {
+                    val waiting = !moved && !dragging && fingers == 1
+                    val event: PointerEvent? = if (waiting) {
+                        val left = HOLD_TO_DRAG_MS - (SystemClock.uptimeMillis() - startedAt)
+                        if (left <= 0) null else withTimeoutOrNull(left) { awaitPointerEvent() }
+                    } else {
+                        awaitPointerEvent()
                     }
-                } else if (pressed.size >= 2) {
-                    var sum = Offset.Zero
-                    pressed.forEach { sum += it.positionChange() }
-                    val delta = sum / pressed.size.toFloat()
-                    scrollTravel += delta
-                    if (!scrolled && hypot(scrollTravel.x, scrollTravel.y) > slop) scrolled = true
-                    if (scrolled && pressed.size == 2) {
-                        val sign = if (naturalScroll) 1f else -1f
-                        // a mostly vertical stroke stays vertical
-                        val dx = if (abs(delta.x) > abs(delta.y) * 0.6f) delta.x else 0f
-                        val stepX = -sign * dx / notch
-                        val stepY = sign * delta.y / notch
-                        session.scroll(stepX, stepY)
-                        val ms = (pressed[0].uptimeMillis - pressed[0].previousUptimeMillis).coerceIn(1, 40)
-                        speedX = speedX * 0.6f + stepX / ms * 0.4f
-                        speedY = speedY * 0.6f + stepY / ms * 0.4f
-                        scrolledAt = pressed[0].uptimeMillis
+                    if (event == null) {
+                        dragging = true
+                        onHold()
+                        session.button("left", true)
+                        continue
                     }
+                    val pressed = event.changes.filter { it.pressed }
+                    if (pressed.isEmpty()) break
+                    // the cloth dents under the first finger, not in the empty middle between two
+                    onFinger(pressed[0].position)
+                    if (pressed.size > fingers) fingers = pressed.size
+                    if (pressed.size == 1 && (fingers == 1 || dragging)) {
+                        val change = pressed[0]
+                        val delta = change.positionChange()
+                        travelled += delta
+                        if (!moved && hypot(travelled.x, travelled.y) > slop) moved = true
+                        if (moved || dragging) {
+                            val ms = (change.uptimeMillis - change.previousUptimeMillis).coerceIn(1, 40)
+                            val dpPerMs = hypot(delta.x, delta.y) / density / ms
+                            // slow strokes stay precise, fast ones cross the screen
+                            val gain = speed * (0.75f + 1.5f * dpPerMs.coerceAtMost(2.5f))
+                            session.move(delta.x / density * gain, delta.y / density * gain)
+                        }
+                    } else if (pressed.size >= 2) {
+                        var sum = Offset.Zero
+                        pressed.forEach { sum += it.positionChange() }
+                        val delta = sum / pressed.size.toFloat()
+                        scrollTravel += delta
+                        if (!scrolled && hypot(scrollTravel.x, scrollTravel.y) > slop) scrolled = true
+                        if (scrolled && pressed.size == 2) {
+                            val sign = if (naturalScroll) 1f else -1f
+                            // a mostly vertical stroke stays vertical
+                            val dx = if (abs(delta.x) > abs(delta.y) * 0.6f) delta.x else 0f
+                            val stepX = -sign * dx / notch
+                            val stepY = sign * delta.y / notch
+                            session.scroll(stepX, stepY)
+                            val ms = (pressed[0].uptimeMillis - pressed[0].previousUptimeMillis).coerceIn(1, 40)
+                            speedX = speedX * 0.6f + stepX / ms * 0.4f
+                            speedY = speedY * 0.6f + stepY / ms * 0.4f
+                            scrolledAt = pressed[0].uptimeMillis
+                        }
+                    }
+                    event.changes.forEach { it.consume() }
                 }
-                event.changes.forEach { it.consume() }
+            } finally {
+                onFinger(null)
+                // a drag cut short (the phone turned, the sheet opened) must not leave the laptop's button held
+                if (dragging) session.button("left", false)
             }
-            if (dragging) {
-                session.button("left", false)
-            } else if (scrolled) {
+            // a drag's button was let go in the finally above; a scroll may roll on, a tap clicks
+            if (!dragging && scrolled) {
                 // fingers that stopped before lifting meant to stop; a flick keeps rolling
                 if (SystemClock.uptimeMillis() - scrolledAt < 70 && hypot(speedX, speedY) > FLING_MIN) {
                     roll = launch {
@@ -139,7 +150,7 @@ fun Modifier.trackpad(
                         }
                     }
                 }
-            } else if (!moved && SystemClock.uptimeMillis() - startedAt < TAP_MS) {
+            } else if (!dragging && !moved && SystemClock.uptimeMillis() - startedAt < TAP_MS) {
                 onTick()
                 session.click(
                     when (fingers) {
@@ -215,9 +226,13 @@ fun Modifier.mouseButton(session: LinkSession, button: String, onTick: () -> Uni
             onTick()
             onPressed(true)
             session.button(button, true)
-            waitForUpOrCancellation()
-            session.button(button, false)
-            onPressed(false)
+            // let go however the press ends: a lift, or the button leaving the screen mid-press
+            try {
+                waitForUpOrCancellation()
+            } finally {
+                session.button(button, false)
+                onPressed(false)
+            }
         }
     }
 

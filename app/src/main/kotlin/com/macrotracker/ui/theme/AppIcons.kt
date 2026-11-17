@@ -308,6 +308,20 @@ object AppIcons {
     val Keyboard: ImageVector by lazy { icon("Keyboard") { s("M10 8h.01"); s("M12 12h.01"); s("M14 8h.01"); s("M16 12h.01"); s("M18 8h.01"); s("M6 8h.01"); s("M7 16h10"); s("M8 12h.01"); s("M4 4 h16 a2 2 0 0 1 2 2 v12 a2 2 0 0 1 -2 2 h-16 a2 2 0 0 1 -2 -2 v-12 a2 2 0 0 1 2 -2 z") } }
     /** Lucide `maximize` */
     val Maximize: ImageVector by lazy { icon("Maximize") { s("M8 3H5a2 2 0 0 0-2 2v3"); s("M21 8V5a2 2 0 0 0-2-2h-3"); s("M3 16v3a2 2 0 0 0 2 2h3"); s("M16 21h3a2 2 0 0 0 2-2v-3") } }
+    /** Lucide `fullscreen`: corners round a screen */
+    val Fullscreen: ImageVector by lazy { icon("Fullscreen") { s("M3 7V5a2 2 0 0 1 2-2h2"); s("M17 3h2a2 2 0 0 1 2 2v2"); s("M21 17v2a2 2 0 0 1-2 2h-2"); s("M7 21H5a2 2 0 0 1-2-2v-2"); s("M9 8 h6 a1 1 0 0 1 1 1 v6 a1 1 0 0 1 -1 1 h-6 a1 1 0 0 1 -1 -1 v-6 a1 1 0 0 1 1 -1 z") } }
+    /** A laptop whose screen shows a speaker playing: the laptop's sound, here. Drawn after Lucide's `laptop-minimal` and `volume-2`. */
+    val LaptopSound: ImageVector by lazy { icon("LaptopSound") { s("M5 4 h14 a2 2 0 0 1 2 2 v8 a2 2 0 0 1 -2 2 h-14 a2 2 0 0 1 -2 -2 v-8 a2 2 0 0 1 2 -2 z"); s("M2 20 h20"); s("M7 8.6 h1.4 l2.6 -2.1 v7 l-2.6 -2.1 h-1.4 z"); s("M13.6 8.3 a2.4 2.4 0 0 1 0 3.4"); s("M15.8 6.6 a4.6 4.6 0 0 1 0 6.8") } }
+    /** The same laptop with its speaker crossed out: the laptop's sound stays there. */
+    val LaptopSoundOff: ImageVector by lazy { icon("LaptopSoundOff") { s("M5 4 h14 a2 2 0 0 1 2 2 v8 a2 2 0 0 1 -2 2 h-14 a2 2 0 0 1 -2 -2 v-8 a2 2 0 0 1 2 -2 z"); s("M2 20 h20"); s("M7 8.6 h1.4 l2.6 -2.1 v7 l-2.6 -2.1 h-1.4 z"); s("M13.5 8.5 l3 3"); s("M16.5 8.5 l-3 3") } }
+    /** A clipboard with arrows both ways: what is copied, between the two. After Lucide's `clipboard` and `arrow-down-up`. */
+    val ClipboardSwap: ImageVector by lazy { icon("ClipboardSwap") { s("M9 2 h6 a1 1 0 0 1 1 1 v2 a1 1 0 0 1 -1 1 h-6 a1 1 0 0 1 -1 -1 v-2 a1 1 0 0 1 1 -1 z"); s("M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"); s("M10 17.5 V10"); s("M8 12 l2 -2 l2 2"); s("M14 10 v7.5"); s("M12 15.5 l2 2 l2 -2") } }
+    /** Lucide `move`: arrows four ways, for dragging */
+    val Move: ImageVector by lazy { icon("Move") { s("M12 2v20"); s("m15 19-3 3-3-3"); s("m19 9 3 3-3 3"); s("M2 12h20"); s("m5 9-3 3 3 3"); s("m9 5 3-3 3 3") } }
+    /** Lucide `zoom-in` */
+    val ZoomIn: ImageVector by lazy { icon("ZoomIn") { s("M3 11 a8 8 0 1 0 16 0 a8 8 0 1 0 -16 0"); s("m21 21 l-4.35 -4.35"); s("M11 8 v6"); s("M8 11 h6") } }
+    /** Lucide `zoom-out` */
+    val ZoomOut: ImageVector by lazy { icon("ZoomOut") { s("M3 11 a8 8 0 1 0 16 0 a8 8 0 1 0 -16 0"); s("m21 21 l-4.35 -4.35"); s("M8 11 h6") } }
     /** Lucide `minimize` */
     val Minimize: ImageVector by lazy { icon("Minimize") { s("M8 3v3a2 2 0 0 1-2 2H3"); s("M21 8h-3a2 2 0 0 1-2-2V3"); s("M3 16h3a2 2 0 0 1 2 2v3"); s("M16 21v-3a2 2 0 0 1 2-2h3") } }
     /** Lucide `volume-2` */

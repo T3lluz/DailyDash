@@ -8,15 +8,24 @@ import android.media.AudioTrack
 import android.media.MediaCodec
 import android.media.MediaFormat
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.view.Surface
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.nio.ByteBuffer
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * The laptop's screen, decoded. The decoder draws into a [SurfaceTexture] this class owns, and
  * the screen's TextureView borrows it (`setSurfaceTexture`), so a rotation or a recomposed view
  * keeps the picture: the stream never has to start again for a new view.
+ *
+ * When the stream moves to another monitor, the laptop keeps the old one coming until the new
+ * one's first frame is ready and then swaps ([announceSwitch]). The screen grabs a still of
+ * the old picture first and slides it away once [switched] says the new one is on screen, so
+ * the move reads as a swipe from one monitor to the next and never as a black gap.
  */
 class LinkVideo {
     val texture = SurfaceTexture(false)
@@ -30,10 +39,58 @@ class LinkVideo {
     private val _live = MutableStateFlow(false)
     val live: StateFlow<Boolean> = _live
 
+    /**
+     * The last switch whose new picture is drawn, by the id [announceSwitch] gave it. A screen
+     * that grabbed its still late can see the switch already landed (`switched >= id`).
+     */
+    private val _switched = MutableStateFlow(0)
+    val switched: StateFlow<Int> = _switched
+    @Volatile private var switchId = 0
+
+    /**
+     * Set by the screen, run on the main thread just before the picture changes monitor, with
+     * the direction the new one lies in (-1, 0 or 1 across and down) and the switch's id. It
+     * grabs what is shown.
+     */
+    @Volatile var beforeSwitch: ((dx: Int, dy: Int, id: Int) -> Unit)? = null
+
     private var codec: MediaCodec? = null
     private var config: ByteArray? = null
     private var hint = 1920 to 1080
     private var waitingForKey = true
+    @Volatile private var switching = false
+    /** Called on the decoder's thread once a switch has settled: its new picture is drawn, or it failed. */
+    @Volatile var onSettled: (() -> Unit)? = null
+    /** Whether a switch is waiting for its new picture. */
+    val isSwitching: Boolean get() = switching
+    /** Presentation times (µs) of frames that only catch the decoder up: decoded, never drawn. */
+    private val catchUp = java.util.concurrent.ConcurrentHashMap.newKeySet<Long>()
+    /** The decoder whose first frame ends the switch: the one set up after the new stream's setup. */
+    @Volatile private var armed: MediaCodec? = null
+    /** The switch that decoder is for: an older one landing late must not complete a newer one. */
+    @Volatile private var armedId = 0
+    private val main = Handler(Looper.getMainLooper())
+
+    /**
+     * The next stream replaces this one (another monitor, or another quality). Called on the
+     * reading thread: it waits a moment for the screen to grab the old picture, since the new
+     * stream's setup follows straight after and restarts the decoder.
+     */
+    fun announceSwitch(dx: Int, dy: Int) {
+        if (!_live.value) return
+        val id = ++switchId
+        switching = true
+        val grab = beforeSwitch ?: return
+        val done = CountDownLatch(1)
+        main.post {
+            try {
+                grab(dx, dy, id)
+            } finally {
+                done.countDown()
+            }
+        }
+        done.await(SNAPSHOT_WAIT_MS, TimeUnit.MILLISECONDS)
+    }
 
     /** The laptop said a stream is starting, at this monitor's size. */
     @Synchronized
@@ -45,7 +102,15 @@ class LinkVideo {
     @Synchronized
     fun feed(flags: Int, ptsMs: Long, data: ByteArray, offset: Int, length: Int) {
         if (flags and LinkProtocol.CONFIG != 0) {
-            config = data.copyOfRange(offset, offset + length)
+            val next = data.copyOfRange(offset, offset + length)
+            // The same setup again carries on from the next keyframe, unless the stream changed
+            // monitor: two monitors of one size share a setup, and frames of the old one still
+            // in the decoder would be what the swipe brings in. A fresh decoder has none.
+            if (codec != null && next.contentEquals(config) && !switching) {
+                waitingForKey = true
+                return
+            }
+            config = next
             restart()
             return
         }
@@ -54,6 +119,7 @@ class LinkVideo {
             if (flags and LinkProtocol.KEY == 0) return
             waitingForKey = false
         }
+        if (flags and LinkProtocol.CATCHUP != 0) catchUp.add(ptsMs * 1000)
         try {
             val index = c.dequeueInputBuffer(30_000)
             if (index < 0) {
@@ -76,9 +142,11 @@ class LinkVideo {
     }
 
     private fun restart() {
-        release()
-        val setup = config ?: return
-        val (sps, pps) = splitParameterSets(setup) ?: return
+        // mid-switch the picture stays up (the screen covers it with its still) until the new frame
+        release(keepLive = switching)
+        catchUp.clear()
+        val setup = config ?: return failed()
+        val (sps, pps) = splitParameterSets(setup) ?: return failed()
         try {
             val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, hint.first, hint.second).apply {
                 setByteBuffer("csd-0", ByteBuffer.wrap(sps))
@@ -90,10 +158,25 @@ class LinkVideo {
             c.configure(format, surface, null, 0)
             c.start()
             codec = c
+            if (switching) {
+                armed = c
+                armedId = switchId
+            }
             waitingForKey = true
             Thread({ drain(c) }, "link-video-out").apply { isDaemon = true }.start()
         } catch (_: Exception) {
             codec = null
+            failed()
+        }
+    }
+
+    /** No decoder could be made: the picture is gone, and the screen's cover says so rather than freezing on the last frame. */
+    private fun failed() {
+        _live.value = false
+        if (switching) {
+            switching = false
+            armed = null
+            onSettled?.invoke()
         }
     }
 
@@ -105,8 +188,21 @@ class LinkVideo {
                 val index = c.dequeueOutputBuffer(info, 100_000)
                 when {
                     index >= 0 -> {
-                        c.releaseOutputBuffer(index, true)
-                        if (!_live.value) _live.value = true
+                        // a frame of a buffered switch other than its newest is only decoded
+                        val show = !catchUp.remove(info.presentationTimeUs)
+                        c.releaseOutputBuffer(index, show)
+                        if (show) {
+                            if (!_live.value) _live.value = true
+                            if (armed === c) {
+                                armed = null
+                                _switched.value = armedId
+                                // a newer switch announced meanwhile is still on its way
+                                if (armedId == switchId) {
+                                    switching = false
+                                    onSettled?.invoke()
+                                }
+                            }
+                        }
                     }
                     index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
                         val f = c.outputFormat
@@ -122,10 +218,14 @@ class LinkVideo {
     }
 
     @Synchronized
-    fun release() {
+    fun release(keepLive: Boolean = false) {
+        if (!keepLive) {
+            switching = false
+            armed = null
+        }
         val c = codec ?: return
         codec = null
-        _live.value = false
+        if (!keepLive) _live.value = false
         try {
             c.stop()
         } catch (_: IllegalStateException) {
@@ -149,9 +249,13 @@ class LinkVideo {
     }
 }
 
+/** How long the reading thread waits for the screen to grab its still before a switch. */
+private const val SNAPSHOT_WAIT_MS = 120L
+
 /** The laptop's sound on the phone: AAC in, the media stream out. */
 class LinkAudio {
     private var codec: MediaCodec? = null
+    private var setup: ByteArray? = null
     private var track: AudioTrack? = null
     private val info = MediaCodec.BufferInfo()
 
@@ -170,7 +274,10 @@ class LinkAudio {
     @Synchronized
     fun feed(flags: Int, ptsMs: Long, data: ByteArray, offset: Int, length: Int) {
         if (flags and LinkProtocol.CONFIG != 0) {
-            start(data.copyOfRange(offset, offset + length))
+            val next = data.copyOfRange(offset, offset + length)
+            // A new monitor's stream sends its setup again, the same as before: the sound plays on
+            // without the gap a new decoder and track would make.
+            if (codec == null || !next.contentEquals(setup)) start(next)
             return
         }
         val c = codec ?: return
@@ -235,6 +342,7 @@ class LinkAudio {
             t.play()
             codec = c
             track = t
+            setup = audioSpecificConfig
         } catch (_: Exception) {
             stop()
         }
@@ -255,6 +363,7 @@ class LinkAudio {
         }
         track?.release()
         track = null
+        setup = null
     }
 
     private companion object {

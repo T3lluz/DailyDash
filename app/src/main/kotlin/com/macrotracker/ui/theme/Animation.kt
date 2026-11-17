@@ -358,6 +358,35 @@ object MacroMotion {
         /** The laptop's picture fading in once the first frame is decoded. */
         fun <T> picture(): FiniteAnimationSpec<T> = tween(320, easing = FastOutSlowInEasing)
 
+        /**
+         * The picture sliding from one monitor to the next, the way the pointer went: the old
+         * one leaves as the new one arrives, and it stops without bouncing (the owner asked for
+         * a plain slide).
+         */
+        fun <T> swipe() = spring<T>(dampingRatio = 1f, stiffness = 400f)
+
+        /** About how long a slide between monitors takes: the picture's box changes shape after it. */
+        const val SWIPE_SETTLE_MS = 340L
+
+        /** A new quality on the same monitor: one picture fades into the other. */
+        fun <T> swap(): FiniteAnimationSpec<T> = tween(260, easing = FastOutSlowInEasing)
+
+        /** How far a picture is shrunk while it is off to the side: the leaving one shrinks as it goes, the arriving one grows to full size, for depth. */
+        const val SWIPE_DEPTH = 0.08f
+
+        /** A switch whose new picture never arrives lets go of the old one after this long. */
+        const val SWIPE_WAIT_MS = 1_200L
+
+        /** The trackpad's cloth giving under a finger, and springing back past flat when it lifts. */
+        fun <T> dentIn() = spring<T>(dampingRatio = 0.72f, stiffness = 700f)
+        fun <T> dentOut() = spring<T>(dampingRatio = 0.36f, stiffness = 380f)
+
+        /** The most a swipe between monitors blurs along its way, in dp, at full speed. */
+        const val SWIPE_BLUR_DP = 33f
+
+        /** The quality picker's highlight sliding to the picked one. */
+        fun <T> segment() = spring<T>(dampingRatio = 0.8f, stiffness = 520f)
+
         /** How long the full-screen controls stay open untouched, and a message stays up. */
         const val CONTROLS_STAY_MS = 6_000L
         const val TOAST_MS = 2_600L

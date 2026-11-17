@@ -100,4 +100,6 @@ object LinkProtocol {
     /** Frame flags. */
     const val KEY = 1
     const val CONFIG = 2
+    /** Sent only to catch the decoder up (a buffered monitor switch): decoded, never shown. */
+    const val CATCHUP = 4
 }

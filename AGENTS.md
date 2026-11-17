@@ -142,33 +142,66 @@ com.macrotracker/
                               prompt on the laptop. A laptop the bridge doesn't list is reached by its address, and
                               then the laptop asks its owner once. `LinkSession` holds one TCP connection (port
                               47600: a kind byte, a length, a payload; JSON, H.264 and AAC, the format in tandem's
-                              server.py) while the screen is in front, tries the laptop's addresses in order and
-                              reconnects by itself. `LinkPrefs` keeps the laptop picked, a token made once and how
-                              the trackpad behaves. `LinkVideo` decodes into a SurfaceTexture it owns and the
-                              screen's TextureView borrows it (`setSurfaceTexture`), so a rotation keeps the
-                              picture; `LinkAudio` plays the laptop's sound, brought up to a phone's level (`lift`:
-                              a laptop mixed for headphones arrives some 20 dB low; peaks go to 3 dB under full,
-                              no clipping; the sheet's "Bring quiet sound up"). Turning it on raises a zeroed
-                              media volume, and pins the sound to the speaker while this phone's own audio is
-                              being sent to the laptop, so it never loops back.
-                              LinkScreen, not connected: the laptops as cards (`Finder`), a tap connects, and the
-                              picked card says how connecting is going. Upright: the laptop's screen in the top
-                              third (tap to click there, pinch to zoom, the view follows the pointer through
-                              `PreviewGeometry`, read only in the layer block), a trackpad (`Modifier.trackpad` in
-                              LinkInput.kt: tap, hold to drag, two fingers scroll with momentum), mouse buttons,
-                              and a dock whose every switch has its name under it; More is a sheet (`LinkSheet`:
-                              media keys, what goes between the two, which monitor, picture quality, trackpad
-                              settings). `LinkKeyView` is an unseen view the phone's keyboard types into; it
-                              rises by itself when the laptop says a click landed in a text field. On its side:
-                              the laptop's screen fills the phone, system bars hidden, the whole surface a
-                              trackpad or a touchscreen, and the controls are one `chromeGlass` panel that
-                              unfolds from its handle and folds away by itself. The picture is the glass's
-                              `hazeSource`, so the panel, the status pill and the round buttons blur the laptop's
-                              screen as the navbar blurs a page. Motion is `MacroMotion.Link`. The switches that
-                              are easy to mix up (the laptop's sound here, this phone's sound there) say what
-                              they did in a toast. The dashboard's laptop page can flip the laptop's sound here too (a
-                              `set` message, and `laptopSound` in the welcome for its "start with sound"). The laptop's commands (the phone's sound on the laptop, the
-                              phone in a window there) are scrcpy on the laptop; the app only asks for them.
+                              server.py) while the screen is in front and tries the laptop's addresses in order.
+                              Once let in it reads with a 12 s timeout (video and pongs never stop that long on a
+                              live link; not before the welcome, since a laptop asking its owner says nothing for
+                              up to two minutes). A link that was up and dropped is `Reconnecting` for
+                              `RECONNECT_GRACE_MS` with the remote still on screen; a failure with no VPN up says
+                              Tailscale is off and offers to open it (`tailscaleOff`). Pings carry the last round
+                              trip and the network (wifi/cell) for the dashboard. `LinkPrefs` keeps the laptop
+                              picked, a token made once, the quality picked and how the trackpad behaves.
+                              `LinkVideo` decodes into a SurfaceTexture it owns and the screen's TextureView
+                              borrows it (`setSurfaceTexture`), so a rotation keeps the picture.
+                              Moving to another monitor never shows a gap: tandem keeps the old stream until the
+                              new one's first keyframe and sends `video` with `switch` (the monitor it left);
+                              `switchDirection` (LinkLogicTest) says which way the new monitor lies on the desk;
+                              `LinkVideo.announceSwitch` has the screen grab a still of the old picture
+                              (`beforeSwitch`, the reading thread waits up to 120 ms) and `switched` ticks at the
+                              new decoder's first frame. `LinkPreview` then swipes: the still leaves the way the
+                              pointer went as the new picture arrives from that side, each a touch smaller while
+                              it is off to the side and blurred along the way by their speed (`MacroMotion.Link.swipe`,
+                              `SWIPE_BLUR_DP`; critically damped: the owner wants a plain slide, no bounce); a new quality
+                              on the same monitor fades, and so does every switch with animations turned down. The
+                              picture's box takes the shown monitor's shape only after the slide and never under a
+                              finger on the pad; zoom resizes it at once. The new picture is hidden
+                              only until its first frame (`SWIPE_WAIT_MS` at most): a TextureView that isn't drawn
+                              stops taking frames and the decoder stalls. The same
+                              audio setup again never restarts `LinkAudio`. `LinkAudio` plays the laptop's sound,
+                              brought up to a phone's level (`lift`: a laptop mixed for headphones arrives some
+                              20 dB low; peaks go to 3 dB under full, no clipping; "Make quiet sound louder").
+                              Turning it on raises a zeroed media volume, and pins the sound to the speaker while
+                              this phone's own audio is being sent to the laptop, so it never loops back.
+                              LinkScreen is in Health's look (rooms, `HealthDisplay`, `riseIn`, `pressSink`, imported
+                              from ui/screens/health) with the remote's own tones in Color.kt: `LinkScreenTone` sky,
+                              `LinkSoundTone` orange, `LinkPhoneTone` violet, `LinkHandsTone` green.
+                              Not connected (`LinkFinder`): a sentence in the display face ("t3lluz is ready"), each
+                              laptop a sky room with a drawn laptop whose screen is lit when on and has a light
+                              running across it while connecting; a tap connects. Upright: a header row (back, the
+                              status pill that opens the sheet, zoom), the laptop's screen edge to edge under it with
+                              nothing laid over it (tap to click there, pinch to zoom, the view follows the pointer
+                              through `PreviewGeometry`, read only in the layer block), the trackpad (`LinkTrackpad`:
+                              a green room with a woven dot texture; an AGSL shader dents the cloth under a finger,
+                              pulling the weave in and shading the walls evenly, and it springs back past flat on
+                              lift; the pad's edges never move; `MacroMotion.Link.dentIn/dentOut`; gestures in
+                              `Modifier.trackpad`, LinkInput.kt), its Left and Right buttons solid at its foot,
+                              outside the dent, and under the pad the dock: icon-only tiles after Health's meters
+                              (keyboard, full screen, the laptop's sound as a laptop with a speaker on its screen,
+                              the clipboard both ways, more), the end tiles taking the pad's 28 dp corners. More is
+                              a sheet of rooms (`LinkSheet`: the monitors as they stand on the desk, follow the
+                              pointer, picture quality, sound both ways and media keys, this phone on the laptop,
+                              trackpad settings, clipboard and lock). The quality the laptop is using can be lighter
+                              than the pick (`LinkState.quality`): tandem steps it down on a slow link and back up
+                              after a calm spell, and `showMonitor` never sends a quality, so a monitor pick never
+                              undoes that. `LinkKeyView` is an unseen view the phone's keyboard types into; it
+                              rises by itself when the laptop says a click landed in a text field. On its side: the
+                              laptop's screen fills the phone, system bars hidden, the whole surface a trackpad or
+                              a touchscreen, and the controls are one `chromeGlass` panel that unfolds from its
+                              handle and folds away by itself; the picture is the glass's `hazeSource`. Motion is
+                              `MacroMotion.Link`. The switches that are easy to mix up (the laptop's sound here,
+                              this phone's sound there) say what they did in a toast. The dashboard's laptop page
+                              can flip the laptop's sound here too (a `set` message, and `laptopSound` in the
+                              welcome for its "start with sound"). The laptop's commands (the phone's sound on the
+                              laptop, the phone in a window there) are scrcpy on the laptop; the app only asks for them.
     links/                 ← AppLinks + OpenWithActivity: mail, calendar (incl. `content://com.android.calendar`), YouTube,
                               Twitch and GitHub links (`LinkKind.forUrl`, LinkKindTest) ask once which app opens them (a
                               sheet listing the service's apps, then browsers) and keep the pick (prefs `app_links`;

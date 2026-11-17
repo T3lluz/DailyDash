@@ -45,7 +45,7 @@ class LinkDirectory @Inject constructor(
     private val settings: SettingsRepository,
     private val hub: PhoneHubPrefs,
 ) {
-    private val client = okHttpClient.newBuilder()
+    internal val client = okHttpClient.newBuilder()
         .connectTimeout(5, TimeUnit.SECONDS)
         .readTimeout(8, TimeUnit.SECONDS)
         .apply { interceptors().removeAll { it is okhttp3.logging.HttpLoggingInterceptor } }
@@ -61,7 +61,7 @@ class LinkDirectory @Inject constructor(
                 when {
                     response.code == 403 -> LinkDirectoryState(loaded = true, problem = "Turn on Phone hub in Connections: the dashboard only lists laptops for its paired phone.")
                     !response.isSuccessful -> LinkDirectoryState(loaded = true, problem = "The dashboard answered ${response.code}.")
-                    else -> LinkDirectoryState(hosts = parseLaptops(JSONObject(body)), loaded = true)
+                    else -> LinkDirectoryState(hosts = notUs(base, parseLaptops(JSONObject(body))), loaded = true)
                 }
             }
         } catch (e: IOException) {
@@ -70,6 +70,44 @@ class LinkDirectory @Inject constructor(
             LinkDirectoryState(loaded = true, problem = "The dashboard's answer made no sense.")
         }
     }
+}
+
+/**
+ * A laptop the bridge calls busy may be busy with this very phone: a session it left a moment
+ * ago, not yet gone. The dashboard's own list says who each session is from; one from this
+ * phone's addresses doesn't count.
+ */
+private fun LinkDirectory.notUs(base: String, hosts: List<LinkHost>): List<LinkHost> {
+    if (hosts.none { it.busy }) return hosts
+    val mine = ownAddresses()
+    val peers = try {
+        val request = Request.Builder().url("$base/_api/link").get().build()
+        client.newCall(request).execute().use { r -> if (r.isSuccessful) sessionPeers(JSONObject(r.body?.string().orEmpty())) else return hosts }
+    } catch (_: Exception) {
+        return hosts
+    }
+    return hosts.map { h -> if (h.busy && peers[h.id]?.all { it in mine } == true) h.copy(busy = false) else h }
+}
+
+/** Each laptop's sessions, by where they come from, out of the dashboard's `/_api/link`. */
+internal fun sessionPeers(o: JSONObject): Map<String, List<String>> = buildMap {
+    val array = o.optJSONArray("hosts") ?: return@buildMap
+    for (i in 0 until array.length()) {
+        val h = array.optJSONObject(i) ?: continue
+        val sessions = h.optJSONObject("state")?.optJSONArray("sessions") ?: continue
+        put(h.optString("id"), (0 until sessions.length()).mapNotNull { sessions.optJSONObject(it)?.optString("peer")?.ifBlank { null } })
+    }
+}
+
+/** This phone's own addresses, its tailnet one among them. */
+internal fun ownAddresses(): Set<String> = try {
+    java.net.NetworkInterface.getNetworkInterfaces().toList()
+        .filter { it.isUp && !it.isLoopback }
+        .flatMap { it.inetAddresses.toList() }
+        .mapNotNull { it.hostAddress?.substringBefore('%') }
+        .toSet()
+} catch (_: Exception) {
+    emptySet()
 }
 
 /** The bridge's answer as laptops. One without an address is left out: there is nowhere to connect to. */

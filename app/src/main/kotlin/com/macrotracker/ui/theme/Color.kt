@@ -104,6 +104,16 @@ val HealthBoneMass = HealthBodyTone
 val HealthGlucose = HealthVitalsTone
 val HealthSkinTemp = HealthVitalsTone
 
+/**
+ * The laptop remote's rooms, in Health's colours: one per thing that flows between the two.
+ * The laptop's screen is sky, sound is orange, this phone on the laptop is violet, and the
+ * trackpad and keyboard (your hands) are green.
+ */
+val LinkScreenTone = HealthVitalsTone
+val LinkSoundTone = HealthActivityTone
+val LinkPhoneTone = HealthBodyTone
+val LinkHandsTone = HealthNutritionTone
+
 /** Sleep stages: shades of the sleep indigo, deep darkest, with awake the one warm note. */
 val SleepStageAwake = Color(0xFFE8A28C)
 val SleepStageRem = Color(0xFFA9B2FF)

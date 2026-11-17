@@ -72,6 +72,13 @@ class LinkViewModel @Inject constructor(
     fun disconnect() {
         prefs.update { it.copy(host = "", name = "", ticket = "") }
         session.stop()
+        // the laptop tells the dashboard it is free within a moment; ask again then, so the
+        // list doesn't say this phone is still using it
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(1_200)
+            looking?.cancel()
+            findLaptops()
+        }
     }
 
     fun start() = session.start()

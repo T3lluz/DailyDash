@@ -99,4 +99,30 @@ class LinkLogicTest {
         assertNull(chordKey("ab"))
         assertNull(chordKey(""))
     }
+
+    // t3lluz's desk, in Hyprland's logical pixels: the ultrawide, the laptop, the 27"
+    private val ultrawide = LinkMonitor("DP-2", "C34H89x", 2560, 1080, x = 0, y = 81, layoutWidth = 2048, layoutHeight = 864)
+    private val laptop = LinkMonitor("eDP-1", "Laptop screen", 2560, 1600, x = 2048, y = 145, layoutWidth = 1280, layoutHeight = 800)
+    private val right = LinkMonitor("HDMI-A-1", "LC27G5xT", 1920, 1080, x = 3328, y = 81, layoutWidth = 1536, layoutHeight = 864)
+
+    @Test
+    fun `the picture moves toward the monitor the pointer went to`() {
+        assertEquals(1 to 0, switchDirection(laptop, right))
+        assertEquals(-1 to 0, switchDirection(laptop, ultrawide))
+        assertEquals(-1 to 0, switchDirection(right, ultrawide))
+    }
+
+    @Test
+    fun `a monitor above or below moves the picture up or down`() {
+        val above = LinkMonitor("DP-3", "Top", 1920, 1080, x = 2048, y = -1080, layoutWidth = 1920, layoutHeight = 1080)
+        assertEquals(0 to -1, switchDirection(laptop, above))
+        assertEquals(0 to 1, switchDirection(above, laptop))
+    }
+
+    @Test
+    fun `a new quality on the same monitor does not move, and an older tandem slides one way`() {
+        assertEquals(0 to 0, switchDirection(laptop, laptop))
+        assertEquals(0 to 0, switchDirection(null, laptop))
+        assertEquals(1 to 0, switchDirection(LinkMonitor("A", "A", 1, 1), LinkMonitor("B", "B", 1, 1)))
+    }
 }
