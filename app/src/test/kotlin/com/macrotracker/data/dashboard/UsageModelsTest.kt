@@ -63,8 +63,10 @@ class UsageModelsTest {
         assertEquals("You've hit your usage limit", cursor.note)
         assertEquals(321.31, cursor.spend!!.total, 0.0)
         assertEquals(301.31, cursor.spend!!.bonus!!, 0.0)
-        assertEquals("Overall", cursor.top()!!.label)
-        assertEquals("the fullest window when none is named", "Weekly", usage.limit("claude")!!.top()!!.label)
+        // a fixed clock: these windows reset on dates that pass
+        val now = Instant.parse("2026-11-18T12:00:00Z")
+        assertEquals("Overall", cursor.top(now)!!.label)
+        assertEquals("the fullest window when none is named", "Weekly", usage.limit("claude")!!.top(now)!!.label)
     }
 
     @Test fun `days and hours split by provider, agent and model, tokens and cost`() {

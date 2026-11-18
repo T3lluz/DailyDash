@@ -302,66 +302,6 @@ object AppIcons {
     val Globe: ImageVector by lazy { icon("Globe") { s("M2 12 a10 10 0 1 0 20 0 a10 10 0 1 0 -20 0"); s("M12 2 a14.5 14.5 0 0 0 0 20 a14.5 14.5 0 0 0 0 -20"); s("M2 12 h20") } }
     /** Lucide `wrench` */
     val Wrench: ImageVector by lazy { icon("Wrench") { s("M14.7 6.3 a1 1 0 0 0 0 1.4 l1.6 1.6 a1 1 0 0 0 1.4 0 l3.106 -3.105 c0.32 -0.322 0.863 -0.22 0.983 0.218 a6 6 0 0 1 -8.259 7.057 l-7.91 7.91 a1 1 0 0 1 -2.999 -3 l7.91 -7.91 a6 6 0 0 1 7.057 -8.259 c0.438 0.12 0.54 0.662 0.219 0.984 z") } }
-    /** Lucide `monitor` */
-    val Monitor: ImageVector by lazy { icon("Monitor") { s("M4 3 h16 a2 2 0 0 1 2 2 v10 a2 2 0 0 1 -2 2 h-16 a2 2 0 0 1 -2 -2 v-10 a2 2 0 0 1 2 -2 z"); s("M8 21 L16 21"); s("M12 17 L12 21") } }
-    /** Lucide `keyboard` */
-    val Keyboard: ImageVector by lazy { icon("Keyboard") { s("M10 8h.01"); s("M12 12h.01"); s("M14 8h.01"); s("M16 12h.01"); s("M18 8h.01"); s("M6 8h.01"); s("M7 16h10"); s("M8 12h.01"); s("M4 4 h16 a2 2 0 0 1 2 2 v12 a2 2 0 0 1 -2 2 h-16 a2 2 0 0 1 -2 -2 v-12 a2 2 0 0 1 2 -2 z") } }
-    /** Lucide `maximize` */
-    val Maximize: ImageVector by lazy { icon("Maximize") { s("M8 3H5a2 2 0 0 0-2 2v3"); s("M21 8V5a2 2 0 0 0-2-2h-3"); s("M3 16v3a2 2 0 0 0 2 2h3"); s("M16 21h3a2 2 0 0 0 2-2v-3") } }
-    /** Lucide `fullscreen`: corners round a screen */
-    val Fullscreen: ImageVector by lazy { icon("Fullscreen") { s("M3 7V5a2 2 0 0 1 2-2h2"); s("M17 3h2a2 2 0 0 1 2 2v2"); s("M21 17v2a2 2 0 0 1-2 2h-2"); s("M7 21H5a2 2 0 0 1-2-2v-2"); s("M9 8 h6 a1 1 0 0 1 1 1 v6 a1 1 0 0 1 -1 1 h-6 a1 1 0 0 1 -1 -1 v-6 a1 1 0 0 1 1 -1 z") } }
-    /** A laptop whose screen shows a speaker playing: the laptop's sound, here. Drawn after Lucide's `laptop-minimal` and `volume-2`. */
-    val LaptopSound: ImageVector by lazy { icon("LaptopSound") { s("M5 4 h14 a2 2 0 0 1 2 2 v8 a2 2 0 0 1 -2 2 h-14 a2 2 0 0 1 -2 -2 v-8 a2 2 0 0 1 2 -2 z"); s("M2 20 h20"); s("M7 8.6 h1.4 l2.6 -2.1 v7 l-2.6 -2.1 h-1.4 z"); s("M13.6 8.3 a2.4 2.4 0 0 1 0 3.4"); s("M15.8 6.6 a4.6 4.6 0 0 1 0 6.8") } }
-    /** The same laptop with its speaker crossed out: the laptop's sound stays there. */
-    val LaptopSoundOff: ImageVector by lazy { icon("LaptopSoundOff") { s("M5 4 h14 a2 2 0 0 1 2 2 v8 a2 2 0 0 1 -2 2 h-14 a2 2 0 0 1 -2 -2 v-8 a2 2 0 0 1 2 -2 z"); s("M2 20 h20"); s("M7 8.6 h1.4 l2.6 -2.1 v7 l-2.6 -2.1 h-1.4 z"); s("M13.5 8.5 l3 3"); s("M16.5 8.5 l-3 3") } }
-    /** A clipboard with arrows both ways: what is copied, between the two. After Lucide's `clipboard` and `arrow-down-up`. */
-    val ClipboardSwap: ImageVector by lazy { icon("ClipboardSwap") { s("M9 2 h6 a1 1 0 0 1 1 1 v2 a1 1 0 0 1 -1 1 h-6 a1 1 0 0 1 -1 -1 v-2 a1 1 0 0 1 1 -1 z"); s("M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"); s("M10 17.5 V10"); s("M8 12 l2 -2 l2 2"); s("M14 10 v7.5"); s("M12 15.5 l2 2 l2 -2") } }
-    /** Lucide `type`: words typed out */
-    val TypeText: ImageVector by lazy { icon("TypeText") { s("M12 4v16"); s("M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2"); s("M9 20h6") } }
-    /** A filled square: stop what is running */
-    val Stop: ImageVector by lazy { icon("Stop") { f("M7 5 h10 a2 2 0 0 1 2 2 v10 a2 2 0 0 1 -2 2 H7 a2 2 0 0 1 -2 -2 V7 a2 2 0 0 1 2 -2 z") } }
-    /** Lucide `app-window`: an app, before its own icon has arrived */
-    val AppWindow: ImageVector by lazy { icon("AppWindow") { s("M4 4 h16 a2 2 0 0 1 2 2 v12 a2 2 0 0 1 -2 2 h-16 a2 2 0 0 1 -2 -2 v-12 a2 2 0 0 1 2 -2 z"); s("M10 4v4"); s("M2 8h20"); s("M6 4v4") } }
-    /** Lucide `move`: arrows four ways, for dragging */
-    val Move: ImageVector by lazy { icon("Move") { s("M12 2v20"); s("m15 19-3 3-3-3"); s("m19 9 3 3-3 3"); s("M2 12h20"); s("m5 9-3 3 3 3"); s("m9 5 3-3 3 3") } }
-    /** Lucide `zoom-in` */
-    val ZoomIn: ImageVector by lazy { icon("ZoomIn") { s("M3 11 a8 8 0 1 0 16 0 a8 8 0 1 0 -16 0"); s("m21 21 l-4.35 -4.35"); s("M11 8 v6"); s("M8 11 h6") } }
-    /** Lucide `zoom-out` */
-    val ZoomOut: ImageVector by lazy { icon("ZoomOut") { s("M3 11 a8 8 0 1 0 16 0 a8 8 0 1 0 -16 0"); s("m21 21 l-4.35 -4.35"); s("M8 11 h6") } }
-    /** Lucide `minimize` */
-    val Minimize: ImageVector by lazy { icon("Minimize") { s("M8 3v3a2 2 0 0 1-2 2H3"); s("M21 8h-3a2 2 0 0 1-2-2V3"); s("M3 16h3a2 2 0 0 1 2 2v3"); s("M16 21v-3a2 2 0 0 1 2-2h3") } }
-    /** Lucide `volume-2` */
-    val Volume: ImageVector by lazy { icon("Volume") { s("M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"); s("M16 9a5 5 0 0 1 0 6"); s("M19.364 18.364a9 9 0 0 0 0-12.728") } }
-    /** Lucide `volume-x` */
-    val VolumeOff: ImageVector by lazy { icon("VolumeOff") { s("M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"); s("M22 9 L16 15"); s("M16 9 L22 15") } }
-    /** Lucide `headphones` */
-    val Headphones: ImageVector by lazy { icon("Headphones") { s("M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3") } }
-    /** Lucide `clipboard-copy` */
-    val ClipboardCopy: ImageVector by lazy { icon("ClipboardCopy") { s("M9 2 h6 a1 1 0 0 1 1 1 v2 a1 1 0 0 1 -1 1 h-6 a1 1 0 0 1 -1 -1 v-2 a1 1 0 0 1 1 -1 z"); s("M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"); s("M16 4h2a2 2 0 0 1 2 2v4"); s("M21 14H11"); s("m15 10-4 4 4 4") } }
-    /** Lucide `clipboard-paste` */
-    val ClipboardPaste: ImageVector by lazy { icon("ClipboardPaste") { s("M11 14h10"); s("M16 4h2a2 2 0 0 1 2 2v1.344"); s("m17 18 4-4-4-4"); s("M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 1.793-1.113"); s("M9 2 h6 a1 1 0 0 1 1 1 v2 a1 1 0 0 1 -1 1 h-6 a1 1 0 0 1 -1 -1 v-2 a1 1 0 0 1 1 -1 z") } }
-    /** Lucide `mouse-pointer-2` */
-    val MousePointer: ImageVector by lazy { icon("MousePointer") { s("M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063z") } }
-    /** Lucide `ellipsis` */
-    val Ellipsis: ImageVector by lazy { icon("Ellipsis") { s("M11 12 a1 1 0 1 0 2 0 a1 1 0 1 0 -2 0"); s("M18 12 a1 1 0 1 0 2 0 a1 1 0 1 0 -2 0"); s("M4 12 a1 1 0 1 0 2 0 a1 1 0 1 0 -2 0") } }
-    /** Lucide `power` */
-    val Power: ImageVector by lazy { icon("Power") { s("M12 2v10"); s("M18.4 6.6a9 9 0 1 1-12.77.04") } }
-    /** Lucide `rotate-cw` */
-    val RotateCw: ImageVector by lazy { icon("RotateCw") { s("M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"); s("M21 3v5h-5") } }
-    /** Lucide `screen-share` */
-    val ScreenShare: ImageVector by lazy { icon("ScreenShare") { s("M13 3H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-3"); s("M8 21h8"); s("M12 17v4"); s("m17 8 5-5"); s("M17 3h5v5") } }
-    /** Lucide `laptop` */
-    val Laptop: ImageVector by lazy { icon("Laptop") { s("M18 5a2 2 0 0 1 2 2v8.526a2 2 0 0 0 .212.897l1.068 2.127a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45l1.068-2.127A2 2 0 0 0 4 15.526V7a2 2 0 0 1 2-2z"); s("M20.054 15.987H3.946") } }
-    /** Lucide `skip-forward` */
-    val SkipForward: ImageVector by lazy { icon("SkipForward") { s("M21 4v16"); s("M6.029 4.285A2 2 0 0 0 3 6v12a2 2 0 0 0 3.029 1.715l9.997-5.998a2 2 0 0 0 .003-3.432z") } }
-    /** Lucide `skip-back` */
-    val SkipBack: ImageVector by lazy { icon("SkipBack") { s("M17.971 4.285A2 2 0 0 1 21 6v12a2 2 0 0 1-3.029 1.715l-9.997-5.998a2 2 0 0 1-.003-3.432z"); s("M3 20V4") } }
-    /** Lucide `volume-1` */
-    val VolumeLow: ImageVector by lazy { icon("VolumeLow") { s("M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z"); s("M16 9a5 5 0 0 1 0 6") } }
-    /** Lucide `monitor-smartphone` */
-    val MonitorSmartphone: ImageVector by lazy { icon("MonitorSmartphone") { s("M18 8V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h8"); s("M10 19v-3.96 3.15"); s("M7 19h5"); s("M18 12 h2 a2 2 0 0 1 2 2 v6 a2 2 0 0 1 -2 2 h-2 a2 2 0 0 1 -2 -2 v-6 a2 2 0 0 1 2 -2 z") } }
-    /** Lucide `scan` */
-    val Scan: ImageVector by lazy { icon("Scan") { s("M3 7V5a2 2 0 0 1 2-2h2"); s("M17 3h2a2 2 0 0 1 2 2v2"); s("M21 17v2a2 2 0 0 1-2 2h-2"); s("M7 21H5a2 2 0 0 1-2-2v-2") } }
 }
 
 private val Ink = SolidColor(Color.Black)

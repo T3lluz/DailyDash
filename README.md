@@ -50,11 +50,12 @@
 | <img src="docs/integrations/servers.svg" width="20" alt="" /> | **Servers** | CPU, memory, disks, network, sensors, containers, ports, systemd, journal, updates, alerts; live notification with dials and an **Ask** button | SSH login, nothing installed server-side |
 | <img src="docs/integrations/ai.svg" width="20" alt="" /> | **AI** | Log meals by describing them; **Tech support** chat, as **Hermes** on your server or **Sysop** on the phone | An AI provider; Hermes needs the dashboard server <sup>†</sup> |
 | <img src="docs/integrations/phone.svg" width="20" alt="" /> | **Phone hub** | The phone on your desk dashboard: battery, media, notifications (dismiss, reply); ring, torch, open URL, clipboard, volume from the desk; **Send to desk** in the share sheet | Dashboard server <sup>†</sup> |
-| <img src="docs/integrations/laptop.svg" width="20" alt="" /> | **Laptop** | Your laptop from the phone: its screen in the top third, a trackpad under it, typing with the phone's keyboard, full screen with its sound when you turn the phone. And the other way: the phone's screen in a window on the laptop, and its sound on the laptop's output | A laptop running tandem, over Tailscale; the dashboard server <sup>†</sup> lists it so a tap connects |
 | <img src="docs/integrations/widgets.svg" width="20" alt="" /> | **Widgets** | Weather, calendar, F1, servers and GitHub on the home screen, each resizable | Long-press the home screen |
 | <img src="docs/integrations/ai.svg" width="20" alt="" /> | **Tilesmith** | Describe a widget (or show it a picture of one) and AI builds it in Material 3 Expressive: YouTube cards you swipe through, a scrolling Gmail inbox, what's playing with skip buttons, photos, birthdays, any RSS feed, JSON API or web search, a server command; comment to change it, one tap to add it | An AI provider (starters work without one); Settings → Permissions for Gmail, Tasks and the phone's extras |
 
 <sup>†</sup> The t3lluz dashboard, reached over <img src="docs/integrations/tailscale.svg" width="12" alt="" /> Tailscale and set in **Settings → Connections**.
+
+The laptop remote moved to its own app, [Weave](https://github.com/T3lluz/Weave).
 
 **Health Connect metrics** (read-only, each with its own toggle): steps, heart rate, resting HR, SpO₂, respiratory rate, distance, floors, elevation, sleep, active and total calories, workouts from Garmin Connect, Samsung Health, Google Fit, Strava and others.
 
