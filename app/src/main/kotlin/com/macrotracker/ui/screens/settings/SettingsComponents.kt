@@ -1,6 +1,12 @@
 package com.macrotracker.ui.screens.settings
 
 import com.macrotracker.ui.screens.home.roomSwitchColors
+import com.macrotracker.ui.screens.home.pageRise
+import com.macrotracker.ui.screens.health.roomColor
+import com.macrotracker.ui.screens.health.LocalRoomColor
+import com.macrotracker.ui.components.Joined
+import com.macrotracker.ui.components.JoinedColumn
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import com.macrotracker.ui.screens.health.pressSink
@@ -58,8 +64,8 @@ import com.macrotracker.ui.theme.AppIcons
 enum class SettingsStatusTone { PLAIN, GOOD, ATTENTION }
 
 /**
- * A titled group of [SettingsNavRow]s: a room in [tone] with its name in the room's colour,
- * the rows on it with no rules between them.
+ * A titled group of rows: its name in the group's colour over the rows as joined tiles in a
+ * tint of it. Every direct child of [content] is one tile.
  */
 @Composable
 fun SettingsGroup(
@@ -67,18 +73,27 @@ fun SettingsGroup(
     modifier: Modifier = Modifier,
     tone: Color = HomeTone.Neutral,
     delayMs: Long = 50,
-    content: @Composable ColumnScope.() -> Unit,
+    content: @Composable () -> Unit,
 ) {
-    PageRoom(tone = tone, modifier = modifier, title = title, flush = true) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp), content = content)
+    val fill = roomColor(tone)
+    CompositionLocalProvider(LocalRoomColor provides fill, com.macrotracker.ui.components.LocalRoomTone provides tone.takeIf { it != HomeTone.Neutral }) {
+        Column(modifier.fillMaxWidth().pageRise().padding(bottom = Joined.GroupSpace - 12.dp)) {
+            Text(
+                title,
+                style = HealthDisplay,
+                fontSize = 17.sp,
+                color = tone,
+                maxLines = 1,
+                modifier = Modifier.padding(start = 10.dp, top = 12.dp, bottom = 9.dp),
+            )
+            JoinedColumn(fill = fill, outer = Joined.Page, content = content)
+        }
     }
 }
 
-/** What used to be a hairline between two rows of a [SettingsGroup]: now only a little air. */
+/** Rows of a [SettingsGroup] are tiles with a gap between them: nothing is drawn here any more. */
 @Composable
-fun SettingsRowDivider() {
-    Spacer(Modifier.height(2.dp))
-}
+fun SettingsRowDivider() = Unit
 
 /**
  * One place in Settings: a tinted icon tile, what it is and what's inside, and where it
@@ -95,17 +110,14 @@ fun SettingsNavRow(
     statusTone: SettingsStatusTone = SettingsStatusTone.PLAIN,
 ) {
     val haptics = rememberHaptics()
-    val press = remember { MutableInteractionSource() }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .pressSink(press)
-            .clip(RoundedCornerShape(20.dp))
-            .clickable(interactionSource = press, indication = androidx.compose.material3.ripple()) {
+            .clickable {
                 haptics.click()
                 onClick()
             }
-            .padding(vertical = 10.dp, horizontal = 10.dp),
+            .padding(vertical = 14.dp, horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
@@ -171,6 +183,18 @@ private fun SettingsStatus(text: String, tone: SettingsStatusTone) {
     }
 }
 
+/**
+ * One tile of a page's joined group that holds more than a row (a service with its switches
+ * under it): the tile in a tint of [tone], its content padded as a room pads its own.
+ */
+@Composable
+fun SettingsTile(tone: Color = HomeTone.Neutral, content: @Composable ColumnScope.() -> Unit) {
+    val fill = roomColor(tone)
+    CompositionLocalProvider(LocalRoomColor provides fill) {
+        Column(Modifier.fillMaxWidth().background(fill).padding(16.dp), content = content)
+    }
+}
+
 @Composable
 fun <T> SettingsSegmentedToggle(
     options: List<Pair<T, String>>,
@@ -220,20 +244,11 @@ fun ConnectionRow(
     onToggle: ((Boolean) -> Unit)? = null,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(WellFill)
-            .padding(14.dp),
+        modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = iconTint,
-            modifier = Modifier.size(28.dp),
-        )
-        Spacer(modifier = Modifier.width(12.dp))
+        com.macrotracker.ui.components.TileIcon(icon, iconTint, size = 44.dp)
+        Spacer(modifier = Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = name,
@@ -318,17 +333,21 @@ private fun MetricToggleRowContent(
     onCheckedChange: (Boolean) -> Unit,
     icon: @Composable () -> Unit,
 ) {
+    // a tile of a JoinedColumn: the whole row flips the switch
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .clickable(role = androidx.compose.ui.semantics.Role.Switch) { onCheckedChange(!enabled) }
+            .padding(start = 14.dp, end = 12.dp, top = 5.dp, bottom = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         icon()
         Spacer(modifier = Modifier.width(12.dp))
         Text(
             text = name,
-            fontSize = 14.sp,
+            style = HealthDisplay,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 14.5.sp,
             color = TextPrimary,
             modifier = Modifier.weight(1f),
         )

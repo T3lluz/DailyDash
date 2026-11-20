@@ -1,5 +1,6 @@
 package com.macrotracker.ui.screens.settings
 
+import com.macrotracker.ui.components.JoinedColumn
 import com.macrotracker.ui.screens.home.roomSwitchColors
 import com.macrotracker.ui.screens.home.WellFill
 import androidx.compose.foundation.background
@@ -78,10 +79,10 @@ fun PhoneHubSettingsCard(viewModel: PhoneHubViewModel = hiltViewModel()) {
 
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(AppIcons.Smartphone, contentDescription = null, tint = HubAccent, modifier = Modifier.size(28.dp))
-            Spacer(Modifier.width(12.dp))
+            com.macrotracker.ui.components.TileIcon(AppIcons.Smartphone, com.macrotracker.ui.screens.home.HomeTone.Servers, size = 44.dp)
+            Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text("Phone hub", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                Text("Phone hub", style = com.macrotracker.ui.screens.health.HealthDisplay, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
                 Text(
                     "Shows this phone on the dashboard (the phone in its top bar): notifications, what is " +
                         "playing with its lyrics, the calendar, health and battery. From there you can ring it, " +
@@ -113,12 +114,11 @@ fun PhoneHubSettingsCard(viewModel: PhoneHubViewModel = hiltViewModel()) {
                     status.error != null -> ServerWarn to "Not reaching the dashboard: ${status.error}"
                     else -> TextTertiary to "Connecting…"
                 }
+                JoinedColumn(outer = 18.dp) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(WellFill)
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(Modifier.size(8.dp).clip(CircleShape).background(dot))
@@ -126,10 +126,9 @@ fun PhoneHubSettingsCard(viewModel: PhoneHubViewModel = hiltViewModel()) {
                     Text(line, fontSize = 12.sp, color = TextSecondary, lineHeight = 16.sp, modifier = Modifier.weight(1f))
                 }
 
-                Spacer(Modifier.height(10.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Notification access", fontSize = 14.sp, color = TextPrimary)
+                        Text("Notification access", style = com.macrotracker.ui.screens.health.HealthDisplay, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp, color = TextPrimary)
                         Text(
                             if (access) "On: notifications and media show on the dashboard, and it can answer and dismiss them"
                             else "Needed for notifications and media controls, and to keep the phone listening when DailyDash is closed",
@@ -150,10 +149,9 @@ fun PhoneHubSettingsCard(viewModel: PhoneHubViewModel = hiltViewModel()) {
                     )
                 }
 
-                Spacer(Modifier.height(10.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Usage access", fontSize = 14.sp, color = TextPrimary)
+                        Text("Usage access", style = com.macrotracker.ui.screens.health.HealthDisplay, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp, color = TextPrimary)
                         Text(
                             if (usage) "On: today's screen time, unlocks and top apps show on the dashboard"
                             else "Optional. Lets the dashboard show today's screen time and the apps it went to",
@@ -179,9 +177,12 @@ fun PhoneHubSettingsCard(viewModel: PhoneHubViewModel = hiltViewModel()) {
                     )
                 }
 
-                Spacer(Modifier.height(12.dp))
-                Text("Share with the dashboard", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary)
-                Spacer(Modifier.height(4.dp))
+                }
+
+                Spacer(Modifier.height(14.dp))
+                Text("Share with the dashboard", style = com.macrotracker.ui.screens.health.HealthDisplay, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary, modifier = Modifier.padding(start = 4.dp))
+                Spacer(Modifier.height(8.dp))
+                JoinedColumn(outer = 18.dp) {
                 MetricToggleRow(name = "Notifications", enabled = config.notifications, icon = AppIcons.Bell) {
                     haptics.tick(); viewModel.update { c -> c.copy(notifications = it) }
                 }
@@ -197,7 +198,8 @@ fun PhoneHubSettingsCard(viewModel: PhoneHubViewModel = hiltViewModel()) {
                 MetricToggleRow(name = "Let the dashboard act on this phone", enabled = config.commands, icon = AppIcons.Bolt) {
                     haptics.tick(); viewModel.update { c -> c.copy(commands = it) }
                 }
-                Spacer(Modifier.height(6.dp))
+                }
+                Spacer(Modifier.height(10.dp))
                 Text(
                     "Anything can go the other way too: share a link, a photo or some text and pick Send to desk.",
                     fontSize = 12.sp,

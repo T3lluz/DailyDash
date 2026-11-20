@@ -106,6 +106,7 @@ internal fun UsageCard(
 
 @Composable
 internal fun UsageChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
     Text(
         label,
         style = HealthDisplay,
@@ -116,7 +117,7 @@ internal fun UsageChip(label: String, selected: Boolean, onClick: () -> Unit) {
         modifier = Modifier
             .clip(RoundedCornerShape(50))
             .background(if (selected) AiAccent.copy(alpha = 0.26f) else Color.Transparent)
-            .selectable(selected = selected, role = Role.Tab, onClick = onClick)
+            .selectable(selected = selected, role = Role.Tab, onClick = { haptics.tick(); onClick() })
             .padding(horizontal = 13.dp, vertical = 7.dp),
     )
 }
@@ -124,6 +125,7 @@ internal fun UsageChip(label: String, selected: Boolean, onClick: () -> Unit) {
 /** A small two-or-three way switch inside a card's header: Provider / Agent / Model. */
 @Composable
 internal fun <T> MiniSwitch(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit) {
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
     Row(
         Modifier.clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.05f)).padding(2.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -138,7 +140,7 @@ internal fun <T> MiniSwitch(options: List<Pair<T, String>>, selected: T, onSelec
                 modifier = Modifier
                     .clip(RoundedCornerShape(14.dp))
                     .background(if (on) Color.White.copy(alpha = 0.10f) else Color.Transparent)
-                    .selectable(selected = on, role = Role.Tab) { onSelect(key) }
+                    .selectable(selected = on, role = Role.Tab) { haptics.tick(); onSelect(key) }
                     .padding(horizontal = 9.dp, vertical = 5.dp),
             )
         }

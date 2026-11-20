@@ -96,6 +96,7 @@ object AppIcons {
     /** Lucide `external-link` */
     val ExternalLink: ImageVector by lazy { icon("ExternalLink") { s("M15 3 h6 v6"); s("M10 14 L21 3"); s("M18 13 v6 a2 2 0 0 1 -2 2 H5 a2 2 0 0 1 -2 -2 V8 a2 2 0 0 1 2 -2 h6") } }
     /** Lucide `eye` */
+    val ThumbsUp: ImageVector by lazy { icon("ThumbsUp") { s("M7 10 v12"); s("M15 5.88 L14 10 h5.83 a2 2 0 0 1 1.92 2.56 l-2.33 8 A2 2 0 0 1 17.5 22 H4 a2 2 0 0 1 -2 -2 v-8 a2 2 0 0 1 2 -2 h2.76 a2 2 0 0 0 1.79 -1.11 L12 2 a3.13 3.13 0 0 1 3 3.88 Z") } }
     val Eye: ImageVector by lazy { icon("Eye") { s("M2.062 12.348 a1 1 0 0 1 0 -0.696 a10.75 10.75 0 0 1 19.876 0 a1 1 0 0 1 0 0.696 a10.75 10.75 0 0 1 -19.876 0"); s("M9 12 a3 3 0 1 0 6 0 a3 3 0 1 0 -6 0") } }
     /** Lucide `eye-off` */
     val EyeOff: ImageVector by lazy { icon("EyeOff") { s("M10.733 5.076 a10.744 10.744 0 0 1 11.205 6.575 a1 1 0 0 1 0 0.696 a10.747 10.747 0 0 1 -1.444 2.49"); s("M14.084 14.158 a3 3 0 0 1 -4.242 -4.242"); s("M17.479 17.499 a10.75 10.75 0 0 1 -15.417 -5.151 a1 1 0 0 1 0 -0.696 a10.75 10.75 0 0 1 4.446 -5.143"); s("m2 2 l20 20") } }

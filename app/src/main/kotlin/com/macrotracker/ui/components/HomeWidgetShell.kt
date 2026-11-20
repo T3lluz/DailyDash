@@ -154,27 +154,6 @@ fun WidgetExpandSection(
     )
 }
 
-/** Standard spacing + [WidgetExpandBar] footer for collapsed/expanded widget sections. */
-@Composable
-fun WidgetExpandFooter(
-    expanded: Boolean,
-    onToggle: () -> Unit,
-    accentColor: Color,
-    expandLabel: String = "More",
-    collapseLabel: String = "Show less",
-    modifier: Modifier = Modifier,
-) {
-    Spacer(modifier = Modifier.height(4.dp))
-    WidgetExpandBar(
-        expanded = expanded,
-        onToggle = onToggle,
-        accentColor = accentColor,
-        expandLabel = expandLabel,
-        collapseLabel = collapseLabel,
-        modifier = modifier,
-    )
-}
-
 /**
  * Bounded nested list for long expanded widget content.
  *

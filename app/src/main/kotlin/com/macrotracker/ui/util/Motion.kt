@@ -1,5 +1,6 @@
 package com.macrotracker.ui.util
 
+import androidx.compose.ui.graphics.graphicsLayer
 import android.provider.Settings
 import kotlinx.coroutines.delay
 import java.time.Duration
@@ -100,5 +101,31 @@ fun Modifier.trackOnScreen(fraction: OnScreenFraction): Modifier = onGloballyPos
         0f
     } else {
         (coords.boundsInWindow().height / height).coerceIn(0f, 1f)
+    }
+}
+
+/**
+ * A row of a scrolling list rising into place the first time a scroll brings it in: it fades
+ * up from a little below and settles, once. Rows on the list's first screen, rows built while
+ * nothing scrolls and rows seen before (in [seen], by [key]) simply stand there, so scrolling
+ * back up never replays it. Read while drawing.
+ */
+@Composable
+fun Modifier.riseWhenScrolledIn(list: androidx.compose.foundation.lazy.LazyListState?, seen: MutableSet<Any>, key: Any?): Modifier {
+    val reduced = rememberReducedMotion()
+    val rising = remember(key) {
+        val first = key != null && seen.add(key)
+        first && !reduced && list?.isScrollInProgress == true
+    }
+    if (!rising) return this
+    val progress = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(Unit) { progress.animateTo(1f, com.macrotracker.ui.theme.MacroMotion.scrollRiseSpring()) }
+    return this.graphicsLayer {
+        val t = progress.value
+        alpha = t.coerceIn(0f, 1f)
+        translationY = (1f - t) * com.macrotracker.ui.theme.MacroMotion.SCROLL_RISE_DP * density
+        val s = 0.97f + 0.03f * t
+        scaleX = s
+        scaleY = s
     }
 }

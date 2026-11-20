@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens.home
 
+import androidx.compose.runtime.setValue
+import com.macrotracker.ui.components.Joined
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -99,6 +101,32 @@ object HomeTone {
 
 val RoomShape = RoundedCornerShape(28.dp)
 
+/**
+ * The name of a group of tiles that stands on a page by itself (a day of videos, the channels
+ * being watched): in the page's colour, with a quiet count and, at its end, an action of its own.
+ */
+@Composable
+fun PageGroupLabel(
+    text: String,
+    tone: Color,
+    note: String? = null,
+    modifier: Modifier = Modifier,
+    trailing: (@Composable RowScope.() -> Unit)? = null,
+) {
+    Row(
+        modifier.fillMaxWidth().pageRise().padding(start = 8.dp, end = 2.dp, top = Joined.GroupSpace + 4.dp, bottom = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, style = HealthDisplay, fontWeight = FontWeight.Bold, fontSize = 18.sp, letterSpacing = (-0.2).sp, color = tone, maxLines = 1)
+        if (note != null) {
+            Spacer(Modifier.width(9.dp))
+            Text(note, style = HealthDisplay, fontWeight = FontWeight.Medium, fontSize = 13.sp, color = TextTertiary, maxLines = 1)
+        }
+        Spacer(Modifier.weight(1f))
+        trailing?.invoke(this)
+    }
+}
+
 /** A block set into a room: a little lighter than the room, no edge. */
 val WellShape = RoundedCornerShape(18.dp)
 val WellFill = Color.White.copy(alpha = 0.055f)
@@ -135,12 +163,12 @@ fun HomeTile(
     val dragging = LocalTileDragging.current
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
-    val sink = animateFloatAsState(if (pressed && onOpen != null) 0.982f else 1f, MacroMotion.pressSpring(), label = "tileSink")
+    val sink = animateFloatAsState(if (pressed && onOpen != null) 0.982f else 1f, MacroMotion.giveSpring(), label = "tileSink")
     CompositionLocalProvider(LocalRoomColor provides fill) {
         Column(
             modifier = modifier
                 .fillMaxWidth()
-                .padding(vertical = 7.dp)
+                .padding(vertical = 8.dp)
                 .graphicsLayer {
                     scaleX = sink.value
                     scaleY = sink.value
@@ -267,13 +295,13 @@ fun PageRoom(
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     // a room that opens a page sinks a little under a finger, as Home's tiles do
-    val sink = animateFloatAsState(if (pressed && onOpen != null) 0.982f else 1f, MacroMotion.pressSpring(), label = "roomSink")
+    val sink = animateFloatAsState(if (pressed && onOpen != null) 0.982f else 1f, MacroMotion.giveSpring(), label = "roomSink")
     CompositionLocalProvider(LocalRoomColor provides fill) {
         Column(
             modifier = modifier
                 .fillMaxWidth()
                 .pageRise()
-                .padding(vertical = 7.dp)
+                .padding(vertical = 8.dp)
                 .graphicsLayer {
                     scaleX = sink.value
                     scaleY = sink.value
@@ -365,12 +393,15 @@ fun TonePill(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     primary: Boolean = false,
+    /** A capsule on its own, or its place in a joined row of controls. */
+    shape: androidx.compose.ui.graphics.Shape = CircleShape,
     onClick: () -> Unit,
 ) {
     val haptics = rememberHaptics()
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
-    val sink = animateFloatAsState(if (pressed) 0.95f else 1f, MacroMotion.pressSpring(), label = "pillSink")
+    val sink = animateFloatAsState(if (pressed) 0.95f else 1f, MacroMotion.giveSpring(), label = "pillSink")
+    var play by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val ink = if (primary) OnAccent else TextPrimary
     Row(
         modifier = modifier
@@ -379,17 +410,18 @@ fun TonePill(
                 scaleY = sink.value
             }
             .heightIn(min = 36.dp)
-            .clip(CircleShape)
+            .clip(shape)
             .background(if (primary) tone else tone.copy(alpha = 0.16f))
             .clickable(interactionSource = source, indication = null, role = Role.Button) {
                 haptics.tick()
+                play++
                 onClick()
             }
             .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(7.dp),
     ) {
-        if (icon != null) Icon(icon, contentDescription = null, tint = if (primary) ink else tone, modifier = Modifier.size(16.dp))
+        if (icon != null) com.macrotracker.ui.components.AnimatedIcon(icon, play = play, tint = { if (primary) ink else tone }, size = 16.dp)
         Text(label, style = HealthDisplay, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = ink, maxLines = 1, softWrap = false)
     }
 }
@@ -403,12 +435,14 @@ fun RoundAction(
     modifier: Modifier = Modifier,
     size: Dp = 34.dp,
     filled: Boolean = false,
+    shape: androidx.compose.ui.graphics.Shape = CircleShape,
     onClick: () -> Unit,
 ) {
     val haptics = rememberHaptics()
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
-    val sink = animateFloatAsState(if (pressed) 0.9f else 1f, MacroMotion.pressSpring(), label = "roundSink")
+    val sink = animateFloatAsState(if (pressed) 0.9f else 1f, MacroMotion.giveSpring(), label = "roundSink")
+    var play by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     Box(
         modifier = modifier
             .graphicsLayer {
@@ -416,16 +450,17 @@ fun RoundAction(
                 scaleY = sink.value
             }
             .size(size)
-            .clip(CircleShape)
+            .clip(shape)
             .background(if (filled) tone else tone.copy(alpha = 0.14f))
             .clickable(interactionSource = source, indication = null, role = Role.Button) {
                 haptics.tick()
+                play++
                 onClick()
             }
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = null, tint = if (filled) OnAccent else tone, modifier = Modifier.size(size * 0.5f))
+        com.macrotracker.ui.components.AnimatedIcon(icon, play = play, tint = { if (filled) OnAccent else tone }, size = size * 0.5f)
     }
 }
 

@@ -1,5 +1,6 @@
 package com.macrotracker.ui.screens.health
 
+import com.macrotracker.ui.components.JoinedColumn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -114,64 +115,71 @@ fun HealthGoalsSheet(
                 }
                 val recent = remember(days, today) { days.filter { it.date.isAfter(today.minusDays(RECENT_DAYS.toLong())) && it.date != today } }
                 val order = listOfNotNull(first) + GoalKind.entries.filter { it != first }
-                order.forEach { kind ->
-                    when (kind) {
-                        GoalKind.STEPS -> GoalRow(
-                            label = "Steps",
-                            icon = AppIcons.Footprints,
-                            tone = HealthSteps,
-                            value = String.format(Locale.US, "%,d", goals.steps),
-                            unit = "a day",
-                            reached = reachedLine(recent.count { it.stats.steps > 0 }, recent.count { it.stats.steps >= goals.steps }, "days"),
-                            canLower = goals.steps > HealthGoals.STEPS_RANGE.first,
-                            canRaise = goals.steps < HealthGoals.STEPS_RANGE.last,
-                            haptics = haptics,
-                            onLower = { onChange(goals.copy(steps = goals.steps - HealthGoals.STEPS_STEP).clamped()) },
-                            onRaise = { onChange(goals.copy(steps = goals.steps + HealthGoals.STEPS_STEP).clamped()) },
-                        )
-                        GoalKind.SLEEP -> GoalRow(
-                            label = "Sleep",
-                            icon = AppIcons.Moon,
-                            tone = HealthSleep,
-                            value = formatGoalMinutes(goals.sleepMinutes),
-                            unit = "a night",
-                            reached = reachedLine(nights.size, nights.count { it.asleepMinutes >= goals.sleepMinutes }, "nights"),
-                            canLower = goals.sleepMinutes > HealthGoals.SLEEP_RANGE.first,
-                            canRaise = goals.sleepMinutes < HealthGoals.SLEEP_RANGE.last,
-                            haptics = haptics,
-                            onLower = { onChange(goals.copy(sleepMinutes = goals.sleepMinutes - HealthGoals.SLEEP_STEP).clamped()) },
-                            onRaise = { onChange(goals.copy(sleepMinutes = goals.sleepMinutes + HealthGoals.SLEEP_STEP).clamped()) },
-                        )
-                        GoalKind.CALORIES -> GoalRow(
-                            label = "Calories",
-                            icon = AppIcons.Flame,
-                            tone = HealthMove,
-                            value = String.format(Locale.US, "%,d", goals.caloriesKcal),
-                            unit = "kcal burned a day",
-                            reached = reachedLine(
-                                recent.count { it.stats.totalCaloriesBurned > 0 },
-                                recent.count { it.stats.totalCaloriesBurned.roundToInt() >= goals.caloriesKcal },
-                                "days",
-                            ),
-                            canLower = goals.caloriesKcal > HealthGoals.CALORIES_RANGE.first,
-                            canRaise = goals.caloriesKcal < HealthGoals.CALORIES_RANGE.last,
-                            haptics = haptics,
-                            onLower = { onChange(goals.copy(caloriesKcal = goals.caloriesKcal - HealthGoals.CALORIES_STEP).clamped()) },
-                            onRaise = { onChange(goals.copy(caloriesKcal = goals.caloriesKcal + HealthGoals.CALORIES_STEP).clamped()) },
-                        )
+JoinedColumn(fill = androidx.compose.ui.graphics.Color.Transparent, outer = 24.dp) {
+                    order.forEach { kind ->
+                        when (kind) {
+                            GoalKind.STEPS -> GoalRow(
+                                label = "Steps",
+                                icon = AppIcons.Footprints,
+                                tone = HealthSteps,
+                                value = String.format(Locale.US, "%,d", goals.steps),
+                                unit = "a day",
+                                reached = reachedLine(recent.count { it.stats.steps > 0 }, recent.count { it.stats.steps >= goals.steps }, "days"),
+                                canLower = goals.steps > HealthGoals.STEPS_RANGE.first,
+                                canRaise = goals.steps < HealthGoals.STEPS_RANGE.last,
+                                haptics = haptics,
+                                onLower = { onChange(goals.copy(steps = goals.steps - HealthGoals.STEPS_STEP).clamped()) },
+                                onRaise = { onChange(goals.copy(steps = goals.steps + HealthGoals.STEPS_STEP).clamped()) },
+                            )
+                            GoalKind.SLEEP -> GoalRow(
+                                label = "Sleep",
+                                icon = AppIcons.Moon,
+                                tone = HealthSleep,
+                                value = formatGoalMinutes(goals.sleepMinutes),
+                                unit = "a night",
+                                reached = reachedLine(nights.size, nights.count { it.asleepMinutes >= goals.sleepMinutes }, "nights"),
+                                canLower = goals.sleepMinutes > HealthGoals.SLEEP_RANGE.first,
+                                canRaise = goals.sleepMinutes < HealthGoals.SLEEP_RANGE.last,
+                                haptics = haptics,
+                                onLower = { onChange(goals.copy(sleepMinutes = goals.sleepMinutes - HealthGoals.SLEEP_STEP).clamped()) },
+                                onRaise = { onChange(goals.copy(sleepMinutes = goals.sleepMinutes + HealthGoals.SLEEP_STEP).clamped()) },
+                            )
+                            GoalKind.CALORIES -> GoalRow(
+                                label = "Calories",
+                                icon = AppIcons.Flame,
+                                tone = HealthMove,
+                                value = String.format(Locale.US, "%,d", goals.caloriesKcal),
+                                unit = "kcal burned a day",
+                                reached = reachedLine(
+                                    recent.count { it.stats.totalCaloriesBurned > 0 },
+                                    recent.count { it.stats.totalCaloriesBurned.roundToInt() >= goals.caloriesKcal },
+                                    "days",
+                                ),
+                                canLower = goals.caloriesKcal > HealthGoals.CALORIES_RANGE.first,
+                                canRaise = goals.caloriesKcal < HealthGoals.CALORIES_RANGE.last,
+                                haptics = haptics,
+                                onLower = { onChange(goals.copy(caloriesKcal = goals.caloriesKcal - HealthGoals.CALORIES_STEP).clamped()) },
+                                onRaise = { onChange(goals.copy(caloriesKcal = goals.caloriesKcal + HealthGoals.CALORIES_STEP).clamped()) },
+                            )
+                        }
                     }
-                }
+}
             }
         }
     }
 }
 
 /** "Reached on 12 of the last 30 days", or nothing when there is nothing to go by. */
-private fun reachedLine(read: Int, reached: Int, what: String): String? =
+internal fun reachedLine(read: Int, reached: Int, what: String): String? =
     if (read < 3) null else "Reached on $reached of the last $read $what"
 
+/**
+ * One daily goal: its name in its colour, the number set large, and minus and plus that step
+ * once on a tap and run while held. The goals sheet on Health and Settings → Goals draw the
+ * same row; in a group of tiles that already has a fill, pass no [fill].
+ */
 @Composable
-private fun GoalRow(
+internal fun GoalRow(
     label: String,
     icon: ImageVector,
     tone: Color,
@@ -183,12 +191,12 @@ private fun GoalRow(
     haptics: HapticHelper,
     onLower: () -> Unit,
     onRaise: () -> Unit,
+    fill: Color? = tone.copy(alpha = 0.10f),
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
-            .background(tone.copy(alpha = 0.10f))
+            .then(if (fill != null) Modifier.background(fill) else Modifier)
             .padding(horizontal = 14.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

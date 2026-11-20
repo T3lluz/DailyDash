@@ -29,8 +29,8 @@ import com.macrotracker.ui.theme.TextTertiary
 import com.macrotracker.ui.util.rememberHaptics
 
 /**
- * A day's food entries as rows split by hairlines, the way Health draws its lists: no box
- * per entry inside the card. Each row's delete is a quiet ✕ at its end.
+ * A day's food entries as joined tiles, as every list in the app is drawn. Each row's
+ * delete is a quiet ✕ at its end.
  */
 @Composable
 fun FoodLogList(
@@ -38,10 +38,9 @@ fun FoodLogList(
     onDelete: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxWidth().animateContentSize(MacroMotion.slideTween())) {
-        logs.forEachIndexed { i, log ->
+    JoinedColumn(modifier = modifier.fillMaxWidth().animateContentSize(MacroMotion.slideTween()), fill = com.macrotracker.ui.screens.home.WellFill, outer = 18.dp) {
+        logs.forEach { log ->
             key(log.id) {
-                if (i > 0) HorizontalDivider(color = Border, thickness = 0.5.dp)
                 MacroLogItem(log = log, onDelete = onDelete)
             }
         }
@@ -57,7 +56,7 @@ fun MacroLogItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
+            .padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {

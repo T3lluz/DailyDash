@@ -1,5 +1,9 @@
 package com.macrotracker.ui.screens
 
+import com.macrotracker.ui.components.joinedRowShape
+import com.macrotracker.ui.components.TilePlace
+import com.macrotracker.ui.components.JoinedColumn
+import com.macrotracker.ui.components.Joined
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import com.macrotracker.ui.screens.server.serverLede
@@ -205,7 +209,6 @@ fun ServerScreen(
         actions = { haze ->
             onOpenConsole?.let { open ->
                 GlassRound(AppIcons.SquareTerminal, "Console", haze) {
-                    haptics.tick()
                     open()
                 }
             }
@@ -215,11 +218,9 @@ fun ServerScreen(
                 haze,
                 tint = if (editing) HomeTone.Servers else TextPrimary,
             ) {
-                haptics.tick()
                 editing = !editing
             }
             GlassRound(AppIcons.Settings, "Server settings", haze) {
-                haptics.tick()
                 onNavigateToSettings()
             }
         },
@@ -231,14 +232,16 @@ fun ServerScreen(
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState())
                         .padding(bottom = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(Joined.Gap),
                 ) {
-                    profiles.forEach { profile ->
+                    // the servers as one joined strip
+                    profiles.forEachIndexed { i, profile ->
                         val isActive = profile.id == activeId
+                        val fill by androidx.compose.animation.animateColorAsState(if (isActive) HomeTone.Servers.copy(alpha = 0.24f) else WellFill, com.macrotracker.ui.theme.MacroMotion.colorTween(), label = "serverPick")
                         Row(
                             modifier = Modifier
-                                .clip(CircleShape)
-                                .background(if (isActive) HomeTone.Servers.copy(alpha = 0.24f) else WellFill)
+                                .clip(joinedRowShape(TilePlace.of(i, profiles.size), outer = 20.dp, inner = 6.dp))
+                                .background(fill)
                                 .clickable {
                                     haptics.tick()
                                     selectedId = profile.id
@@ -402,10 +405,11 @@ private fun ServerAdvisoriesCard(
             trailing = "${runtime.advisories.size + appAlerts.size}",
             onAskAi = onAskAi,
         )
-        runtime.advisories.forEachIndexed { index, advisory ->
-            AdvisoryRow(advisory, onAskAi = onAskAiAbout?.let { handler -> { handler(advisory) } })
-            if (index < runtime.advisories.lastIndex) {
-                Spacer(Modifier.height(12.dp))
+        if (runtime.advisories.isNotEmpty()) {
+            JoinedColumn(fill = WellFill, outer = 18.dp) {
+                runtime.advisories.forEach { advisory ->
+                    AdvisoryRow(advisory, onAskAi = onAskAiAbout?.let { handler -> { handler(advisory) } })
+                }
             }
         }
         if (link != null && appAlerts.isNotEmpty()) {
@@ -437,7 +441,7 @@ private fun AdvisoryRow(advisory: ServerAdvisory, onAskAi: (() -> Unit)? = null)
         AdvisorySeverity.WARNING -> ServerWarn
         AdvisorySeverity.INFO -> TextSecondary
     }
-    Row(modifier = Modifier.fillMaxWidth()) {
+    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp)) {
         Box(
             modifier = Modifier
                 .padding(top = 5.dp)

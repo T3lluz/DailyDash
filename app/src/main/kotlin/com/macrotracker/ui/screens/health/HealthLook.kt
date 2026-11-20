@@ -159,11 +159,11 @@ private val LoadingWidths = listOf(0.44f, 1f, 0.8f, 0.62f)
  * back, read in the draw phase. Share [source] with the tile's `clickable`.
  */
 @Composable
-fun Modifier.pressSink(source: MutableInteractionSource): Modifier {
+fun Modifier.pressSink(source: MutableInteractionSource, depth: Float = MacroMotion.PRESSED_TILE): Modifier {
     val pressed by source.collectIsPressedAsState()
     val scale = animateFloatAsState(
-        targetValue = if (pressed) 0.955f else 1f,
-        animationSpec = MacroMotion.pressSpring(),
+        targetValue = if (pressed) depth else 1f,
+        animationSpec = MacroMotion.giveSpring(),
         label = "pressSink",
     )
     return graphicsLayer {

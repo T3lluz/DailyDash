@@ -61,6 +61,9 @@ import com.macrotracker.ui.util.LaunchedWhileResumed
 import com.macrotracker.ui.util.rememberHaptics
 import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.delay
+import com.macrotracker.ui.screens.health.pressSink
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.background
 
 /*
  * What floats over the foot of a chat. While Hermes works, a tab on the composer's top left
@@ -69,7 +72,10 @@ import kotlinx.coroutines.delay
  * Once the chat is scrolled away from its end, a round button goes back there.
  */
 
-internal val DockHeight = 38.dp
+internal val DockHeight = 40.dp
+
+/** How far a dock button's tile sits in from its glass: as far as the composer's tiles. */
+private val DockInset = 5.dp
 
 @Composable
 internal fun ChatDock(
@@ -90,18 +96,28 @@ internal fun ChatDock(
             modifier = Modifier.align(Alignment.Center).padding(horizontal = DockHeight + 10.dp),
         ) {
             val haptics = rememberHaptics()
-            Row(
+            val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+            // the composer's language: glass, and a tile set into it as far as the tiles stand apart
+            Box(
                 modifier = Modifier
+                    .pressSink(press, MacroMotion.PRESSED_TILE)
                     .height(DockHeight)
-                    .clip(CircleShape)
-                    .clickable(role = Role.Button) { haptics.tick(); onWaiting() }
                     .chromeGlass(hazeState, CircleShape)
-                    .padding(horizontal = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                    .clickable(interactionSource = press, indication = null, role = Role.Button) { haptics.tick(); onWaiting() }
+                    .padding(DockInset),
             ) {
-                Icon(AppIcons.Warning, null, tint = com.macrotracker.ui.theme.ServerWarn, modifier = Modifier.size(15.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Needs your answer", color = TextPrimary, fontSize = 12.5.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+                Row(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .clip(CircleShape)
+                        .background(com.macrotracker.ui.theme.ServerWarn.copy(alpha = 0.16f))
+                        .padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(AppIcons.Warning, null, tint = com.macrotracker.ui.theme.ServerWarn, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(7.dp))
+                    Text("Needs your answer", color = TextPrimary, style = com.macrotracker.ui.screens.health.HealthDisplay, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                }
             }
         }
         AnimatedVisibility(
@@ -111,16 +127,26 @@ internal fun ChatDock(
             modifier = Modifier.align(Alignment.CenterEnd),
         ) {
             val haptics = rememberHaptics()
-            // a full-size target round the smaller glass button
+            val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+            // a full-size target round the glass button, which holds a tile in the chat's orange
             Box(
                 Modifier
                     .requiredSize(48.dp)
                     .clip(CircleShape)
-                    .clickable(role = Role.Button) { haptics.tick(); onJump() },
+                    .clickable(interactionSource = press, indication = null, role = Role.Button) { haptics.tick(); onJump() },
                 contentAlignment = Alignment.Center,
             ) {
-                Box(Modifier.size(DockHeight).chromeGlass(hazeState, CircleShape), contentAlignment = Alignment.Center) {
-                    Icon(AppIcons.ArrowDown, contentDescription = "Go to the latest", tint = TextPrimary, modifier = Modifier.size(17.dp))
+                Box(
+                    Modifier
+                        .pressSink(press, MacroMotion.PRESSED_ROUND)
+                        .size(DockHeight + 4.dp)
+                        .chromeGlass(hazeState, CircleShape)
+                        .padding(DockInset)
+                        .clip(CircleShape)
+                        .background(com.macrotracker.ui.theme.AiAccent.copy(alpha = 0.18f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(AppIcons.ArrowDown, contentDescription = "Go to the latest", tint = com.macrotracker.ui.theme.AiAccent, modifier = Modifier.size(17.dp))
                 }
             }
         }

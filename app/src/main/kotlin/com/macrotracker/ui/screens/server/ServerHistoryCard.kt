@@ -135,6 +135,7 @@ private fun PillRow(
     scroll: Boolean = false,
     onSelect: (Int) -> Unit,
 ) {
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -152,7 +153,7 @@ private fun PillRow(
                 modifier = Modifier
                     .clip(RoundedCornerShape(16.dp))
                     .background(if (on) accent.copy(alpha = 0.18f) else WellFill)
-                    .clickable { onSelect(i) }
+                    .clickable { haptics.tick(); onSelect(i) }
                     .padding(horizontal = 11.dp, vertical = 6.dp),
             )
         }

@@ -1,5 +1,9 @@
 package com.macrotracker.ui.screens.health
 
+import androidx.compose.runtime.collectAsState
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
 import com.macrotracker.ui.util.rememberReducedMotion
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.Icon
@@ -53,8 +57,6 @@ import com.macrotracker.ui.util.rememberClockFormatter
 import java.time.Duration
 import java.time.Instant
 import com.macrotracker.ui.components.ContentSkeleton
-import com.macrotracker.ui.components.WidgetExpandFooter
-import com.macrotracker.ui.components.WidgetExpandSection
 import androidx.compose.runtime.mutableStateOf
 import com.macrotracker.ui.components.StatusCopy
 import com.macrotracker.ui.theme.AppIcons
@@ -77,9 +79,9 @@ import kotlin.math.roundToInt
  * by stage with each stage's time and share beside its lane (hold a finger on it to read a
  * stretch); then every night of
  * the last two weeks as a bar against the goal. Tap or drag across the bars to read another
- * night; everything above follows it. "Score and schedule" opens what the score is made of
- * and when the nights began and ended, with their regularity and sleep debt. The night on a
- * clock face is the body clock's, at the top of the tab.
+ * night; everything above follows it. "Score and schedule" opens the sleep's own page
+ * ([SleepPage]): what the score is made of and when the nights began and ended, with their
+ * regularity and sleep debt. The night on a clock face is the body clock's, at the top of the tab.
  */
 @Composable
 fun SleepSection(
@@ -88,6 +90,8 @@ fun SleepSection(
     haptics: HapticHelper,
     onRequestPermission: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Opens the sleep's own page: the score's parts, the schedule and how regular the nights are. */
+    onOpenDetail: () -> Unit = {},
 ) {
     val zone = remember { ZoneId.systemDefault() }
     val h24 = rememberClock24()
@@ -103,7 +107,6 @@ fun SleepSection(
     val selectedIndex = pickedIndex ?: nights.lastIndex
     val night = nights.getOrNull(selectedIndex)
     val consistency = remember(nights) { computeSleepConsistency(nights.map { it.toSpan() }, goal, zone) }
-    var detailed by rememberSaveable { mutableStateOf(false) }
     val pick: (Int?) -> Unit = { i ->
         pickedDay = if (i == null || i == nights.lastIndex) NO_PICK else nights[i].date.toEpochDay()
         pickedAgainst = newestDay
@@ -164,64 +167,12 @@ fun SleepSection(
                     )
                 }
 
-                WidgetExpandSection(visible = detailed) {
-                    Column {
-                        NightDetail(night = night)
-                        if (nights.size >= 2) {
-                            Spacer(modifier = Modifier.height(18.dp))
-                            HealthSectionLabel(text = "Bedtime to waking")
-                            Spacer(modifier = Modifier.height(8.dp))
-                            SleepScheduleChart(
-                                nights = nights,
-                                selectedIndex = selectedIndex,
-                                goalMinutes = goal,
-                                zone = zone,
-                                haptics = haptics,
-                                onSelect = { pick(it) },
-                            )
-                        }
-                        consistency?.takeIf { it.nights >= 3 }?.let { c ->
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                HealthStatTile(
-                                    label = "Bedtime",
-                                    value = formatEveningOffset(c.avgBedtimeOffset, h24),
-                                    sub = "±${c.bedtimeSpreadMinutes} min",
-                                    modifier = Modifier.weight(1f),
-                                )
-                                HealthStatTile(
-                                    label = "Wake",
-                                    value = formatEveningOffset(c.avgWakeOffset, h24),
-                                    sub = "average",
-                                    modifier = Modifier.weight(1f),
-                                )
-                                HealthStatTile(
-                                    label = "Sleep debt",
-                                    value = if (c.weekDebtMinutes <= 0) "None" else formatMinutesCompact(c.weekDebtMinutes),
-                                    sub = "last 7 nights",
-                                    modifier = Modifier.weight(1f),
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                "${c.nightsAtGoal} of ${c.nights} nights near your ${formatGoalMinutes(goal)} goal",
-                                fontSize = 12.sp,
-                                color = TextTertiary,
-                            )
-                        }
-                    }
+                // what the score is made of and when the nights began and ended: a page of its own
+                Spacer(modifier = Modifier.height(14.dp))
+                OpenPageRow("Score and schedule", HealthSleep) {
+                    haptics.tick()
+                    onOpenDetail()
                 }
-                // The bar gives its own haptic.
-                WidgetExpandFooter(
-                    expanded = detailed,
-                    onToggle = { detailed = !detailed },
-                    accentColor = HealthSleep,
-                    expandLabel = "Score and schedule",
-                    collapseLabel = "Less",
-                )
             }
         }
     }
@@ -543,6 +494,133 @@ private fun SleepScheduleChart(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.weight(1f),
                 )
+            }
+        }
+    }
+}
+
+/** A row at a room's foot that opens a page of its own: its name, and a chevron. */
+@Composable
+internal fun OpenPageRow(label: String, tone: androidx.compose.ui.graphics.Color, onClick: () -> Unit) {
+    val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .pressSink(press, MacroMotion.PRESSED_ROW)
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(18.dp))
+            .background(tone.copy(alpha = 0.12f))
+            .clickable(interactionSource = press, indication = androidx.compose.material3.ripple(), role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .padding(start = 16.dp, end = 12.dp, top = 13.dp, bottom = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = HealthDisplay, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = tone, modifier = Modifier.weight(1f))
+        Icon(AppIcons.ChevronRight, contentDescription = null, tint = tone, modifier = Modifier.size(18.dp))
+    }
+}
+
+/**
+ * The sleep's own page, opened from the tab's Sleep room: the night set large with its stages,
+ * what its score is made of, every night of the last two weeks to pick from, when the nights
+ * began and ended, and how regular they were. Picking a night here moves the whole page to it.
+ */
+@Composable
+fun SleepPage(viewModel: com.macrotracker.ui.viewmodel.HealthViewModel, onBack: () -> Unit) {
+    val nights by viewModel.sleepNights.collectAsState()
+    val loaded by viewModel.sleepLoaded.collectAsState()
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
+    val zone = remember { ZoneId.systemDefault() }
+    val h24 = rememberClock24()
+    val goal = LocalHealthGoals.current.sleepMinutes
+    var pickedDay by rememberSaveable { mutableLongStateOf(NO_PICK) }
+    val pickedIndex = nights.indexOfFirst { it.date.toEpochDay() == pickedDay }.takeIf { it >= 0 }
+    val selectedIndex = pickedIndex ?: nights.lastIndex
+    val night = nights.getOrNull(selectedIndex)
+    val consistency = remember(nights) { computeSleepConsistency(nights.map { it.toSpan() }, goal, zone) }
+    val pick: (Int?) -> Unit = { i -> pickedDay = if (i == null || i == nights.lastIndex) NO_PICK else nights[i].date.toEpochDay() }
+
+    com.macrotracker.ui.screens.home.HomePage(
+        title = "Sleep",
+        tone = HealthSleep,
+        onBack = onBack,
+        lede = night?.let { nightSubtitle(it, newest = selectedIndex == nights.lastIndex, goal = goal) },
+    ) {
+        if (night == null) {
+            item(key = "empty") {
+                com.macrotracker.ui.screens.home.PageRoom(HealthSleep) {
+                    if (!loaded) RoomLoading(tone = HealthSleep, bars = 5)
+                    else Text("No sleep recorded yet.", fontSize = 15.sp, color = TextSecondary)
+                }
+            }
+            return@HomePage
+        }
+        item(key = "night") {
+            com.macrotracker.ui.screens.home.PageRoom(HealthSleep) {
+                AnimatedContent(
+                    targetState = night,
+                    transitionSpec = { fadeIn(MacroMotion.fadeTween(180)) togetherWith fadeOut(MacroMotion.fadeTween(120)) },
+                    contentKey = { it.date },
+                    label = "sleepPageNight",
+                ) { shown -> NightSummary(night = shown, zone = zone, haptics = haptics) }
+            }
+        }
+        item(key = "score") {
+            // the parts name themselves ("What made the score")
+            com.macrotracker.ui.screens.home.PageRoom(HealthSleep) { NightDetail(night = night) }
+        }
+        if (nights.size >= 2) {
+            item(key = "nights") {
+                com.macrotracker.ui.screens.home.PageRoom(
+                    HealthSleep,
+                    title = "Last ${nights.size} nights",
+                    meta = consistency?.let { "avg ${formatMinutesCompact(it.avgAsleepMinutes)}" },
+                ) {
+                    RangeBarChart(
+                        values = nights.map { it.asleepMinutes / 60.0 },
+                        color = HealthSleep,
+                        haptics = haptics,
+                        height = 150.dp,
+                        labels = nights.map { it.date.minusDays(1).dayOfWeek.getDisplayName(JavaTextStyle.NARROW, Locale.getDefault()) },
+                        selectedIndex = pickedIndex,
+                        onSelect = pick,
+                        goal = goal / 60.0,
+                        axisLabel = { "${compactNumber(it)}h" },
+                        chartKey = "sleepPageNights",
+                    )
+                }
+            }
+            item(key = "schedule") {
+                com.macrotracker.ui.screens.home.PageRoom(HealthSleep, title = "Bedtime to waking") {
+                    SleepScheduleChart(
+                        nights = nights,
+                        selectedIndex = selectedIndex,
+                        goalMinutes = goal,
+                        zone = zone,
+                        haptics = haptics,
+                        onSelect = { pick(it) },
+                    )
+                }
+            }
+        }
+        consistency?.takeIf { it.nights >= 3 }?.let { c ->
+            item(key = "regular") {
+                com.macrotracker.ui.screens.home.PageRoom(HealthSleep, title = "Regularity") {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        HealthStatTile(label = "Bedtime", value = formatEveningOffset(c.avgBedtimeOffset, h24), sub = "±${c.bedtimeSpreadMinutes} min", modifier = Modifier.weight(1f))
+                        HealthStatTile(label = "Wake", value = formatEveningOffset(c.avgWakeOffset, h24), sub = "average", modifier = Modifier.weight(1f))
+                        HealthStatTile(
+                            label = "Sleep debt",
+                            value = if (c.weekDebtMinutes <= 0) "None" else formatMinutesCompact(c.weekDebtMinutes),
+                            sub = "last 7 nights",
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "${c.nightsAtGoal} of ${c.nights} nights near your ${formatGoalMinutes(goal)} goal",
+                        fontSize = 13.sp,
+                        color = TextTertiary,
+                    )
+                }
             }
         }
     }

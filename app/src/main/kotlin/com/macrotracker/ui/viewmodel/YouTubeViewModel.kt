@@ -73,6 +73,11 @@ class YouTubeViewModel @Inject constructor(
 
     fun toggleFavourite(id: String) = settings.toggleYoutubeFavourite(id)
 
+    /** Which of the page's tabs show as a grid of tiles. */
+    val grids: StateFlow<Set<String>> = settings.pageGrids
+
+    fun toggleGrid(key: String) = settings.togglePageGrid(key)
+
     private val _trackedChannels = MutableStateFlow<List<YoutubeChannel>>(emptyList())
     val trackedChannels: StateFlow<List<YoutubeChannel>> = _trackedChannels
 

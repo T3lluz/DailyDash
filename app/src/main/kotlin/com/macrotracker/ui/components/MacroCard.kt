@@ -60,6 +60,12 @@ fun CardTitle(
 }
 
 /**
+ * The colour of the settings card or group a control stands in, when it has one of its own:
+ * a [MacroButton] fills with it instead of the app's blue, so a card's main action is its colour.
+ */
+val LocalRoomTone = androidx.compose.runtime.staticCompositionLocalOf<Color?> { null }
+
+/**
  * A room for anything that is not a Home tile or a page's room (Settings and its pages):
  * the same flat dark tint of a colour with 28 dp corners and no edge. [borderColor] is
  * kept for callers that marked a card by its edge; it now tints the room instead.
@@ -73,12 +79,12 @@ fun MacroCard(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val fill = roomColor(tone)
-    CompositionLocalProvider(LocalRoomColor provides fill) {
+    CompositionLocalProvider(LocalRoomColor provides fill, LocalRoomTone provides tone.takeIf { it != HomeTone.Neutral }) {
         Column(
             modifier = modifier
                 .fillMaxWidth()
                 .pageRise()
-                .padding(vertical = 7.dp)
+                .padding(vertical = 8.dp)
                 .clip(MacroCardShape)
                 .background(fill)
                 .padding(18.dp),

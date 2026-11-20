@@ -1,5 +1,18 @@
 package com.macrotracker.ui.screens.home
 
+import com.macrotracker.ui.components.VeilInset
+import androidx.compose.foundation.lazy.LazyItemScope
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.zIndex
+import com.macrotracker.ui.components.Joined
+import com.macrotracker.ui.screens.health.pressSink
+import kotlin.math.roundToInt
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.imePadding
@@ -7,6 +20,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import com.macrotracker.ui.components.ChromeTabLabel
 import com.macrotracker.ui.components.ChromeTabBar
 import com.macrotracker.ui.util.rememberReducedMotion
+import com.macrotracker.ui.util.riseWhenScrolledIn
 import kotlinx.coroutines.delay
 import androidx.compose.animation.core.Animatable
 import androidx.compose.runtime.DisposableEffect
@@ -20,6 +34,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.slideInVertically
@@ -32,6 +47,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -84,6 +100,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.macrotracker.ui.components.chromeGlass
+import com.macrotracker.ui.components.ChromeVeil
+import com.macrotracker.ui.components.rememberBarFold
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import com.macrotracker.ui.components.VeilEdge
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import com.macrotracker.ui.screens.health.HealthDisplay
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Background
@@ -96,8 +118,21 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.launch
 
-/** How far the head scrolls before it has faded out; the bar's title arrives part way. */
-private const val TitleFadePx = 190f
+/** How far the head scrolls before it has faded out. */
+private val TitleFade = 72.dp
+
+/** Where a page's pinned row stops under its bar (the bar is 12 + 44 dp), and its glass. */
+private val PinTop = 64.dp
+private val PinShape = RoundedCornerShape(26.dp)
+
+/** How far past a pinned row's foot its veil thins out to nothing, as the bar's does past the bar. */
+private val PinVeilTail = 10.dp
+
+/** A page's side padding: the list's rows stand this far in from the screen's edges. */
+private val PageSide = 16.dp
+
+/** How far up from the navigation bar a page's dock stands: 8 dp under it and 64 of its own. */
+private val DockVeil = 72.dp
 
 /** A page of a [HomePage] that has several: its name and icon in the dock. */
 data class PageTab(val label: String, val icon: ImageVector)
@@ -105,9 +140,10 @@ data class PageTab(val label: String, val icon: ImageVector)
 /**
  * The full page a Home tile opens. A large title in the display face and one sentence
  * under it lead a column of rooms; the back button and the page's own actions float over
- * it as glass, and the title joins them once it has scrolled away. A subject with several
- * sides ([tabs]) gets a dock where the navbar sits on a tab screen: a tap or a sideways
- * swipe turns the page.
+ * it as glass, and the title grows out of the back button once it has scrolled away. A
+ * subject with several sides ([tabs]) gets a dock where the navbar sits on a tab screen: a
+ * tap or a sideways swipe turns the page. A page's own controls that should stay in reach
+ * (a filter row, tabs) go in its content with [pagePinned].
  */
 @Composable
 fun HomePage(
@@ -120,77 +156,98 @@ fun HomePage(
     pagerState: PagerState = rememberPagerState { tabs.size.coerceAtLeast(1) },
     /** Stands where the title does (F1's race panel); the title still names the page in the bar. */
     hero: (@Composable () -> Unit)? = null,
-    /**
-     * A page's own controls (a filter row, tabs) that stay within reach: the page draws them
-     * in its content with [Modifier.pageStickyAnchor], and once that copy has scrolled under
-     * the bar the same controls stand here on glass, pinned below it.
-     */
-    sticky: (@Composable (page: Int) -> Unit)? = null,
     actions: @Composable RowScope.(HazeState) -> Unit = {},
     content: LazyListScope.(page: Int) -> Unit,
 ) {
     val haze = rememberHazeState()
+    // what a pinned row blurs: the page's own items, each its own source under it
+    val listHaze = rememberHazeState()
     val scope = rememberCoroutineScope()
-    val haptics = rememberHaptics()
+    val density = LocalDensity.current
+    val fadePx = with(density) { TitleFade.toPx() }
     // which pages have scrolled their title away
     val scrolled = remember { mutableStateMapOf<Int, Boolean>() }
     val titleInBar by remember { derivedStateOf { scrolled[pagerState.currentPage] == true } }
-    // where each page's own sticky controls are, and where this page's bar ends
-    val anchors = remember(pagerState.pageCount) { List(pagerState.pageCount.coerceAtLeast(1)) { StickyAnchor() } }
-    val rootTop = remember { mutableFloatStateOf(0f) }
     val lists = remember { HashMap<Int, LazyListState>() }
+    val pins = remember { HashMap<Int, PagePin>() }
+    // the dock folds away while you read down a side, as the navbar does; a new side starts open
+    val (dockFold, dockFoldProgress) = rememberBarFold(enabled = tabs.size > 1)
+    LaunchedEffect(pagerState.currentPage) { dockFold.unfold() }
     val toTop: (Int) -> Unit = { page -> lists[page]?.let { l -> scope.launch { l.animateScrollToItem(0) } } }
     val entrance = remember { PageEntrance() }
-    val barLine = with(LocalDensity.current) { 62.dp.toPx() }
 
-    Box(modifier = modifier.fillMaxSize().background(Background).onGloballyPositioned { rootTop.floatValue = it.positionInWindow().y }) {
+    Box(modifier = modifier.fillMaxSize().background(Background)) {
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxSize().hazeSource(haze),
+            modifier = Modifier.fillMaxSize().hazeSource(haze).nestedScroll(dockFold.connection),
             userScrollEnabled = tabs.size > 1,
             beyondViewportPageCount = 0,
             key = { it },
         ) { page ->
             val list = rememberLazyListState()
+            val pin = remember(listHaze) { PagePin(listHaze) }
+            pin.listState = list
             DisposableEffect(list, page) {
                 lists[page] = list
-                onDispose { if (lists[page] === list) lists.remove(page) }
+                pins[page] = pin
+                onDispose {
+                    if (lists[page] === list) lists.remove(page)
+                    if (pins[page] === pin) pins.remove(page)
+                }
             }
             LaunchedEffect(list, page) {
-                snapshotFlow { list.firstVisibleItemIndex > 0 || list.firstVisibleItemScrollOffset > TitleFadePx * 0.7f }
-                    .collect { scrolled[page] = it }
+                // in once the head is mostly gone, out only once it is nearly back: no flicker on the line
+                snapshotFlow { if (list.firstVisibleItemIndex > 0) Float.MAX_VALUE else list.firstVisibleItemScrollOffset.toFloat() }
+                    .collect { off ->
+                        val was = scrolled[page] == true
+                        val now = if (was) off > fadePx * 0.45f else off > fadePx * 0.7f
+                        if (now != was) scrolled[page] = now
+                    }
             }
-            val anchor = anchors.getOrNull(page) ?: remember { StickyAnchor() }
-            CompositionLocalProvider(LocalStickyAnchor provides anchor, LocalPageEntrance provides entrance) {
-            LazyColumn(
-                state = list,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 72.dp, bottom = if (tabs.size > 1) 132.dp else 56.dp),
-            ) {
-                item(key = "page-head", contentType = "head") {
-                    // The head leaves as it is scrolled off: it thins out and lags a little
-                    // behind the finger, so the title in the bar reads as the same title arriving.
-                    // Once the head is no longer the first item it has gone for good: it stays
-                    // faded, or it would show again in the strip under the bar, behind the pill.
-                    val leave = Modifier.graphicsLayer {
-                        val first = list.firstVisibleItemIndex == 0
-                        val off = if (first) list.firstVisibleItemScrollOffset.toFloat() else Float.MAX_VALUE
-                        val t = if (first) (off / TitleFadePx).coerceIn(0f, 1f) else 1f
-                        alpha = 1f - t * t * (3f - 2f * t)
-                        translationY = if (first) off * 0.18f else 0f
-                        transformOrigin = TransformOrigin(0f, 0f)
-                        scaleX = 1f - 0.06f * t
-                        scaleY = 1f - 0.06f * t
+            CompositionLocalProvider(LocalPageEntrance provides entrance) {
+                LazyColumn(
+                    state = list,
+                    modifier = Modifier.fillMaxSize().onPlaced { pin.list = it },
+                    contentPadding = PaddingValues(start = PageSide, end = PageSide, top = 72.dp, bottom = if (tabs.size > 1) 132.dp else 56.dp),
+                ) {
+                    val pageScope = PageListScope(this, pin)
+                    pageScope.item(key = "page-head", contentType = "head") {
+                        // The head leaves as it is scrolled off: it thins out and lags a little
+                        // behind the finger, so the title in the bar reads as the same title arriving.
+                        // Once the head is no longer the first item it has gone for good: it stays
+                        // faded, or it would show again in the strip under the bar, behind the pill.
+                        val leave = Modifier.graphicsLayer {
+                            val first = list.firstVisibleItemIndex == 0
+                            val off = if (first) list.firstVisibleItemScrollOffset.toFloat() else Float.MAX_VALUE
+                            val t = if (first) (off / fadePx).coerceIn(0f, 1f) else 1f
+                            alpha = 1f - t * t * (3f - 2f * t)
+                            translationY = if (first) off * 0.18f else 0f
+                            transformOrigin = TransformOrigin(0f, 0f)
+                            scaleX = 1f - 0.06f * t
+                            scaleY = 1f - 0.06f * t
+                        }
+                        if (hero != null) {
+                            Box(leave.pageRise()) { hero() }
+                        } else {
+                            PageHeadText(title, lede, leave.pageRise())
+                        }
                     }
-                    if (hero != null) {
-                        Box(leave.pageRise()) { hero() }
-                    } else {
-                        PageHeadText(title, lede, leave.pageRise())
-                    }
+                    pageScope.content(page)
                 }
-                content(page)
             }
+        }
+
+        val veilPx = with(density) { 28.dp.toPx() }
+        ChromeVeil(haze, VeilEdge.Top, PinTop + 10.dp) {
+            val page = pagerState.currentPage
+            val l = lists[page]
+            val scrolled = when {
+                l == null -> 0f
+                l.firstVisibleItemIndex > 0 -> 1f
+                else -> (l.firstVisibleItemScrollOffset / veilPx).coerceIn(0f, 1f)
             }
+            // a pinned row draws its own, down to itself and behind it: this one gives way
+            scrolled * (1f - (pins[page]?.stuck?.floatValue ?: 0f))
         }
 
         PageBar(
@@ -202,43 +259,163 @@ fun HomePage(
             actions = actions,
         )
 
-        // The page's own controls, on glass under the bar once the copy in the page is behind it.
-        if (sticky != null) {
-            val page = pagerState.currentPage
-            val stuck by remember(page, anchors) {
-                derivedStateOf {
-                    val a = anchors.getOrNull(page)
-                    a != null && a.placed && a.bottom.floatValue < rootTop.floatValue + barLine
-                }
-            }
-            androidx.compose.animation.AnimatedVisibility(
-                visible = stuck && !pagerState.isScrollInProgress,
-                modifier = Modifier.align(Alignment.TopCenter).padding(start = 14.dp, end = 14.dp, top = 64.dp),
-                enter = fadeIn(tween(140)) + slideInVertically(spring(dampingRatio = 0.75f, stiffness = 480f)) { -it / 2 },
-                exit = fadeOut(tween(110)) + slideOutVertically(tween(130)) { -it / 3 },
-            ) {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .chromeGlass(haze, RoundedCornerShape(26.dp))
-                        .padding(horizontal = 8.dp, vertical = 7.dp),
-                ) {
-                    CompositionLocalProvider(LocalStickyAnchor provides null, LocalRoomColor provides Background) { sticky(page) }
-                }
-            }
-        }
-
         if (tabs.size > 1) {
+            // the dock's own veil: the page melts away under it as it does under the bar
+            val navInset = androidx.compose.foundation.layout.WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+            ChromeVeil(
+                haze,
+                VeilEdge.Bottom,
+                height = navInset + DockVeil - VeilInset,
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
             PageDock(
                 tabs = tabs,
                 selected = pagerState.targetPage,
                 haze = haze,
+                collapse = { dockFoldProgress.value },
+                folded = dockFold.folded,
+                onUnfold = { dockFold.unfold() },
                 onSelect = { i ->
                     // the open tab again is "back to the top", as on the app's own navbar
                     if (i == pagerState.currentPage) toTop(i) else scope.launch { pagerState.animateScrollToPage(i) }
                 },
                 modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
             )
+        }
+    }
+}
+
+/** What a page's pinned row needs: the list it rides in, and the glass that blurs that list's items. */
+class PagePin internal constructor(internal val haze: HazeState) {
+    internal var list: LayoutCoordinates? = null
+
+    /** How far the row has settled under the bar (0 to 1); the bar's own veil gives way as it does. */
+    internal val stuck = mutableFloatStateOf(0f)
+
+    /** The page's list, and the rows it has shown, for rows rising in as a scroll brings them. */
+    internal var listState: LazyListState? = null
+    internal val seen = HashSet<Any>()
+}
+
+/**
+ * The scope a [HomePage]'s content is written in. Once the page has a pinned row, every other
+ * item is a source of the row's glass, so the row blurs what scrolls under it without being
+ * part of what it blurs.
+ */
+private class PageListScope(val inner: LazyListScope, val pin: PagePin) : LazyListScope {
+    var pinned = false
+
+    override fun item(key: Any?, contentType: Any?, content: @Composable LazyItemScope.() -> Unit) {
+        inner.item(key, contentType) {
+            val itemScope = this
+            this@PageListScope.Sourced(itemScope, key) { itemScope.content() }
+        }
+    }
+
+    override fun items(
+        count: Int,
+        key: ((index: Int) -> Any)?,
+        contentType: (index: Int) -> Any?,
+        itemContent: @Composable LazyItemScope.(index: Int) -> Unit,
+    ) {
+        inner.items(count, key, contentType) { i ->
+            val itemScope = this
+            this@PageListScope.Sourced(itemScope, key?.invoke(i)) { itemScope.itemContent(i) }
+        }
+    }
+
+    @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+    override fun stickyHeader(key: Any?, contentType: Any?, content: @Composable LazyItemScope.(Int) -> Unit) {
+        inner.stickyHeader(key, contentType, content)
+    }
+
+    /** Every item glides to its place when the page changes round it, as a filter or a new row does. */
+    @Composable
+    private fun Sourced(itemScope: LazyItemScope, key: Any?, content: @Composable () -> Unit) {
+        val glide = with(itemScope) {
+            Modifier.animateItem(
+                fadeInSpec = MacroMotion.PageItem.fadeIn(),
+                placementSpec = MacroMotion.PageItem.place(),
+                fadeOutSpec = MacroMotion.PageItem.fadeOut(),
+            )
+        }
+        // and rises into place the first time a scroll brings it in
+        val rise = Modifier.riseWhenScrolledIn(pin.listState, pin.seen, key)
+        Box(glide.then(rise).then(if (pinned) Modifier.hazeSource(pin.haze, zIndex = -1f) else Modifier)) { content() }
+    }
+}
+
+/**
+ * A page's own controls that stay in reach: they stand in the page where they are put and
+ * scroll with it, and once they reach the bar they stop under it, on glass that comes in as
+ * the page goes on under them. It is the one row the whole way, never a second copy.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+fun LazyListScope.pagePinned(key: Any = "pinned", content: @Composable () -> Unit) {
+    val page = this as? PageListScope
+    if (page == null) {
+        item(key = key) { content() }
+        return
+    }
+    page.pinned = true
+    page.inner.stickyHeader(key = key, contentType = "pinned") { PinnedRow(page.pin, content) }
+}
+
+@Composable
+private fun PinnedRow(pin: PagePin, content: @Composable () -> Unit) {
+    val density = LocalDensity.current
+    val pinY = with(density) { PinTop.toPx() }
+    val fadePx = with(density) { MacroMotion.PIN_FADE_DP.dp.toPx() }
+    // The list holds a sticky item at its very top, under the bar. This row takes over from
+    // the line under the bar: it stops there, pushed down past where the list put it. The
+    // push is worked out while placing, from where the list put it this frame, so it never lags.
+    val side = with(density) { PageSide.roundToPx() }
+    // how tall the row is, so its veil can reach all the way down beside it
+    var rowPx by remember { mutableIntStateOf(0) }
+    val veilDepth = PinTop + with(density) { rowPx.toDp() } + PinVeilTail
+    Box(Modifier.fillMaxWidth().zIndex(1f)) {
+        Layout(
+            contents = listOf(
+                // Once it has settled, the row draws the bar's veil itself, from the top of the page
+                // down past its own foot and behind its glass, so the page melts away all the way
+                // down beside the row and the row itself stays sharp.
+                { ChromeVeil(pin.haze, VeilEdge.Top, veilDepth) { pin.stuck.floatValue } },
+                { Box(Modifier.fillMaxSize().chromeGlass(pin.haze, PinShape)) },
+                {
+                    Box(Modifier.padding(horizontal = 8.dp, vertical = 7.dp)) {
+                        CompositionLocalProvider(LocalRoomColor provides Background) { content() }
+                    }
+                },
+            ),
+        ) { (veil, glass, body), constraints ->
+            val b = body.first().measure(constraints)
+            if (rowPx != b.height) rowPx = b.height
+            val g = glass.first().measure(Constraints.fixed(b.width, b.height))
+            // as wide as the page, past the list's own side padding
+            val v = veil.firstOrNull()?.measure(Constraints(minWidth = b.width + side * 2, maxWidth = b.width + side * 2))
+            layout(b.width, b.height) {
+                val here = coordinates
+                val list = pin.list
+                val y = if (here != null && list != null && here.isAttached && list.isAttached) {
+                    list.localPositionOf(here, Offset.Zero).y
+                } else {
+                    pinY
+                }
+                val push = (pinY - y).coerceAtLeast(0f)
+                val t = (push / fadePx).coerceIn(0f, 1f)
+                val at = push.roundToInt()
+                pin.stuck.floatValue = t
+                // its top at the page's top: this layout stands y down the list
+                if (v != null && t > 0f) v.place(-side, -y.roundToInt())
+                if (t > 0f) {
+                    g.placeWithLayer(0, at) {
+                        alpha = t
+                        // the glass settles in from a little wider, as the bar's pills sit
+                        scaleX = 1f + 0.03f * (1f - t)
+                    }
+                }
+                b.place(0, at)
+            }
         }
     }
 }
@@ -305,7 +482,8 @@ internal fun PageHeadText(title: String, lede: String?, modifier: Modifier = Mod
 
 /**
  * The page's bar: back, the title once it has scrolled away (a tap on it goes back to the
- * top), and the page's own actions, all on glass over the page.
+ * top), and the page's own actions, all on glass over the page. The title grows out of the
+ * back button and the two become one joined pair, and fold back the same way.
  */
 @Composable
 internal fun PageBar(
@@ -317,41 +495,59 @@ internal fun PageBar(
     actions: @Composable RowScope.(HazeState) -> Unit,
 ) {
     val haptics = rememberHaptics()
+    val reduced = rememberReducedMotion()
+    val shown by animateFloatAsState(
+        if (titleInBar) 1f else 0f,
+        if (reduced) androidx.compose.animation.core.snap() else MacroMotion.barTitleSpring(),
+        label = "barTitle",
+    )
+    val p = shown.coerceIn(0f, 1f)
+    // where back meets the title its corners close in, as two joined tiles meet
+    val join = androidx.compose.ui.unit.lerp(22.dp, Joined.Inner, p)
     Row(
         modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        GlassRound(AppIcons.ArrowBack, "Back", haze) {
-            haptics.click()
-            onBack()
-        }
-        Box(Modifier.weight(1f).padding(horizontal = 10.dp), contentAlignment = Alignment.CenterStart) {
-            // The title lands in the bar the way it left the page: up from below, small to
-            // full size on a spring, from the back button's side.
-            androidx.compose.animation.AnimatedVisibility(
-                visible = titleInBar,
-                enter = fadeIn(tween(160)) +
-                    scaleIn(spring(dampingRatio = 0.62f, stiffness = 420f), initialScale = 0.72f, transformOrigin = TransformOrigin(0f, 0.5f)) +
-                    slideInVertically(spring(dampingRatio = 0.7f, stiffness = 420f)) { it / 2 },
-                exit = fadeOut(tween(110)) +
-                    scaleOut(tween(140), targetScale = 0.86f, transformOrigin = TransformOrigin(0f, 0.5f)) +
-                    slideOutVertically(tween(140)) { it / 3 },
-            ) {
-                Text(
-                    title,
-                    style = HealthDisplay,
-                    fontSize = 16.sp,
-                    color = TextPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .chromeGlass(haze, CircleShape)
-                        .clickable(role = Role.Button) {
+        GlassRound(
+            AppIcons.ArrowBack, "Back", haze,
+            shape = RoundedCornerShape(topStart = 22.dp, bottomStart = 22.dp, topEnd = join, bottomEnd = join),
+            onClick = onBack,
+        )
+        Box(Modifier.weight(1f).padding(end = 10.dp), contentAlignment = Alignment.CenterStart) {
+            if (p > 0.002f) {
+                val source = remember { MutableInteractionSource() }
+                Box(
+                    Modifier
+                        .padding(start = Joined.Gap)
+                        .pressSink(source, MacroMotion.PRESSED_TILE)
+                        .chromeGlass(haze, RoundedCornerShape(topStart = join, bottomStart = join, topEnd = 22.dp, bottomEnd = 22.dp))
+                        // grows out of the back button: the glass is as wide as the share shown
+                        .layout { measurable, constraints ->
+                            val placeable = measurable.measure(constraints.copy(minWidth = 0))
+                            val w = (placeable.width * shown).roundToInt().coerceIn(1, placeable.width)
+                            layout(w, placeable.height) { placeable.place(0, 0) }
+                        }
+                        .clickable(interactionSource = source, indication = null, role = Role.Button) {
                             haptics.tick()
                             onTitleTap()
-                        }
-                        .padding(horizontal = 16.dp, vertical = 11.dp),
-                )
+                        },
+                ) {
+                    Text(
+                        title,
+                        style = HealthDisplay,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 16.sp,
+                        color = TextPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .graphicsLayer {
+                                alpha = ((shown - 0.35f) / 0.65f).coerceIn(0f, 1f)
+                                translationX = (1f - shown) * -10.dp.toPx()
+                            }
+                            .padding(start = 14.dp, end = 18.dp, top = 12.dp, bottom = 12.dp),
+                    )
+                }
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -377,7 +573,13 @@ fun SubPage(
     val scope = rememberCoroutineScope()
     val scroll = rememberScrollState()
     val entrance = remember { PageEntrance() }
-    val titleInBar by remember { derivedStateOf { scroll.value > TitleFadePx * 0.7f } }
+    val fadePx = with(LocalDensity.current) { TitleFade.toPx() }
+    var titleInBar by remember { mutableStateOf(false) }
+    LaunchedEffect(scroll) {
+        snapshotFlow { scroll.value.toFloat() }.collect { off ->
+            titleInBar = if (titleInBar) off > fadePx * 0.45f else off > fadePx * 0.7f
+        }
+    }
     Box(modifier = modifier.fillMaxSize().background(Background)) {
         Column(
             Modifier
@@ -396,7 +598,7 @@ fun SubPage(
                     Modifier
                         .graphicsLayer {
                             val off = scroll.value.toFloat()
-                            val t = (off / TitleFadePx).coerceIn(0f, 1f)
+                            val t = (off / fadePx).coerceIn(0f, 1f)
                             alpha = 1f - t * t * (3f - 2f * t)
                             translationY = off * 0.18f
                             transformOrigin = TransformOrigin(0f, 0f)
@@ -408,6 +610,8 @@ fun SubPage(
                 content()
             }
         }
+        val veilPx = with(LocalDensity.current) { 28.dp.toPx() }
+        ChromeVeil(haze, VeilEdge.Top, PinTop + 10.dp) { (scroll.value / veilPx).coerceIn(0f, 1f) }
         PageBar(
             title = title,
             titleInBar = titleInBar,
@@ -419,40 +623,48 @@ fun SubPage(
     }
 }
 
-/** Where a page's sticky controls stand in its content, as the page shell needs to know it. */
-class StickyAnchor {
-    val bottom = mutableFloatStateOf(Float.MAX_VALUE)
-    var placed by mutableStateOf(false)
-}
-
-/** The open page's anchor; null inside the pinned copy, so it never reports itself. */
-val LocalStickyAnchor = staticCompositionLocalOf<StickyAnchor?> { null }
-
 /**
- * Marks the controls a [HomePage] pins under its bar once they scroll away. Put it on the
- * copy that stands in the page's content; the page's `sticky` slot draws the pinned one.
+ * A round glass button of the page's bar. It gives under the finger and ticks, as Weave's
+ * buttons do, so callers add no haptic of their own. [shape] lets it join what stands beside it.
  */
 @Composable
-fun Modifier.pageStickyAnchor(): Modifier {
-    val anchor = LocalStickyAnchor.current ?: return this
-    return onGloballyPositioned {
-        anchor.bottom.floatValue = it.positionInWindow().y + it.size.height
-        anchor.placed = true
-    }
-}
-
-/** A round glass button of the page's bar. */
-@Composable
-fun GlassRound(icon: ImageVector, label: String, haze: HazeState, modifier: Modifier = Modifier, tint: Color = TextPrimary, onClick: () -> Unit) {
+fun GlassRound(
+    icon: ImageVector,
+    label: String,
+    haze: HazeState,
+    modifier: Modifier = Modifier,
+    tint: Color = TextPrimary,
+    shape: Shape = CircleShape,
+    onClick: () -> Unit,
+) {
+    val haptics = rememberHaptics()
+    val source = remember { MutableInteractionSource() }
+    var play by remember { mutableIntStateOf(0) }
     Box(
         modifier = modifier
+            .pressSink(source, MacroMotion.PRESSED_ROUND)
             .size(44.dp)
-            .chromeGlass(haze, CircleShape)
-            .clickable(role = Role.Button, onClick = onClick)
+            .chromeGlass(haze, shape)
+            .clickable(interactionSource = source, indication = null, role = Role.Button) {
+                haptics.tick()
+                play++
+                onClick()
+            }
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
+        // a button that changes what it does (list or tiles) turns its icon over
+        androidx.compose.animation.AnimatedContent(
+            targetState = icon,
+            transitionSpec = {
+                (fadeIn(tween(160, delayMillis = 40)) + scaleIn(MacroMotion.giveSpring(), initialScale = 0.6f))
+                    .togetherWith(fadeOut(tween(100)) + scaleOut(tween(120), targetScale = 0.6f))
+            },
+            label = "glassIcon",
+        ) { shown ->
+            // and acts it out as it is pressed: refresh spins, a link nudges out
+            com.macrotracker.ui.components.AnimatedIcon(shown, play = play, tint = { tint }, size = 20.dp)
+        }
     }
 }
 
@@ -460,11 +672,13 @@ fun GlassRound(icon: ImageVector, label: String, haze: HazeState, modifier: Modi
 @Composable
 fun GlassPill(label: String, haze: HazeState, modifier: Modifier = Modifier, icon: ImageVector? = null, tint: Color = TextPrimary, onClick: () -> Unit) {
     val haptics = rememberHaptics()
+    val source = remember { MutableInteractionSource() }
     Row(
         modifier = modifier
+            .pressSink(source, MacroMotion.PRESSED_TILE)
             .height(44.dp)
             .chromeGlass(haze, CircleShape)
-            .clickable(role = Role.Button) {
+            .clickable(interactionSource = source, indication = null, role = Role.Button) {
                 haptics.tick()
                 onClick()
             }
@@ -488,14 +702,26 @@ private fun PageDock(
     haze: HazeState,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    collapse: () -> Float = { 0f },
+    folded: Boolean = false,
+    onUnfold: () -> Unit = {},
 ) {
-    ChromeTabBar(count = tabs.size, selectedIndex = selected, hazeState = haze, onSelect = onSelect, modifier = modifier) { i, selection, _ ->
-        Icon(
+    ChromeTabBar(
+        count = tabs.size,
+        selectedIndex = selected,
+        hazeState = haze,
+        onSelect = onSelect,
+        modifier = modifier,
+        collapse = collapse,
+        folded = folded,
+        onUnfold = onUnfold,
+    ) { i, selection, play ->
+        // the dock's icons act out their side when it is picked, as the navbar's do
+        com.macrotracker.ui.components.AnimatedIcon(
             tabs[i].icon,
-            contentDescription = null,
-            tint = androidx.compose.ui.graphics.lerp(TextSecondary, TextPrimary, selection().coerceIn(0f, 1f)),
-            modifier = Modifier.size(22.dp),
+            play = play,
+            tint = { androidx.compose.ui.graphics.lerp(TextSecondary, TextPrimary, selection().coerceIn(0f, 1f)) },
         )
-        ChromeTabLabel(tabs[i].label, selection)
+        ChromeTabLabel(tabs[i].label, selection, fade = collapse)
     }
 }

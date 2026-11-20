@@ -1,5 +1,15 @@
 package com.macrotracker.ui.screens.git
 
+import com.macrotracker.ui.components.joinedRowShape
+import com.macrotracker.ui.components.TilePlace
+import androidx.compose.foundation.lazy.itemsIndexed
+import com.macrotracker.ui.components.Joined
+import com.macrotracker.ui.components.ownTile
+import com.macrotracker.ui.components.JoinedItem
+import com.macrotracker.ui.screens.ai.AiMenu
+import com.macrotracker.ui.components.TileMenu
+import com.macrotracker.ui.components.TileMenuGroup
+import com.macrotracker.ui.components.TileMenuItem
 import com.macrotracker.ui.screens.home.FieldShape
 import com.macrotracker.ui.screens.home.roomFieldColors
 import com.macrotracker.ui.screens.home.RoomNeutral
@@ -242,7 +252,8 @@ private fun GitMain(
                 else -> Column(Modifier.fillMaxSize()) {
                     BranchHero(st, ui.busy, vm)
                     TabBar(tab, st, onTab)
-                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                    // what scrolls up melts away under the tabs instead of being cut off flat
+                    com.macrotracker.ui.components.SoftTopBox(Modifier.weight(1f).fillMaxWidth()) {
                         AnimatedContent(
                             targetState = tab,
                             transitionSpec = {
@@ -319,9 +330,11 @@ private fun BranchHero(st: GitStatus, busy: String?, vm: GitViewModel) {
                 IconButton(onClick = { haptics.tick(); more = true }, modifier = Modifier.size(36.dp)) {
                     Icon(AppIcons.Settings, "More", tint = TextSecondary, modifier = Modifier.size(18.dp))
                 }
-                DropdownMenu(expanded = more, onDismissRequest = { more = false }, modifier = Modifier.background(RoomNeutral)) {
-                    GitMenuRow("Stash changes", AppIcons.Archive) { more = false; vm.stash(false) }
-                    GitMenuRow(if (st.stashes > 0) "Restore last stash (${st.stashes})" else "Restore last stash", AppIcons.Undo) { more = false; vm.stash(true) }
+                TileMenu(expanded = more, onDismissRequest = { more = false }, color = AiMenu) {
+                    TileMenuGroup {
+                        TileMenuItem("Stash changes", AppIcons.Archive) { more = false; vm.stash(false) }
+                        TileMenuItem("Restore last stash", AppIcons.Undo, value = if (st.stashes > 0) "${st.stashes}" else null) { more = false; vm.stash(true) }
+                    }
                 }
             }
         }
@@ -342,21 +355,14 @@ private fun BranchHero(st: GitStatus, busy: String?, vm: GitViewModel) {
             }
         }
         Spacer(Modifier.height(14.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SyncButton("Fetch", AppIcons.Refresh, busy == "Fetching", false, busy == null, Modifier.weight(1f)) { vm.sync("fetch") }
-            SyncButton("Pull", AppIcons.ArrowDown, busy == "Pulling", st.behind > 0, busy == null, Modifier.weight(1f)) { vm.sync("pull") }
-            SyncButton("Push", AppIcons.ArrowUp, busy == "Pushing", st.ahead > 0 || st.upstream.isBlank(), busy == null, Modifier.weight(1f)) { vm.sync("push") }
+        // one row of joined buttons, as Weave's dock
+        Row(horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+            SyncButton("Fetch", AppIcons.Refresh, busy == "Fetching", false, busy == null, Modifier.weight(1f), joinedRowShape(TilePlace.FIRST, outer = 20.dp)) { vm.sync("fetch") }
+            SyncButton("Pull", AppIcons.ArrowDown, busy == "Pulling", st.behind > 0, busy == null, Modifier.weight(1f), joinedRowShape(TilePlace.MIDDLE, outer = 20.dp)) { vm.sync("pull") }
+            SyncButton("Push", AppIcons.ArrowUp, busy == "Pushing", st.ahead > 0 || st.upstream.isBlank(), busy == null, Modifier.weight(1f), joinedRowShape(TilePlace.LAST, outer = 20.dp)) { vm.sync("push") }
         }
     }
 }
-
-@Composable
-private fun GitMenuRow(label: String, icon: ImageVector, onClick: () -> Unit) =
-    androidx.compose.material3.DropdownMenuItem(
-        text = { Text(label, color = TextPrimary, fontSize = 14.sp) },
-        leadingIcon = { Icon(icon, null, tint = TextSecondary, modifier = Modifier.size(16.dp)) },
-        onClick = onClick,
-    )
 
 @Composable
 internal fun Pill(text: String, color: Color, filled: Boolean, modifier: Modifier = Modifier) {
@@ -370,11 +376,11 @@ internal fun Pill(text: String, color: Color, filled: Boolean, modifier: Modifie
 }
 
 @Composable
-private fun SyncButton(label: String, icon: ImageVector, running: Boolean, accent: Boolean, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun SyncButton(label: String, icon: ImageVector, running: Boolean, accent: Boolean, enabled: Boolean, modifier: Modifier, shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(18.dp), onClick: () -> Unit) {
     val haptics = rememberHaptics()
     Row(
         modifier
-            .clip(RoundedCornerShape(18.dp))
+            .clip(shape)
             .background(if (accent) AiAccent else Color.White.copy(alpha = 0.08f))
             .clickable(enabled = enabled) { haptics.click(); onClick() }
             .padding(vertical = 11.dp),
@@ -445,7 +451,7 @@ private fun ChangesTab(st: GitStatus, busy: String?, vm: GitViewModel, stack: Mu
                 }
             }
         } else {
-            LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(Joined.Gap)) {
                 fun section(title: String, rows: List<GitFile>, stagedSide: Boolean, action: String, onAll: () -> Unit) {
                     if (rows.isEmpty()) return
                     item(key = "s-$title") {
@@ -459,14 +465,14 @@ private fun ChangesTab(st: GitStatus, busy: String?, vm: GitViewModel, stack: Mu
                             )
                         }
                     }
-                    items(rows, key = { "f-$title-${it.path}" }) { f ->
+                    itemsIndexed(rows, key = { _, entry -> "f-$title-${entry.path}" }) { place, f -> JoinedItem(place, rows.size, fill = AiRoom, outer = 22.dp) {
                         FileRow(
                             f, stagedSide,
                             onOpen = { haptics.tick(); open(f, stagedSide, rows) },
                             onToggle = { haptics.click(); vm.stage(listOf(f.path), unstage = stagedSide) },
                             onDiscard = { discarding = f },
                         )
-                    }
+                    } }
                 }
                 section("Staged", staged, true, "Unstage all") { vm.stage(staged.map { it.path }, unstage = true) }
                 section("Changes", changed, false, "Stage all") { vm.stage(changed.map { it.path }) }
@@ -489,23 +495,24 @@ private fun ChangesTab(st: GitStatus, busy: String?, vm: GitViewModel, stack: Mu
                     textStyle = TextStyle(color = TextPrimary, fontSize = 14.sp, lineHeight = 20.sp),
                     cursorBrush = SolidColor(AiAccent),
                     maxLines = 4,
+                    // the message and the commit button as two joined tiles
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(18.dp))
+                        .clip(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 6.dp, bottomEnd = 6.dp))
                         .background(Background)
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                        .padding(horizontal = 14.dp, vertical = 13.dp),
                     decorationBox = { inner ->
                         if (message.isEmpty()) Text("Commit message", color = TextTertiary, fontSize = 14.sp)
                         inner()
                     },
                 )
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(3.dp))
                 val nothingStaged = staged.isEmpty()
                 val can = message.isNotBlank() && busy == null
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(18.dp))
+                        .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp, bottomStart = 18.dp, bottomEnd = 18.dp))
                         .background(if (can) AiAccent else Color.White.copy(alpha = 0.07f))
                         .clickable(enabled = can) {
                             haptics.confirm()
@@ -545,8 +552,7 @@ private fun FileRow(f: GitFile, stagedSide: Boolean, onOpen: () -> Unit, onToggl
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(AiRoom)
+            .ownTile(RoundedCornerShape(18.dp), AiRoom)
             .combinedClickable(onClick = onOpen, onLongClick = { menu = true })
             .padding(start = 12.dp, top = 9.dp, bottom = 9.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -564,9 +570,11 @@ private fun FileRow(f: GitFile, stagedSide: Boolean, onOpen: () -> Unit, onToggl
             Icon(if (stagedSide) AppIcons.Close else AppIcons.AddCircle, if (stagedSide) "Unstage" else "Stage", tint = if (stagedSide) TextSecondary else AiAccent, modifier = Modifier.size(20.dp))
         }
         Box {
-            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, modifier = Modifier.background(RoomNeutral)) {
-                GitMenuRow(if (stagedSide) "Unstage" else "Stage", AppIcons.AddCircle) { menu = false; onToggle() }
-                GitMenuRow("Discard changes", AppIcons.Delete) { menu = false; onDiscard() }
+            TileMenu(expanded = menu, onDismissRequest = { menu = false }, color = AiMenu) {
+                TileMenuGroup {
+                    TileMenuItem(if (stagedSide) "Unstage" else "Stage", if (stagedSide) AppIcons.Close else AppIcons.AddCircle) { menu = false; onToggle() }
+                    TileMenuItem("Discard changes", AppIcons.Delete, danger = true) { menu = false; onDiscard() }
+                }
             }
         }
     }
@@ -636,18 +644,18 @@ private fun BranchesTab(st: GitStatus, busy: String?, vm: GitViewModel, stack: M
             b == null -> Note(AppIcons.Warning, branches.error ?: "No branches.", Modifier.fillMaxWidth())
             else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 item(key = "actions") {
-                    Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ActionCard("Review vs ${b.base}", "What this branch adds", AppIcons.Eye, AiAccent, Modifier.weight(1f)) {
+                    Row(Modifier.fillMaxWidth().padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+                        ActionCard("Review vs ${b.base}", "What this branch adds", AppIcons.Eye, AiAccent, Modifier.weight(1f), joinedRowShape(TilePlace.FIRST, outer = 22.dp)) {
                             haptics.click(); vm.loadCompare(b.base); stack += GitPage.Compare(b.base)
                         }
-                        ActionCard("New branch", "From ${st.branch}", AppIcons.AddCircle, ServerGood, Modifier.weight(1f)) { haptics.tick(); creating = true }
+                        ActionCard("New branch", "From ${st.branch}", AppIcons.AddCircle, ServerGood, Modifier.weight(1f), joinedRowShape(TilePlace.LAST, outer = 22.dp)) { haptics.tick(); creating = true }
                     }
                 }
                 item(key = "lh") { SectionLabel("Local") }
-                items(b.local, key = { "l-${it.name}" }) { br -> BranchRow(br) { if (!br.current) { haptics.tick(); switching = br } } }
+                itemsIndexed(b.local, key = { _, entry -> "l-${entry.name}" }) { place, br -> JoinedItem(place, b.local.size, fill = AiRoom, outer = 22.dp) { BranchRow(br) { if (!br.current) { haptics.tick(); switching = br } } } }
                 if (b.remote.isNotEmpty()) {
                     item(key = "rh") { SectionLabel("Remote") }
-                    items(b.remote.take(30), key = { "r-${it.name}" }) { br -> BranchRow(br) { haptics.tick(); switching = br } }
+                    itemsIndexed(b.remote.take(30), key = { _, entry -> "r-${entry.name}" }) { place, br -> JoinedItem(place, b.remote.take(30).size, fill = AiRoom, outer = 22.dp) { BranchRow(br) { haptics.tick(); switching = br } } }
                 }
             }
         }
@@ -670,10 +678,10 @@ private fun SectionLabel(text: String) =
     Text(text, style = HealthDisplay, color = TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 4.dp, top = 12.dp, bottom = 2.dp))
 
 @Composable
-private fun ActionCard(title: String, sub: String, icon: ImageVector, tint: Color, modifier: Modifier, onClick: () -> Unit) {
+private fun ActionCard(title: String, sub: String, icon: ImageVector, tint: Color, modifier: Modifier, shape: androidx.compose.ui.graphics.Shape = Card, onClick: () -> Unit) {
     Column(
         modifier
-            .clip(Card)
+            .clip(shape)
             .background(AiRoom)
             .clickable(onClick = onClick)
             .padding(14.dp),
@@ -690,8 +698,8 @@ private fun BranchRow(b: GitBranch, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(if (b.current) AiRoomHi else AiRoom)
+            .ownTile(RoundedCornerShape(18.dp), AiRoom)
+            .then(if (b.current) Modifier.background(AiRoomHi) else Modifier)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -756,7 +764,7 @@ private fun PrsTab(st: GitStatus, vm: GitViewModel, stack: MutableList<GitPage>)
         }
         LoadList(prs, "No pull requests here.") { list ->
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(list, key = { it.number }) { p -> PrCard(p) { haptics.tick(); vm.loadPr(p.number); stack += GitPage.Pr(p.number) } }
+                itemsIndexed(list, key = { _, entry -> entry.number }) { place, p -> JoinedItem(place, list.size, fill = AiRoom, outer = 22.dp) { PrCard(p) { haptics.tick(); vm.loadPr(p.number); stack += GitPage.Pr(p.number) } } }
             }
         }
     }
@@ -773,7 +781,7 @@ internal fun prTone(p: GitPr): Pair<String, Color> = when {
 @Composable
 private fun PrCard(p: GitPr, onClick: () -> Unit) {
     val (label, tone) = prTone(p)
-    Column(Modifier.fillMaxWidth().clip(Card).background(AiRoom).clickable(onClick = onClick).padding(14.dp)) {
+    Column(Modifier.fillMaxWidth().ownTile(Card, AiRoom).clickable(onClick = onClick).padding(14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Pill(label, tone, true)
             Spacer(Modifier.width(8.dp))

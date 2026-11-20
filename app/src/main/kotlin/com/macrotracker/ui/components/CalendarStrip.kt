@@ -1,5 +1,8 @@
 package com.macrotracker.ui.components
 
+import com.macrotracker.ui.theme.MacroMotion
+import androidx.compose.animation.animateColorAsState
+import com.macrotracker.ui.screens.home.WellFill
 import androidx.compose.ui.text.style.TextAlign
 import java.time.temporal.ChronoUnit
 import androidx.compose.foundation.lazy.LazyListScope
@@ -199,7 +202,7 @@ internal fun LazyListScope.calendarPageRooms(events: List<CalendarEvent>, today:
                 ).joinToString(", "),
                 flush = true,
             ) {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+                JoinedColumn(Modifier.fillMaxWidth().padding(horizontal = 12.dp), fill = WellFill, outer = 18.dp) {
                     list.forEach { event -> AgendaRow(event, onOpen) }
                 }
             }
@@ -228,8 +231,9 @@ private fun MonthAhead(events: List<CalendarEvent>, today: LocalDate, onOpen: (C
                 )
             }
         }
+        // five weeks as one joined grid, round only at its own corners
         (0 until 5).forEach { week ->
-            Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(Modifier.fillMaxWidth().padding(bottom = if (week < 4) Joined.Gap else 0.dp), horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
                 (0 until 7).forEach { i ->
                     val day = first.plusDays((week * 7 + i).toLong())
                     val list = byDay[day].orEmpty()
@@ -239,13 +243,13 @@ private fun MonthAhead(events: List<CalendarEvent>, today: LocalDate, onOpen: (C
                         Modifier
                             .weight(1f)
                             .height(46.dp)
-                            .clip(RoundedCornerShape(14.dp))
+                            .clip(joinedGridShape(week, 5, i, 7, outer = 18.dp, inner = 6.dp))
                             .background(
                                 when {
                                     on -> tone.copy(alpha = 0.30f)
-                                    day == today -> Color.White.copy(alpha = 0.10f)
-                                    list.isNotEmpty() -> Color.White.copy(alpha = 0.05f)
-                                    else -> Color.Transparent
+                                    day == today -> Color.White.copy(alpha = 0.12f)
+                                    list.isNotEmpty() -> Color.White.copy(alpha = 0.075f)
+                                    else -> Color.White.copy(alpha = 0.03f)
                                 },
                             )
                             .clickable(enabled = !past) {
@@ -277,9 +281,11 @@ private fun MonthAhead(events: List<CalendarEvent>, today: LocalDate, onOpen: (C
         Text(
             dayName(shown, today).replaceFirstChar { it.uppercase() } + if (list.isEmpty()) ", nothing on" else "",
             style = HealthDisplay, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = TextSecondary,
-            modifier = Modifier.padding(top = 12.dp, bottom = 2.dp),
+            modifier = Modifier.padding(top = 14.dp, bottom = 8.dp),
         )
-        list.forEach { event -> AgendaRow(event, onOpen) }
+        JoinedColumn(fill = WellFill, outer = 18.dp) {
+            list.forEach { event -> AgendaRow(event, onOpen) }
+        }
     }
 }
 
@@ -344,8 +350,13 @@ private fun DayStrip(
             .fillMaxWidth()
             .nestedScroll(rememberWidgetCrossAxisScrollLock())
             .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(Joined.Gap),
     ) {
+        // one joined strip: All at its start, the last day at its end
+        val lastBusy = byDay.keys.maxOrNull() ?: today
+        val days = java.time.temporal.ChronoUnit.DAYS.between(today, lastBusy)
+            .coerceIn(6L, CalendarRepository.WINDOW_DAYS.toLong() - 1)
+        val count = days.toInt() + 2
         DayChip(
             top = "All",
             main = "${byDay.values.sumOf { it.size }}",
@@ -353,11 +364,9 @@ private fun DayStrip(
             selected = picked == null,
             onClick = { onPick(null) },
             wide = true,
+            shape = joinedRowShape(TilePlace.of(0, count), outer = 18.dp, inner = 6.dp),
         )
         // A week at least, and on to the last day with something in it, up to the month the app reads.
-        val lastBusy = byDay.keys.maxOrNull() ?: today
-        val days = java.time.temporal.ChronoUnit.DAYS.between(today, lastBusy)
-            .coerceIn(6L, CalendarRepository.WINDOW_DAYS.toLong() - 1)
         for (offset in 0L..days) {
             val day = today.plusDays(offset)
             val events = byDay[day].orEmpty()
@@ -373,6 +382,7 @@ private fun DayStrip(
                 selected = picked == day,
                 muted = events.isEmpty(),
                 onClick = { onPick(day) },
+                shape = joinedRowShape(TilePlace.of(offset.toInt() + 1, count), outer = 18.dp, inner = 6.dp),
             )
         }
     }
@@ -387,14 +397,15 @@ private fun DayChip(
     onClick: () -> Unit,
     muted: Boolean = false,
     wide: Boolean = false,
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(16.dp),
 ) {
-    val shape = RoundedCornerShape(16.dp)
+    val fill by animateColorAsState(if (selected) HomeTone.Calendar.copy(alpha = 0.26f) else Color.White.copy(alpha = 0.05f), MacroMotion.colorTween(), label = "dayChip")
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .widthIn(min = if (wide) 48.dp else 44.dp)
             .clip(shape)
-            .background(if (selected) HomeTone.Calendar.copy(alpha = 0.26f) else Color.White.copy(alpha = 0.05f))
+            .background(fill)
             .clickable(onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 7.dp),
     ) {
@@ -667,9 +678,8 @@ private fun AgendaRow(event: CalendarEvent, onOpen: (CalendarEvent) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
             .clickable { onOpen(event) }
-            .padding(vertical = 9.dp, horizontal = 10.dp),
+            .padding(vertical = 11.dp, horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.width(54.dp)) {
@@ -691,7 +701,7 @@ private fun AgendaRow(event: CalendarEvent, onOpen: (CalendarEvent) -> Unit) {
         )
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Text(event.title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(event.title, style = HealthDisplay, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val sub = listOfNotNull(
                 event.location.takeIf { it.isNotBlank() },
                 event.meetingLink?.let(::meetingName),

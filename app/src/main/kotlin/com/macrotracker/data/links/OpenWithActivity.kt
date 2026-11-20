@@ -1,5 +1,9 @@
 package com.macrotracker.data.links
 
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.itemsIndexed
+import com.macrotracker.ui.components.joinedTile
+import com.macrotracker.ui.components.Joined
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -170,14 +174,14 @@ private fun OpenWithSheet(
     val apps = remember(kind) { AppLinks.apps(context, kind, target) }
     val chosen = remember(kind) { AppLinks.chosen(context, kind) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = Surface) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = com.macrotracker.ui.screens.home.SheetColor) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 8.dp)) {
             Text(
                 kind.sheetTitle,
                 color = TextPrimary,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp),
+                style = com.macrotracker.ui.screens.health.HealthDisplay,
+                fontSize = 20.sp,
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 12.dp),
             )
             if (apps.isEmpty()) {
                 Text(
@@ -187,12 +191,14 @@ private fun OpenWithSheet(
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
                 )
             }
-            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 520.dp)) {
-                items(apps, key = { it.packageName }) { app ->
+            // the apps as one group of joined tiles
+            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 520.dp), contentPadding = PaddingValues(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+                itemsIndexed(apps, key = { _, it -> it.packageName }) { i, app ->
                     AppRow(
                         app = app,
                         selected = app.packageName == chosen,
                         onClick = { haptics.tick(); onPick(app) },
+                        modifier = Modifier.joinedTile(i, apps.size, fill = if (app.packageName == chosen) SelectedFill else Joined.Fill, outer = 22.dp),
                     )
                 }
                 if (target == null && chosen != null) {
@@ -200,8 +206,9 @@ private fun OpenWithSheet(
                         Row(
                             Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 8.dp)
-                                .clip(RoundedCornerShape(12.dp))
+                                .padding(top = 10.dp)
+                                .clip(RoundedCornerShape(22.dp))
+                                .background(Joined.Fill)
                                 .clickable { haptics.tick(); onForget() }
                                 .padding(horizontal = 12.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -220,7 +227,7 @@ private fun OpenWithSheet(
 }
 
 @Composable
-private fun AppRow(app: LinkApp, selected: Boolean, onClick: () -> Unit) {
+private fun AppRow(app: LinkApp, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val icon by produceState<ImageBitmap?>(null, app.packageName) {
         value = withContext(Dispatchers.IO) {
@@ -230,13 +237,10 @@ private fun AppRow(app: LinkApp, selected: Boolean, onClick: () -> Unit) {
         }
     }
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) SelectedFill else Color.Transparent)
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 9.dp),
+            .padding(horizontal = 12.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val bmp = icon

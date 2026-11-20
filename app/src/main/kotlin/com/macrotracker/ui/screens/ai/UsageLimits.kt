@@ -1,5 +1,6 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.components.JoinedColumn
 import com.macrotracker.ui.theme.AiAccent
 import androidx.compose.foundation.background
 import com.macrotracker.ui.screens.health.HealthDisplay
@@ -130,6 +131,7 @@ internal fun ProviderLimitBlock(
     onToggle: ((String) -> Unit)? = null,
     compact: Boolean = false,
 ) {
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
     val context = LocalContext.current
     Row(verticalAlignment = Alignment.CenterVertically) {
         UsageMark(limit.label, 24.dp)
@@ -146,7 +148,7 @@ internal fun ProviderLimitBlock(
         Spacer(Modifier.weight(1f))
         limit.manageUrl?.let { url ->
             Row(
-                Modifier.clip(RoundedCornerShape(16.dp)).clickable { context.openUrl(url) }.padding(horizontal = 6.dp, vertical = 4.dp),
+                Modifier.clip(RoundedCornerShape(16.dp)).clickable { haptics.tick(); context.openUrl(url) }.padding(horizontal = 6.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text("Manage", fontSize = 12.5.sp, fontWeight = FontWeight.Medium, color = Primary)
@@ -160,11 +162,13 @@ internal fun ProviderLimitBlock(
         Text("No reading yet.", fontSize = 13.sp, color = TextSecondary)
     }
     val now = rememberUsageNow()
-    limit.windows.forEachIndexed { i, w ->
-        if (i > 0) Spacer(Modifier.height(if (compact) 2.dp else 4.dp))
-        val key = "${limit.id}:${w.id}"
-        LimitRow(w, now, open = key in open, onToggle = onToggle?.let { { it(key) } }, compact = compact)
-    }
+// the windows as joined tiles
+    JoinedColumn(fill = WellFill, outer = 18.dp) {
+        limit.windows.forEach { w ->
+            val key = "${limit.id}:${w.id}"
+            LimitRow(w, now, open = key in open, onToggle = onToggle?.let { { it(key) } }, compact = compact)
+        }
+}
     if (limit.note.isNotBlank()) {
         Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(AppIcons.Warning, null, tint = Warning, modifier = Modifier.size(14.dp))
@@ -218,13 +222,12 @@ internal fun LimitRow(window: LimitWindow, now: Instant, open: Boolean = false, 
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
             .then(if (onToggle != null) Modifier.clickable(onClick = onToggle) else Modifier)
             .semantics { contentDescription = "${w.label}: $head used. $resetLine. $paceWords" }
-            .padding(vertical = if (compact) 4.dp else 6.dp),
+            .padding(horizontal = 12.dp, vertical = if (compact) 8.dp else 11.dp),
     ) {
         Row(verticalAlignment = Alignment.Bottom) {
-            Text(w.label, fontSize = if (compact) 13.sp else 14.sp, fontWeight = FontWeight.Medium, color = TextPrimary,
+            Text(w.label, style = com.macrotracker.ui.screens.health.HealthDisplay, fontSize = if (compact) 13.5.sp else 14.5.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary,
                 maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             Text(
                 head, fontSize = if (compact) 13.sp else 14.sp, fontWeight = FontWeight.Bold, style = TabularNumbers,

@@ -1,5 +1,9 @@
 package com.macrotracker.ui.screens.settings
 
+import com.macrotracker.ui.screens.home.pageRise
+import com.macrotracker.ui.screens.home.RoomNeutral
+import com.macrotracker.ui.components.JoinedColumn
+import com.macrotracker.ui.components.Joined
 import com.macrotracker.ui.screens.health.HealthDisplay
 import com.macrotracker.ui.screens.home.WellFill
 import com.macrotracker.ui.screens.home.SubPage
@@ -158,32 +162,27 @@ fun AboutSettingsScreen(
                     variant = ButtonVariant.SECONDARY,
                 )
             }
-            Spacer(modifier = Modifier.height(6.dp))
-            MetricToggleRow(
-                name = "Tell me when a build is out",
-                enabled = notifyEnabled,
-                icon = AppIcons.Bell,
-                onCheckedChange = { enabled ->
-                    haptics.tick()
-                    appUpdateViewModel.setNotifyEnabled(enabled)
-                },
-            )
-            Text(
-                text = "Checks every few hours, even with the app closed, and posts a notification you can update from.",
-                fontSize = 11.sp,
-                color = TextSecondary,
-                modifier = Modifier.padding(top = 2.dp),
-            )
+            Spacer(modifier = Modifier.height(10.dp))
+            JoinedColumn(outer = 18.dp) {
+                MetricToggleRow(
+                    name = "Tell me when a build is out",
+                    enabled = notifyEnabled,
+                    icon = AppIcons.Bell,
+                    onCheckedChange = { enabled ->
+                        haptics.tick()
+                        appUpdateViewModel.setNotifyEnabled(enabled)
+                    },
+                )
+            }
 
-            Spacer(modifier = Modifier.height(14.dp))
-            Spacer(Modifier.height(8.dp))
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(20.dp))
             Text(
                 text = "Release notes",
-                fontSize = 14.sp,
+                style = HealthDisplay,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = TextPrimary,
-                modifier = Modifier.padding(bottom = 8.dp),
+                color = TextSecondary,
+                modifier = Modifier.padding(start = 4.dp, bottom = 9.dp),
             )
             when {
                 releaseNotesLoading && releaseNotes.isEmpty() -> {
@@ -205,33 +204,20 @@ fun AboutSettingsScreen(
                     )
                 }
                 else -> {
-                    releaseNotes.take(3).forEach { release ->
-                        ReleaseNotesDropdown(
-                            release = release,
-                            isCurrent = release.versionCode == appUpdateViewModel.currentVersionCode,
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                    }
-                    if (releaseNotes.size > 3) {
-                        // The older ones unfold instead of popping in.
-                        AnimatedVisibility(
-                            visible = showAllReleaseNotes,
-                            enter = MacroMotion.expandEnter,
-                            exit = MacroMotion.expandExit,
-                        ) {
-                            Column {
-                                // Each older update is built as it scrolls in.
-                                releaseNotes.drop(3).forEach { release ->
-                                    LoadWhenSeen(placeholderHeight = 48.dp) {
-                                        ReleaseNotesDropdown(
-                                            release = release,
-                                            isCurrent = release.versionCode == appUpdateViewModel.currentVersionCode,
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                }
+                    // every release is a tile of one group; the older ones join it when asked for
+                    val shown = if (showAllReleaseNotes) releaseNotes else releaseNotes.take(3)
+                    JoinedColumn(outer = 18.dp) {
+                        shown.forEach { release ->
+                            androidx.compose.runtime.key(release.tagName) {
+                                ReleaseNotesDropdown(
+                                    release = release,
+                                    isCurrent = release.versionCode == appUpdateViewModel.currentVersionCode,
+                                )
                             }
                         }
+                    }
+                    if (releaseNotes.size > 3) {
+                        Spacer(modifier = Modifier.height(10.dp))
                         MacroButton(
                             text = if (showAllReleaseNotes) {
                                 "Show fewer updates"
@@ -247,7 +233,7 @@ fun AboutSettingsScreen(
             }
         }
 
-        MacroCard(delayMs = 90) {
+        JoinedColumn(modifier = Modifier.pageRise().padding(vertical = 7.dp), fill = RoomNeutral, outer = Joined.Page) {
             SettingsNavRow(
                 icon = AppIcons.GraduationCap,
                 tint = Primary,
@@ -270,12 +256,8 @@ private fun ReleaseNotesDropdown(
     val shape = RoundedCornerShape(14.dp)
     val dateLabel = release.publishedAt?.take(10).orEmpty()
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(WellFill)
-    ) {
+    // a tile of the release list: the group gives it its fill and corners
+    Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()

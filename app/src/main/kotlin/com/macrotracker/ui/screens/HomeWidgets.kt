@@ -1,5 +1,6 @@
 package com.macrotracker.ui.screens
 
+import androidx.compose.foundation.layout.fillMaxHeight
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.compose.foundation.layout.Arrangement
@@ -214,10 +215,12 @@ private fun HomeFoodWidget(viewModel: HomeViewModel, actions: HomeTileActions) {
             )
             Spacer(Modifier.height(14.dp))
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TonePill("Log a meal", HomeTone.Food, icon = AppIcons.Add, primary = true, onClick = actions.openFood)
-            RoundAction(AppIcons.Sparkles, "Estimate with AI", HomeTone.Food, size = 38.dp, onClick = actions.openMealChat)
-            RoundAction(AppIcons.Camera, "Scan a label", HomeTone.Food, size = 38.dp, onClick = actions.scanLabel)
+        // one row of joined controls: the main one wide, the other two square
+        Row(Modifier.height(androidx.compose.foundation.layout.IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(com.macrotracker.ui.components.Joined.Gap)) {
+            val rowShape = { p: com.macrotracker.ui.components.TilePlace -> com.macrotracker.ui.components.joinedRowShape(p, outer = 20.dp, inner = 6.dp) }
+            TonePill("Log a meal", HomeTone.Food, Modifier.fillMaxHeight(), icon = AppIcons.Add, primary = true, shape = rowShape(com.macrotracker.ui.components.TilePlace.FIRST), onClick = actions.openFood)
+            RoundAction(AppIcons.Sparkles, "Estimate with AI", HomeTone.Food, size = 40.dp, shape = rowShape(com.macrotracker.ui.components.TilePlace.MIDDLE), onClick = actions.openMealChat)
+            RoundAction(AppIcons.Camera, "Scan a label", HomeTone.Food, size = 40.dp, shape = rowShape(com.macrotracker.ui.components.TilePlace.LAST), onClick = actions.scanLabel)
         }
     }
 }

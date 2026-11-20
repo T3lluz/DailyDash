@@ -1,5 +1,8 @@
 package com.macrotracker.ui.screens.ai
 
+import dev.chrisbanes.haze.hazeSource
+import com.macrotracker.ui.components.JoinedColumn
+import com.macrotracker.ui.screens.home.WellFill
 import androidx.compose.foundation.background
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
@@ -130,7 +133,7 @@ fun UsagePane(
         ) {
             UsageTab.entries.forEach { t ->
                 val badge = if (t == UsageTab.SCHEDULE) state.schedule?.jobs?.size?.takeIf { it > 0 } else null
-                UsageChip(t.label + (badge?.let { " $it" } ?: ""), t == tab) { haptics.tick(); tab = t }
+                UsageChip(t.label + (badge?.let { " $it" } ?: ""), t == tab) { tab = t }
             }
         }
         // A spinner only for a read someone asked for, or the first one: a background reload shows none.
@@ -139,8 +142,11 @@ fun UsagePane(
             else Icon(AppIcons.Refresh, "Read again", tint = TextSecondary, modifier = Modifier.size(18.dp))
         }
     }
+    // the cards melt away under the tabs instead of being cut off flat
+    val softEdge = dev.chrisbanes.haze.rememberHazeState()
+    com.macrotracker.ui.components.SoftTopEdge(softEdge)
     LazyColumn(
-        modifier = Modifier.weight(1f).fillMaxWidth(),
+        modifier = Modifier.weight(1f).fillMaxWidth().hazeSource(softEdge),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = TabContentBottomPadding),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -194,32 +200,33 @@ fun UsagePane(
             UsageTab.CHATS -> item(key = "chats") {
                 UsageCard("Hermes chats", AppIcons.Chat, note = u!!.hermesTurns7d.takeIf { it > 0 }?.let { "$it answer${if (it == 1) "" else "s"} this week" }) {
                     if (u.chats.isEmpty()) Text("No readings yet.", fontSize = 13.sp, color = TextSecondary)
-                    u.chats.forEachIndexed { i, c ->
-                        if (i > 0) Spacer(Modifier.height(6.dp))
-                        Row(
-                            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
-                                .clickable { haptics.tick(); viewModel.openChat(c.id); onOpenChat() }
-                                .padding(vertical = 9.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(c.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(
-                                    listOfNotNull(HermesModelName(c.model), c.calls.takeIf { it > 0 }?.let { "$it call${if (it == 1) "" else "s"}" },
-                                        if (c.busy) "working now" else c.updatedMs.takeIf { it > 0 }?.let { agoWords(it) }).joinToString(" · "),
-                                    fontSize = 12.sp, color = TextTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                            if (c.window > 0 && c.context > 0) {
-                                ContextRing(c.context / c.window.toFloat())
-                                Spacer(Modifier.width(12.dp))
-                            }
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text(formatTokens(c.tokens), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, style = TabularNumbers)
-                                Text(formatUsd(c.cost), fontSize = 12.sp, color = TextTertiary, style = TabularNumbers)
+JoinedColumn(fill = WellFill, outer = 18.dp) {
+                        u.chats.forEach { c ->
+                            Row(
+                                Modifier.fillMaxWidth()
+                                    .clickable { haptics.tick(); viewModel.openChat(c.id); onOpenChat() }
+                                    .padding(horizontal = 12.dp, vertical = 11.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(c.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(
+                                        listOfNotNull(HermesModelName(c.model), c.calls.takeIf { it > 0 }?.let { "$it call${if (it == 1) "" else "s"}" },
+                                            if (c.busy) "working now" else c.updatedMs.takeIf { it > 0 }?.let { agoWords(it) }).joinToString(" · "),
+                                        fontSize = 12.sp, color = TextTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                                if (c.window > 0 && c.context > 0) {
+                                    ContextRing(c.context / c.window.toFloat())
+                                    Spacer(Modifier.width(12.dp))
+                                }
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(formatTokens(c.tokens), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, style = TabularNumbers)
+                                    Text(formatUsd(c.cost), fontSize = 12.sp, color = TextTertiary, style = TabularNumbers)
+                                }
                             }
                         }
-                    }
+}
                 }
             }
             UsageTab.SCHEDULE -> usageSchedule(

@@ -1,5 +1,6 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.components.Joined
 import com.macrotracker.ui.screens.health.HealthDisplay
 import com.macrotracker.ui.screens.home.RoomNeutral
 import com.macrotracker.ui.screens.home.WellFill
@@ -144,6 +145,9 @@ val AiRoomHi: Color = lerp(Background, AiAccent, 0.18f)
 /** The AI tab's sheets: darker than a room, still warm. */
 val AiSheet: Color = lerp(Background, AiAccent, 0.05f)
 
+/** A menu in the AI tab: the app's menu card, warmed like the tab. */
+val AiMenu: Color = lerp(com.macrotracker.ui.components.MenuColor, AiAccent, 0.07f)
+
 /** Pill nav = 64dp + 8dp bottom pad; keep a little air above it. */
 internal val PillNavClearance = 80.dp
 
@@ -165,6 +169,46 @@ suspend fun LazyListState.followChatBottom(animate: Boolean = true) {
         if (animate) animateScrollBy(overflow.toFloat()) else scrollBy(overflow.toFloat())
     }
 }
+
+/**
+ * The way back to the newest line from the jump button: one glide that eases into the end, as
+ * a fling does, never a jump. From far up it first moves to about two screens short of the end
+ * (scrolling the whole way would take seconds), then glides the rest, re-aimed every frame
+ * from what the list has measured, so it lands exactly on the last line.
+ */
+suspend fun LazyListState.glideToChatBottom() {
+    val lastIndex = layoutInfo.totalItemsCount - 1
+    if (lastIndex < 0) return
+    val viewport = (layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset).coerceAtLeast(1)
+    fun average(): Float = layoutInfo.visibleItemsInfo.takeIf { it.isNotEmpty() }?.map { it.size }?.average()?.toFloat()?.coerceAtLeast(1f) ?: viewport.toFloat()
+    fun remaining(): Float {
+        val info = layoutInfo
+        val last = info.visibleItemsInfo.lastOrNull() ?: return 0f
+        val bottom = info.viewportEndOffset - info.afterContentPadding
+        val past = (last.offset + last.size - bottom).toFloat()
+        return past + average() * (lastIndex - last.index)
+    }
+    if (remaining() > viewport * 2.5f) {
+        val rows = kotlin.math.ceil(viewport * 2f / average()).toInt().coerceAtLeast(1)
+        scrollToItem((lastIndex - rows).coerceAtLeast(0))
+    }
+    scroll {
+        var then = androidx.compose.runtime.withFrameNanos { it }
+        while (true) {
+            val now = androidx.compose.runtime.withFrameNanos { it }
+            val dt = ((now - then) / 1_000_000_000f).coerceIn(0f, 0.05f)
+            then = now
+            val left = remaining()
+            if (left <= 0.5f) break
+            // close a share of what is left each frame: quick at first, easing into the end
+            val step = maxOf(left * (1f - kotlin.math.exp(-dt * GLIDE_RATE)), minOf(left, 2f))
+            if (scrollBy(step) < 0.5f) break
+        }
+    }
+}
+
+/** How quickly the jump button's glide closes the way to the end, per second. */
+private const val GLIDE_RATE = 9f
 
 /**
  * Whether the chat follows its newest line. It starts pinned and stays pinned however much
@@ -253,20 +297,21 @@ fun FollowChatOnKeyboard(listState: LazyListState, shouldFollow: () -> Boolean) 
  * not come and go around the line or as the composer changes height.
  */
 @Composable
-fun rememberAwayFromChatEnd(listState: LazyListState): State<Boolean> {
+fun rememberAwayFromChatEnd(listState: LazyListState, pin: ChatPin? = null): State<Boolean> {
     val density = LocalDensity.current
     val away = remember(listState) { mutableStateOf(false) }
-    LaunchedEffect(listState, density) {
+    LaunchedEffect(listState, density, pin) {
         val on = with(density) { 260.dp.toPx() }
         val off = with(density) { 40.dp.toPx() }
         var dragged = false
         launch { listState.interactionSource.interactions.collect { if (it is DragInteraction.Start) dragged = true } }
-        snapshotFlow { listState.hiddenBelow()
-        }.collect { hidden ->
+        // Away once a finger took the chat up, or whenever the chat has stopped following its
+        // end (a jump to a found line, a chat opened part way): never while it follows a reply in.
+        snapshotFlow { listState.hiddenBelow() to (pin?.pinned ?: true) }.collect { (hidden, following) ->
             if (hidden < off) {
                 away.value = false
                 dragged = false
-            } else if (hidden > on && dragged) {
+            } else if (hidden > on && (dragged || !following)) {
                 away.value = true
             }
         }
@@ -488,6 +533,7 @@ fun UserBubble(text: String, onLongPress: (() -> Unit)? = null, onTap: (() -> Un
 
 @Composable
 fun TypingBubble(identity: BotIdentity, label: String, onCancel: () -> Unit) {
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth(),
@@ -513,7 +559,7 @@ fun TypingBubble(identity: BotIdentity, label: String, onCancel: () -> Unit) {
             color = TextSecondary,
             modifier = Modifier
                 .clip(ChatPillShape)
-                .clickable(onClick = onCancel)
+                .clickable(onClick = { haptics.tick(); onCancel() })
                 .padding(horizontal = 10.dp, vertical = 6.dp),
         )
     }
@@ -554,6 +600,7 @@ fun rememberCopyLatest(text: () -> String): () -> Unit {
 /** Copy, small and quiet, at the end of an answer's byline; it turns to a tick for a moment. */
 @Composable
 fun CopyButton(text: String) {
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
     val copy = rememberCopy(text)
     var copied by remember { mutableStateOf(false) }
     LaunchedEffect(copied) {
@@ -563,7 +610,7 @@ fun CopyButton(text: String) {
         Modifier
             .size(28.dp)
             .clip(CircleShape)
-            .clickable(role = Role.Button) { copy(); copied = true },
+            .clickable(role = Role.Button) { haptics.tick(); copy(); copied = true },
         contentAlignment = Alignment.Center,
     ) {
         Icon(
@@ -604,11 +651,12 @@ fun SmallActionChip(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,
+    shape: androidx.compose.ui.graphics.Shape = ChatPillShape,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .clip(ChatPillShape)
+            .clip(shape)
             .background(WellFill)
             .clickable(onClick = onClick)
             .padding(horizontal = 11.dp, vertical = 6.dp),
@@ -622,6 +670,7 @@ fun SmallActionChip(
 /** Starter questions on an empty thread. */
 @Composable
 fun ChatStarters(starters: List<String>, onPick: (String) -> Unit) {
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
     LazyRow(
         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -635,7 +684,7 @@ fun ChatStarters(starters: List<String>, onPick: (String) -> Unit) {
                 modifier = Modifier
                     .clip(ChatPillShape)
                     .background(AiRoom)
-                    .clickable { onPick(starter) }
+                    .clickable { haptics.tick(); onPick(starter) }
                     .padding(horizontal = 12.dp, vertical = 8.dp),
             )
         }
@@ -660,6 +709,7 @@ fun ChatComposer(
     leading: (@Composable () -> Unit)? = null,
     clearsNavPill: Boolean = true,
 ) {
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
     val bottomPad = composerBottomGap(clearsNavPill)
     val canSend = enabled && value.isNotBlank()
     val sendBackground by animateColorAsState(
@@ -675,22 +725,22 @@ fun ChatComposer(
             .padding(top = 6.dp, bottom = bottomPad)
             // The navbar's and the island's glass: lift, blur, tint and edge alike.
             .chromeGlass(hazeState, ComposerShape)
-            .padding(start = 4.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+            .padding(6.dp),
         verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.spacedBy(Joined.GlassGap),
     ) {
-        if (leading != null) {
-            leading()
-        } else {
-            Spacer(modifier = Modifier.width(8.dp))
-        }
+        // the line and send as joined tiles in the glass, as Hermes' composer draws them
+        if (leading != null) leading()
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
             enabled = enabled,
             modifier = Modifier
                 .weight(1f)
-                .heightIn(min = 40.dp)
-                .padding(vertical = 10.dp, horizontal = 4.dp),
+                .heightIn(min = 44.dp)
+                .clip(RoundedCornerShape(topStart = if (leading == null) 22.dp else 6.dp, bottomStart = if (leading == null) 22.dp else 6.dp, topEnd = 6.dp, bottomEnd = 6.dp))
+                .background(Color.White.copy(alpha = 0.07f))
+                .padding(vertical = 12.dp, horizontal = 14.dp),
             textStyle = TextStyle(color = TextPrimary, fontSize = 15.sp, lineHeight = 20.sp),
             cursorBrush = SolidColor(accent),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
@@ -705,11 +755,10 @@ fun ChatComposer(
         )
         Box(
             modifier = Modifier
-                .padding(bottom = 2.dp)
-                .size(38.dp)
-                .clip(ComposerSendShape)
-                .background(sendBackground, ComposerSendShape)
-                .clickable(enabled = canSend, onClick = onSend),
+                .size(44.dp)
+                .clip(RoundedCornerShape(topStart = 6.dp, bottomStart = 6.dp, topEnd = 22.dp, bottomEnd = 22.dp))
+                .background(sendBackground)
+                .clickable(enabled = canSend, onClick = { haptics.tick(); onSend() }),
             contentAlignment = Alignment.Center,
         ) {
             Icon(

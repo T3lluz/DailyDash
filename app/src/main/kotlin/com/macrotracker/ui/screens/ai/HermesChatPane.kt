@@ -1,5 +1,17 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.components.VeilInset
+import com.macrotracker.ui.components.VeilEdge
+import com.macrotracker.ui.components.ChromeVeil
+import com.macrotracker.ui.components.joinedRowShape
+import com.macrotracker.ui.components.TilePlace
+import com.macrotracker.ui.components.Joined
+import com.macrotracker.ui.components.IconTile
+import com.macrotracker.ui.components.JoinedColumn
+import com.macrotracker.ui.components.JoinedRow
+import com.macrotracker.ui.components.TileMenu
+import com.macrotracker.ui.components.TileMenuGroup
+import com.macrotracker.ui.components.TileMenuItem
 import com.macrotracker.ui.screens.home.RoomNeutral
 import com.macrotracker.ui.screens.health.HealthDisplay
 import com.macrotracker.ui.screens.home.WellFill
@@ -309,7 +321,12 @@ fun HermesChatPane(
     val rowCount = rows.size
     // Follows the newest line until a finger scrolls away from it.
     val pin = rememberChatPin(listState)
-    val awayFromEnd by rememberAwayFromChatEnd(listState)
+    val awayFromEnd by rememberAwayFromChatEnd(listState, pin)
+    // how far the composer's glass body reaches up from the foot: its veil starts a little inside it
+    var composerBody by remember { mutableStateOf(0.dp) }
+    var composerGap by remember { mutableStateOf(0.dp) }
+    // how tall the header (and the find bar under it) stands over the chat
+    var topChrome by remember { mutableStateOf(64.dp) }
     // A finger on the transcript is reading, not typing: the keyboard goes and the composer folds.
     val focusManager = LocalFocusManager.current
     LaunchedEffect(listState) {
@@ -619,72 +636,6 @@ fun HermesChatPane(
                 },
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-                HermesHeader(
-                    title = state.threadTitle,
-                    status = headerStatus(state),
-                    working = state.busy,
-                    railAttention = state.threads.any { it.id != state.threadId && (it.busy || it.pending > 0 || state.isUnread(it)) } ||
-                        turns.keys.any { it != state.threadId },
-                    pinned = current?.pinned == true,
-                    hasThread = state.threadId != null,
-                    onOpenRail = {
-                        viewModel.refreshThreads()
-                        focusManager.clearFocus()
-                        scope.launch { rail.open() }
-                    },
-                    onNewChat = {
-                        pin.pinned = true
-                        switchDraft(null)
-                        viewModel.newThread()
-                    },
-                    onOpenFiles = { filesAt = Triple("~", 0, 0) },
-                    onOpenGit = onOpenGit,
-                    followUp = followUp,
-                    onToggleFollowUp = { haptics.tick(); viewModel.setFollowUp(if (followUp == "steer") "queue" else "steer") },
-                    onFind = { finding = true },
-                    onOpenInfo = { infoOpen = true },
-                    brand = ModelBrands.brandOf(state.currentModel?.family.orEmpty(), state.currentModel?.group.orEmpty()),
-                    onRename = { current?.let { renaming = it } ?: state.threadId?.let { id -> renaming = placeholderThread(id, state.threadTitle) } },
-                    onTogglePin = { state.threadId?.let { viewModel.setPinned(it, current?.pinned != true) } },
-                    onClear = { state.threadId?.let { id -> confirmClear = current ?: placeholderThread(id, state.threadTitle) } },
-                    onDelete = { state.threadId?.let { id -> confirmDelete = current ?: placeholderThread(id, state.threadTitle) } },
-                    onUsePhoneAi = onUsePhoneAi,
-                    onOpenConsole = onOpenConsole,
-                    onOpenUsage = onOpenUsage,
-                    onOpenTilesmith = onOpenTilesmith,
-                    onCopyChat = copyChat,
-                    usage = usageState.usage,
-                )
-                if (finding) {
-                    val hits = remember(rows, findQuery) {
-                        val q = findQuery.trim()
-                        if (q.length < 2) emptyList() else rows.filter { row -> rowText(row).contains(q, ignoreCase = true) }.map { it.key }
-                    }
-                    LaunchedEffect(hits) { findAt = findAt.coerceIn(0, (hits.size - 1).coerceAtLeast(0)) }
-                    fun jump(to: Int) {
-                        if (hits.isEmpty()) return
-                        findAt = (to + hits.size) % hits.size
-                        rowIndex[hits[findAt]]?.let { i -> scope.launch { pin.pinned = false; listState.animateScrollToItem(i) } }
-                    }
-                    Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        SearchBox(findQuery, { findQuery = it; findAt = 0 }, "Find in this chat", Modifier.weight(1f))
-                        Text(
-                            if (findQuery.trim().length < 2) "" else if (hits.isEmpty()) "0" else "${findAt + 1}/${hits.size}",
-                            color = TextTertiary, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 8.dp),
-                        )
-                        IconButton(onClick = { jump(findAt - 1) }, enabled = hits.isNotEmpty(), modifier = Modifier.size(34.dp)) {
-                            Icon(AppIcons.ChevronUp, "Previous", tint = TextSecondary, modifier = Modifier.size(20.dp))
-                        }
-                        IconButton(onClick = { jump(findAt + 1) }, enabled = hits.isNotEmpty(), modifier = Modifier.size(34.dp)) {
-                            Icon(AppIcons.ChevronDown, "Next", tint = TextSecondary, modifier = Modifier.size(20.dp))
-                        }
-                        IconButton(onClick = { finding = false; findQuery = "" }, modifier = Modifier.size(34.dp)) {
-                            Icon(AppIcons.Close, "Close search", tint = TextSecondary, modifier = Modifier.size(18.dp))
-                        }
-                    }
-                    // typing moves to the first match
-                    LaunchedEffect(hits.firstOrNull(), findQuery) { if (hits.isNotEmpty()) jump(0) }
-                }
                 // The chat on screen is read as it moves, so it never gets its own dot.
                 LaunchedEffect(state.threadId, current?.updatedMs, current?.busy) { viewModel.markSeen(state.threadId) }
 
@@ -772,10 +723,10 @@ fun HermesChatPane(
                         message = state.reachError ?: "Hermes did not answer.",
                         onRetry = { viewModel.refresh() },
                         onUsePhoneAi = onUsePhoneAi,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).padding(top = topChrome),
                     )
                     (state.reach == HermesReach.CHECKING || state.reach == HermesReach.UNKNOWN) && state.status == null -> Box(
-                        Modifier.weight(1f).fillMaxWidth(),
+                        Modifier.weight(1f).fillMaxWidth().padding(top = topChrome),
                         contentAlignment = Alignment.Center,
                     ) { LoadingSpinner(color = AiAccent) }
                     else -> androidx.compose.runtime.CompositionLocalProvider(
@@ -788,6 +739,7 @@ fun HermesChatPane(
                             .hazeSource(state = chatHaze),
                         // the working tab is part of the composer's column, so its height is already in this
                         bottomRoom = { composerHeight.value + 10.dp },
+                        topRoom = { topChrome },
                     ) {
                         if (state.items.isEmpty() && !state.loadingThread && state.live == null) {
                             item(key = "greeting") {
@@ -841,12 +793,107 @@ fun HermesChatPane(
                 }
             }
 
+            // The header floats over the chat, as a page's bar does over its page: the chat runs on
+            // under it and melts away into a veil, whole behind the header and thinning just past it.
+            ChromeVeil(
+                chatHaze,
+                VeilEdge.Top,
+                height = topChrome + HeaderVeilTail,
+                modifier = Modifier.align(Alignment.TopCenter),
+                solid = topChrome,
+            )
+            Column(
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .onSizeChanged { topChrome = with(density) { it.height.toDp() } },
+            ) {
+                HermesHeader(
+                    title = state.threadTitle,
+                    status = headerStatus(state),
+                    working = state.busy,
+                    railAttention = state.threads.any { it.id != state.threadId && (it.busy || it.pending > 0 || state.isUnread(it)) } ||
+                        turns.keys.any { it != state.threadId },
+                    pinned = current?.pinned == true,
+                    hasThread = state.threadId != null,
+                    onOpenRail = {
+                        viewModel.refreshThreads()
+                        focusManager.clearFocus()
+                        scope.launch { rail.open() }
+                    },
+                    onNewChat = {
+                        pin.pinned = true
+                        switchDraft(null)
+                        viewModel.newThread()
+                    },
+                    onOpenFiles = { filesAt = Triple("~", 0, 0) },
+                    onOpenGit = onOpenGit,
+                    followUp = followUp,
+                    onToggleFollowUp = { haptics.tick(); viewModel.setFollowUp(if (followUp == "steer") "queue" else "steer") },
+                    onFind = { finding = true },
+                    onOpenInfo = { infoOpen = true },
+                    brand = ModelBrands.brandOf(state.currentModel?.family.orEmpty(), state.currentModel?.group.orEmpty()),
+                    onRename = { current?.let { renaming = it } ?: state.threadId?.let { id -> renaming = placeholderThread(id, state.threadTitle) } },
+                    onTogglePin = { state.threadId?.let { viewModel.setPinned(it, current?.pinned != true) } },
+                    onClear = { state.threadId?.let { id -> confirmClear = current ?: placeholderThread(id, state.threadTitle) } },
+                    onDelete = { state.threadId?.let { id -> confirmDelete = current ?: placeholderThread(id, state.threadTitle) } },
+                    onUsePhoneAi = onUsePhoneAi,
+                    onOpenConsole = onOpenConsole,
+                    onOpenUsage = onOpenUsage,
+                    onOpenTilesmith = onOpenTilesmith,
+                    onCopyChat = copyChat,
+                    usage = usageState.usage,
+                )
+                if (finding) {
+                    val hits = remember(rows, findQuery) {
+                        val q = findQuery.trim()
+                        if (q.length < 2) emptyList() else rows.filter { row -> rowText(row).contains(q, ignoreCase = true) }.map { it.key }
+                    }
+                    LaunchedEffect(hits) { findAt = findAt.coerceIn(0, (hits.size - 1).coerceAtLeast(0)) }
+                    fun jump(to: Int) {
+                        if (hits.isEmpty()) return
+                        findAt = (to + hits.size) % hits.size
+                        rowIndex[hits[findAt]]?.let { i -> scope.launch { pin.pinned = false; listState.animateScrollToItem(i) } }
+                    }
+                    Row(Modifier.padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        SearchBox(findQuery, { findQuery = it; findAt = 0 }, "Find in this chat", Modifier.weight(1f))
+                        Text(
+                            if (findQuery.trim().length < 2) "" else if (hits.isEmpty()) "0" else "${findAt + 1}/${hits.size}",
+                            color = TextTertiary, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 8.dp),
+                        )
+                        IconButton(onClick = { jump(findAt - 1) }, enabled = hits.isNotEmpty(), modifier = Modifier.size(34.dp)) {
+                            Icon(AppIcons.ChevronUp, "Previous", tint = TextSecondary, modifier = Modifier.size(20.dp))
+                        }
+                        IconButton(onClick = { jump(findAt + 1) }, enabled = hits.isNotEmpty(), modifier = Modifier.size(34.dp)) {
+                            Icon(AppIcons.ChevronDown, "Next", tint = TextSecondary, modifier = Modifier.size(20.dp))
+                        }
+                        IconButton(onClick = { finding = false; findQuery = "" }, modifier = Modifier.size(34.dp)) {
+                            Icon(AppIcons.Close, "Close search", tint = TextSecondary, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                    // typing moves to the first match
+                    LaunchedEffect(hits.firstOrNull(), findQuery) { if (hits.isNotEmpty()) jump(0) }
+                }
+            }
+
+            // the chat melts away under the composer and the navbar, as a page does under its chrome
+            ChromeVeil(
+                chatHaze,
+                VeilEdge.Bottom,
+                height = (composerBody - VeilInset).coerceAtLeast(0.dp),
+                modifier = Modifier.align(Alignment.BottomCenter),
+                // whole under the composer (the strip down to the navbar), thinning up into its lower part
+                solid = composerGap,
+            )
             if (state.reach != HermesReach.DOWN) {
                 ChatDock(
                     showJump = awayFromEnd && state.items.isNotEmpty(),
                     onJump = {
-                        pin.pinned = true
-                        scope.launch { listState.followChatBottom() }
+                        // a glide down, and the chat follows its end again once it has landed
+                        scope.launch {
+                            listState.glideToChatBottom()
+                            pin.pinned = true
+                        }
                     },
                     hazeState = chatHaze,
                     modifier = Modifier.align(Alignment.BottomCenter).offset { IntOffset(0, -(composerHeight.value + 2.dp).roundToPx()) },
@@ -864,7 +911,7 @@ fun HermesChatPane(
                             .padding(horizontal = 16.dp, vertical = 4.dp)
                             .clip(RoundedCornerShape(16.dp))
                             .background(AiRoom)
-                            .clickable { viewModel.dismissNotice() }
+                            .clickable { haptics.tick(); viewModel.dismissNotice() }
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -994,6 +1041,7 @@ fun HermesChatPane(
                                     RequestBar(label, detail, chatHaze) { focusManager.clearFocus(); requestFolded = false }
                                 }
                                 HermesComposer(
+                                    onBody = { top, gap -> composerBody = top; composerGap = gap },
                                     value = draft,
                                     onValueChange = { typed ->
                                         // "/plan " (the space is the Enter): the mode switches as you type and the
@@ -1041,8 +1089,10 @@ fun HermesChatPane(
                                     working = state.live,
                                     workingLabel = liveLabel,
                                     onWorking = {
-                                        pin.pinned = true
-                                        scope.launch { listState.followChatBottom() }
+                                        scope.launch {
+                                            listState.glideToChatBottom()
+                                            pin.pinned = true
+                                        }
                                     },
                                     roomy = state.items.isEmpty() && state.live == null,
                                 )
@@ -1124,7 +1174,7 @@ fun HermesChatPane(
             onPickWindow = { tokens -> haptics.tick(); viewModel.setWindow(tokens) },
             modes = remember(state.status) { HermesCatalog.modes(state.status) },
             modeId = state.mode.id,
-            onPickMode = { id -> haptics.tick(); viewModel.setMode(id) },
+            onPickMode = { id -> viewModel.setMode(id) },
         )
     }
     if (infoOpen) {
@@ -1139,7 +1189,7 @@ fun HermesChatPane(
                 items = state.items,
                 archived = thread.id in archived,
                 wake = snoozed[thread.id]?.takeIf { it > System.currentTimeMillis() }?.let { wakeLabel(it) },
-                onPickMode = { id -> haptics.tick(); viewModel.setMode(id) },
+                onPickMode = { id -> viewModel.setMode(id) },
                 onPickModel = { infoOpen = false; modelSheet = true },
                 onRename = { renaming = thread },
                 onTogglePin = { viewModel.setPinned(thread.id, !thread.pinned) },
@@ -1259,14 +1309,12 @@ private fun QueueSheet(
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = AiSheet) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp)) {
             SheetTitle("Queued", if (working) "Each goes when the turn before it ends. Steer says one now." else null)
+            JoinedColumn(Modifier.padding(horizontal = 16.dp), fill = AiRoom) {
             queue.forEachIndexed { i, text ->
                 Column(
                     Modifier
-                        .padding(horizontal = 12.dp, vertical = 4.dp)
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(AiRoom)
-                        .padding(start = 14.dp, end = 6.dp, top = 10.dp, bottom = 4.dp),
+                        .padding(start = 14.dp, end = 6.dp, top = 12.dp, bottom = 6.dp),
                 ) {
                     Text(text, color = TextPrimary, fontSize = 14.sp, lineHeight = 20.sp, maxLines = 4, overflow = TextOverflow.Ellipsis)
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1279,6 +1327,7 @@ private fun QueueSheet(
                     }
                 }
             }
+            }
         }
     }
 }
@@ -1290,19 +1339,14 @@ private fun AttachSheet(onDismiss: () -> Unit, onPhoto: () -> Unit, onCamera: ()
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = AiSheet) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp)) {
             SheetTitle("Add to the message")
-            @Composable
-            fun choice(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) = Row(
-                Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(icon, null, tint = TextSecondary, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(14.dp))
-                Text(label, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            // four places a file can come from, as one row of joined tiles
+            JoinedRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp), fill = AiRoom) {
+                IconTile(AppIcons.Camera, "Camera", height = 76.dp, onClick = onCamera)
+                IconTile(AppIcons.Images, "Photo", height = 76.dp, onClick = onPhoto)
+                IconTile(AppIcons.File, "File", height = 76.dp, onClick = onFile)
+                IconTile(AppIcons.Server, "Server", height = 76.dp, onClick = onServerFile)
             }
-            choice(AppIcons.Camera, "Take a photo", onCamera)
-            choice(AppIcons.Images, "Photo", onPhoto)
-            choice(AppIcons.AddCircle, "File", onFile)
-            choice(AppIcons.Folder, "A file on the server", onServerFile)
+            Spacer(Modifier.height(8.dp))
         }
     }
 }
@@ -1313,16 +1357,21 @@ private fun ChatList(
     state: LazyListState,
     bottomRoom: () -> Dp,
     modifier: Modifier = Modifier,
+    /** The header standing over the list's top: the first row starts under it. */
+    topRoom: () -> Dp = { 0.dp },
     content: LazyListScope.() -> Unit,
 ) {
     LazyColumn(
         state = state,
         modifier = modifier,
         // rows space themselves: work rows sit tight, as T3 Code's work log does
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 10.dp, bottom = bottomRoom()),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = topRoom() + 10.dp, bottom = bottomRoom()),
         content = content,
     )
 }
+
+/** How far past the header its veil thins out, as a page's does past its bar. */
+private val HeaderVeilTail = 18.dp
 
 /** Enough of a thread for the dialogs when the list has not caught up with a brand-new one. */
 private fun placeholderThread(id: String, title: String) = HermesThreadSummary(
@@ -1370,10 +1419,11 @@ private fun HermesUnreachable(
         Spacer(Modifier.height(6.dp))
         Text(message, color = TextSecondary, fontSize = 13.sp, lineHeight = 18.sp)
         Spacer(Modifier.height(16.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PillButton(icon = AppIcons.Refresh, label = "Try again", accent = AiAccent, emphasized = true, onClick = onRetry)
+        Row(horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+            val two = onUsePhoneAi != null
+            PillButton(icon = AppIcons.Refresh, label = "Try again", accent = AiAccent, emphasized = true, onClick = onRetry, shape = joinedRowShape(if (two) TilePlace.FIRST else TilePlace.ONLY, outer = 20.dp, inner = 6.dp))
             if (onUsePhoneAi != null) {
-                PillButton(icon = AppIcons.Bot, label = "Use phone AI", accent = TextSecondary, onClick = onUsePhoneAi)
+                PillButton(icon = AppIcons.Bot, label = "Use phone AI", accent = TextSecondary, onClick = onUsePhoneAi, shape = joinedRowShape(TilePlace.LAST, outer = 20.dp, inner = 6.dp))
             }
         }
     }
@@ -1420,7 +1470,7 @@ private fun HermesUserBubble(item: HermesItem.User, canEdit: Boolean, actions: B
                                 .size(width = 150.dp, height = 112.dp)
                                 .clip(RoundedCornerShape(18.dp))
                                 .background(WellFill)
-                                .clickable { actions.onOpenImage(a) },
+                                .clickable { haptics.tick(); actions.onOpenImage(a) },
                         )
                     } else {
                         AttachmentChip(a)
@@ -1433,10 +1483,12 @@ private fun HermesUserBubble(item: HermesItem.User, canEdit: Boolean, actions: B
                 UserBubble(item.text, onLongPress = { haptics.gestureStart(); menu = true })
                 // anchored at the bubble's right edge, where the message is
                 Box(Modifier.align(Alignment.BottomEnd)) {
-                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, modifier = Modifier.background(RoomNeutral)) {
-                        MenuRow("Copy", AppIcons.Copy) { menu = false; copy() }
-                        if (canEdit) MenuRow("Edit and resend", AppIcons.Edit) { menu = false; actions.onEdit(item) }
-                        if (item.ts > 0) MenuRow("Fork from here", AppIcons.GitFork) { menu = false; actions.onFork(item.ts) }
+                    TileMenu(expanded = menu, onDismissRequest = { menu = false }, color = AiMenu) {
+                        TileMenuGroup {
+                            TileMenuItem("Copy", AppIcons.Copy) { menu = false; copy() }
+                            if (canEdit) TileMenuItem("Edit and resend", AppIcons.Edit) { menu = false; actions.onEdit(item) }
+                            if (item.ts > 0) TileMenuItem("Fork from here", AppIcons.GitFork) { menu = false; actions.onFork(item.ts) }
+                        }
                     }
                 }
             }
@@ -1460,19 +1512,15 @@ private fun HermesUserBubble(item: HermesItem.User, canEdit: Boolean, actions: B
  */
 @Composable
 internal fun ChangesCard(changes: List<HermesFileChange>, onOpenFile: (HermesFileChange) -> Unit, onRevert: (HermesFileChange) -> Unit) {
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
     var showAll by rememberSaveable { mutableStateOf(false) }
     val plus = changes.sumOf { it.plus }
     val minus = changes.sumOf { it.minus }
     val shown = if (showAll) changes else changes.take(CHANGES_SHOWN)
-    val shape = RoundedCornerShape(16.dp)
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(AiRoom),
-    ) {
+    // the total, then a tile per file
+    JoinedColumn(modifier = Modifier.fillMaxWidth(), fill = AiRoom) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 14.dp, top = 10.dp, bottom = 9.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(AppIcons.Code, null, tint = TextSecondary, modifier = Modifier.size(14.dp))
@@ -1489,11 +1537,9 @@ internal fun ChangesCard(changes: List<HermesFileChange>, onOpenFile: (HermesFil
             Text("−$minus", color = ServerCritical, fontSize = 12.sp, fontFamily = Mono, fontWeight = FontWeight.SemiBold)
         }
         shown.forEach { change ->
-            Spacer(Modifier.height(8.dp))
             FileChangeRow(change, onOpenFile, onRevert)
         }
         if (changes.size > CHANGES_SHOWN && !showAll) {
-            Spacer(Modifier.height(8.dp))
             Text(
                 "Show ${changes.size - CHANGES_SHOWN} more",
                 color = AiAccent,
@@ -1501,8 +1547,8 @@ internal fun ChangesCard(changes: List<HermesFileChange>, onOpenFile: (HermesFil
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { showAll = true }
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                    .clickable { haptics.tick(); showAll = true }
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
             )
         }
     }
@@ -1512,6 +1558,7 @@ private const val CHANGES_SHOWN = 5
 
 @Composable
 private fun FileChangeRow(change: HermesFileChange, onOpenFile: (HermesFileChange) -> Unit, onRevert: (HermesFileChange) -> Unit) {
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
     var open by rememberSaveable(change.path) { mutableStateOf(false) }
     val turn = animateFloatAsState(if (open) 90f else 0f, label = "file")
     val name = change.path.substringAfterLast('/')
@@ -1520,7 +1567,7 @@ private fun FileChangeRow(change: HermesFileChange, onOpenFile: (HermesFileChang
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { open = !open }
+                .clickable { haptics.tick(); open = !open }
                 .padding(start = 12.dp, end = 10.dp, top = 9.dp, bottom = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

@@ -1,5 +1,12 @@
 package com.macrotracker.ui.screens.settings
 
+import com.macrotracker.ui.components.joinedRowShape
+import com.macrotracker.ui.components.TilePlace
+import com.macrotracker.ui.components.Joined
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.animation.animateContentSize
+import com.macrotracker.ui.components.JoinedColumn
+import com.macrotracker.ui.components.JoinedRow
 import com.macrotracker.ui.screens.home.SheetColor
 import com.macrotracker.ui.screens.home.roomSwitchColors
 import com.macrotracker.ui.screens.health.HealthDisplay
@@ -136,8 +143,9 @@ fun ServersSettingsScreen(
     SubPage(title = "Servers", lede = "SSH monitoring for your own machines", onBack = onNavigateBack) {
 
         // ── Server list ──────────────────────────────────────────────────
-        MacroCard(delayMs = 40) {
-            CardHeader(title = "Your servers", icon = AppIcons.Server, accent = Primary) {
+        // each card in the colour of what it is about, so the page reads as parts at a glance
+        MacroCard(delayMs = 40, tone = com.macrotracker.ui.screens.home.HomeTone.Servers) {
+            CardHeader(title = "Your servers", icon = AppIcons.Server, accent = com.macrotracker.ui.screens.home.HomeTone.Servers) {
                 // A shell on the dashboard server, the same as the web's console.
                 Text(
                     "Console",
@@ -180,8 +188,9 @@ fun ServersSettingsScreen(
                 )
             }
 
+            if (profiles.isNotEmpty()) Spacer(modifier = Modifier.height(12.dp))
+            JoinedColumn(outer = 18.dp) {
             profiles.forEach { profile ->
-                Spacer(modifier = Modifier.height(10.dp))
                 ServerListRow(
                     profile = profile,
                     statusColor = statusColor(runtimes[profile.id]?.connection),
@@ -198,8 +207,9 @@ fun ServersSettingsScreen(
                     },
                 )
             }
+            }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             MacroButton(
                 text = "Add server",
                 onClick = {
@@ -252,8 +262,8 @@ fun ServersSettingsScreen(
 
         // ── Notifications ────────────────────────────────────────────────
         Spacer(modifier = Modifier.height(4.dp))
-        MacroCard(delayMs = 70) {
-            CardHeader(title = "Notifications")
+        MacroCard(delayMs = 70, tone = com.macrotracker.ui.screens.home.HomeTone.Mail) {
+            CardHeader(title = "Notifications", icon = AppIcons.Bell, accent = com.macrotracker.ui.screens.home.HomeTone.Mail)
             Text(
                 "DailyDash posts a push notification when a server needs you. Repeats of the same " +
                     "problem are held back for the cooldown below, so a full disk alerts once, not " +
@@ -264,6 +274,7 @@ fun ServersSettingsScreen(
                 modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
             )
 
+            JoinedColumn(modifier = Modifier.animateContentSize(), outer = 18.dp) {
             ToggleRow(
                 title = "Server notifications",
                 subtitle = if (notificationsGranted) {
@@ -278,9 +289,7 @@ fun ServersSettingsScreen(
                 },
             )
 
-            WidgetExpandSection(visible = settings.enabled && notificationsGranted) {
-                Column {
-                    Spacer(Modifier.height(8.dp))
+            if (settings.enabled && notificationsGranted) {
                     ToggleRow(
                         title = "Critical",
                         subtitle = "Unreachable hosts, failed units, disks about to fill",
@@ -302,7 +311,6 @@ fun ServersSettingsScreen(
                         onCheckedChange = { haptics.tick(); viewModel.setUpdatesEnabled(it) },
                         accent = Primary,
                     )
-                    Spacer(modifier = Modifier.height(10.dp))
                     StepperRow(
                         label = "Alert cooldown",
                         value = "${settings.alertCooldownMinutes} min",
@@ -313,14 +321,14 @@ fun ServersSettingsScreen(
                             viewModel.setAlertCooldownMinutes((settings.alertCooldownMinutes + 5).coerceAtMost(240))
                         },
                     )
-                }
+            }
             }
         }
 
         // ── Live notification ────────────────────────────────────────────
         LoadWhenSeen(placeholderHeight = 240.dp) {
-            MacroCard(delayMs = 90) {
-                CardHeader(title = "Live stats notification")
+            MacroCard(delayMs = 90, tone = com.macrotracker.ui.screens.home.HomeTone.Weather) {
+                CardHeader(title = "Live stats notification", icon = AppIcons.Activity, accent = com.macrotracker.ui.screens.home.HomeTone.Weather)
                 Text(
                     "Keeps an ongoing notification with live gauges. It stays compact; tap More on it " +
                         "for the full panel with dials, history and every core.",
@@ -329,6 +337,7 @@ fun ServersSettingsScreen(
                     lineHeight = 17.sp,
                     modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
                 )
+                JoinedColumn(modifier = Modifier.animateContentSize(), outer = 18.dp) {
                 ToggleRow(
                     title = "Show live notification",
                     subtitle = if (profiles.isEmpty()) "Add a server first" else "Runs while it is switched on",
@@ -341,8 +350,7 @@ fun ServersSettingsScreen(
                         viewModel.setLiveNotificationEnabled(enabled && profiles.isNotEmpty())
                     },
                 )
-                WidgetExpandSection(visible = settings.liveNotificationEnabled) {
-                    Column {
+                if (settings.liveNotificationEnabled) {
                         ToggleRow(
                             title = "Open onto the full panel",
                             subtitle = "Off keeps it compact until you tap More",
@@ -355,32 +363,35 @@ fun ServersSettingsScreen(
                             checked = settings.startOnBoot,
                             onCheckedChange = { haptics.tick(); viewModel.setStartOnBoot(it) },
                         )
-                        if (profiles.size > 1) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            StatLabel("SERVER SHOWN")
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                profiles.forEach { profile ->
-                                    val selected = settings.liveNotificationServerId == profile.id ||
-                                        (settings.liveNotificationServerId == null && profile == profiles.first())
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(14.dp))
-                                            .background(if (selected) Primary.copy(alpha = 0.2f) else ServerWell)
-                                            .clickable {
-                                                haptics.tick()
-                                                viewModel.setLiveNotificationServer(profile.id)
-                                            }
-                                            .padding(horizontal = 10.dp, vertical = 6.dp),
-                                    ) {
-                                        Text(
-                                            profile.label,
-                                            color = if (selected) TextPrimary else TextSecondary,
-                                            fontSize = 12.sp,
-                                            maxLines = 1,
-                                        )
+                }
+                }
+                if (settings.liveNotificationEnabled && profiles.size > 1) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Text("Server shown", style = HealthDisplay, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp, color = TextSecondary, modifier = Modifier.padding(start = 4.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    JoinedRow(modifier = Modifier.fillMaxWidth(), outer = 18.dp) {
+                        profiles.forEach { profile ->
+                            val selected = settings.liveNotificationServerId == profile.id ||
+                                (settings.liveNotificationServerId == null && profile == profiles.first())
+                            Box(
+                                modifier = Modifier
+                                    .background(if (selected) Primary.copy(alpha = 0.24f) else Color.Transparent)
+                                    .clickable {
+                                        haptics.tick()
+                                        viewModel.setLiveNotificationServer(profile.id)
                                     }
-                                }
+                                    .padding(horizontal = 10.dp, vertical = 12.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    profile.label,
+                                    style = HealthDisplay,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (selected) TextPrimary else TextSecondary,
+                                    fontSize = 13.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
                             }
                         }
                     }
@@ -390,8 +401,8 @@ fun ServersSettingsScreen(
 
         // ── Polling + thresholds ─────────────────────────────────────────
         LoadWhenSeen(placeholderHeight = 320.dp) {
-            MacroCard(delayMs = 110) {
-                CardHeader(title = "Polling & thresholds")
+            MacroCard(delayMs = 110, tone = com.macrotracker.ui.screens.home.HomeTone.Briefing) {
+                CardHeader(title = "Polling & thresholds", icon = AppIcons.Gauge, accent = com.macrotracker.ui.screens.home.HomeTone.Briefing)
                 Text(
                     "Each poll is one batched command over a session that stays open, so a 5-second " +
                         "refresh costs the server almost nothing.",
@@ -400,6 +411,7 @@ fun ServersSettingsScreen(
                     lineHeight = 17.sp,
                     modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
                 )
+                JoinedColumn(outer = 18.dp) {
                 StepperRow(
                     label = "Refresh while open",
                     value = "${settings.pollSeconds}s",
@@ -416,7 +428,10 @@ fun ServersSettingsScreen(
                         viewModel.setBackgroundPollSeconds((settings.backgroundPollSeconds + 5).coerceAtMost(300))
                     },
                 )
-                Spacer(Modifier.height(8.dp))
+                }
+                Spacer(Modifier.height(14.dp))
+                Text("Alert above", style = HealthDisplay, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp, color = TextSecondary, modifier = Modifier.padding(start = 4.dp, bottom = 8.dp))
+                JoinedColumn(outer = 18.dp) {
                 ThresholdRow("CPU", settings.thresholds.cpuPercent, "%") { delta ->
                     viewModel.updateThresholds { it.copy(cpuPercent = clampPercent(it.cpuPercent + delta)) }
                 }
@@ -434,7 +449,8 @@ fun ServersSettingsScreen(
                         it.copy(temperatureCelsius = (it.temperatureCelsius + delta).coerceIn(40, 110))
                     }
                 }
-                Spacer(modifier = Modifier.height(8.dp))
+                }
+                Spacer(modifier = Modifier.height(10.dp))
                 Text(
                     "Load is judged per core, so the same threshold works on a 2-core VPS and a " +
                         "32-core box.",
@@ -460,10 +476,8 @@ private fun ServerListRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(Background)
             .clickable(onClick = onEdit)
-            .padding(12.dp),
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
@@ -476,8 +490,9 @@ private fun ServerListRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = profile.label,
+                style = HealthDisplay,
                 color = TextPrimary,
-                fontSize = 14.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -719,14 +734,16 @@ private fun ServerEditorCard(
         }
 
         Spacer(modifier = Modifier.height(6.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
             MacroButton(
+                shape = joinedRowShape(TilePlace.FIRST, outer = 26.dp, inner = Joined.Inner),
                 text = "Test",
                 onClick = { onTest(target, username, port, authMode, secret, passphrase) },
                 variant = ButtonVariant.SECONDARY,
                 modifier = Modifier.weight(1f),
             )
             MacroButton(
+                shape = joinedRowShape(TilePlace.LAST, outer = 26.dp, inner = Joined.Inner),
                 text = "Save",
                 onClick = {
                     val result = onSave(target, label, username, port, authMode, secret, passphrase)
@@ -735,8 +752,9 @@ private fun ServerEditorCard(
                 modifier = Modifier.weight(1f),
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
             MacroButton(
+                shape = joinedRowShape(if (onDelete != null) TilePlace.FIRST else TilePlace.ONLY, outer = 26.dp, inner = Joined.Inner),
                 text = "Cancel",
                 onClick = onCancel,
                 variant = ButtonVariant.SECONDARY,
@@ -744,6 +762,7 @@ private fun ServerEditorCard(
             )
             if (onDelete != null) {
                 MacroButton(
+                    shape = joinedRowShape(TilePlace.LAST, outer = 26.dp, inner = Joined.Inner),
                     text = "Delete",
                     onClick = { confirmDelete = true },
                     variant = ButtonVariant.DANGER,
@@ -790,20 +809,22 @@ private fun ToggleRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 5.dp),
+            .clickable(role = androidx.compose.ui.semantics.Role.Switch) { onCheckedChange(!checked) }
+            .padding(start = 14.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
-                .size(6.dp)
-                .clip(RoundedCornerShape(3.dp))
-                .background(if (checked) accent else Border),
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(if (checked) accent else TextTertiary.copy(alpha = 0.5f)),
         )
-        Spacer(modifier = Modifier.width(10.dp))
+        Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-            Text(subtitle, color = TextSecondary, fontSize = 11.sp, lineHeight = 15.sp)
+            Text(title, style = HealthDisplay, color = TextPrimary, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold)
+            Text(subtitle, color = TextSecondary, fontSize = 12.sp, lineHeight = 16.sp)
         }
+        Spacer(modifier = Modifier.width(8.dp))
         Switch(checked = checked, onCheckedChange = onCheckedChange, colors = roomSwitchColors())
     }
 }
@@ -819,17 +840,17 @@ private fun StepperRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(start = 14.dp, end = 10.dp, top = 9.dp, bottom = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, color = TextPrimary, fontSize = 13.sp, modifier = Modifier.weight(1f))
+        Text(label, style = HealthDisplay, fontWeight = FontWeight.SemiBold, color = TextPrimary, fontSize = 14.5.sp, modifier = Modifier.weight(1f))
         StepperButton("−") { haptics.tick(); onDecrease() }
         Text(
             text = value, style = HealthDisplay,
             color = TextPrimary,
-            fontSize = 13.sp,
-            fontFamily = FontFamily.Monospace,
+            fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             modifier = Modifier.width(64.dp),
             maxLines = 1,
         )
@@ -841,9 +862,9 @@ private fun StepperRow(
 private fun StepperButton(symbol: String, onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .size(30.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(WellFill)
+            .size(34.dp)
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.09f))
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -854,7 +875,7 @@ private fun StepperButton(symbol: String, onClick: () -> Unit) {
 @Composable
 private fun ThresholdRow(label: String, value: Int, unit: String, onDelta: (Int) -> Unit) {
     StepperRow(
-        label = "$label alert above",
+        label = label,
         value = "$value$unit",
         onDecrease = { onDelta(-5) },
         onIncrease = { onDelta(5) },

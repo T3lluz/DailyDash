@@ -202,10 +202,17 @@ internal fun LazyListScope.briefPageRooms(
         PageRoom(BriefAccent) {
             BriefLead(st, big = true)
             BriefErrorLine(error)
-            Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                onChat?.let { TonePill("Ask ${brief.by}", BriefAccent, icon = AppIcons.Chat, primary = true, onClick = it) }
+            // the two things to do as one joined pair
+            val both = onChat != null && !st.writing
+            Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+                onChat?.let {
+                    TonePill("Ask ${brief.by}", BriefAccent, icon = AppIcons.Chat, primary = true, shape = joinedRowShape(if (both) TilePlace.FIRST else TilePlace.ONLY, outer = 18.dp, inner = 6.dp), onClick = it)
+                }
                 if (!st.writing) {
-                    TonePill(if (st.done) "Write it again" else "Write it now", BriefAccent, icon = AppIcons.Refresh, onClick = onRun)
+                    TonePill(
+                        if (st.done) "Write it again" else "Write it now", BriefAccent, icon = AppIcons.Refresh,
+                        shape = joinedRowShape(if (both) TilePlace.LAST else TilePlace.ONLY, outer = 18.dp, inner = 6.dp), onClick = onRun,
+                    )
                 }
             }
         }
@@ -237,10 +244,11 @@ private const val NOW_ROWS = 6
 @Composable
 private fun NowRows(items: List<IslandItem>, heading: Boolean = true) {
     if (items.isEmpty()) return
-    Column(modifier = Modifier.padding(top = if (heading) 16.dp else 0.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    // the things on now as joined tiles, as Weave joins a row of its own
+    com.macrotracker.ui.components.JoinedColumn(modifier = Modifier.padding(top = if (heading) 16.dp else 0.dp), fill = com.macrotracker.ui.screens.home.WellFill, outer = 18.dp) {
         items.forEachIndexed { i, item ->
             val tone = toneColor(item)
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier.size(36.dp).clip(RoundedCornerShape(16.dp)).background(tone.copy(alpha = 0.16f)),
                     contentAlignment = Alignment.Center,
@@ -257,7 +265,7 @@ private fun NowRows(items: List<IslandItem>, heading: Boolean = true) {
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(item.title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(item.title, style = HealthDisplay, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (item.sub.isNotBlank()) {
                         Text(item.sub, fontSize = 13.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }

@@ -1,5 +1,22 @@
 package com.macrotracker.ui.screens
 
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import com.macrotracker.ui.components.VeilInset
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.animation.core.animateFloatAsState
+import com.macrotracker.ui.components.IslandVeilDepth
+import com.macrotracker.ui.components.VeilEdge
+import com.macrotracker.ui.components.ChromeVeil
+import com.macrotracker.ui.components.rememberBarFold
 import android.app.Activity
 import android.content.ContentUris
 import android.content.Intent
@@ -226,6 +243,9 @@ fun MainScreen(
                 // A Home tile's own page ("page:F1", "page:WEATHER"), over Home so Back lands there.
                 navController.navigateToTabRoot(Screen.Home.route)
                 navController.navigateToSubScreen(SubScreenRoutes.homePage(where.substringAfter(':').uppercase()))
+            } else if (where.startsWith("route:")) {
+                // Any pushed screen by its route ("route:settings/ai"), for looking at one from outside.
+                runCatching { navController.navigateToSubScreen(where.substringAfter(':')) }
             }
         }
         onOpenRequestHandled()
@@ -373,6 +393,13 @@ private fun MainScreenScaffold(
     }
 
     val hazeState = rememberHazeState()
+
+    // As X's bar does: reading down a tab folds the navbar to one circle with the tab in it,
+    // and a scroll back up (or a tap on the circle) opens it. The AI tab keeps it open, so the
+    // composer above it never moves. A new tab starts open.
+    val navFoldable = currentRoute == Screen.Home.route || currentRoute == Screen.Health.route || currentRoute == Screen.Settings.route
+    val (navFold, navFoldProgress) = rememberBarFold(enabled = navFoldable)
+    LaunchedEffect(currentRoute) { navFold.unfold() }
     // A screen built on a platform view (the console's WebView, the camera preview) stays out
     // of the blur. The island and the navbar draw the blur source a second time, and a WebView
     // drawn twice in a frame can take the app down; the chrome slides away over those screens anyway.
@@ -409,12 +436,38 @@ private fun MainScreenScaffold(
                 navController = navController,
                 modifier = navHostModifier
                     .fillMaxSize()
+                    .nestedScroll(navFold.connection)
                     .then(if (hostsPlatformView) Modifier else Modifier.hazeSource(state = hazeState)),
                 startDestination = startDestination,
                 onOnboardingComplete = onOnboardingComplete,
                 aiAvailable = hasAiApiKey,
             )
         }
+        // The chrome's veils: the page melts away under the island and the navbar, as it does
+        // under a page's bar. The AI tab veils its own composer, so the navbar's stays off there.
+        val chatPanelOpenForVeil by com.macrotracker.ui.util.ChatPanelState.open.collectAsState()
+        val islandVeil by animateFloatAsState(if (islandVisible && !hostsPlatformView) 1f else 0f, MacroMotion.fadeTween(), label = "islandVeil")
+        val barVeil by animateFloatAsState(
+            if (isMainTabRoute && currentRoute != Screen.AI.route && !chatPanelOpenForVeil && !hostsPlatformView) 1f else 0f,
+            MacroMotion.fadeTween(),
+            label = "barVeil",
+        )
+        val insets = androidx.compose.foundation.layout.WindowInsets
+        val statusInset = insets.statusBars.asPaddingValues().calculateTopPadding()
+        val navInset = insets.navigationBars.asPaddingValues().calculateBottomPadding()
+        // each starts a little in under its chrome and gathers towards the screen's edge
+        ChromeVeil(
+            hazeState,
+            VeilEdge.Top,
+            height = statusInset + IslandVeilDepth - VeilInset,
+            modifier = Modifier.align(Alignment.TopCenter),
+        ) { islandVeil }
+        ChromeVeil(
+            hazeState,
+            VeilEdge.Bottom,
+            height = navInset + NavBarVeil - VeilInset,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        ) { barVeil }
         TopIsland(
             items = islandItems,
             labels = islandLabels,
@@ -470,9 +523,15 @@ private fun MainScreenScaffold(
             onSettingsUpdateBadgeClick = onSettingsUpdateBadgeClick,
             hazeState = hazeState,
             modifier = Modifier.align(Alignment.BottomCenter),
+            collapse = { navFoldProgress.value },
+            folded = navFold.folded && navFoldable,
+            onUnfold = { navFold.unfold() },
         )
     }
 }
+
+/** How far up from the navigation bar the navbar stands: 8 dp under it and 64 of its own. */
+private val NavBarVeil = 72.dp
 
 /** Routes whose screen is a platform view, kept out of the chrome's haze source. */
 private val PlatformViewRoutes = setOf(SubScreenRoutes.CONSOLE)
@@ -485,6 +544,9 @@ private fun MainBottomBar(
     onSettingsUpdateBadgeClick: () -> Unit,
     hazeState: HazeState,
     modifier: Modifier = Modifier,
+    collapse: () -> Float = { 0f },
+    folded: Boolean = false,
+    onUnfold: () -> Unit = {},
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route?.substringBefore('?')
@@ -520,6 +582,9 @@ private fun MainBottomBar(
                 onItemClick = onItemClick,
                 showSettingsUpdateBadge = showSettingsUpdateBadge,
                 hazeState = hazeState,
+                collapse = collapse,
+                folded = folded,
+                onUnfold = onUnfold,
             )
         }
     }

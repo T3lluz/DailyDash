@@ -149,6 +149,7 @@ private data class MdLook(
 
 @Composable
 private fun MdBlockView(block: MdBlock, look: MdLook, cursor: Boolean) {
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
     when (block) {
         is MdBlock.Heading -> InlineText(
             text = block.text + if (cursor) CURSOR else "",
@@ -174,7 +175,7 @@ private fun MdBlockView(block: MdBlock, look: MdLook, cursor: Boolean) {
                     modifier = Modifier
                         .heightIn(max = 280.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .clickable(onClickLabel = "Open the picture") { openImage?.invoke(src, alt) },
+                        .clickable(onClickLabel = "Open the picture") { haptics.tick(); openImage?.invoke(src, alt) },
                 )
             } else {
                 InlineText(
@@ -482,6 +483,7 @@ private fun MdFence(block: MdBlock.Code, look: MdLook, cursor: Boolean) {
  */
 @Composable
 private fun CodeBlock(info: String, code: String, fontSize: TextUnit, cursor: Boolean) {
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     var copied by remember(code) { mutableStateOf(false) }
@@ -564,6 +566,7 @@ private fun CodeBlock(info: String, code: String, fontSize: TextUnit, cursor: Bo
                 modifier = Modifier
                     .clip(RoundedCornerShape(10.dp))
                     .clickable {
+                        haptics.click()
                         scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Code", code))) }
                         copied = true
                     }
@@ -589,7 +592,7 @@ private fun CodeBlock(info: String, code: String, fontSize: TextUnit, cursor: Bo
                 color = Primary,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { open = !open }
+                    .clickable { haptics.tick(); open = !open }
                     .padding(horizontal = 10.dp, vertical = 8.dp),
             )
         }

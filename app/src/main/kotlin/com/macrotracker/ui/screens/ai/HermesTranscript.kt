@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.components.joinedRowShape
+import com.macrotracker.ui.components.TilePlace
 import com.macrotracker.ui.screens.health.HealthDisplay
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.animation.AnimatedVisibility
@@ -124,13 +126,14 @@ private fun Chevron(open: Boolean, modifier: Modifier = Modifier, right: Boolean
 /** A finished run, folded: how long Hermes worked. A tap opens it to everything it did and said on the way. */
 @Composable
 internal fun FoldRow(row: FeedRow.Fold, open: Boolean, onToggle: () -> Unit) {
+    val haptics = rememberHaptics()
     val label = row.ms?.let { "Worked for ${tookShort(it)}" } ?: "Worked"
     Row(
         modifier = Modifier
             .padding(top = 2.dp, bottom = 8.dp)
             .clip(CircleShape)
             .background(if (open) AiRoomHi else AiRoom)
-            .clickable(role = Role.Button, onClickLabel = if (open) "Hide the work" else "Show the work", onClick = onToggle)
+            .clickable(role = Role.Button, onClickLabel = if (open) "Hide the work" else "Show the work") { if (open) haptics.toggleOff() else haptics.toggleOn(); onToggle() }
             .heightIn(min = 38.dp)
             .padding(horizontal = 14.dp)
             .semantics { stateDescription = if (open) "Expanded" else "Collapsed" },
@@ -164,6 +167,7 @@ internal fun ThinkingRow(label: String) {
  */
 @Composable
 internal fun WorkGroup(row: FeedRow.Work, isOpen: (String) -> Boolean, onToggle: (String) -> Unit, onOpenPath: (String) -> Unit) {
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
     val single = row.single
     if (single != null) {
         // one step needs no header: the row is the step
@@ -175,7 +179,7 @@ internal fun WorkGroup(row: FeedRow.Work, isOpen: (String) -> Boolean, onToggle:
     Column(Modifier.fillMaxWidth().padding(bottom = 2.dp)) {
         if (thought.isNotBlank() && !open) {
             Row(
-                modifier = Modifier.fillMaxWidth().clip(RowShape).clickable { onToggle(row.key) }.padding(horizontal = 2.dp),
+                modifier = Modifier.fillMaxWidth().clip(RowShape).clickable { haptics.tick(); onToggle(row.key) }.padding(horizontal = 2.dp),
                 verticalAlignment = Alignment.Top,
             ) {
                 Box(Modifier.size(IconSlot), contentAlignment = Alignment.Center) {
@@ -255,6 +259,7 @@ private fun StepRow(
 /** What a step ran and what came back, under its row. */
 @Composable
 private fun StepDetail(step: WorkStep) {
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
     SelectionContainer {
         Column(
             Modifier
@@ -282,7 +287,7 @@ private fun StepDetail(step: WorkStep) {
                 Text(
                     "Open the page",
                     color = AiAccent, fontSize = 12.5.sp, fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(top = 6.dp).clip(RowShape).clickable { runCatching { uri.openUri(url) } }.padding(vertical = 4.dp),
+                    modifier = Modifier.padding(top = 6.dp).clip(RowShape).clickable { haptics.tick(); runCatching { uri.openUri(url) } }.padding(vertical = 4.dp),
                 )
             }
             step.exit?.takeIf { it != 0 }?.let {
@@ -474,10 +479,13 @@ internal fun ErrorRow(item: HermesItem.Error, recover: ErrorActions?) {
                 }
             }
             if (recover != null) {
-                Row(Modifier.padding(top = 8.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)) {
-                    SmallActionChip(icon = AppIcons.Refresh, label = "Ask again", onClick = recover.onRetry)
-                    SmallActionChip(icon = AppIcons.SwapVertical, label = "Change model", onClick = recover.onPickModel)
-                    if (limit) SmallActionChip(icon = AppIcons.ChartColumn, label = "Usage", onClick = recover.onOpenUsage)
+                // what the error leads to, as one joined strip
+                Row(Modifier.padding(top = 8.dp), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(2.dp)) {
+                    val n = if (limit) 3 else 2
+                    fun at(i: Int) = joinedRowShape(TilePlace.of(i, n), outer = 14.dp, inner = 4.dp)
+                    SmallActionChip(icon = AppIcons.Refresh, label = "Ask again", onClick = recover.onRetry, shape = at(0))
+                    SmallActionChip(icon = AppIcons.SwapVertical, label = "Change model", onClick = recover.onPickModel, shape = at(1))
+                    if (limit) SmallActionChip(icon = AppIcons.ChartColumn, label = "Usage", onClick = recover.onOpenUsage, shape = at(2))
                 }
             }
         }

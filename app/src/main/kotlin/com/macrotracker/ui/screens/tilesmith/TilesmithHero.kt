@@ -1,5 +1,9 @@
 package com.macrotracker.ui.screens.tilesmith
 
+import androidx.compose.foundation.lazy.itemsIndexed
+import com.macrotracker.ui.components.joinedRowShape
+import com.macrotracker.ui.components.TilePlace
+import com.macrotracker.ui.components.Joined
 import com.macrotracker.ui.screens.home.WellFill
 import com.macrotracker.ui.screens.health.HealthDisplay
 import androidx.compose.ui.graphics.Color
@@ -175,11 +179,12 @@ fun TilesmithHero(
 
         Spacer(Modifier.height(12.dp))
         Text("Start from", style = HealthDisplay, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary, modifier = Modifier.padding(start = 2.dp, bottom = 8.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(end = 4.dp)) {
-            items(TileStarters.all, key = { it.id }) { s ->
+        // a strip of joined tiles that scrolls, round at its two ends
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(Joined.Gap), contentPadding = PaddingValues(end = 4.dp)) {
+            itemsIndexed(TileStarters.all, key = { _, it -> it.id }) { i, s ->
                 Row(
                     Modifier
-                        .clip(RoundedCornerShape(18.dp))
+                        .clip(joinedRowShape(TilePlace.of(i, TileStarters.all.size), outer = 18.dp))
                         .background(WellFill)
                         .clickable { haptics.click(); onOpen(null, null, s.id) }
                         .padding(start = 8.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
@@ -203,15 +208,15 @@ fun TilesmithHero(
         if (mine.isNotEmpty()) {
             Spacer(Modifier.height(16.dp))
             Text("Your widgets", style = HealthDisplay, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary, modifier = Modifier.padding(start = 2.dp, bottom = 8.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(end = 4.dp)) {
-                items(mine, key = { it.id }) { d ->
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(Joined.Gap), contentPadding = PaddingValues(end = 4.dp)) {
+                itemsIndexed(mine, key = { _, it -> it.id }) { i, d ->
                     val placed by produceState(0, d.id, placedTick) {
                         value = withContext(Dispatchers.IO) { TilesmithPin.placedCount(context, d.id) }
                     }
                     Column(
                         Modifier
                             .width(156.dp)
-                            .clip(RoundedCornerShape(22.dp))
+                            .clip(joinedRowShape(TilePlace.of(i, mine.size), outer = 22.dp))
                             .background(WellFill)
                             .combinedClickable(
                                 onClick = { haptics.click(); onOpen(d.id, null, null) },

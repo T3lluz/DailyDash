@@ -1,5 +1,10 @@
 package com.macrotracker.ui.screens.f1
 
+import com.macrotracker.ui.components.joinedGridShape
+import com.macrotracker.ui.components.joinedShape
+import com.macrotracker.ui.components.TilePlace
+import com.macrotracker.ui.components.Joined
+import com.macrotracker.ui.components.JoinedColumn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -323,15 +328,14 @@ private fun WeekendMarks(weekend: Weekend, codes: List<String>, hub: F1Hub, tone
         meta = if (current) weekend.race.shortName else weekend.race.at.atZone(zone).format(DateShort),
         flush = true,
     ) {
-        Column(Modifier.padding(horizontal = 8.dp)) {
+        JoinedColumn(Modifier.padding(horizontal = 12.dp), fill = WellFill, outer = 18.dp) {
             sessions.forEach { result ->
                 val s = result
                 Column(
                     Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(18.dp))
                         .clickable { open(F1Dest.Session(weekend.race.round, s.kind)) }
-                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                        .padding(horizontal = 12.dp, vertical = 11.dp),
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(s.kind, style = F1Display, fontSize = 16.sp, color = TextPrimary, modifier = Modifier.weight(1f), maxLines = 1)
@@ -397,10 +401,10 @@ private fun <T> Neighbours(table: Championship<T>, pos: Int, name: (T) -> String
         table.rows.firstOrNull { it.pos == pos + 1 }?.let { it to "${(me.points - it.points).toInt()} behind" },
     )
     if (rows.isEmpty()) return
-    Column(Modifier.padding(top = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    JoinedColumn(Modifier.padding(top = 14.dp), fill = WellFill, outer = 18.dp) {
         rows.forEach { (s, gap) ->
             Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(WellFill).clickable { open(dest(s.entry)) }.padding(horizontal = 12.dp, vertical = 9.dp),
+                Modifier.fillMaxWidth().clickable { open(dest(s.entry)) }.padding(horizontal = 12.dp, vertical = 11.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text("P${s.pos}", style = HealthDisplay, fontSize = 14.sp, color = medal(s.pos) ?: TextSecondary, modifier = Modifier.width(36.dp))
@@ -613,10 +617,10 @@ private fun TeamPage(hub: F1Hub, name: String, nowMs: Long, onBack: () -> Unit) 
         item(key = "drivers") {
             val total = drivers.sumOf { it.points }.coerceAtLeast(1.0)
             PageRoom(colour, title = "Drivers", icon = AppIcons.Helmet, flush = true) {
-                Column(Modifier.padding(horizontal = 8.dp)) {
+                JoinedColumn(Modifier.padding(horizontal = 12.dp), fill = WellFill, outer = 18.dp) {
                     drivers.forEach { d ->
                         Row(
-                            Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).clickable { open(F1Dest.Driver(d.code)) }.padding(horizontal = 10.dp, vertical = 9.dp),
+                            Modifier.fillMaxWidth().clickable { open(F1Dest.Driver(d.code)) }.padding(horizontal = 10.dp, vertical = 11.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             DriverFace(d.image, d.code, colour, 56.dp)
@@ -770,7 +774,7 @@ private fun SessionPage(hub: F1Hub, round: Int, kind: String, nowMs: Long, onBac
             item(key = "others") {
                 PageRoom(F1Tone, title = "The weekend", icon = AppIcons.CalendarDays, meta = race.shortName, flush = true) {
                     val up = race.sessions.firstOrNull { weekend.resultFor(it) == null && !it.over(now) }
-                    Column(Modifier.padding(horizontal = 8.dp)) { SessionRows(weekend, up, nowMs, liveNow = false) }
+                    Box(Modifier.padding(horizontal = 12.dp)) { SessionRows(weekend, up, nowMs, liveNow = false) }
                 }
             }
         }
@@ -817,7 +821,7 @@ private fun LapRow(row: ResultRow, hub: F1Hub, pos: String, time: String, gapMs:
     val colour = teamColour(row.colour)
     val open = LocalF1Open.current
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable { open(F1Dest.Driver(row.code)) }.padding(horizontal = 10.dp, vertical = 6.dp),
+        Modifier.fillMaxWidth().clickable { open(F1Dest.Driver(row.code)) }.padding(horizontal = 10.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(pos, style = F1Figure, fontSize = 15.sp, color = medal(pos.toIntOrNull()) ?: TextSecondary, textAlign = TextAlign.Center, maxLines = 1, modifier = Modifier.width(24.dp))
@@ -860,7 +864,9 @@ private fun TopThree(rows: List<ResultRow>, hub: F1Hub, time: (ResultRow) -> Str
     val best = F1HubMath.lapMs(time(first))
     val colour = teamColour(first.colour)
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(colour.copy(alpha = 0.16f)).clickable { open(F1Dest.Driver(first.code)) }.padding(14.dp),
+        // the three are one block of joined tiles: the quickest across the top, the next two under it
+        Modifier.fillMaxWidth().clip(if (rows.size > 1) joinedShape(TilePlace.FIRST, outer = 22.dp) else RoundedCornerShape(22.dp))
+            .background(colour.copy(alpha = 0.16f)).clickable { open(F1Dest.Driver(first.code)) }.padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         DriverFace(hub.driver(first.code)?.image, first.code, colour, 64.dp)
@@ -872,11 +878,12 @@ private fun TopThree(rows: List<ResultRow>, hub: F1Hub, time: (ResultRow) -> Str
         }
         Text(time(first), style = F1Display, fontSize = 26.sp, color = LapPurple, maxLines = 1, softWrap = false)
     }
-    Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        rows.drop(1).take(2).forEachIndexed { i, r ->
+    val under = rows.drop(1).take(2)
+    Row(Modifier.padding(top = Joined.Gap), horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+        under.forEachIndexed { i, r ->
             val c = teamColour(r.colour)
             Row(
-                Modifier.weight(1f).clip(RoundedCornerShape(20.dp)).background(c.copy(alpha = 0.12f)).clickable { open(F1Dest.Driver(r.code)) }.padding(10.dp),
+                Modifier.weight(1f).clip(joinedGridShape(1, 2, i, under.size, outer = 22.dp)).background(c.copy(alpha = 0.12f)).clickable { open(F1Dest.Driver(r.code)) }.padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 DriverFace(hub.driver(r.code)?.image, r.code, c, 38.dp)
@@ -899,12 +906,12 @@ private fun TeamPaceRoom(result: SessionResult, hub: F1Hub) {
     val open = LocalF1Open.current
     val max = pace.last().third.coerceAtLeast(1L)
     PageRoom(HomeTone.GitHub, title = "Team pace", icon = AppIcons.Gauge, meta = "Best lap of either car", flush = true) {
-        Column(Modifier.padding(horizontal = 8.dp)) {
+        JoinedColumn(Modifier.padding(horizontal = 12.dp), fill = WellFill, outer = 18.dp) {
             pace.forEachIndexed { i, (name, hex, gap) ->
                 val t = hub.team(name)
                 val colour = teamColour(hex)
                 Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable(enabled = t != null) { open(F1Dest.Team(name)) }.padding(horizontal = 10.dp, vertical = 6.dp),
+                    Modifier.fillMaxWidth().clickable(enabled = t != null) { open(F1Dest.Team(name)) }.padding(horizontal = 10.dp, vertical = 9.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text("${i + 1}", style = F1Figure, fontSize = 14.sp, color = medal(i + 1) ?: TextSecondary, textAlign = TextAlign.Center, modifier = Modifier.width(24.dp))
@@ -933,7 +940,7 @@ private fun LazyListScope.practiceRooms(result: SessionResult, hub: F1Hub) {
     }
     item(key = "all") {
         PageRoom(F1Tone, title = "Classification", icon = AppIcons.Flag, meta = "Best lap, gap, laps", flush = true) {
-            Column(Modifier.padding(horizontal = 8.dp)) {
+            JoinedColumn(Modifier.padding(horizontal = 12.dp), fill = WellFill, outer = 18.dp) {
                 result.rows.forEachIndexed { i, row ->
                     LapRow(row, hub, row.posText.ifBlank { "${i + 1}" }, row.best, gaps[i], maxGap, row.laps?.toString().orEmpty())
                 }
@@ -990,7 +997,7 @@ private fun LazyListScope.qualifyingRooms(result: SessionResult, hub: F1Hub) {
             val maxGap = gaps.filterNotNull().maxOrNull() ?: 0L
             PageRoom(F1Tone, title = "Part by part", icon = AppIcons.Clock, meta = "${rows.size} cars", flush = true) {
                 SegRow(parts.map { it.first }, picked.coerceIn(0, parts.lastIndex), F1Tone, Modifier.padding(start = 18.dp, bottom = 10.dp)) { picked = it }
-                Column(Modifier.padding(horizontal = 8.dp)) {
+                JoinedColumn(Modifier.padding(horizontal = 12.dp), fill = WellFill, outer = 18.dp) {
                     rows.forEachIndexed { i, row ->
                         val out = name != "Q3" && row.out == name
                         LapRow(row, hub, "${i + 1}", time(row), gaps[i], maxGap, "", dim = out, tag = if (out) "Out" else null)
@@ -1008,7 +1015,7 @@ private fun LazyListScope.qualifyingRooms(result: SessionResult, hub: F1Hub) {
         item(key = "mates") {
             val open = LocalF1Open.current
             PageRoom(HomeTone.Calendar, title = "Teammates", icon = AppIcons.Users, meta = "In the last part both ran", flush = true) {
-                Column(Modifier.padding(horizontal = 8.dp)) {
+                JoinedColumn(Modifier.padding(horizontal = 12.dp), fill = WellFill, outer = 18.dp) {
                     pairs.forEach { (x, y) ->
                         // the deepest part both set a time in
                         val shared = listOf<(ResultRow) -> String>({ it.q3 }, { it.q2 }, { it.q1 }, { it.best })
@@ -1082,7 +1089,7 @@ private fun LazyListScope.raceRooms(result: SessionResult, weekend: Weekend, hub
             val gaps = quick.map { r -> F1HubMath.lapMs(r.fastLap)?.let { t -> best?.let { t - it } } }
             val maxGap = gaps.filterNotNull().maxOrNull() ?: 0L
             PageRoom(LapPurple, title = "Fastest laps", icon = AppIcons.Clock, meta = "Each car's best, and the lap it came on", flush = true) {
-                Column(Modifier.padding(horizontal = 8.dp)) {
+                JoinedColumn(Modifier.padding(horizontal = 12.dp), fill = WellFill, outer = 18.dp) {
                     quick.forEachIndexed { i, row ->
                         LapRow(row, hub, "${row.fastRank}", row.fastLap, gaps[i], maxGap, row.fastLapNo?.let { "L$it" }.orEmpty())
                     }
@@ -1117,13 +1124,15 @@ private fun LazyListScope.raceRooms(result: SessionResult, weekend: Weekend, hub
         item(key = "out") {
             val open = LocalF1Open.current
             PageRoom(HomeTone.Neutral, title = "Did not finish", icon = AppIcons.Warning, meta = "${out.size}") {
+                JoinedColumn(fill = WellFill, outer = 18.dp) {
                 out.forEach { r ->
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { open(F1Dest.Driver(r.code)) }.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().clickable { open(F1Dest.Driver(r.code)) }.padding(horizontal = 12.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
                         TeamSwatch(teamColour(r.colour), height = 20.dp)
                         Spacer(Modifier.width(8.dp))
                         Text(r.surname, style = F1Display, fontSize = 15.sp, color = TextPrimary, maxLines = 1, modifier = Modifier.weight(1f))
                         Text(listOfNotNull(r.status, r.laps?.takeIf { it > 0 }?.let { "after $it laps" }).joinToString(", "), fontSize = 13.sp, color = TextSecondary, maxLines = 1)
                     }
+                }
                 }
             }
         }
@@ -1222,7 +1231,7 @@ private fun RoundPage(hub: F1Hub, round: Int, nowMs: Long, onBack: () -> Unit) {
             item(key = "sessions") {
                 PageRoom(F1Tone, title = "Sessions", icon = AppIcons.CalendarDays, meta = if (hub.weekend(round) != null || h == null) "Tap one" else null, flush = true) {
                     val up = race.sessions.firstOrNull { weekend.resultFor(it) == null && !it.over(now) }
-                    Column(Modifier.padding(horizontal = 8.dp)) { SessionRows(weekend, up, nowMs, liveNow = false, openable = hub.weekend(round) != null || h == null) }
+                    Box(Modifier.padding(horizontal = 12.dp)) { SessionRows(weekend, up, nowMs, liveNow = false, openable = hub.weekend(round) != null || h == null) }
                 }
             }
         }
@@ -1234,7 +1243,7 @@ private fun RoundPage(hub: F1Hub, round: Int, nowMs: Long, onBack: () -> Unit) {
             if (order.isNotEmpty()) {
                 item(key = "order") {
                     PageRoom(F1Tone, title = "Finishing order", icon = AppIcons.Flag, meta = "Place and points", flush = true) {
-                        Column(Modifier.padding(horizontal = 8.dp)) {
+                        JoinedColumn(Modifier.padding(horizontal = 12.dp), fill = WellFill, outer = 18.dp) {
                             order.forEach { (code, mark) ->
                                 ResultLine(historyRow(hub, code, mark.finish), hub) {
                                     if (mark.pole) F1Tag("Pole", LapPurple, Modifier.padding(end = 8.dp))
@@ -1255,13 +1264,13 @@ private fun RoundPage(hub: F1Hub, round: Int, nowMs: Long, onBack: () -> Unit) {
                     val top = after.first().second.coerceAtLeast(1.0)
                     val open = LocalF1Open.current
                     PageRoom(HomeTone.Calendar, title = "The table after it", icon = AppIcons.ChartLine, meta = "Top ten", flush = true) {
-                        Column(Modifier.padding(horizontal = 8.dp)) {
+                        JoinedColumn(Modifier.padding(horizontal = 12.dp), fill = WellFill, outer = 18.dp) {
                             after.take(10).forEachIndexed { i, (code, pts) ->
                                 val d = hub.driver(code)
                                 val colour = d?.let { teamColour(it.colour) } ?: TextSecondary
                                 val was = before?.indexOf(code)?.takeIf { it >= 0 }
                                 Row(
-                                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable { open(F1Dest.Driver(code)) }.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    Modifier.fillMaxWidth().clickable { open(F1Dest.Driver(code)) }.padding(horizontal = 10.dp, vertical = 9.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Text("${i + 1}", style = F1Figure, fontSize = 15.sp, color = medal(i + 1) ?: TextSecondary, textAlign = TextAlign.Center, modifier = Modifier.width(24.dp))

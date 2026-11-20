@@ -13,6 +13,10 @@ data class YoutubeVideo(
     val viewCount: Long? = null,
     /** Approximate like/rating count from RSS `media:starRating`, when available. */
     val likeCount: Long? = null,
+    /** A Short: the feed links it under /shorts/ rather than /watch. */
+    val isShort: Boolean = false,
+    /** The video's description from RSS `media:description`, when it has one. */
+    val description: String? = null,
 )
 
 data class YoutubeChannel(

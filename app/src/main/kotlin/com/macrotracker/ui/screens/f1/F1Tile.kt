@@ -1,5 +1,8 @@
 package com.macrotracker.ui.screens.f1
 
+import com.macrotracker.ui.components.joinedRowShape
+import com.macrotracker.ui.components.TilePlace
+import com.macrotracker.ui.components.Joined
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.Image
@@ -163,19 +166,27 @@ private fun F1Glance(hub: F1Hub, live: F1Live?) {
             }
             if (race.sessions.isNotEmpty()) {
                 // every block as tall as the tallest, so a run session sits level with one to come
-                Row(Modifier.fillMaxWidth().padding(top = 14.dp).height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    race.sessions.forEach { s -> SessionBlock(s, weekend, next = s == up, on = onNow && s == up, clock = { s.at.atZone(zone).format(clock) }, day = s.at.atZone(zone).format(DayShort), now = now, modifier = Modifier.weight(1f).fillMaxHeight()) }
+                // one row of joined blocks, as Weave's dock: round only at the row's own ends
+                Row(Modifier.fillMaxWidth().padding(top = 14.dp).height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+                    race.sessions.forEachIndexed { i, s ->
+                        SessionBlock(
+                            s, weekend, next = s == up, on = onNow && s == up, clock = { s.at.atZone(zone).format(clock) }, day = s.at.atZone(zone).format(DayShort), now = now,
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            shape = joinedRowShape(TilePlace.of(i, race.sessions.size), outer = 18.dp),
+                        )
+                    }
                 }
             }
         }
         val table = remember(hub, nowMs / 60_000L) { F1HubMath.drivers(hub, now) }
         if (table.rows.isNotEmpty()) {
-            Row(Modifier.fillMaxWidth().padding(top = 10.dp).height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                table.rows.take(3).forEachIndexed { i, s ->
+            val three = table.rows.take(3)
+            Row(Modifier.fillMaxWidth().padding(top = Joined.Gap).height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+                three.forEachIndexed { i, s ->
                     val d = s.entry
                     val colour = teamColour(d.colour)
                     Row(
-                        Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(20.dp)).background(colour.copy(alpha = 0.15f)).padding(horizontal = 9.dp, vertical = 9.dp),
+                        Modifier.weight(1f).fillMaxHeight().clip(joinedRowShape(TilePlace.of(i, three.size), outer = 18.dp)).background(colour.copy(alpha = 0.15f)).padding(horizontal = 9.dp, vertical = 9.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         DriverFace(d.image, d.code, colour, 34.dp)
@@ -204,14 +215,14 @@ private fun F1Glance(hub: F1Hub, live: F1Live?) {
 
 /** One session of the weekend as a block: its name, then its time, or who topped it once it has run. */
 @Composable
-private fun SessionBlock(s: HubSession, weekend: Weekend, next: Boolean, on: Boolean, clock: () -> String, day: String, now: Instant, modifier: Modifier) {
+private fun SessionBlock(s: HubSession, weekend: Weekend, next: Boolean, on: Boolean, clock: () -> String, day: String, now: Instant, modifier: Modifier, shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(18.dp)) {
     val result = weekend.resultFor(s)
     val p1 = result?.rows?.firstOrNull()
     val done = result != null || s.over(now)
     val ink = if (next) Color(0xFF14181D) else TextPrimary
     Column(
         modifier
-            .clip(RoundedCornerShape(18.dp))
+            .clip(shape)
             .background(
                 when {
                     next -> F1Tone

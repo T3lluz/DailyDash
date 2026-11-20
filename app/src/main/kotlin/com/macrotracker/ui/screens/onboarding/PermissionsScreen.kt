@@ -1,5 +1,6 @@
 package com.macrotracker.ui.screens.onboarding
 
+import com.macrotracker.ui.components.JoinedColumn
 import com.macrotracker.ui.screens.health.HealthDisplay
 import com.macrotracker.ui.screens.home.RoomNeutral
 import android.Manifest
@@ -210,20 +211,22 @@ fun PermissionsScreen(onContinue: () -> Unit) {
                 .graphicsLayer {
                     alpha = contentAlpha.value
                 },
-            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            PERMISSION_ITEMS.forEach { item ->
-                val granted = grantedState.value[item.key] == true
-                PermissionRow(
-                    item = item,
-                    granted = granted,
-                    onClick = {
-                        if (item.permission != null && !granted) {
-                            rowLauncher.launch(item.requested.toTypedArray())
-                        }
-                    },
-                )
-            }
+// what the app can use, as one group of joined tiles
+            JoinedColumn(fill = RoomNeutral, outer = 24.dp) {
+                PERMISSION_ITEMS.forEach { item ->
+                    val granted = grantedState.value[item.key] == true
+                    PermissionRow(
+                        item = item,
+                        granted = granted,
+                        onClick = {
+                            if (item.permission != null && !granted) {
+                                rowLauncher.launch(item.requested.toTypedArray())
+                            }
+                        },
+                    )
+                }
+}
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -247,13 +250,7 @@ private fun PermissionRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(RoomNeutral, RoundedCornerShape(14.dp))
-            .border(
-                width = 1.dp,
-                color = if (granted) Success.copy(alpha = 0.5f) else Border,
-                shape = RoundedCornerShape(14.dp),
-            )
+            .then(if (granted) Modifier.background(Success.copy(alpha = 0.08f)) else Modifier)
             .clickable(enabled = !granted && item.permission != null) { haptics.click(); onClick() }
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -278,7 +275,8 @@ private fun PermissionRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = item.title,
-                fontSize = 15.sp,
+                style = com.macrotracker.ui.screens.health.HealthDisplay,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = TextPrimary,
             )

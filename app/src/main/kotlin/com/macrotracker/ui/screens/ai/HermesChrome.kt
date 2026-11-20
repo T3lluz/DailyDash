@@ -1,5 +1,8 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.components.Joined
+import com.macrotracker.ui.screens.health.pressSink
+import androidx.compose.ui.graphics.Shape
 import com.macrotracker.ui.screens.home.FieldShape
 import com.macrotracker.ui.screens.home.roomFieldColors
 import com.macrotracker.ui.screens.home.RoomNeutral
@@ -89,6 +92,11 @@ import com.macrotracker.data.hermes.HermesStatus
 import com.macrotracker.data.hermes.HermesThreadSummary
 import com.macrotracker.data.hermes.HermesTurnActivity
 import com.macrotracker.ui.components.LivePulseDot
+import com.macrotracker.ui.components.IconTile
+import com.macrotracker.ui.components.TileMenu
+import com.macrotracker.ui.components.TileMenuGroup
+import com.macrotracker.ui.components.TileMenuItem
+import com.macrotracker.ui.components.TileMenuTiles
 import com.macrotracker.ui.components.LoadingSpinner
 import com.macrotracker.ui.components.chromeGlass
 import com.macrotracker.ui.theme.AppIcons
@@ -229,28 +237,39 @@ internal fun HermesHeader(
         Spacer(Modifier.width(8.dp))
         Box {
             HeaderRound(AppIcons.Settings, "Chat options") { haptics.tick(); menuOpen = true }
-            DropdownMenu(
-                expanded = menuOpen,
-                onDismissRequest = { menuOpen = false },
-                modifier = Modifier.background(RoomNeutral).widthIn(min = 220.dp),
-            ) {
+            // Sorted by what it is about: this chat, how Hermes works, where else to go,
+            // and what can't be undone last and apart.
+            TileMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }, color = AiMenu, minWidth = 264.dp) {
                 if (hasThread) {
-                    MenuRow("Rename", AppIcons.Edit) { menuOpen = false; onRename() }
-                    MenuRow(if (pinned) "Unpin" else "Pin to the top", AppIcons.Star) { menuOpen = false; onTogglePin() }
-                    MenuRow("Chat details", AppIcons.Info) { menuOpen = false; onOpenInfo() }
-                    MenuRow("Find in chat", AppIcons.Search) { menuOpen = false; onFind() }
-                    MenuRow("Copy chat", AppIcons.Copy) { menuOpen = false; onCopyChat() }
-                    MenuRow("Clear this chat", AppIcons.Refresh) { menuOpen = false; onClear() }
-                    MenuRow("Delete this chat", AppIcons.Delete, danger = true) { menuOpen = false; onDelete() }
-                    Spacer(Modifier.height(8.dp))
+                    TileMenuGroup {
+                        TileMenuItem("Chat details", AppIcons.Info) { menuOpen = false; onOpenInfo() }
+                        TileMenuItem("Rename", AppIcons.Edit) { menuOpen = false; onRename() }
+                        TileMenuItem(if (pinned) "Unpin" else "Pin to the top", if (pinned) AppIcons.StarFilled else AppIcons.Star) { menuOpen = false; onTogglePin() }
+                        TileMenuItem("Find in chat", AppIcons.Search) { menuOpen = false; onFind() }
+                        TileMenuItem("Copy chat", AppIcons.Copy) { menuOpen = false; onCopyChat() }
+                    }
                 }
-                MenuRow(if (followUp == "steer") "While working: Steer" else "While working: Queue", if (followUp == "steer") AppIcons.Bolt else AppIcons.ListChecks) { menuOpen = false; onToggleFollowUp() }
-                MenuRow("Git and pull requests", AppIcons.GitFork) { menuOpen = false; onOpenGit() }
-                MenuRow("Server files", AppIcons.Folder) { menuOpen = false; onOpenFiles() }
-                MenuRow("Console", AppIcons.SquareTerminal) { menuOpen = false; onOpenConsole() }
-                MenuRow("Tilesmith widget maker", AppIcons.Blocks) { menuOpen = false; onOpenTilesmith() }
-                if (onUsePhoneAi != null) {
-                    MenuRow("Use this phone's AI instead", AppIcons.Bot) { menuOpen = false; onUsePhoneAi() }
+                TileMenuGroup {
+                    TileMenuItem(
+                        "While working",
+                        if (followUp == "steer") AppIcons.Bolt else AppIcons.ListChecks,
+                        value = if (followUp == "steer") "Steer" else "Queue",
+                    ) { menuOpen = false; onToggleFollowUp() }
+                    if (onUsePhoneAi != null) {
+                        TileMenuItem("Use this phone's AI", AppIcons.Bot) { menuOpen = false; onUsePhoneAi() }
+                    }
+                }
+                TileMenuTiles {
+                    IconTile(AppIcons.GitFork, "Git") { menuOpen = false; onOpenGit() }
+                    IconTile(AppIcons.Folder, "Files") { menuOpen = false; onOpenFiles() }
+                    IconTile(AppIcons.SquareTerminal, "Console") { menuOpen = false; onOpenConsole() }
+                    IconTile(AppIcons.Blocks, "Tilesmith") { menuOpen = false; onOpenTilesmith() }
+                }
+                if (hasThread) {
+                    TileMenuGroup {
+                        TileMenuItem("Clear this chat", AppIcons.Refresh) { menuOpen = false; onClear() }
+                        TileMenuItem("Delete this chat", AppIcons.Delete, danger = true) { menuOpen = false; onDelete() }
+                    }
                 }
             }
         }
@@ -260,25 +279,22 @@ internal fun HermesHeader(
 /** A round button of the AI tab's header, as a page's bar draws its own. */
 @Composable
 internal fun HeaderRound(icon: ImageVector, label: String, onClick: () -> Unit) {
+    val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    var play by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     Box(
         modifier = Modifier
+            .pressSink(press, MacroMotion.PRESSED_ROUND)
             .size(42.dp)
             .clip(CircleShape)
             .background(AiRoom)
-            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClickLabel = label, onClick = onClick),
+            .clickable(interactionSource = press, indication = null, role = androidx.compose.ui.semantics.Role.Button, onClickLabel = label) {
+                play++
+                onClick()
+            },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = label, tint = TextPrimary, modifier = Modifier.size(19.dp))
+        com.macrotracker.ui.components.AnimatedIcon(icon, play = play, tint = { TextPrimary }, size = 19.dp, contentDescription = label)
     }
-}
-
-@Composable
-internal fun MenuRow(label: String, icon: ImageVector, danger: Boolean = false, onClick: () -> Unit) {
-    DropdownMenuItem(
-        text = { Text(label, color = if (danger) Error else TextPrimary, fontSize = 14.sp) },
-        leadingIcon = { Icon(icon, null, tint = if (danger) Error else TextSecondary, modifier = Modifier.size(16.dp)) },
-        onClick = onClick,
-    )
 }
 
 @Composable
@@ -300,12 +316,15 @@ internal fun SearchBox(
     hint: String,
     modifier: Modifier = Modifier,
     focusRequester: androidx.compose.ui.focus.FocusRequester? = null,
+    /** The AI tab's warm room; elsewhere the app's neutral well. */
+    fill: Color = AiRoom,
 ) {
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(AiRoom)
+            .background(fill)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -328,7 +347,7 @@ internal fun SearchBox(
                 AppIcons.Close,
                 contentDescription = "Clear search",
                 tint = TextTertiary,
-                modifier = Modifier.size(16.dp).clickable { onValueChange("") },
+                modifier = Modifier.size(16.dp).clickable { haptics.tick(); onValueChange("") },
             )
         }
     }
@@ -379,6 +398,11 @@ internal fun HermesComposer(
     followUp: String = "queue",
     /** The other one, from a hold on the send button. */
     onSendAlternate: () -> Unit = {},
+    /**
+     * Where the composer's glass body stands over the pane's foot: how far up its top reaches (not
+     * the working tab on it), and the gap under it.
+     */
+    onBody: (top: androidx.compose.ui.unit.Dp, gap: androidx.compose.ui.unit.Dp) -> Unit = { _, _ -> },
 ) {
     val bottomPad = composerBottomGap()
     val hasContent = value.isNotBlank() || attachments.isNotEmpty()
@@ -399,12 +423,14 @@ internal fun HermesComposer(
     var focused by remember { mutableStateOf(false) }
     val open = focused || roomy || attachments.isNotEmpty() || uploading || '\n' in value
 
-    val attach: @Composable () -> Unit = {
-        IconButton(onClick = { haptics.tick(); onAttach() }, enabled = enabled && !uploading, modifier = Modifier.size(36.dp)) {
-            Icon(AppIcons.AddCircle, contentDescription = "Attach a file", tint = TextSecondary, modifier = Modifier.size(20.dp))
+    // Every control is a tile of the panel, joined as Weave's are: round only where the
+    // group meets the panel's own corners, small corners where two tiles meet.
+    val attach: @Composable (Shape) -> Unit = { shape ->
+        ComposerTile(shape, label = "Attach a file", enabled = enabled && !uploading, onClick = { haptics.tick(); onAttach() }) {
+            Icon(AppIcons.Add, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(20.dp))
         }
     }
-    val send: @Composable () -> Unit = {
+    val send: @Composable (Shape) -> Unit = { shape ->
         SendControl(
             busy = busy,
             hasText = hasContent,
@@ -413,6 +439,7 @@ internal fun HermesComposer(
             onSend = onSend,
             onAlternate = onSendAlternate,
             onStop = onStop,
+            shape = shape,
         )
     }
 
@@ -438,6 +465,7 @@ internal fun HermesComposer(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .onSizeChanged { onBody(with(density) { it.height.toDp() } + bottomPad, bottomPad) }
             .animateContentSize(MacroMotion.entranceSpring())
             .padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
     ) {
@@ -457,14 +485,26 @@ internal fun HermesComposer(
             }
         }
         // One field in both shapes, so folding never drops the cursor or the keyboard.
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (!open) attach()
+        // Folded: one row of tiles, attach, the field, the model, send. Open: the field across
+        // the top, the tools as a row of tiles under it.
+        val trailing = if (open) 0 else (if (mode.kind != "write") 1 else 0) + 1 + (if (usage != null) 1 else 0) + 1
+        val fieldFill by animateColorAsState(if (focused) ComposerTileFillHi else ComposerTileFill, MacroMotion.colorTween(), label = "fieldFill")
+        Row(horizontalArrangement = Arrangement.spacedBy(ComposerTileGap), verticalAlignment = Alignment.CenterVertically) {
+            if (!open) attach(composerTileShape(top = true, bottom = true, first = true, last = false))
+            Box(
+                Modifier
+                    .weight(1f)
+                    .heightIn(min = ComposerTileSize)
+                    .clip(composerTileShape(top = true, bottom = !open, first = open, last = open || trailing == 0))
+                    .background(fieldFill),
+                contentAlignment = Alignment.CenterStart,
+            ) {
             BasicTextField(
                 value = value,
                 onValueChange = onValueChange,
                 enabled = enabled,
                 modifier = Modifier
-                    .weight(1f)
+                    .fillMaxWidth()
                     .onFocusChanged { focused = it.isFocused }
                     // A hardware keyboard: Enter sends, Shift+Enter is a new line. A phone's own keyboard
                     // sends no key event for Enter (it commits a newline), so it is left alone.
@@ -477,7 +517,7 @@ internal fun HermesComposer(
                             false
                         }
                     }
-                    .then(if (open) Modifier.heightIn(min = 52.dp).padding(horizontal = 10.dp, vertical = 8.dp) else Modifier.padding(horizontal = 4.dp)),
+                    .then(if (open) Modifier.heightIn(min = 56.dp).padding(horizontal = 14.dp, vertical = 12.dp) else Modifier.padding(horizontal = 14.dp)),
                 textStyle = TextStyle(color = TextPrimary, fontSize = 15.sp, lineHeight = 21.sp),
                 cursorBrush = SolidColor(AiAccent),
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
@@ -494,53 +534,48 @@ internal fun HermesComposer(
                     inner()
                 },
             )
+            }
             if (!open) {
-                Spacer(Modifier.width(6.dp))
                 // a chat in /plan or /ask says so folded too
                 if (mode.kind != "write") {
-                    ModeTag(mode, onClearMode)
-                    Spacer(Modifier.width(6.dp))
+                    ModeTag(mode, onClearMode, shape = composerTileShape(top = true, bottom = true, first = false, last = false))
                 }
-                ModelPill(model, modelFallback, switchingModel, modifiers, onPickModel, logoOnly = true)
-                Spacer(Modifier.width(6.dp))
+                ModelPill(
+                    model, modelFallback, switchingModel, modifiers, onPickModel, logoOnly = true,
+                    shape = composerTileShape(top = true, bottom = true, first = false, last = false),
+                )
                 usage?.let {
-                    it()
-                    Spacer(Modifier.width(4.dp))
+                    ComposerTile(composerTileShape(top = true, bottom = true, first = false, last = false)) { it() }
                 }
-                send()
+                send(composerTileShape(top = true, bottom = true, first = false, last = true))
             }
         }
         if (open) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                attach()
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    // Agent needs no word on the bar; a chat in /plan or /ask shows it, tap to leave.
-                    if (mode.kind != "write") ModeTag(mode, onClearMode)
-                    ModelPill(
-                        model = model,
-                        fallback = modelFallback,
-                        switching = switchingModel,
-                        modifiers = modifiers,
-                        onClick = onPickModel,
-                    )
-                }
-                Spacer(Modifier.width(6.dp))
+            val mid = composerTileShape(top = false, bottom = true, first = false, last = false)
+            Row(
+                Modifier.padding(top = ComposerTileGap),
+                horizontalArrangement = Arrangement.spacedBy(ComposerTileGap),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                attach(composerTileShape(top = false, bottom = true, first = true, last = false))
+                // Agent needs no word on the bar; a chat in /plan or /ask shows it, tap to leave.
+                if (mode.kind != "write") ModeTag(mode, onClearMode, shape = mid)
+                ModelPill(
+                    model = model,
+                    fallback = modelFallback,
+                    switching = switchingModel,
+                    modifiers = modifiers,
+                    onClick = onPickModel,
+                    shape = mid,
+                    modifier = Modifier.weight(1f),
+                )
                 if (onDictate != null) {
-                    IconButton(onClick = { haptics.tick(); onDictate() }, enabled = enabled, modifier = Modifier.size(36.dp)) {
-                        Icon(AppIcons.Mic, contentDescription = "Dictate", tint = TextSecondary, modifier = Modifier.size(19.dp))
+                    ComposerTile(mid, label = "Dictate", enabled = enabled, onClick = { haptics.tick(); onDictate() }) {
+                        Icon(AppIcons.Mic, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(19.dp))
                     }
                 }
-                usage?.let {
-                    it()
-                    Spacer(Modifier.width(4.dp))
-                }
-                send()
+                usage?.let { ComposerTile(mid) { it() } }
+                send(composerTileShape(top = false, bottom = true, first = false, last = true))
             }
         }
     }
@@ -561,6 +596,9 @@ internal fun ModelPill(
     onClick: () -> Unit,
     /** The folded composer's: the maker's logo alone, in a round button. */
     logoOnly: Boolean = false,
+    /** Its corners: a pill, or its place among the composer's tiles. */
+    shape: Shape = RoundedCornerShape(999.dp),
+    modifier: Modifier = Modifier,
 ) {
     val haptics = rememberHaptics()
     val cur = modifiers.current
@@ -574,13 +612,18 @@ internal fun ModelPill(
         model != null -> model.familyLabel.ifBlank { model.label }
         else -> fallback ?: "Pick a model"
     }
+    val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(Color.White.copy(alpha = 0.08f))
-            .clickable { haptics.tick(); onClick() }
+        modifier = modifier
+            .pressSink(press)
+            .height(ComposerTileSize)
+            .then(if (logoOnly) Modifier.width(ComposerTileSize) else Modifier)
+            .clip(shape)
+            .background(ComposerTileFill)
+            .clickable(interactionSource = press, indication = androidx.compose.material3.ripple()) { haptics.tick(); onClick() }
             .semantics { contentDescription = listOfNotNull("Model $name", depth?.let { "$it depth" }).joinToString(", ") }
-            .padding(start = 4.dp, end = if (logoOnly) 4.dp else 9.dp, top = 4.dp, bottom = 4.dp),
+            .padding(start = if (logoOnly) 0.dp else 11.dp, end = if (logoOnly) 0.dp else 12.dp),
+        horizontalArrangement = if (logoOnly) Arrangement.Center else Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (switching) {
@@ -592,12 +635,13 @@ internal fun ModelPill(
         Spacer(Modifier.width(6.dp))
         Text(
             name,
+            style = HealthDisplay,
             color = TextPrimary,
-            fontSize = 12.5.sp,
+            fontSize = 13.5.sp,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.widthIn(max = 120.dp),
+            modifier = Modifier.weight(1f, fill = false),
         )
         if (depth != null && !switching) {
             Text("  \u00b7  ", color = TextTertiary, fontSize = 12.sp)
@@ -616,18 +660,66 @@ internal fun ModelPill(
     }
 }
 
+/** The composer's tiles: as tall as a thumb, a quiet fill on the glass, brighter while typing. */
+internal val ComposerTileSize = 44.dp
+internal val ComposerTileGap = Joined.GlassGap
+internal val ComposerTileFill = Color.White.copy(alpha = 0.07f)
+internal val ComposerTileFillHi = Color.White.copy(alpha = 0.11f)
+
+/** The panel's 22 dp corner less the 6 dp the tiles stand in by (as far as they stand apart); where tiles meet, 6 dp. */
+private val ComposerTileOuter = 16.dp
+private val ComposerTileInner = 6.dp
+
+/** A tile's corners by where it sits among the composer's: round only at the panel's own. */
+internal fun composerTileShape(top: Boolean, bottom: Boolean, first: Boolean, last: Boolean): Shape = RoundedCornerShape(
+    topStart = if (top && first) ComposerTileOuter else ComposerTileInner,
+    topEnd = if (top && last) ComposerTileOuter else ComposerTileInner,
+    bottomEnd = if (bottom && last) ComposerTileOuter else ComposerTileInner,
+    bottomStart = if (bottom && first) ComposerTileOuter else ComposerTileInner,
+)
+
+/** One square tile of the composer: an icon button, or whatever [content] is. */
+@Composable
+internal fun ComposerTile(
+    shape: Shape,
+    label: String? = null,
+    enabled: Boolean = true,
+    onClick: (() -> Unit)? = null,
+    content: @Composable () -> Unit,
+) {
+    val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    Box(
+        Modifier
+            // gives a little under the finger, as Weave's tiles do
+            .then(if (onClick != null) Modifier.pressSink(press) else Modifier)
+            .size(ComposerTileSize)
+            .clip(shape)
+            .background(ComposerTileFill)
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(interactionSource = press, indication = androidx.compose.material3.ripple(), enabled = enabled, role = androidx.compose.ui.semantics.Role.Button, onClickLabel = label, onClick = onClick)
+                        .semantics { if (label != null) contentDescription = label }
+                } else {
+                    Modifier
+                },
+            ),
+        contentAlignment = Alignment.Center,
+    ) { content() }
+}
+
 /** "Plan \u00d7": the chat is not in Agent; a tap puts it back. */
 @Composable
-private fun ModeTag(mode: HermesMode, onClear: () -> Unit) {
+private fun ModeTag(mode: HermesMode, onClear: () -> Unit, shape: Shape = RoundedCornerShape(999.dp)) {
     val haptics = rememberHaptics()
     val tint = modeColor(mode.kind)
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(999.dp))
-            .background(tint.copy(alpha = 0.14f))
+            .height(ComposerTileSize)
+            .clip(shape)
+            .background(tint.copy(alpha = 0.16f))
             .clickable { haptics.tick(); onClear() }
             .semantics { contentDescription = "${mode.label} mode, tap for Agent" }
-            .padding(start = 9.dp, end = 7.dp, top = 6.dp, bottom = 6.dp),
+            .padding(start = 12.dp, end = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(modeIcon(mode.kind), null, tint = tint, modifier = Modifier.size(13.dp))
@@ -640,6 +732,7 @@ private fun ModeTag(mode: HermesMode, onClear: () -> Unit) {
 
 @Composable
 internal fun AttachmentChip(attachment: HermesAttachment, onRemove: (() -> Unit)? = null) {
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(14.dp))
@@ -666,7 +759,7 @@ internal fun AttachmentChip(attachment: HermesAttachment, onRemove: (() -> Unit)
                 modifier = Modifier
                     .size(20.dp)
                     .clip(CircleShape)
-                    .clickable(onClick = onRemove)
+                    .clickable(onClick = { haptics.tick(); onRemove() })
                     .padding(3.dp),
             )
         }
@@ -721,6 +814,7 @@ internal fun skillCommand(text: String, skills: List<com.macrotracker.data.herme
 
 @Composable
 internal fun SkillPalette(entries: List<com.macrotracker.data.hermes.HermesSkill>, onPick: (com.macrotracker.data.hermes.HermesSkill) -> Unit) {
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
     if (entries.isEmpty()) return
     LazyColumn(
         modifier = Modifier
@@ -745,7 +839,7 @@ internal fun SkillPalette(entries: List<com.macrotracker.data.hermes.HermesSkill
             }
             item(key = "s-${e.name}") {
                 Row(
-                    modifier = Modifier.fillMaxWidth().clickable { onPick(e) }.padding(horizontal = 14.dp, vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth().clickable { haptics.tick(); onPick(e) }.padding(horizontal = 14.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text("$" + e.name, color = AiAccent, fontSize = 13.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold)
@@ -759,6 +853,7 @@ internal fun SkillPalette(entries: List<com.macrotracker.data.hermes.HermesSkill
 
 @Composable
 internal fun SlashPalette(entries: List<SlashEntry>, onPick: (SlashEntry) -> Unit) {
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
     if (entries.isEmpty()) return
     LazyColumn(
         modifier = Modifier
@@ -790,7 +885,7 @@ internal fun SlashPalette(entries: List<SlashEntry>, onPick: (SlashEntry) -> Uni
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onPick(e) }
+                        .clickable { haptics.tick(); onPick(e) }
                         .padding(horizontal = 14.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -874,6 +969,7 @@ private fun SendControl(
     onSend: () -> Unit,
     onAlternate: () -> Unit,
     onStop: () -> Unit,
+    shape: Shape = RoundedCornerShape(50),
 ) {
     val haptics = rememberHaptics()
     var menu by remember { mutableStateOf(false) }
@@ -883,18 +979,22 @@ private fun SendControl(
         else -> SendMode.SEND
     }
     val lit = mode == SendMode.STOP || canSend
-    val bg by animateColorAsState(if (lit) AiAccent else Color.White.copy(alpha = 0.10f), MacroMotion.colorTween(), label = "sendBg")
+    val bg by animateColorAsState(if (lit) AiAccent else ComposerTileFill, MacroMotion.colorTween(), label = "sendBg")
     val fg = if (lit) Color(0xFF1A120C) else TextTertiary
     val label = when (mode) { SendMode.STEER -> "Steer"; SendMode.QUEUE -> "Queue"; else -> null }
+    val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     Box {
         Row(
             modifier = Modifier
-                .height(40.dp)
-                .widthIn(min = 40.dp)
-                .clip(RoundedCornerShape(50))
+                .pressSink(press)
+                .height(ComposerTileSize)
+                .widthIn(min = ComposerTileSize)
+                .clip(shape)
                 .background(bg)
                 .animateContentSize(MacroMotion.entranceSpring())
                 .combinedClickable(
+                    interactionSource = press,
+                    indication = androidx.compose.material3.ripple(),
                     enabled = lit,
                     onClick = {
                         when (mode) {
@@ -922,27 +1022,21 @@ private fun SendControl(
                 Text(label, style = HealthDisplay, color = fg, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             }
         }
-        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, modifier = Modifier.background(RoomNeutral).widthIn(min = 250.dp)) {
-            listOf(SendMode.STEER, SendMode.QUEUE).forEach { m ->
-                val current = m == mode
-                DropdownMenuItem(
-                    text = {
-                        Column {
-                            Text(if (m == SendMode.STEER) "Steer now" else "Queue", color = TextPrimary, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold)
-                            Text(
-                                if (m == SendMode.STEER) "Stop what Hermes is doing and say this now" else "Say this when the turn is done",
-                                color = TextTertiary, fontSize = 11.5.sp,
-                            )
-                        }
-                    },
-                    leadingIcon = { Icon(if (m == SendMode.STEER) AppIcons.Bolt else AppIcons.ListChecks, null, tint = TextSecondary, modifier = Modifier.size(17.dp)) },
-                    trailingIcon = if (current) ({ Icon(AppIcons.Check, null, tint = TextSecondary, modifier = Modifier.size(15.dp)) }) else null,
-                    onClick = {
+        TileMenu(expanded = menu, onDismissRequest = { menu = false }, color = AiMenu, minWidth = 264.dp) {
+            TileMenuGroup {
+                listOf(SendMode.STEER, SendMode.QUEUE).forEach { m ->
+                    val current = m == mode
+                    TileMenuItem(
+                        label = if (m == SendMode.STEER) "Steer now" else "Queue",
+                        icon = if (m == SendMode.STEER) AppIcons.Bolt else AppIcons.ListChecks,
+                        summary = if (m == SendMode.STEER) "Stop what Hermes is doing and say this now" else "Say this when the turn is done",
+                        checked = current,
+                    ) {
                         menu = false
                         // the one it already does is the main button; the other is the alternate
-                        if (current) { haptics.click(); onSend() } else { haptics.click(); onAlternate() }
-                    },
-                )
+                        if (current) onSend() else onAlternate()
+                    }
+                }
             }
         }
     }

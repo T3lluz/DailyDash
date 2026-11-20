@@ -1,5 +1,6 @@
 package com.macrotracker.ui.screens.health
 
+import androidx.compose.runtime.collectAsState
 import com.macrotracker.ui.util.rememberHaptics
 import com.macrotracker.ui.theme.Warning
 import com.macrotracker.ui.theme.Surface
@@ -120,6 +121,8 @@ fun ActivitySection(
     haptics: HapticHelper,
     onRequestPermission: () -> Unit,
     onExpandActivity: (HealthActivity) -> Unit,
+    /** Opens a workout's own page (its numbers, heart rate, zones and laps). */
+    onOpenWorkout: (HealthActivity) -> Unit = {},
     onRetry: () -> Unit = onRequestPermission,
     /** Health Connect's own screens, where a source like Garmin Connect is checked. */
     onOpenHealthConnect: () -> Unit = onRequestPermission,
@@ -206,7 +209,7 @@ fun ActivitySection(
                             ActivitiesList(
                                 activities = shown.activities,
                                 haptics = haptics,
-                                onExpandActivity = onExpandActivity,
+                                onOpenWorkout = onOpenWorkout,
                             )
                         }
                     }
@@ -298,26 +301,21 @@ private fun WeekReadout(label: String, value: String, unit: String?, tone: Color
 private fun ActivitiesList(
     activities: List<HealthActivity>,
     haptics: HapticHelper,
-    onExpandActivity: (HealthActivity) -> Unit,
+    onOpenWorkout: (HealthActivity) -> Unit,
 ) {
     val workouts = remember(activities) { activities.sortedByDescending { it.startTime } }
-    var expandedId by rememberSaveable { mutableStateOf<String?>(null) }
     var showAll by rememberSaveable { mutableStateOf(false) }
 
     val visible = if (showAll) workouts else workouts.take(CollapsedRowCount)
     val canExpand = workouts.size > CollapsedRowCount
 
     val rows: @Composable () -> Unit = {
-        visible.forEachIndexed { i, activity ->
-            if (i > 0) InsetHairline(start = WorkoutTextInset)
+        visible.forEach { activity ->
             WorkoutRow(
                 activity = activity,
-                expanded = expandedId == activity.id,
-                onToggle = {
+                onOpen = {
                     haptics.tick()
-                    val opening = expandedId != activity.id
-                    expandedId = if (opening) activity.id else null
-                    if (opening) onExpandActivity(activity)
+                    onOpenWorkout(activity)
                 },
             )
         }
@@ -325,10 +323,14 @@ private fun ActivitiesList(
 
     // Collapsed the rows lay out inline; expanded, a full month scrolls in place so the
     // card never swallows the whole screen.
+    // every workout a joined tile on the room
+    val tiles: @Composable () -> Unit = {
+        com.macrotracker.ui.components.JoinedColumn(modifier = Modifier.fillMaxWidth(), fill = com.macrotracker.ui.screens.home.WellFill, outer = 18.dp) { rows() }
+    }
     if (showAll) {
-        WidgetScrollBox { rows() }
+        WidgetScrollBox { tiles() }
     } else {
-        Column(modifier = Modifier.fillMaxWidth()) { rows() }
+        tiles()
     }
 
     if (canExpand) {
@@ -338,41 +340,25 @@ private fun ActivitiesList(
             hiddenCount = workouts.size - CollapsedRowCount,
             onClick = {
                 haptics.tick()
-                if (showAll) expandedId = null
                 showAll = !showAll
             },
         )
     }
 }
 
-/** The details a workout carries: the stat grid, then its heart rate and laps when it has them. */
-@Composable
-private fun WorkoutDetails(activity: HealthActivity, limit: Int = Int.MAX_VALUE) {
-    WorkoutStatsGrid(workoutStats(activity).take(limit))
-    if (activity.hrSamples.size >= 2) {
-        Spacer(modifier = Modifier.height(18.dp))
-        WorkoutHeartRate(activity.hrSamples, maxHr = activity.maxHr)
-        WorkoutZones(activity.hrSamples, maxHr = activity.maxHr)
-    }
-    if (activity.laps.size >= 2) {
-        Spacer(modifier = Modifier.height(14.dp))
-        WorkoutLaps(activity)
-    }
-}
-
 @Composable
 private fun WorkoutRow(
     activity: HealthActivity,
-    expanded: Boolean,
-    onToggle: () -> Unit,
+    onOpen: () -> Unit,
 ) {
     val headline = remember(activity.id, activity.distanceKm, activity.duration) { workoutHeadline(activity) }
+    val press = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .clickable(onClick = onToggle)
-            .padding(vertical = 12.dp),
+            .pressSink(press, MacroMotion.PRESSED_ROW)
+            .clickable(interactionSource = press, indication = androidx.compose.material3.ripple(), onClick = onOpen)
+            .padding(horizontal = 12.dp, vertical = 12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             WorkoutBadge(activity.exerciseType, size = WorkoutBadgeSize)
@@ -405,20 +391,78 @@ private fun WorkoutRow(
                     maxLines = 1,
                 )
             }
-            Spacer(modifier = Modifier.width(4.dp))
-            ExpandChevron(expanded)
+            Spacer(modifier = Modifier.width(6.dp))
+            // a workout opens its own page now, rather than unfolding in the room
+            Icon(com.macrotracker.ui.theme.AppIcons.ChevronRight, contentDescription = null, tint = TextTertiary, modifier = Modifier.size(18.dp))
         }
-        AnimatedVisibility(visible = expanded, enter = MacroMotion.expandEnter, exit = MacroMotion.expandExit) {
-            Column(modifier = Modifier.padding(top = 8.dp)) {
-                WorkoutDetails(activity)
-                Text(
-                    "From ${activity.sourceLabel}" + (activity.deviceLabel?.let { " · $it" } ?: ""),
-                    fontSize = 12.sp,
-                    color = TextTertiary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 10.dp),
-                )
+    }
+}
+
+/**
+ * A workout's own page, opened from its row on the tab: what it was, set large, then every
+ * number it carries, its heart rate and time in zones, and its laps.
+ */
+@Composable
+fun WorkoutPage(viewModel: com.macrotracker.ui.viewmodel.HealthViewModel, id: String, onBack: () -> Unit) {
+    val state by viewModel.activitiesState.collectAsState()
+    val activity = (state as? com.macrotracker.ui.viewmodel.ActivitiesUiState.Success)?.activities?.firstOrNull { it.id == id }
+    // its heart rate is read once it is opened
+    LaunchedEffect(id, activity != null) { activity?.let { viewModel.onActivityExpanded(it) } }
+    val headline = activity?.let { remember(it.id, it.distanceKm, it.duration) { workoutHeadline(it) } }
+    com.macrotracker.ui.screens.home.HomePage(
+        title = activity?.title ?: "Workout",
+        tone = HealthActivityTone,
+        onBack = onBack,
+        lede = activity?.let { listOf(shortWorkoutDay(it.startTime), formatActivityDuration(it.duration)).joinToString(" · ") },
+    ) {
+        if (activity == null || headline == null) {
+            item(key = "gone") {
+                com.macrotracker.ui.screens.home.PageRoom(HealthActivityTone) {
+                    Text("This workout isn't in Health Connect any more.", fontSize = 15.sp, color = TextSecondary)
+                }
+            }
+            return@HomePage
+        }
+        item(key = "head") {
+            com.macrotracker.ui.screens.home.PageRoom(HealthActivityTone) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    WorkoutBadge(activity.exerciseType, size = 52.dp)
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        HealthValueText(
+                            value = headline.value,
+                            unit = headline.unit,
+                            valueSize = 34.sp,
+                            unitSize = 15.sp,
+                            color = headline.tone,
+                            unitColor = headline.tone,
+                        )
+                        Text(
+                            "From ${activity.sourceLabel}" + (activity.deviceLabel?.let { " · $it" } ?: ""),
+                            fontSize = 13.sp,
+                            color = TextSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        }
+        item(key = "numbers") {
+            com.macrotracker.ui.screens.home.PageRoom(HealthActivityTone, title = "Numbers") { WorkoutStatsGrid(workoutStats(activity)) }
+        }
+        if (activity.hrSamples.size >= 2) {
+            item(key = "heart") {
+                // the chart names itself, with its average and peak
+                com.macrotracker.ui.screens.home.PageRoom(HealthHeartTone) {
+                    WorkoutHeartRate(activity.hrSamples, maxHr = activity.maxHr)
+                    WorkoutZones(activity.hrSamples, maxHr = activity.maxHr)
+                }
+            }
+        }
+        if (activity.laps.size >= 2) {
+            item(key = "laps") {
+                com.macrotracker.ui.screens.home.PageRoom(HealthActivityTone, title = "Laps") { WorkoutLaps(activity) }
             }
         }
     }

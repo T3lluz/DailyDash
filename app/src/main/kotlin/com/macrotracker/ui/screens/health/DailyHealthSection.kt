@@ -1,5 +1,8 @@
 package com.macrotracker.ui.screens.health
 
+import com.macrotracker.ui.components.joinedRowShape
+import com.macrotracker.ui.components.TilePlace
+import com.macrotracker.ui.components.Joined
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
@@ -337,7 +340,8 @@ fun DailyHealthSection(
         }
 
         Spacer(modifier = Modifier.height(8.dp))
-        Row(modifier = Modifier.fillMaxWidth().riseIn(3, rise), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        // the four meters as one row of joined tiles, as Weave's dock
+        Row(modifier = Modifier.fillMaxWidth().riseIn(3, rise), horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
             // Until the day is read the meters hold their places with a dash.
             val fmt = { n: Long -> if (ready) String.format(Locale.US, "%,d", n) else "–" }
             Meter(
@@ -351,6 +355,7 @@ fun DailyHealthSection(
                 onClick = { pick(ClockLayer.STEPS) },
                 onLongClick = { openGoals(GoalKind.STEPS) },
                 modifier = Modifier.weight(1f),
+                shape = joinedRowShape(TilePlace.of(0, 4), outer = 22.dp),
             )
             Meter(
                 label = "Sleep",
@@ -363,6 +368,7 @@ fun DailyHealthSection(
                 onClick = { pick(ClockLayer.SLEEP) },
                 onLongClick = { openGoals(GoalKind.SLEEP) },
                 modifier = Modifier.weight(1f),
+                shape = joinedRowShape(TilePlace.of(1, 4), outer = 22.dp),
             )
             Meter(
                 label = "Calories",
@@ -375,6 +381,7 @@ fun DailyHealthSection(
                 onClick = { pick(ClockLayer.MOVE) },
                 onLongClick = { openGoals(GoalKind.CALORIES) },
                 modifier = Modifier.weight(1f),
+                shape = joinedRowShape(TilePlace.of(2, 4), outer = 22.dp),
             )
             Meter(
                 label = "Heart",
@@ -386,6 +393,7 @@ fun DailyHealthSection(
                 selected = focus == ClockLayer.HEART,
                 onClick = { pick(ClockLayer.HEART) },
                 modifier = Modifier.weight(1f),
+                shape = joinedRowShape(TilePlace.of(3, 4), outer = 22.dp),
             )
         }
 
@@ -538,6 +546,7 @@ private fun Meter(
     modifier: Modifier = Modifier,
     /** A hold: the meter's goal. */
     onLongClick: (() -> Unit)? = null,
+    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(20.dp),
 ) {
     val fill by animateFloatAsState(
         targetValue = if (selected) 1f else 0f,
@@ -553,7 +562,7 @@ private fun Meter(
     Column(
         modifier = modifier
             .pressSink(press)
-            .clip(RoundedCornerShape(20.dp))
+            .clip(shape)
             .drawBehind { drawRect(tone.copy(alpha = 0.09f + 0.13f * fill)) }
             .combinedClickable(
                 interactionSource = press,

@@ -45,6 +45,8 @@ fun MacroButton(
     modifier: Modifier = Modifier,
     variant: ButtonVariant = ButtonVariant.PRIMARY,
     enabled: Boolean = true,
+    /** Its corners: a pill on its own, or its place in a joined row of buttons. */
+    shape: androidx.compose.ui.graphics.Shape = CircleShape,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
@@ -52,12 +54,14 @@ fun MacroButton(
 
     val scale by animateFloatAsState(
         targetValue = if (pressed) 0.93f else 1f,
-        animationSpec = MacroMotion.pressSpring(),
+        animationSpec = MacroMotion.giveSpring(),
         label = "btnScale",
     )
 
+    // a card's main action takes the card's own colour
+    val accent = LocalRoomTone.current ?: Primary
     val (baseBg, contentColor, borderColor) = when (variant) {
-        ButtonVariant.PRIMARY -> Triple(Primary, OnAccent, Primary)
+        ButtonVariant.PRIMARY -> Triple(accent, OnAccent, accent)
         ButtonVariant.SECONDARY -> Triple(Color.White.copy(alpha = 0.08f), TextPrimary, Color.Transparent)
         ButtonVariant.DANGER -> Triple(Error.copy(alpha = 0.18f), Error, Color.Transparent)
     }
@@ -65,7 +69,7 @@ fun MacroButton(
     val bgColor by animateColorAsState(
         targetValue = when {
             !enabled -> baseBg
-            variant == ButtonVariant.PRIMARY && pressed -> PrimaryVariant
+            variant == ButtonVariant.PRIMARY && pressed -> if (accent == Primary) PrimaryVariant else androidx.compose.ui.graphics.lerp(accent, Color.Black, 0.18f)
             else -> baseBg
         },
         animationSpec = MacroMotion.colorTween(),
@@ -83,7 +87,7 @@ fun MacroButton(
             .fillMaxWidth()
             .padding(vertical = 6.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale },
-        shape = CircleShape,
+        shape = shape,
         colors = ButtonDefaults.buttonColors(
             containerColor = bgColor,
             contentColor = contentColor,

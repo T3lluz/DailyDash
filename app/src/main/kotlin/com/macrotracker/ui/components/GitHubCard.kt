@@ -1,6 +1,6 @@
 package com.macrotracker.ui.components
 
-import com.macrotracker.ui.screens.home.pageStickyAnchor
+import com.macrotracker.ui.screens.home.pagePinned
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.key
 import com.macrotracker.ui.screens.health.HealthDisplay
@@ -343,19 +343,9 @@ fun GitHubPage(viewModel: GitHubViewModel, onBack: () -> Unit) {
             onBack = onBack,
             lede = ghHeaderLine(hub, state)?.let { "$it." },
             tabs = tabs,
-            sticky = {
-                if (hub != null) {
-                    RepoPicker(
-                        repos = hub.repos,
-                        selectedFullName = hub.selectedFullName,
-                        onSelect = { haptics.tick(); viewModel.selectRepo(it) },
-                    )
-                }
-            },
             actions = { haze ->
                 if (state !is GitHubUiState.NeedsAuth) {
                     GlassRound(AppIcons.Refresh, "Refresh", haze) {
-                        haptics.tick()
                         viewModel.loadDashboard(forceRefresh = true)
                     }
                 }
@@ -388,28 +378,27 @@ fun GitHubPage(viewModel: GitHubViewModel, onBack: () -> Unit) {
                 }
                 return@HomePage
             }
-            item(key = "repo") {
-                Box(Modifier.pageStickyAnchor().padding(horizontal = 2.dp, vertical = 4.dp)) {
-                    RepoPicker(
-                        repos = hub.repos,
-                        selectedFullName = hub.selectedFullName,
-                        onSelect = { haptics.tick(); viewModel.selectRepo(it) },
-                    )
-                }
+            pagePinned("repo") {
+                RepoPicker(
+                    repos = hub.repos,
+                    selectedFullName = hub.selectedFullName,
+                    onSelect = { haptics.tick(); viewModel.selectRepo(it) },
+                )
             }
             when (page) {
                 0 -> {
                     item(key = "stats") {
                         val stats = remember(hub) { collapsedStats(hub) }
                         PageRoom(GhTone) {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                stats.forEach { stat ->
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+                                stats.forEachIndexed { i, stat ->
                                     GlanceStat(
                                         value = stat.value,
                                         label = stat.label,
                                         color = stat.color,
                                         icon = stat.icon,
                                         modifier = Modifier.weight(1f),
+                                        shape = joinedRowShape(TilePlace.of(i, stats.size), outer = 18.dp),
                                     )
                                 }
                             }
@@ -498,8 +487,7 @@ private fun ConnectPrompt(onConnect: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(Sharp)
-            .background(GhSurface)
+            .ownTile(Sharp, GhSurface)
             .clickable(onClick = onConnect)
             .padding(horizontal = 14.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -566,16 +554,8 @@ private fun GitHubCollapsedGlance(
         hub.contributions?.let { ContributionStrip(it, haptics) }
 
         if (pulse.isNotEmpty()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(Sharp)
-                    .background(GhSurface),
-            ) {
-                pulse.forEachIndexed { index, item ->
-                    if (index > 0) {
-                        HorizontalDivider(color = GhHairline.copy(alpha = 0.55f), thickness = 0.5.dp)
-                    }
+            JoinedColumn(modifier = Modifier.fillMaxWidth(), fill = GhSurface, outer = 20.dp) {
+                pulse.forEach { item ->
                     PulseLine(item) {
                         haptics.tick()
                         item.url?.let {
@@ -809,10 +789,11 @@ private fun GlanceStat(
     color: Color,
     icon: Int,
     modifier: Modifier = Modifier,
+    shape: androidx.compose.ui.graphics.Shape = Sharp,
 ) {
     Column(
         modifier = modifier
-            .clip(Sharp)
+            .clip(shape)
             .background(GhSurface)
             .padding(horizontal = 6.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -864,8 +845,7 @@ private fun ContributionStrip(contributions: GitHubContributions, haptics: Hapti
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(Sharp)
-            .background(GhSurface)
+            .ownTile(Sharp, GhSurface)
             .padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 9.dp),
         verticalArrangement = Arrangement.spacedBy(7.dp),
     ) {
@@ -965,7 +945,7 @@ private fun PulseLine(item: GhPulse, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 9.dp),
+            .padding(horizontal = 12.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -1047,14 +1027,14 @@ private fun IssuesTab(
                 },
             )
         } else {
-            WidgetScrollBox(
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
+            WidgetScrollBox {
+                JoinedColumn(fill = GhSurface, outer = 20.dp) {
                 filtered.take(30).forEach { issue ->
                     IssueRow(issue) {
                         haptics.tick()
                         context.openUrl(issue.htmlUrl)
                     }
+                }
                 }
             }
         }
@@ -1108,14 +1088,14 @@ private fun PullsTab(
                 },
             )
         } else {
-            WidgetScrollBox(
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
+            WidgetScrollBox {
+                JoinedColumn(fill = GhSurface, outer = 20.dp) {
                 filtered.take(30).forEach { pr ->
                     PullRow(pr) {
                         haptics.tick()
                         context.openUrl(pr.htmlUrl)
                     }
+                }
                 }
             }
         }
@@ -1130,9 +1110,8 @@ private fun ActivityTab(activity: List<GitHubActivity>, haptics: HapticHelper) {
         return
     }
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        WidgetScrollBox(
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
+        WidgetScrollBox {
+            JoinedColumn(fill = GhSurface, outer = 20.dp) {
             activity.take(30).forEach { item ->
                 ActivityRow(item) {
                     haptics.tick()
@@ -1140,6 +1119,7 @@ private fun ActivityTab(activity: List<GitHubActivity>, haptics: HapticHelper) {
                         context.openUrl(it)
                     }
                 }
+            }
             }
         }
     }
@@ -1174,14 +1154,14 @@ private fun ReposTab(
         return
     }
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        WidgetScrollBox(
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
+        WidgetScrollBox {
+            JoinedColumn(fill = GhSurface, outer = 20.dp) {
             repos.take(40).forEach { repo ->
                 RepoRow(repo) {
                     haptics.tick()
                     onSelectRepo(repo.fullName)
                 }
+            }
             }
         }
         Text(
@@ -1208,9 +1188,8 @@ private fun InboxTab(
         return
     }
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        WidgetScrollBox(
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
+        WidgetScrollBox {
+            JoinedColumn(fill = GhSurface, outer = 20.dp) {
             notifications.take(30).forEach { item ->
                 NotificationRow(item) {
                     haptics.tick()
@@ -1218,6 +1197,7 @@ private fun InboxTab(
                         context.openUrl(it)
                     }
                 }
+            }
             }
         }
     }
@@ -1228,9 +1208,8 @@ private fun NotificationRow(item: GitHubNotification, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(Sharp)
             .clickable(onClick = onClick)
-            .padding(horizontal = 4.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -1284,8 +1263,7 @@ private fun RepoPicker(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(Sharp)
-            .background(GhSurface),
+            .ownTile(Sharp, GhSurface),
     ) {
         Row(
             modifier = Modifier
@@ -1337,9 +1315,10 @@ private fun RepoPicker(
         AnimatedVisibility(visible = open, enter = MacroMotion.expandEnter, exit = MacroMotion.expandExit) {
             WidgetScrollBox(
                 maxHeight = if (compact) 148.dp else 240.dp,
-                contentPadding = PaddingValues(bottom = 4.dp),
+                contentPadding = PaddingValues(bottom = 6.dp),
             ) {
-                HorizontalDivider(color = GhHairline, thickness = 0.5.dp)
+                // the repos as tiles set into the picker, its corner less the gap they stand in by
+                JoinedColumn(Modifier.padding(horizontal = 6.dp), fill = Color.White.copy(alpha = 0.05f), outer = 14.dp, inner = 5.dp) {
                 PickerRow(
                     title = "All repos",
                     subtitle = "Issues, PRs, and activity across your account",
@@ -1364,6 +1343,7 @@ private fun RepoPicker(
                     }
                 }
             }
+                }
         }
     }
 }
@@ -1381,9 +1361,9 @@ private fun PickerRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(if (active) GhAccent.copy(alpha = 0.12f) else Color.Transparent)
+            .background(if (active) GhAccent.copy(alpha = 0.16f) else Color.Transparent)
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = if (compact) 7.dp else 9.dp),
+            .padding(horizontal = 12.dp, vertical = if (compact) 9.dp else 11.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -1522,13 +1502,14 @@ private fun RepoDetail(
             SectionLabel("Commits")
             WidgetScrollBox(
                 maxHeight = 200.dp,
-                verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
+                JoinedColumn(fill = GhSurface, outer = 20.dp) {
                 commits.take(10).forEach { commit ->
                     CommitRow(commit) {
                         haptics.tick()
                         context.openUrl(commit.htmlUrl)
                     }
+                }
                 }
             }
         }
@@ -1537,13 +1518,14 @@ private fun RepoDetail(
             SectionLabel("Actions")
             WidgetScrollBox(
                 maxHeight = 200.dp,
-                verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
+                JoinedColumn(fill = GhSurface, outer = 20.dp) {
                 runs.take(8).forEach { run ->
                     WorkflowRow(run) {
                         haptics.tick()
                         context.openUrl(run.htmlUrl)
                     }
+                }
                 }
             }
         }
@@ -1559,8 +1541,7 @@ private fun ReleaseRow(release: GitHubRelease, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(Sharp)
-            .background(GhSurface)
+            .ownTile(Sharp, GhSurface)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1592,7 +1573,7 @@ private fun CommitRow(commit: GitHubCommit, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 4.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -1629,7 +1610,7 @@ private fun WorkflowRow(run: GitHubWorkflowRun, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 4.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -1819,8 +1800,7 @@ private fun IssueRow(issue: GitHubIssue, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(Sharp)
-            .background(GhSurface)
+            .ownTile(Sharp, GhSurface)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -1873,8 +1853,7 @@ private fun PullRow(pr: GitHubPullRequest, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(Sharp)
-            .background(GhSurface)
+            .ownTile(Sharp, GhSurface)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -1933,10 +1912,9 @@ private fun ActivityRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(Sharp)
-            .then(if (compact) Modifier.background(GhSurface) else Modifier)
+            .ownTile(Sharp, if (compact) GhSurface else androidx.compose.ui.graphics.Color.Transparent)
             .clickable(onClick = onClick)
-            .padding(horizontal = if (compact) 12.dp else 4.dp, vertical = if (compact) 10.dp else 8.dp),
+            .padding(horizontal = 12.dp, vertical = if (compact) 10.dp else 11.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -1969,8 +1947,7 @@ private fun RepoRow(repo: GitHubRepo, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(Sharp)
-            .background(GhSurface)
+            .ownTile(Sharp, GhSurface)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -2201,8 +2178,7 @@ private fun EmptyHint(text: String) {
         color = TextSecondary,
         modifier = Modifier
             .fillMaxWidth()
-            .clip(Sharp)
-            .background(GhSurface)
+            .ownTile(Sharp, GhSurface)
             .padding(horizontal = 12.dp, vertical = 16.dp),
     )
 }

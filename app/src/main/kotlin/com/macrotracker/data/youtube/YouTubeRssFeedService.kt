@@ -88,6 +88,8 @@ class YouTubeRssFeedService @Inject constructor(
             var publishedAt: String? = null
             var viewCount: Long? = null
             var likeCount: Long? = null
+            var isShort = false
+            var description: String? = null
             var inEntry = false
 
             while (eventType != XmlPullParser.END_DOCUMENT) {
@@ -101,6 +103,8 @@ class YouTubeRssFeedService @Inject constructor(
                                 publishedAt = null
                                 viewCount = null
                                 likeCount = null
+                                isShort = false
+                                description = null
                             }
                             "yt:videoId" -> if (inEntry) videoId = parser.nextText()
                             "title" -> {
@@ -115,6 +119,12 @@ class YouTubeRssFeedService @Inject constructor(
                             }
                             "media:starRating" -> if (inEntry) {
                                 likeCount = parser.getAttributeValue(null, "count")?.toLongOrNull()
+                            }
+                            "link" -> if (inEntry) {
+                                if (parser.getAttributeValue(null, "href")?.contains("/shorts/") == true) isShort = true
+                            }
+                            "media:description" -> if (inEntry) {
+                                description = parser.nextText().trim().ifBlank { null }
                             }
                         }
                     }
@@ -135,6 +145,8 @@ class YouTubeRssFeedService @Inject constructor(
                                         thumbnailUrl = "https://i.ytimg.com/vi/$vid/hqdefault.jpg",
                                         viewCount = viewCount,
                                         likeCount = likeCount,
+                                        isShort = isShort,
+                                        description = description,
                                     )
                                 )
                             }

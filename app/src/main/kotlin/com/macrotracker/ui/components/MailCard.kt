@@ -1,6 +1,6 @@
 package com.macrotracker.ui.components
 
-import com.macrotracker.ui.screens.home.pageStickyAnchor
+import com.macrotracker.ui.screens.home.WellFill
 import com.macrotracker.ui.screens.health.HealthDisplay
 import com.macrotracker.ui.screens.health.RoomLoading
 import com.macrotracker.ui.screens.home.HomeTile
@@ -151,18 +151,21 @@ fun MailCard(
                         return@HomeTile
                     }
                     val rows = viewModel.rows(box, MailTab.NEEDS, overlay)
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp).animateContentSize()) {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp).animateContentSize()) {
                         if (rows.isEmpty()) {
                             EmptyMail(MailTab.NEEDS, box.unread)
                         } else {
-                            rows.take(SHOW).forEach { r ->
-                                MailRowView(
-                                    row = r,
-                                    onOpen = { runCatching { uri.openUri(r.url) } },
-                                    onAct = { a -> haptics.tick(); viewModel.act(r, a) },
-                                    asking = r.ids.firstOrNull() in asking,
-                                    onAsk = { haptics.click(); viewModel.ask(r) },
-                                )
+                            // every mail a joined tile
+                            JoinedColumn(fill = WellFill, outer = 18.dp) {
+                                rows.take(SHOW).forEach { r ->
+                                    MailRowView(
+                                        row = r,
+                                        onOpen = { haptics.click(); runCatching { uri.openUri(r.url) } },
+                                        onAct = { a -> haptics.tick(); viewModel.act(r, a) },
+                                        asking = r.ids.firstOrNull() in asking,
+                                        onAsk = { haptics.click(); viewModel.ask(r) },
+                                    )
+                                }
                             }
                         }
                     }
@@ -212,7 +215,7 @@ fun MailTabs(viewModel: MailViewModel, modifier: Modifier = Modifier) {
     }
 }
 
-/** The mail page: the tabs, then every mail of the open one in a room, each with its actions. */
+/** The mail page under its pinned tabs: every mail of the open one in a room, each with its actions. */
 @Composable
 fun MailPageBody(viewModel: MailViewModel, onOpenHermes: () -> Unit) {
     val state by viewModel.state.collectAsState()
@@ -247,21 +250,22 @@ fun MailPageBody(viewModel: MailViewModel, onOpenHermes: () -> Unit) {
             val shownTab = if (tab !in shownTabs) MailTab.NEEDS else tab
             val rows = counts[shownTab].orEmpty()
             Column {
-                MailTabs(viewModel, Modifier.pageStickyAnchor().padding(bottom = 6.dp))
                 MailNotice(notice.value, Modifier.padding(bottom = 4.dp)) { ids -> notice.value = null; viewModel.undoArchive(ids) }
                 PageRoom(MailAccent, flush = true) {
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp).animateContentSize()) {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp).animateContentSize()) {
                         if (rows.isEmpty()) {
                             EmptyMail(shownTab, box.unread)
                         } else {
-                            rows.forEach { r ->
-                                MailRowView(
-                                    row = r,
-                                    onOpen = { runCatching { uri.openUri(r.url) } },
-                                    onAct = { a -> haptics.tick(); viewModel.act(r, a) },
-                                    asking = r.ids.firstOrNull() in asking,
-                                    onAsk = { haptics.click(); viewModel.ask(r) },
-                                )
+                            JoinedColumn(fill = WellFill, outer = 18.dp) {
+                                rows.forEach { r ->
+                                    MailRowView(
+                                        row = r,
+                                        onOpen = { haptics.click(); runCatching { uri.openUri(r.url) } },
+                                        onAct = { a -> haptics.tick(); viewModel.act(r, a) },
+                                        asking = r.ids.firstOrNull() in asking,
+                                        onAsk = { haptics.click(); viewModel.ask(r) },
+                                    )
+                                }
                             }
                         }
                     }
@@ -289,6 +293,7 @@ fun mailAccountUrl(viewModel: MailViewModel): String? {
 /** An archive to undo, or what went wrong: one line that goes away by itself. */
 @Composable
 private fun MailNotice(ev: MailEvent?, modifier: Modifier = Modifier, onUndo: (List<String>) -> Unit) {
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
     ev ?: return
     Row(
         modifier = modifier
@@ -307,7 +312,7 @@ private fun MailNotice(ev: MailEvent?, modifier: Modifier = Modifier, onUndo: (L
             Text(
                 "Undo",
                 style = HealthDisplay, fontSize = 14.sp, color = MailAccent,
-                modifier = Modifier.clip(CircleShape).clickable { onUndo(ev.ids) }.padding(horizontal = 14.dp, vertical = 9.dp),
+                modifier = Modifier.clip(CircleShape).clickable { haptics.tick(); onUndo(ev.ids) }.padding(horizontal = 14.dp, vertical = 9.dp),
             )
         }
     }
@@ -338,9 +343,8 @@ private fun MailRowView(row: MailRow, onOpen: () -> Unit, onAct: (String) -> Uni
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
                 .clickable(onClick = onOpen)
-                .padding(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 2.dp),
+                .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 2.dp),
             verticalAlignment = Alignment.Top,
         ) {
             Box(
@@ -396,7 +400,7 @@ private fun MailRowView(row: MailRow, onOpen: () -> Unit, onAct: (String) -> Uni
             }
         }
         Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 40.dp, end = 4.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 40.dp, end = 6.dp, bottom = 4.dp),
             horizontalArrangement = Arrangement.End,
         ) {
             MailAction(if (row.unread) AppIcons.MailOpen else AppIcons.Mail, if (row.unread) "Mark read" else "Mark unread") {

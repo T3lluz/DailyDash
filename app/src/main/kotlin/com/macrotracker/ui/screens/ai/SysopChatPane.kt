@@ -1,5 +1,8 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.components.TileMenu
+import com.macrotracker.ui.components.TileMenuGroup
+import com.macrotracker.ui.components.TileMenuItem
 import com.macrotracker.ui.screens.home.RoomNeutral
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -153,51 +156,30 @@ fun SysopChatPane(
                             accent = ServerBrand,
                             onClick = { threadMenuOpen = true },
                         )
-                        DropdownMenu(
-                            expanded = threadMenuOpen,
-                            onDismissRequest = { threadMenuOpen = false },
-                            modifier = Modifier.background(RoomNeutral),
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("New chat", color = TextPrimary, fontSize = 14.sp) },
-                                onClick = {
+                        TileMenu(expanded = threadMenuOpen, onDismissRequest = { threadMenuOpen = false }) {
+                            TileMenuGroup {
+                                TileMenuItem("New chat", AppIcons.NewChat) {
                                     threadMenuOpen = false
                                     pin.pinned = true
                                     viewModel.newThread(bot)
-                                },
-                            )
-                            if (onUseHermes != null) {
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            "Ask Hermes on your server instead",
-                                            color = ServerBrand,
-                                            fontSize = 13.sp,
-                                        )
-                                    },
-                                    onClick = {
+                                }
+                                if (onUseHermes != null) {
+                                    TileMenuItem("Ask Hermes on your server", AppIcons.Server, tint = ServerBrand) {
                                         threadMenuOpen = false
                                         onUseHermes()
-                                    },
-                                )
+                                    }
+                                }
                             }
-                            state.threads.take(12).forEach { thread ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            thread.title,
-                                            color = if (thread.id == state.threadId) ServerBrand else TextPrimary,
-                                            fontSize = 13.sp,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                    },
-                                    onClick = {
-                                        threadMenuOpen = false
-                                        pin.pinned = true
-                                        viewModel.selectThread(bot, thread.id)
-                                    },
-                                )
+                            if (state.threads.isNotEmpty()) {
+                                TileMenuGroup(label = "Chats") {
+                                    state.threads.take(12).forEach { thread ->
+                                        TileMenuItem(thread.title, null, checked = thread.id == state.threadId) {
+                                            threadMenuOpen = false
+                                            pin.pinned = true
+                                            viewModel.selectThread(bot, thread.id)
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

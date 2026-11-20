@@ -257,6 +257,12 @@ class SettingsRepository @Inject constructor(
 
     fun toggleTwitchFavourite(userId: String) = toggleId(_twitchFavourites, KEY_TWITCH_FAVOURITES, userId)
 
+    /** The page tabs shown as a grid of tiles rather than a list ("youtube.feed", "twitch.live", …). */
+    private val _pageGrids = MutableStateFlow(readIdSet(KEY_PAGE_GRIDS))
+    val pageGrids: StateFlow<Set<String>> = _pageGrids
+
+    fun togglePageGrid(key: String) = toggleId(_pageGrids, KEY_PAGE_GRIDS, key)
+
     private fun readIdSet(key: String): Set<String> =
         prefs.getString(key, null).orEmpty().split('\n').filterTo(LinkedHashSet()) { it.isNotBlank() }
 
@@ -588,6 +594,7 @@ class SettingsRepository @Inject constructor(
         const val KEY_HERMES_DRAFT = "hermes_draft_"
         const val KEY_YOUTUBE_FAVOURITES = "youtube_favourite_channels"
         const val KEY_TWITCH_FAVOURITES = "twitch_favourite_channels"
+        const val KEY_PAGE_GRIDS = "page_grids"
         const val KEY_DASHBOARD_CALS = "dashboard_cals"
         const val KEY_DASHBOARD_CAL_MINE = "dashboard_cal_mine"
         const val KEY_BIRTH_YEAR = "birth_year"

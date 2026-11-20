@@ -169,7 +169,7 @@ fun PermissionsSettingsScreen(
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(28.dp))
                     .background(Warning.copy(alpha = 0.14f))
                     .clickable { haptics.confirm(); consent(lapsed) }
                     .padding(14.dp),
@@ -192,7 +192,7 @@ fun PermissionsSettingsScreen(
             }
         }
 
-        SettingsGroup(title = "On this phone", delayMs = 40) {
+        SettingsGroup(title = "On this phone", tone = com.macrotracker.ui.screens.home.HomeTone.Weather, delayMs = 40) {
             rows.forEachIndexed { i, r ->
                 if (i > 0) SettingsRowDivider()
                 PermissionRow(r.icon, r.tint, r.title, r.detail, r.granted, if (r.special) "Open" else "Allow") {
@@ -220,7 +220,7 @@ fun PermissionsSettingsScreen(
         }
 
         LoadWhenSeen(placeholderHeight = 200.dp) {
-            SettingsGroup(title = "Google account", delayMs = 70) {
+            SettingsGroup(title = "Google account", tone = com.macrotracker.ui.screens.home.HomeTone.Mail, delayMs = 70) {
                 GoogleScope.entries.forEachIndexed { i, g ->
                     if (i > 0) SettingsRowDivider()
                     PermissionRow(
@@ -242,37 +242,32 @@ fun PermissionsSettingsScreen(
                         }
                     }
                 }
-                SettingsRowDivider()
                 Row(
-                    Modifier.fillMaxWidth().padding(vertical = 8.dp, horizontal = 2.dp),
+                    Modifier.fillMaxWidth().padding(vertical = 13.dp, horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box(Modifier.size(40.dp).clip(RoundedCornerShape(18.dp)).background(Warning.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
-                        Icon(AppIcons.Bell, null, tint = Warning, modifier = Modifier.size(20.dp))
-                    }
-                    Spacer(Modifier.width(12.dp))
+                    com.macrotracker.ui.components.TileIcon(AppIcons.Bell, Warning, size = 42.dp)
+                    Spacer(Modifier.width(13.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Remind me to reconnect", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-                        Text("A notification when Google stops sharing Gmail or Tasks, one tap to allow it again", fontSize = 12.sp, color = TextSecondary, lineHeight = 16.sp)
+                        Text("Remind me to reconnect", style = HealthDisplay, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                        Text("A notification when Google stops sharing Gmail or Tasks. Tap a connected one to disconnect it.", fontSize = 12.sp, color = TextSecondary, lineHeight = 16.sp)
                     }
-                    Switch(checked = remind, onCheckedChange = { on ->
-                        haptics.tick()
-                        remind = on
-                        GoogleReconnect.setRemind(context, on)
-                    })
+                    Spacer(Modifier.width(8.dp))
+                    Switch(
+                        checked = remind,
+                        onCheckedChange = { on ->
+                            haptics.tick()
+                            remind = on
+                            GoogleReconnect.setRemind(context, on)
+                        },
+                        colors = com.macrotracker.ui.screens.home.roomSwitchColors(),
+                    )
                 }
-                Text(
-                    "Tap a connected one to disconnect it. YouTube channels come from Home's YouTube card, Twitch from its own.",
-                    fontSize = 11.sp,
-                    color = TextSecondary,
-                    lineHeight = 15.sp,
-                    modifier = Modifier.padding(start = 54.dp, top = 4.dp, bottom = 6.dp),
-                )
             }
         }
 
         LoadWhenSeen(placeholderHeight = 360.dp) {
-            SettingsGroup(title = "Accounts and services", delayMs = 100) {
+            SettingsGroup(title = "Accounts and services", tone = com.macrotracker.ui.screens.home.HomeTone.Upcoming, delayMs = 100) {
                 val services = remember(tick) { serviceRows(context) }
                 services.forEachIndexed { i, r ->
                     if (i > 0) SettingsRowDivider()
@@ -373,17 +368,14 @@ private fun PermissionRow(icon: ImageVector, tint: Color, title: String, detail:
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
             .clickable(onClick = onClick)
-            .padding(vertical = 10.dp, horizontal = 2.dp),
+            .padding(vertical = 13.dp, horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(40.dp).clip(RoundedCornerShape(18.dp)).background(tint.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
-        }
-        Spacer(Modifier.width(12.dp))
+        com.macrotracker.ui.components.TileIcon(icon, tint, size = 42.dp)
+        Spacer(Modifier.width(13.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1)
+            Text(title, style = HealthDisplay, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1)
             Text(detail, fontSize = 12.sp, color = TextSecondary, lineHeight = 16.sp, maxLines = 2, modifier = Modifier.padding(top = 1.dp))
         }
         Spacer(Modifier.width(10.dp))

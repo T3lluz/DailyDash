@@ -1,5 +1,7 @@
 package com.macrotracker.ui.theme
 
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -60,6 +62,45 @@ object MacroMotion {
         dampingRatio = 1f,
         stiffness = 600f,
     )
+
+    /**
+     * A button giving under the finger, as Weave's do: quick, a touch past the press on the way
+     * down and a small pop past flat when it lets go. Read the scale in a layer, never in composition.
+     */
+    fun <T> giveSpring() = spring<T>(dampingRatio = 0.62f, stiffness = 900f)
+
+    /** How far a round button gives under the finger; a tile gives less, a room-wide row least. */
+    const val PRESSED_ROUND = 0.9f
+    const val PRESSED_TILE = 0.955f
+    const val PRESSED_ROW = 0.982f
+
+    /** A row a scroll brings in for the first time rising this far (dp) into place, on this spring. */
+    const val SCROLL_RISE_DP = 28f
+    fun scrollRiseSpring() = spring<Float>(dampingRatio = 0.9f, stiffness = 260f)
+
+    /** The navbar folding away to one circle while you read, and opening again: no wobble. */
+    fun <T> navFoldSpring() = spring<T>(dampingRatio = 1f, stiffness = 650f)
+
+    /** How far a page has to move down before the navbar folds, and up before it opens again, in dp (X's are short). */
+    const val NAV_FOLD_DP = 24f
+    const val NAV_UNFOLD_DP = 12f
+
+    /** The page bar's title growing out of the back button, and folding back into it. */
+    fun <T> barTitleSpring() = spring<T>(dampingRatio = 0.86f, stiffness = 420f)
+
+    /** A pinned row's glass coming in over this much of the scroll past its line, in dp. */
+    const val PIN_FADE_DP = 22f
+
+    /**
+     * A page's items making room for one another (a filter, a new video, a row going): what
+     * comes fades in, what goes fades out, and the rest glide to their places without a bounce.
+     */
+    object PageItem {
+        fun fadeIn(): FiniteAnimationSpec<Float> = tween(260, delayMillis = 40, easing = FastOutSlowInEasing)
+        fun fadeOut(): FiniteAnimationSpec<Float> = tween(140, easing = FastOutSlowInEasing)
+        fun place(): FiniteAnimationSpec<androidx.compose.ui.unit.IntOffset> =
+            spring(dampingRatio = 0.92f, stiffness = 380f, visibilityThreshold = androidx.compose.ui.unit.IntOffset(1, 1))
+    }
 
     /** Critically-damped confirm pulse for primary CTA micro-feedback (add/check). */
     fun <T> confirmSpring() = spring<T>(
@@ -442,37 +483,38 @@ object MacroMotion {
         shrinkVertically(tween(SLIDE_MS, easing = FastOutSlowInEasing)) +
             fadeOut(tween(FADE_OUT_MS, easing = FastOutSlowInEasing))
 
-    // ── Native-style slide transitions (Stats, CameraScan, Help) ───────
-    // 100% slide for the "active" screen, 30% parallax for the "background" screen.
-    // Also used for predictive back so the gesture slides instead of fading.
+    // ── Pushed screens ─────────────────────────────────────────────────
+    // The new screen slides all the way in over the old one, which drifts a quarter back and
+    // dims, so the one on top reads as lying over it. A quick start and a long soft landing
+    // (M3's emphasized curve), the same both ways. Predictive back scrubs these too.
+    private val PushEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
+    private const val PUSH_MS = 380
+    private const val PUSH_DIM = 0.55f
+
     val subScreenEnter: EnterTransition =
-        slideInHorizontally(
-            animationSpec = tween(SLIDE_MS, easing = FastOutSlowInEasing),
-        ) { it }
+        slideInHorizontally(animationSpec = tween(PUSH_MS, easing = PushEasing)) { it }
 
     val subScreenExit: ExitTransition =
-        slideOutHorizontally(
-            animationSpec = tween(SLIDE_MS, easing = FastOutSlowInEasing),
-        ) { -it / 3 }
+        slideOutHorizontally(animationSpec = tween(PUSH_MS, easing = PushEasing)) { -it / 4 } +
+            fadeOut(tween(PUSH_MS, easing = PushEasing), targetAlpha = PUSH_DIM)
 
     val subScreenPopEnter: EnterTransition =
-        slideInHorizontally(
-            animationSpec = tween(SLIDE_MS, easing = FastOutSlowInEasing),
-        ) { -it / 3 }
+        slideInHorizontally(animationSpec = tween(PUSH_MS, easing = PushEasing)) { -it / 4 } +
+            fadeIn(tween(PUSH_MS, easing = PushEasing), initialAlpha = PUSH_DIM)
 
     val subScreenPopExit: ExitTransition =
-        slideOutHorizontally(
-            animationSpec = tween(SLIDE_MS, easing = FastOutSlowInEasing),
-        ) { it }
+        slideOutHorizontally(animationSpec = tween(PUSH_MS, easing = PushEasing)) { it }
 
     // ── Directional tab transitions ──────────────────────────────────
+    // Between tabs the screens trade places along a short way and cross-fade (M3's shared axis),
+    // rather than one sliding the whole width over the other: quick, and the eye stays put.
     fun tabEnter(toRight: Boolean): EnterTransition =
-        slideInHorizontally(
-            animationSpec = tween(SLIDE_MS, easing = FastOutSlowInEasing),
-        ) { if (toRight) it else -it }
+        slideInHorizontally(animationSpec = tween(TAB_MS, easing = PushEasing)) { if (toRight) it / 6 else -it / 6 } +
+            fadeIn(tween(TAB_MS - 120, delayMillis = 70, easing = LinearOutSlowInEasing))
 
     fun tabExit(toRight: Boolean): ExitTransition =
-        slideOutHorizontally(
-            animationSpec = tween(SLIDE_MS, easing = FastOutSlowInEasing),
-        ) { if (toRight) -it / 3 else it / 3 }
+        slideOutHorizontally(animationSpec = tween(TAB_MS, easing = PushEasing)) { if (toRight) -it / 6 else it / 6 } +
+            fadeOut(tween(110, easing = FastOutLinearInEasing))
+
+    private const val TAB_MS = 320
 }

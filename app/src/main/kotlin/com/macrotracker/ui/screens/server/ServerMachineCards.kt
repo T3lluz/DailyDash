@@ -1,5 +1,6 @@
 package com.macrotracker.ui.screens.server
 
+import com.macrotracker.ui.components.JoinedColumn
 import com.macrotracker.ui.screens.health.HealthDisplay
 import com.macrotracker.ui.screens.health.LocalRoomColor
 import androidx.compose.foundation.shape.CircleShape
@@ -378,33 +379,36 @@ internal fun StorageCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
                 modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
             )
         }
-        disks.take(8).forEachIndexed { index, disk ->
-            if (index > 0) Spacer(modifier = Modifier.height(12.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        JoinedColumn(fill = WellFill, outer = 18.dp) {
+            disks.take(8).forEach { disk ->
+                Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = disk.mountPoint,
+                        color = TextPrimary,
+                        fontSize = 13.sp,
+                        fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    StatValue("${disk.usedPercent.roundToInt()}%", color = serverLevelColor(disk.usedPercent), fontSize = 13.sp)
+                }
+                Spacer(modifier = Modifier.height(5.dp))
+                ServerMeterBar(percent = disk.usedPercent, height = 5.dp)
+                Spacer(modifier = Modifier.height(3.dp))
                 Text(
-                    text = disk.mountPoint,
-                    color = TextPrimary,
-                    fontSize = 13.sp,
-                    fontFamily = FontFamily.Monospace,
-                    modifier = Modifier.weight(1f),
+                    text = "${formatKb(disk.usedKb)} of ${formatKb(disk.totalKb)} · ${formatKb(disk.availableKb)} free · ${disk.filesystem}",
+                    color = TextTertiary,
+                    fontSize = 11.5.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                StatValue("${disk.usedPercent.roundToInt()}%", color = serverLevelColor(disk.usedPercent), fontSize = 13.sp)
             }
-            Spacer(modifier = Modifier.height(5.dp))
-            ServerMeterBar(percent = disk.usedPercent, height = 5.dp)
-            Spacer(modifier = Modifier.height(3.dp))
-            Text(
-                text = "${formatKb(disk.usedKb)} of ${formatKb(disk.totalKb)} · ${formatKb(disk.availableKb)} free · ${disk.filesystem}",
-                color = TextTertiary,
-                fontSize = 11.5.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            }
         }
-    }
+        }
 }
 
 // ── Sensors & power ─────────────────────────────────────────────────────────
@@ -613,70 +617,73 @@ internal fun ContainersCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?, link
             onAskAi = onAskAi,
         )
         val shown = if (showAll) sorted else sorted.take(CONTAINERS_FOLDED)
-        shown.forEach { container ->
-            val usage = stats[container.name]
-            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-                // the app's icon, with its state as a dot on the corner
-                Box {
-                    AppIcon(containerIconCandidates(container.name, link?.iconForContainer(container.name)), container.name, 30.dp)
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .offset(x = 2.dp, y = 2.dp)
-                            .size(10.dp)
-                            .clip(CircleShape)
-                            .background(LocalRoomColor.current)
-                            .padding(2.dp)
-                            .clip(CircleShape)
-                            .background(
-                                when {
-                                    container.isUnhealthy -> ServerWarn
-                                    container.isRunning -> ServerGood
-                                    else -> ServerCritical
-                                },
-                            ),
-                    )
-                }
-                Spacer(modifier = Modifier.width(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        container.name,
-                        color = TextPrimary,
-                        fontSize = 13.sp,
-                        fontFamily = FontFamily.Monospace,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        container.status,
-                        color = if (container.isRunning) TextTertiary else ServerCritical,
-                        fontSize = 11.5.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                if (usage != null && container.isRunning) {
-                    Spacer(Modifier.width(8.dp))
-                    Column(Modifier.width(92.dp), horizontalAlignment = Alignment.End) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            StatValue(
-                                if (usage.cpuPercent < 1f) "%.1f%%".format(usage.cpuPercent) else "${usage.cpuPercent.roundToInt()}%",
-                                fontSize = 12.5.sp,
-                                color = TextPrimary,
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text(usage.memoryUsage.replace("iB", ""), color = TextTertiary, fontSize = 11.5.sp, fontFamily = HealthDisplayFamily, maxLines = 1)
-                        }
-                        Spacer(Modifier.height(3.dp))
-                        ServerMeterBar(
-                            percent = (usage.cpuPercent / peak * 100f).coerceIn(2f, 100f),
-                            height = 3.dp,
-                            color = ServerDisk,
+// every container a joined tile, as the services wall
+        JoinedColumn(fill = WellFill, outer = 18.dp) {
+            shown.forEach { container ->
+                val usage = stats[container.name]
+                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    // the app's icon, with its state as a dot on the corner
+                    Box {
+                        AppIcon(containerIconCandidates(container.name, link?.iconForContainer(container.name)), container.name, 30.dp)
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .offset(x = 2.dp, y = 2.dp)
+                                .size(10.dp)
+                                .clip(CircleShape)
+                                .background(LocalRoomColor.current)
+                                .padding(2.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    when {
+                                        container.isUnhealthy -> ServerWarn
+                                        container.isRunning -> ServerGood
+                                        else -> ServerCritical
+                                    },
+                                ),
                         )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            container.name,
+                            color = TextPrimary,
+                            fontSize = 13.sp,
+                            fontFamily = FontFamily.Monospace,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            container.status,
+                            color = if (container.isRunning) TextTertiary else ServerCritical,
+                            fontSize = 11.5.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    if (usage != null && container.isRunning) {
+                        Spacer(Modifier.width(8.dp))
+                        Column(Modifier.width(92.dp), horizontalAlignment = Alignment.End) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                StatValue(
+                                    if (usage.cpuPercent < 1f) "%.1f%%".format(usage.cpuPercent) else "${usage.cpuPercent.roundToInt()}%",
+                                    fontSize = 12.5.sp,
+                                    color = TextPrimary,
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(usage.memoryUsage.replace("iB", ""), color = TextTertiary, fontSize = 11.5.sp, fontFamily = HealthDisplayFamily, maxLines = 1)
+                            }
+                            Spacer(Modifier.height(3.dp))
+                            ServerMeterBar(
+                                percent = (usage.cpuPercent / peak * 100f).coerceIn(2f, 100f),
+                                height = 3.dp,
+                                color = ServerDisk,
+                            )
+                        }
                     }
                 }
             }
-        }
+}
         if (containers.size > CONTAINERS_FOLDED) {
             Spacer(Modifier.height(6.dp))
             Text(
@@ -733,16 +740,18 @@ internal fun SystemCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
                 fontSize = 13.sp,
             )
         }
-        units.forEach { unit ->
-            Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f).padding(start = 14.dp)) {
-                    Text(unit.name, color = TextPrimary, fontSize = 13.sp, fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (unit.description.isNotBlank()) {
-                        Text(unit.description, color = TextSecondary, fontSize = 11.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (units.isNotEmpty()) Spacer(Modifier.height(10.dp))
+        JoinedColumn(fill = WellFill, outer = 18.dp) {
+            units.forEach { unit ->
+                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(unit.name, color = TextPrimary, fontSize = 13.sp, fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (unit.description.isNotBlank()) {
+                            Text(unit.description, color = TextSecondary, fontSize = 11.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                     }
+                    ServerTag(unit.sub.uppercase(), ServerCritical)
                 }
-                ServerTag(unit.sub.uppercase(), ServerCritical)
             }
         }
         detail?.journalErrors?.let { errors ->

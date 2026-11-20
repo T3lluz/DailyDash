@@ -1,5 +1,9 @@
 package com.macrotracker.ui.components
 
+import androidx.compose.runtime.CompositionLocalProvider
+import com.macrotracker.ui.components.joinedCellShape
+import com.macrotracker.ui.components.Joined
+import com.macrotracker.ui.components.LocalTileShape
 import com.macrotracker.ui.screens.health.HealthDisplay
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
@@ -170,7 +174,7 @@ internal fun GroundLine(weather: WeatherInfo, tempUnit: TempUnit, clock24: Boole
 internal fun MiniHours(steps: List<HourlyForecast>, tempUnit: TempUnit, clock24: Boolean, modifier: Modifier = Modifier) {
     val shown = remember(steps) { steps.take(13).filterIndexed { i, _ -> i % 3 == 0 } }
     if (shown.size < 3) return
-    Row(modifier.fillMaxWidth().clip(TileShape).background(TileFill).padding(vertical = 10.dp)) {
+    Row(modifier.fillMaxWidth().clip(LocalTileShape.current ?: TileShape).background(TileFill).padding(vertical = 10.dp)) {
         shown.forEach { hour ->
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(hourShort(hour.epochMillis, clock24), color = TextTertiary, fontSize = 11.sp, style = Tabular, maxLines = 1)
@@ -195,7 +199,7 @@ internal fun RainNowcast(steps: List<RainStep>, modifier: Modifier = Modifier) {
     val ahead = remember(steps) { steps.filter { it.epochMillis >= now - 5 * 60_000L } }
     if (ahead.size < 6 || ahead.none { it.mmPerHour >= WeatherMath.WET }) return
     val peak = ahead.maxOf { it.mmPerHour }.coerceAtLeast(2.5)
-    Column(modifier.fillMaxWidth().clip(TileShape).background(TileFill).padding(12.dp)) {
+    Column(modifier.fillMaxWidth().clip(LocalTileShape.current ?: TileShape).background(TileFill).padding(12.dp)) {
         Canvas(
             Modifier.fillMaxWidth().height(46.dp).semantics { contentDescription = WeatherMath.nowcastLine(steps, now).orEmpty() },
         ) {
@@ -284,14 +288,16 @@ internal fun HourlyExplorer(
     Column(modifier.fillMaxWidth()) {
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(Joined.Gap),
         ) {
-            offered.forEach { m ->
+            // what the chart draws, as one joined strip
+            offered.forEachIndexed { i, m ->
                 val on = m == metric
+                val fill by androidx.compose.animation.animateColorAsState(if (on) Color.White.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.05f), MacroMotion.colorTween(), label = "chartChip")
                 Row(
                     Modifier
-                        .clip(CircleShape)
-                        .background(if (on) Color.White.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.05f))
+                        .clip(joinedRowShape(TilePlace.of(i, offered.size), outer = 16.dp, inner = 5.dp))
+                        .background(fill)
                         .clickable(role = Role.Tab) { haptics.tick(); metric = m }
                         .padding(horizontal = 11.dp, vertical = 7.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -303,7 +309,7 @@ internal fun HourlyExplorer(
             }
         }
         Spacer(Modifier.height(10.dp))
-        Column(Modifier.fillMaxWidth().clip(TileShape).background(TileFill).padding(top = 12.dp, bottom = 10.dp)) {
+        Column(Modifier.fillMaxWidth().clip(LocalTileShape.current ?: TileShape).background(TileFill).padding(top = 12.dp, bottom = 10.dp)) {
             // the hour under the finger, in full
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(painterResource(hour.iconRes), null, tint = Color.Unspecified, modifier = Modifier.size(30.dp))
@@ -731,7 +737,7 @@ internal fun WearRow(advice: ClothingAdvice, modifier: Modifier = Modifier) {
     Column(
         modifier
             .fillMaxWidth()
-            .clip(TileShape)
+            .clip(LocalTileShape.current ?: TileShape)
             .background(TileFill)
             .clickable(enabled = advice.detail.isNotBlank(), onClickLabel = "Why") { haptics.tick(); why = !why }
             .padding(horizontal = 12.dp, vertical = 9.dp),
@@ -747,11 +753,11 @@ internal fun WearRow(advice: ClothingAdvice, modifier: Modifier = Modifier) {
         if (advice.items.isNotEmpty()) {
             Row(
                 Modifier.padding(top = 7.dp).horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                advice.items.forEach { item ->
+                advice.items.forEachIndexed { i, item ->
                     Row(
-                        Modifier.clip(CircleShape).background(Color.White.copy(alpha = 0.08f)).padding(horizontal = 8.dp, vertical = 4.dp),
+                        Modifier.clip(joinedRowShape(TilePlace.of(i, advice.items.size), outer = 12.dp, inner = 4.dp)).background(Color.White.copy(alpha = 0.08f)).padding(horizontal = 8.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(painterResource(item.icon.iconRes), null, tint = TextPrimary, modifier = Modifier.size(12.dp))
@@ -769,7 +775,7 @@ internal fun WearRow(advice: ClothingAdvice, modifier: Modifier = Modifier) {
 /** One reading: what it is, the number, and under it a small picture or a line that places it. */
 @Composable
 private fun Tile(icon: ImageVector, label: String, value: String, modifier: Modifier = Modifier, note: String? = null, picture: (@Composable ColumnScope.() -> Unit)? = null) {
-    Column(modifier.clip(TileShape).background(TileFill).heightIn(min = 118.dp).padding(12.dp)) {
+    Column(modifier.clip(LocalTileShape.current ?: TileShape).background(TileFill).heightIn(min = 118.dp).padding(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, null, tint = TextTertiary, modifier = Modifier.size(13.dp))
             Spacer(Modifier.width(6.dp))
@@ -911,7 +917,7 @@ internal fun ConditionsGrid(weather: WeatherInfo, tempUnit: TempUnit, windUnit: 
         }
     }
     tiles += { m ->
-        Column(m.clip(TileShape).background(TileFill).heightIn(min = 118.dp).padding(12.dp)) {
+        Column(m.clip(LocalTileShape.current ?: TileShape).background(TileFill).heightIn(min = 118.dp).padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(AppIcons.Wind, null, tint = TextTertiary, modifier = Modifier.size(13.dp))
                 Spacer(Modifier.width(6.dp))
@@ -1008,7 +1014,7 @@ internal fun ConditionsGrid(weather: WeatherInfo, tempUnit: TempUnit, windUnit: 
     if (rise != null && set != null) {
         val light = java.time.Duration.between(rise, set)
         tiles += { m ->
-            Column(m.clip(TileShape).background(TileFill).heightIn(min = 118.dp).padding(12.dp)) {
+            Column(m.clip(LocalTileShape.current ?: TileShape).background(TileFill).heightIn(min = 118.dp).padding(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(AppIcons.Sunset, null, tint = TextTertiary, modifier = Modifier.size(13.dp))
                     Spacer(Modifier.width(6.dp))
@@ -1028,7 +1034,7 @@ internal fun ConditionsGrid(weather: WeatherInfo, tempUnit: TempUnit, windUnit: 
 
     sky?.moonPhase?.let { phase ->
         tiles += { m ->
-            Column(m.clip(TileShape).background(TileFill).heightIn(min = 118.dp).padding(12.dp)) {
+            Column(m.clip(LocalTileShape.current ?: TileShape).background(TileFill).heightIn(min = 118.dp).padding(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(AppIcons.Moon, null, tint = TextTertiary, modifier = Modifier.size(13.dp))
                     Spacer(Modifier.width(6.dp))
@@ -1084,10 +1090,15 @@ internal fun ConditionsGrid(weather: WeatherInfo, tempUnit: TempUnit, windUnit: 
         }
     }
 
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        tiles.chunked(2).forEach { pair ->
-            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                pair.forEach { tile -> tile(Modifier.weight(1f).fillMaxHeight()) }
+    // every reading a tile of one joined grid, round only at the grid's own corners
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+        tiles.chunked(2).forEachIndexed { r, pair ->
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+                pair.forEachIndexed { c, tile ->
+                    CompositionLocalProvider(LocalTileShape provides joinedCellShape(r * 2 + c, tiles.size, 2, outer = 22.dp)) {
+                        tile(Modifier.weight(1f).fillMaxHeight())
+                    }
+                }
                 // an odd one out keeps its half, so every tile is one width
                 if (pair.size == 1) Spacer(Modifier.weight(1f))
             }

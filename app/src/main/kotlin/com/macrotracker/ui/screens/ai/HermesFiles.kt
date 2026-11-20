@@ -1,5 +1,9 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.screens.health.HealthDisplay
+import androidx.compose.foundation.layout.PaddingValues
+import com.macrotracker.ui.components.joinedTile
+import com.macrotracker.ui.components.Joined
 import com.macrotracker.ui.screens.home.WellFill
 import android.graphics.BitmapFactory
 import android.util.Base64
@@ -191,18 +195,20 @@ private fun FolderList(folder: HermesPreview.Folder, onOpen: (HermesPreview.Fold
     val entries = remember(folder.path) {
         folder.entries.sortedWith(compareBy({ !it.dir }, { it.name.startsWith(".") }, { it.name.lowercase() }))
     }
-    LazyColumn(Modifier.fillMaxSize()) {
-        items(entries, key = { it.path }) { e ->
+    // the folder as one group of joined tiles
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+        itemsIndexed(entries, key = { _, it -> it.path }) { i, e ->
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .joinedTile(i, entries.size, fill = AiRoom, outer = 22.dp)
                     .clickable { onOpen(e) }
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                    .padding(horizontal = 14.dp, vertical = 13.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(if (e.dir) AppIcons.Folder else AppIcons.File, null, tint = if (e.dir) AiAccent else TextSecondary, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(14.dp))
-                Text(e.name, color = TextPrimary, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text(e.name, style = HealthDisplay, fontWeight = FontWeight.SemiBold, color = TextPrimary, fontSize = 14.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 if (!e.dir) Text(sizeLabel(e.bytes), color = TextTertiary, fontSize = 11.sp)
             }
         }

@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.components.joinedCellShape
+import com.macrotracker.ui.components.Joined
 import androidx.compose.runtime.remember
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -96,16 +98,17 @@ internal fun HermesWelcome(onAsk: (String) -> Unit, onGit: () -> Unit, onFiles: 
             color = TextPrimary,
             modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 18.dp, bottom = 16.dp),
         )
+        // the starters as one joined grid, each tile in its own colour
         Starters.chunked(2).forEachIndexed { row, pair ->
-            Row(Modifier.fillMaxWidth().padding(bottom = 10.dp).height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                pair.forEach { st ->
+            Row(Modifier.fillMaxWidth().padding(bottom = Joined.Gap).height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+                pair.forEachIndexed { col, st ->
                     val press = remember { MutableInteractionSource() }
                     Column(
                         Modifier
                             .weight(1f)
                             .fillMaxHeight()
                             .pressSink(press)
-                            .clip(RoundedCornerShape(26.dp))
+                            .clip(joinedCellShape(row * 2 + col, Starters.size, 2, outer = 26.dp, inner = Joined.Inner))
                             .background(roomColor(st.tint))
                             .clickable(interactionSource = press, indication = androidx.compose.material3.ripple()) {
                                 haptics.click()

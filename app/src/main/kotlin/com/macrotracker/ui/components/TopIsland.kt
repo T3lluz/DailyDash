@@ -1,5 +1,7 @@
 package com.macrotracker.ui.components
 
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.runtime.SideEffect
 import com.macrotracker.ui.screens.health.HealthDisplayFamily
 import com.macrotracker.ui.screens.health.HealthDisplay
 import com.macrotracker.ui.util.tookShort
@@ -159,14 +161,14 @@ import kotlin.math.sign
 
 private val PillHeight = 40.dp
 /** The pill: always two lines, an item's title over its second line. */
-private val IslandHeight = 56.dp
+private val IslandHeight = 60.dp
 /** The largest font scale the pill follows; past it two lines no longer fit [IslandHeight]. */
 private const val MAX_FONT_SCALE = 1.3f
-/** The solo disc's box; the margin around it, (56 − 40) / 2, is the pill's left margin too. */
+/** The solo disc's box; the margin around it, (60 − 40) / 2, is the pill's left margin too. */
 private val SoloBox = 40.dp
-private val SoloPadStart = 8.dp
+private val SoloPadStart = (IslandHeight - SoloBox) / 2
 /** Text and numbers stay clear of the pill's round end: its radius less the disc's margin. */
-private val SoloPadEnd = 18.dp
+private val SoloPadEnd = 20.dp
 /** Between the left side and the right. */
 private val SoloSplit = 16.dp
 /** Between two numbers on the right. */
@@ -174,6 +176,9 @@ private val FactGap = 14.dp
 /** The least of the title kept when the right side asks for room. */
 private val SoloTitleMin = 112.dp
 private val IslandTop = 6.dp
+
+/** How far down from the status bar the island reaches: where its veil is measured from. */
+val IslandVeilDepth = IslandTop + IslandHeight
 /** Under the discs, so overlapping ones keep their edge on the see-through glass. */
 private val DiscBase = Color(0xFF141416)
 private val CardCorner = 26.dp
@@ -539,8 +544,18 @@ private data class PillPlan(
 /** Cells on the pill, Hermes counted; two read well on a phone. */
 private const val MAX_ON_PILL = 2
 
-/** Between two cells: a gap, no line; each cell's disc already marks where it starts. */
-private val Divider = 12.dp
+/**
+ * With two things or more on the pill, each is its own tile set into the glass, joined as the
+ * app's lists are: [IslandInset] in from the pill's edge, so a tile's outer corner is the pill's
+ * less that ([IslandTileOuter]), [IslandGap] apart (the same as the inset, so the glass shows
+ * the same width all round every tile) with small corners where two meet.
+ */
+private val IslandGap = Joined.GlassGap
+private val IslandInset = IslandGap
+private val IslandTile = IslandHeight - IslandInset * 2
+private val IslandTileOuter = IslandHeight / 2 - IslandInset
+private val IslandTileInner = 8.dp
+private val IslandTileFill = Color.White.copy(alpha = 0.07f)
 
 /** Hermes' label on a card row, beside his clock. */
 private val HermesLabelMax = 170.dp
@@ -600,8 +615,9 @@ private fun rememberPillPlan(
         val shown = items.take(MAX_ON_PILL - if (hermes != null) 1 else 0)
         val rest = items.drop(shown.size)
         val cells = shown.size + if (hermes != null) 1 else 0
-        val room = width - CellPadStart - (if (rest.isEmpty()) CellPadEnd else ClusterPad) - clusterWidth(rest.size) - Divider * (cells - 1).coerceAtLeast(0)
-        val textRoom = room / cells.coerceAtLeast(1) - CellDisc - CellGap - 6.dp
+        // each cell is a tile of its own: what is left after the gaps and the round tile, shared out
+        val room = width - IslandInset * 2 - IslandGap * (cells - 1).coerceAtLeast(0) - (if (rest.isEmpty()) 0.dp else IslandGap + IslandTile)
+        val textRoom = room / cells.coerceAtLeast(1) - CellPadStart - CellPadEnd - CellDisc - CellGap - 2.dp
         val entries = shown.map { item ->
             val full = item.title.trim()
             // The whole title when it fits its cell; else the label, when it names the thing
@@ -635,10 +651,8 @@ private inline fun fitTitle(text: String, room: Dp, width: (String) -> Dp): Stri
 /** The two-cell pill: a cell's disc sits as far from the pill's edge as from its top. */
 private val CellDisc = 36.dp
 private val CellGap = 10.dp
-private val CellPadStart = 10.dp
-private val CellPadEnd = 14.dp
-
-private fun clusterWidth(count: Int): Dp = if (count == 0) 0.dp else 8.dp + ClusterSize
+private val CellPadStart = 6.dp
+private val CellPadEnd = 10.dp
 
 /** The circle the rest wait in, as far from the pill's end as from its top and bottom. */
 private val ClusterSize = 36.dp
@@ -659,18 +673,14 @@ private fun CompactPill(
 ) {
     val plan = rememberPillPlan(items, hermes, labels, rich, width)
     val alone = plan.solo != null || plan.hermesAlone
+    // the tiles on the pill, the one the rest wait in counted
+    val tiles = if (alone) 1 else plan.entries.size + (if (plan.hermes != null) 1 else 0) + (if (plan.rest.isNotEmpty()) 1 else 0)
+    fun tile(i: Int) = joinedRowShape(TilePlace.of(i, tiles), outer = IslandTileOuter, inner = IslandTileInner)
     Row(
         Modifier
             .width(width)
             .height(IslandHeight)
-            .padding(
-                start = if (alone) SoloPadStart else CellPadStart,
-                end = when {
-                    alone -> 0.dp
-                    plan.rest.isEmpty() -> CellPadEnd
-                    else -> ClusterPad
-                },
-            ),
+            .padding(if (alone) PaddingValues(start = SoloPadStart) else PaddingValues(IslandInset)),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // A new line-up rolls in (the old words up and out, the new ones up from below); a
@@ -703,28 +713,38 @@ private fun CompactPill(
                     }
                 }
                 p.hermesAlone -> p.hermes?.let { h -> HermesSolo(h, onClick = { onHermes(h) }, modifier = Modifier.fillMaxWidth()) }
-                // Cells of one width, so the discs, titles and second lines line up the same in each.
-                else -> Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    p.hermes?.let { h -> HermesCell(h, p.hermesTitle ?: h.label, onClick = { onHermes(h) }, modifier = Modifier.weight(1f)) }
+                // Each cell its own tile, all one width, so the discs, titles and second lines line up.
+                else -> Row(Modifier.fillMaxWidth().fillMaxHeight(), horizontalArrangement = Arrangement.spacedBy(IslandGap), verticalAlignment = Alignment.CenterVertically) {
+                    p.hermes?.let { h ->
+                        Box(
+                            Modifier.weight(1f).fillMaxHeight().clip(tile(0)).background(IslandTileFill).padding(start = CellPadStart, end = CellPadEnd),
+                            contentAlignment = Alignment.CenterStart,
+                        ) {
+                            HermesCell(h, p.hermesTitle ?: h.label, onClick = { onHermes(h) }, modifier = Modifier.fillMaxWidth())
+                        }
+                    }
                     p.entries.forEachIndexed { i, e ->
-                        if (i > 0 || p.hermes != null) EntryDivider()
                         key(IslandRanking.key(e.item)) {
-                            ItemCell(e, onClick = { onItem(e.item) }, onLongClick = { onHide(e.item) }, modifier = Modifier.weight(1f))
+                            Box(
+                                Modifier.weight(1f).fillMaxHeight().clip(tile(i + if (p.hermes != null) 1 else 0)).background(IslandTileFill)
+                                    .padding(start = CellPadStart, end = CellPadEnd),
+                                contentAlignment = Alignment.CenterStart,
+                            ) {
+                                ItemCell(e, onClick = { onItem(e.item) }, onLongClick = { onHide(e.item) }, modifier = Modifier.fillMaxWidth())
+                            }
                         }
                     }
                 }
             }
         }
-        if (plan.rest.isNotEmpty()) {
-            Spacer(Modifier.width(8.dp))
-            Cluster(plan.rest, onClick = onMore)
+        if (!alone && plan.rest.isNotEmpty()) {
+            // the rest wait in a tile of their own at the end, round where the pill is
+            Spacer(Modifier.width(IslandGap))
+            Box(Modifier.size(IslandTile).clip(tile(tiles - 1)).background(IslandTileFill), contentAlignment = Alignment.Center) {
+                Cluster(plan.rest, onClick = onMore)
+            }
         }
     }
-}
-
-@Composable
-private fun EntryDivider() {
-    Spacer(Modifier.width(Divider))
 }
 
 /** The press, tap and long press every entry on the pill shares. */
@@ -1821,7 +1841,7 @@ private fun ToneDisc(item: IslandItem, tone: Color, size: Dp, phase: Float = 0f,
 @Composable
 private fun Modifier.pressScale(source: MutableInteractionSource): Modifier {
     val pressed by source.collectIsPressedAsState()
-    val scale = animateFloatAsState(if (pressed) 0.94f else 1f, MacroMotion.pressSpring(), label = "island_press")
+    val scale = animateFloatAsState(if (pressed) 0.94f else 1f, MacroMotion.giveSpring(), label = "island_press")
     return graphicsLayer {
         scaleX = scale.value
         scaleY = scale.value

@@ -1,5 +1,14 @@
 package com.macrotracker.ui.screens.ai
 
+import androidx.compose.foundation.lazy.itemsIndexed
+import com.macrotracker.ui.components.joinedShape
+import com.macrotracker.ui.components.TilePlace
+import com.macrotracker.ui.components.IconTile
+import com.macrotracker.ui.components.JoinedRow
+import com.macrotracker.ui.components.Joined
+import com.macrotracker.ui.components.TileMenu
+import com.macrotracker.ui.components.TileMenuGroup
+import com.macrotracker.ui.components.TileMenuItem
 import com.macrotracker.ui.screens.home.RoomNeutral
 import com.macrotracker.ui.screens.health.HealthDisplay
 import androidx.compose.animation.AnimatedVisibility
@@ -238,9 +247,11 @@ internal fun HermesThreadRail(
     }
 
     // One chat's row, for the list and for the shelves at the foot. [within] is the list it can be moved in, if it can.
-    val rowFor: @Composable (HermesThreadSummary, List<HermesThreadSummary>?, Modifier) -> Unit = { t, within, rowModifier ->
+    // [place] is where the row stands in its section: a section's rows are joined tiles.
+    val rowFor: @Composable (HermesThreadSummary, List<HermesThreadSummary>?, Modifier, TilePlace) -> Unit = { t, within, rowModifier, place ->
                     ThreadRow(
                         modifier = rowModifier,
+                        place = place,
                         draft = drafts[t.id],
                         openKey = openRow,
                         onOpenChange = { openRow = it },
@@ -323,16 +334,18 @@ internal fun HermesThreadRail(
                     Modifier
                         .size(40.dp)
                         .clip(CircleShape)
-                        .clickable { options = true }
+                        .clickable { haptics.tick(); options = true }
                         .semantics { contentDescription = "List options" },
                     contentAlignment = Alignment.Center,
                 ) { Icon(AppIcons.SwapVertical, null, tint = TextSecondary, modifier = Modifier.size(19.dp)) }
-                DropdownMenu(expanded = options, onDismissRequest = { options = false }, modifier = Modifier.background(RoomNeutral)) {
-                    MenuRow(if (groupByDay) "Group by day  ✓" else "Group by day", AppIcons.CalendarDays) { onGroupByDay(!groupByDay) }
-                    Spacer(Modifier.height(8.dp))
-                    RailHeading("Settle after")
-                    listOf(0 to "Never", 3 to "3 days", 7 to "A week", 14 to "2 weeks", 30 to "A month").forEach { (days, label) ->
-                        MenuRow(if (days == autoSettleDays) "$label  ✓" else label, AppIcons.CheckCircle) { options = false; onAutoSettle(days) }
+                TileMenu(expanded = options, onDismissRequest = { options = false }, color = AiMenu) {
+                    TileMenuGroup {
+                        TileMenuItem("Group by day", AppIcons.CalendarDays, checked = groupByDay) { onGroupByDay(!groupByDay) }
+                    }
+                    TileMenuGroup(label = "Settle idle chats after") {
+                        listOf(0 to "Never", 3 to "3 days", 7 to "A week", 14 to "2 weeks", 30 to "A month").forEach { (days, label) ->
+                            TileMenuItem(label, null, checked = days == autoSettleDays) { options = false; onAutoSettle(days) }
+                        }
                     }
                 }
             }
@@ -343,7 +356,7 @@ internal fun HermesThreadRail(
                     .size(40.dp)
                     .clip(CircleShape)
                     .background(AiAccent.copy(alpha = 0.16f))
-                    .clickable { onNewChat() }
+                    .clickable { haptics.tick(); onNewChat() }
                     .semantics { contentDescription = "New chat" },
                 contentAlignment = Alignment.Center,
             ) {
@@ -393,14 +406,14 @@ internal fun HermesThreadRail(
         LazyColumn(
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(bottom = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            verticalArrangement = Arrangement.spacedBy(Joined.Gap),
         ) {
             fun section(label: String, rows: List<HermesThreadSummary>, movable: Boolean = false) {
                 if (rows.isEmpty()) return
                 if (label.isNotBlank()) item(key = "h-$label") {
                     RailSection(label, rows.size, when (label) { "Active" -> AiAccent; "Pinned" -> ServerWarn; "Staff" -> AiAccent; else -> TextTertiary })
                 }
-                items(rows, key = { "t-${it.id}" }) { t -> rowFor(t, if (movable) rows else null, Modifier.animateItem(fadeInSpec = null, fadeOutSpec = androidx.compose.animation.core.tween(110), placementSpec = androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMedium))) }
+                itemsIndexed(rows, key = { _, it -> "t-${it.id}" }) { i, t -> rowFor(t, if (movable) rows else null, Modifier.animateItem(fadeInSpec = null, fadeOutSpec = androidx.compose.animation.core.tween(110), placementSpec = androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMedium)), TilePlace.of(i, rows.size)) }
             }
             if (filter == RailFilter.ALL) {
                 // staff stand at the very top; then what wants you, what is kept, and what was typed and not sent
@@ -432,7 +445,7 @@ internal fun HermesThreadRail(
                             modifier = Modifier
                                 .padding(horizontal = 8.dp)
                                 .clip(RoundedCornerShape(16.dp))
-                                .clickable { onReorder(emptyList()) }
+                                .clickable { haptics.tick(); onReorder(emptyList()) }
                                 .padding(horizontal = 12.dp, vertical = 8.dp),
                         )
                     }
@@ -460,18 +473,16 @@ internal fun HermesThreadRail(
         if (query.isBlank() && (sleeping.isNotEmpty() || put.isNotEmpty())) {
             Column(Modifier.fillMaxWidth().padding(top = 4.dp)) {
                 Spacer(Modifier.height(8.dp))
-                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                JoinedRow(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), fill = AiRoom, outer = 22.dp) {
                     Shelf.entries.forEach { sh ->
                         val list = if (sh == Shelf.SNOOZED) sleeping else put
                         if (list.isEmpty()) return@forEach
                         val open = shelf == sh
                         Row(
                             modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(18.dp))
-                                .background(if (open) AiRoomHi else AiRoom)
+                                .background(if (open) AiRoomHi else Color.Transparent)
                                 .clickable { haptics.tick(); shelf = if (open) null else sh }
-                                .padding(horizontal = 12.dp, vertical = 11.dp),
+                                .padding(horizontal = 14.dp, vertical = 13.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Icon(sh.icon, null, tint = if (open) TextPrimary else TextTertiary, modifier = Modifier.size(15.dp))
@@ -495,28 +506,26 @@ internal fun HermesThreadRail(
                     LazyColumn(
                         modifier = Modifier.heightIn(max = 252.dp),
                         contentPadding = PaddingValues(bottom = 6.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                        verticalArrangement = Arrangement.spacedBy(Joined.Gap),
                     ) {
-                        items(rows, key = { "s-${it.id}" }) { t -> rowFor(t, null, Modifier.animateItem(fadeInSpec = null, fadeOutSpec = androidx.compose.animation.core.tween(110), placementSpec = androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMedium))) }
+                        itemsIndexed(rows, key = { _, it -> "s-${it.id}" }) { i, t -> rowFor(t, null, Modifier.animateItem(fadeInSpec = null, fadeOutSpec = androidx.compose.animation.core.tween(110), placementSpec = androidx.compose.animation.core.spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMedium)), TilePlace.of(i, rows.size)) }
                     }
                 }
             }
         }
         // the usual places, where T3 Code's sidebar keeps its own; the nav pill floats over the foot
         Spacer(Modifier.height(8.dp))
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    start = 12.dp, end = 12.dp, top = 8.dp,
-                    bottom = 12.dp,
-                ),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        // joined like Weave's dock: one row of tiles, round only at the panel's own corners
+        JoinedRow(
+            modifier = Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+            fill = AiRoom,
+            // the panel's 28 dp corner less the 8 dp it stands in from it
+            outer = 20.dp,
         ) {
-            FooterButton(AppIcons.GitFork, "Git", Modifier.weight(1f), onOpenGit)
-            FooterButton(AppIcons.Folder, "Files", Modifier.weight(1f), onOpenFiles)
-            FooterButton(AppIcons.SquareTerminal, "Shell", Modifier.weight(1f), onOpenConsole)
-            FooterButton(AppIcons.ChartBar, "Usage", Modifier.weight(1f), onOpenUsage)
+            IconTile(AppIcons.GitFork, "Git", onClick = onOpenGit)
+            IconTile(AppIcons.Folder, "Files", onClick = onOpenFiles)
+            IconTile(AppIcons.SquareTerminal, "Console", onClick = onOpenConsole)
+            IconTile(AppIcons.ChartBar, "Usage", onClick = onOpenUsage)
         }
     }
     // what was just done, with a way back: the pill floats over the panel's foot
@@ -542,7 +551,7 @@ internal fun HermesThreadRail(
             Box(
                 Modifier
                     .clip(RoundedCornerShape(50))
-                    .clickable { shownNote?.undo?.invoke(); note = null }
+                    .clickable { haptics.tick(); shownNote?.undo?.invoke(); note = null }
                     .padding(horizontal = 12.dp, vertical = 8.dp),
             ) { Text("Undo", color = AiAccent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
         }
@@ -642,6 +651,8 @@ private fun ThreadRow(
     /** The chat whose swipe actions are open, if any: one at a time. */
     openKey: String? = null,
     onOpenChange: (String?) -> Unit = {},
+    /** Where it stands in its section, for the corners it shares with the rows next to it. */
+    place: TilePlace = TilePlace.ONLY,
 ) {
     val haptics = rememberHaptics()
     var menuOpen by remember { mutableStateOf(false) }
@@ -655,7 +666,7 @@ private fun ThreadRow(
             else -> listOf(SwipeAction("Settle", AppIcons.CheckCircle) { onToggleArchive() }, SwipeAction("Snooze", AppIcons.BellOff) { onSnooze() })
         }
     }
-    val shape = RoundedCornerShape(18.dp)
+    val shape = joinedShape(place, outer = 22.dp)
     SwipeActionsRow(
         key = thread.id,
         openKey = openKey,
@@ -741,24 +752,31 @@ private fun ThreadRow(
                     RowChips(model?.label, modeTag, thread.tokens, thread.contextFraction, Modifier.padding(top = 7.dp))
                 }
             }
-            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }, modifier = Modifier.background(RoomNeutral)) {
-                MenuRow("Rename", AppIcons.Edit) { menuOpen = false; onRename() }
-                if (!thread.isStaff) {
-                    MenuRow(if (thread.pinned) "Unpin" else "Pin", AppIcons.Star) { menuOpen = false; onTogglePin() }
-                }
-                if (!thread.isStaff) {
-                    MenuRow(if (archived) "Unsettle" else "Settle", AppIcons.CheckCircle) { menuOpen = false; onToggleArchive() }
-                    if (wake != null) {
-                        MenuRow("Wake now", AppIcons.Bell) { menuOpen = false; onWake() }
-                    } else if (state == null) {
-                        MenuRow("Snooze…", AppIcons.BellOff) { menuOpen = false; onSnooze() }
+            // Sorted: the chat itself, where it stands in the list, then what empties or removes it.
+            TileMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }, color = AiMenu) {
+                TileMenuGroup {
+                    TileMenuItem("Rename", AppIcons.Edit) { menuOpen = false; onRename() }
+                    if (!thread.isStaff) {
+                        TileMenuItem(if (thread.pinned) "Unpin" else "Pin", if (thread.pinned) AppIcons.StarFilled else AppIcons.Star) { menuOpen = false; onTogglePin() }
+                        TileMenuItem(if (archived) "Unsettle" else "Settle", AppIcons.CheckCircle) { menuOpen = false; onToggleArchive() }
+                        if (wake != null) {
+                            TileMenuItem("Wake now", AppIcons.Bell) { menuOpen = false; onWake() }
+                        } else if (state == null) {
+                            TileMenuItem("Snooze…", AppIcons.BellOff) { menuOpen = false; onSnooze() }
+                        }
                     }
                 }
-                moves?.top?.let { top -> MenuRow("Move to top", AppIcons.ArrowUp) { menuOpen = false; top() } }
-                moves?.up?.let { up -> MenuRow("Move up", AppIcons.ChevronUp) { menuOpen = false; up() } }
-                moves?.down?.let { down -> MenuRow("Move down", AppIcons.ChevronDown) { menuOpen = false; down() } }
-                MenuRow("Clear", AppIcons.Refresh) { menuOpen = false; onClear() }
-                MenuRow(if (thread.isStaff) "Let go" else "Delete", AppIcons.Delete, danger = true) { menuOpen = false; onDelete() }
+                if (moves != null && (moves.top != null || moves.up != null || moves.down != null)) {
+                    TileMenuGroup {
+                        moves.top?.let { top -> TileMenuItem("Move to top", AppIcons.ArrowUp) { menuOpen = false; top() } }
+                        moves.up?.let { up -> TileMenuItem("Move up", AppIcons.ChevronUp) { menuOpen = false; up() } }
+                        moves.down?.let { down -> TileMenuItem("Move down", AppIcons.ChevronDown) { menuOpen = false; down() } }
+                    }
+                }
+                TileMenuGroup {
+                    TileMenuItem("Clear", AppIcons.Refresh) { menuOpen = false; onClear() }
+                    TileMenuItem(if (thread.isStaff) "Let go" else "Delete", AppIcons.Delete, danger = true) { menuOpen = false; onDelete() }
+                }
             }
         }
     }
@@ -817,23 +835,6 @@ private fun RowModelLine(model: RailModel?, modeTag: String?, tokens: Long, modi
         if (tokens > 0) {
             Text("  ·  ${tokenLabel(tokens)} tok", color = TextTertiary, fontSize = 11.5.sp, maxLines = 1)
         }
-    }
-}
-
-@Composable
-private fun FooterButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, modifier: Modifier, onClick: () -> Unit) {
-    val haptics = rememberHaptics()
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(18.dp))
-            .background(AiRoom)
-            .clickable { haptics.tick(); onClick() }
-            .padding(vertical = 10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Icon(icon, null, tint = TextSecondary, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.height(4.dp))
-        Text(label, color = TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1)
     }
 }
 
@@ -929,8 +930,8 @@ private fun DraftRow(text: String, selected: Boolean, modifier: Modifier = Modif
         modifier = modifier
             .padding(horizontal = 8.dp)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(if (selected) AiRoomHi else AiRoom)
+            .clip(RoundedCornerShape(22.dp))
+            .background(if (selected) AiRoomHi else TileDark)
             .clickable { haptics.tick(); onClick() }
             .padding(horizontal = 12.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,

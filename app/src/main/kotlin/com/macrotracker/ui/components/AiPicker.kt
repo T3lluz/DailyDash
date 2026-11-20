@@ -1,5 +1,6 @@
 package com.macrotracker.ui.components
 
+import com.macrotracker.ui.components.Joined
 import com.macrotracker.ui.screens.home.SheetColor
 import com.macrotracker.ui.screens.home.WellFill
 import com.macrotracker.ui.screens.health.roomColor
@@ -146,16 +147,30 @@ fun AiAccessBadge(access: AiAccess, modifier: Modifier = Modifier, label: String
  * for a composer that needs the room.
  */
 @Composable
-fun AiPill(status: AiProviderStatus?, onClick: () -> Unit, modifier: Modifier = Modifier, open: Boolean = false, compact: Boolean = false) {
+fun AiPill(
+    status: AiProviderStatus?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    open: Boolean = false,
+    compact: Boolean = false,
+    /** As one tile of a composer's joined row: its corners there, and the row's height. */
+    tile: androidx.compose.ui.graphics.Shape? = null,
+) {
     val haptics = rememberHaptics()
     val name = status?.let { if (it.provider == AiProvider.HERMES) "Hermes" else it.modelLabel } ?: "Pick an AI"
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(999.dp))
+            .then(if (tile != null) Modifier.height(44.dp) else Modifier)
+            .clip(tile ?: RoundedCornerShape(999.dp))
             .background(if (open) ServerBrand.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.07f))
             .clickable { haptics.tick(); onClick() }
             .semantics { contentDescription = "AI: $name, ${status?.access?.label ?: "not set up"}" }
-            .padding(start = 4.dp, end = if (compact) 6.dp else 9.dp, top = 4.dp, bottom = 4.dp),
+            .padding(
+                start = if (tile != null) 11.dp else 4.dp,
+                end = if (tile != null) 12.dp else if (compact) 6.dp else 9.dp,
+                top = if (tile != null) 0.dp else 4.dp,
+                bottom = if (tile != null) 0.dp else 4.dp,
+            ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box {
@@ -177,12 +192,13 @@ fun AiPill(status: AiProviderStatus?, onClick: () -> Unit, modifier: Modifier = 
             Spacer(Modifier.width(6.dp))
             Text(
                 name,
+                style = com.macrotracker.ui.screens.health.HealthDisplay,
                 color = TextPrimary,
-                fontSize = 12.5.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = 128.dp),
+                modifier = Modifier.widthIn(max = 160.dp),
             )
         }
         Spacer(Modifier.width(3.dp))
@@ -247,7 +263,7 @@ private fun ColumnScope.AiModelList(
     // sheet then opens on the first one that has.
     val tab = picked.takeIf { t -> providers.any { it.provider == t } } ?: providers.firstOrNull()?.provider
     val haptics = rememberHaptics()
-    SearchBox(value = query, onValueChange = { query = it }, hint = "Search all models", modifier = Modifier.padding(horizontal = 16.dp))
+    SearchBox(value = query, onValueChange = { query = it }, hint = "Search all models", modifier = Modifier.padding(horizontal = 16.dp), fill = Joined.Fill)
     if (q.isEmpty()) {
         val scroll = rememberScrollState()
         Row(
@@ -267,10 +283,11 @@ private fun ColumnScope.AiModelList(
         color = TextTertiary, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 4.dp),
     )
     @Composable
-    fun option(p: AiProviderStatus, m: AiModel) = ModelOption(
+    fun option(p: AiProviderStatus, m: AiModel, index: Int, count: Int) = ModelOption(
         logo = p.provider, title = m.name, note = m.note,
         selected = state.selected == p.provider && p.model == m.id,
         onClick = { onPick(p.provider, m.id) },
+        index = index, count = count,
     )
     LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
         if (q.isNotEmpty()) {
@@ -280,7 +297,7 @@ private fun ColumnScope.AiModelList(
                 if (hits.isEmpty()) return@forEach
                 any = true
                 item(key = "h-${p.provider}") { RailHeading(p.provider.displayName) }
-                hits.forEach { m -> item(key = "m-${p.provider}-${m.id}") { option(p, m) } }
+                hits.forEachIndexed { i, m -> item(key = "m-${p.provider}-${m.id}") { option(p, m, i, hits.size) } }
             }
             if (!any) item(key = "none") { Text("No match", color = TextTertiary, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp)) }
             return@LazyColumn
@@ -314,7 +331,8 @@ private fun ColumnScope.AiModelList(
                 )
             }
             else -> {
-                modelsFor(state, p.provider).forEach { m -> item(key = "m-${p.provider}-${m.id}") { option(p, m) } }
+                val models = modelsFor(state, p.provider)
+                models.forEachIndexed { i, m -> item(key = "m-${p.provider}-${m.id}") { option(p, m, i, models.size) } }
                 if (p.provider in state.loadingModels) {
                     item(key = "l-${p.provider}") {
                         Text("Loading ${p.provider.displayName}'s models…", color = TextTertiary, fontSize = 12.sp, modifier = Modifier.padding(start = 64.dp, top = 2.dp, bottom = 6.dp))
@@ -328,15 +346,15 @@ private fun ColumnScope.AiModelList(
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 10.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .background(Color.White.copy(alpha = 0.06f))
+                .clip(RoundedCornerShape(Joined.Outer))
+                .background(Joined.Fill)
                 .clickable(onClick = onManage)
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .padding(horizontal = 14.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(AppIcons.Settings, null, tint = TextSecondary, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(10.dp))
-            Text("Sign-ins, keys and models", color = TextPrimary, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Text("Sign-ins, keys and models", style = com.macrotracker.ui.screens.health.HealthDisplay, color = TextPrimary, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
             Icon(AppIcons.ChevronRight, null, tint = TextTertiary, modifier = Modifier.size(16.dp))
         }
     }
@@ -346,15 +364,18 @@ private fun ColumnScope.AiModelList(
 fun modelsFor(state: AiUiState, provider: AiProvider): List<AiModel> = state.models[provider].orEmpty()
 
 @Composable
-private fun ModelOption(logo: AiProvider, title: String, note: String?, selected: Boolean, onClick: () -> Unit, dim: Boolean = false) {
+private fun ModelOption(
+    logo: AiProvider, title: String, note: String?, selected: Boolean, onClick: () -> Unit, dim: Boolean = false,
+    /** Where it stands in its run of options, for the corners it shares with its neighbours. */
+    index: Int = 0, count: Int = 1,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(if (selected) ServerBrand.copy(alpha = 0.10f) else Color.Transparent)
+            .padding(start = 16.dp, end = 16.dp, bottom = Joined.Gap)
+            .joinedTile(index, count, fill = if (selected) ServerBrand.copy(alpha = 0.18f) else Joined.Fill)
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 9.dp),
+            .padding(horizontal = 14.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         AiProviderLogo(logo, 30.dp)
@@ -380,26 +401,32 @@ private fun ModelOption(logo: AiProvider, title: String, note: String?, selected
 /** Every provider as a card, two across, with its status; the Settings screen's grid. */
 @Composable
 fun AiProviderGrid(state: AiUiState, focused: AiProvider, onFocus: (AiProvider) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        state.providers.chunked(2).forEach { pair ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                pair.forEach { p ->
+    // a grid of joined tiles: only the grid's own corners are round
+    val rows = state.providers.chunked(2)
+    Column(verticalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+        rows.forEachIndexed { r, pair ->
+            Row(horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+                pair.forEachIndexed { c, p ->
                     val on = p.provider == focused
-                    val shape = RoundedCornerShape(22.dp)
+                    val shape = joinedGridShape(r, rows.size, c, pair.size, outer = Joined.Page, inner = Joined.Inner)
+                    val fill by androidx.compose.animation.animateColorAsState(
+                        if (on) roomColor(ServerBrand).let { androidx.compose.ui.graphics.lerp(it, ServerBrand, 0.12f) } else roomColor(com.macrotracker.ui.screens.home.HomeTone.Neutral),
+                        com.macrotracker.ui.theme.MacroMotion.colorTween(), label = "providerTile",
+                    )
                     Row(
                         Modifier
                             .weight(1f)
                             .clip(shape)
-                            .background(if (on) roomColor(ServerBrand).let { androidx.compose.ui.graphics.lerp(it, ServerBrand, 0.12f) } else roomColor(com.macrotracker.ui.screens.home.HomeTone.Neutral))
+                            .background(fill)
                             .clickable { onFocus(p.provider) }
-                            .padding(horizontal = 12.dp, vertical = 11.dp),
+                            .padding(horizontal = 14.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         AiProviderLogo(p.provider, 34.dp)
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(p.provider.displayName, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                                Text(p.provider.displayName, style = com.macrotracker.ui.screens.health.HealthDisplay, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                                 if (p.provider == state.selected) {
                                     Spacer(Modifier.width(6.dp))
                                     Box(Modifier.size(6.dp).clip(CircleShape).background(ServerBrand))
@@ -410,7 +437,6 @@ fun AiProviderGrid(state: AiUiState, focused: AiProvider, onFocus: (AiProvider) 
                         }
                     }
                 }
-                if (pair.size == 1) Spacer(Modifier.weight(1f))
             }
         }
     }

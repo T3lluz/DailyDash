@@ -1,5 +1,9 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.components.joinedGridShape
+import com.macrotracker.ui.components.TileMenuItem
+import com.macrotracker.ui.components.JoinedColumn
+import com.macrotracker.ui.components.Joined
 import com.macrotracker.ui.screens.health.HealthDisplay
 import com.macrotracker.ui.screens.home.WellFill
 import androidx.compose.foundation.background
@@ -124,6 +128,7 @@ internal fun ChatInfoSheet(
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val activity = chatActivity(items)
     val brand = ModelBrands.brandOf(model?.family ?: thread.model, model?.group.orEmpty())
@@ -149,7 +154,7 @@ internal fun ChatInfoSheet(
                     modifier = Modifier
                         .clip(RoundedCornerShape(50))
                         .background(Color.White.copy(alpha = 0.07f))
-                        .clickable { onPickModel() }
+                        .clickable { haptics.tick(); onPickModel() }
                         .padding(start = 6.dp, end = 12.dp, top = 5.dp, bottom = 5.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -194,17 +199,18 @@ internal fun ChatInfoSheet(
                     }
                     Spacer(Modifier.height(14.dp))
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Stat("Tokens", if (thread.tokens > 0) tokenLabel(thread.tokens) else "–", Modifier.weight(1f))
-                    Stat("Cost", if (thread.cost > 0.0) String.format(java.util.Locale.US, "$%.2f", thread.cost) else "–", Modifier.weight(1f))
-                    Stat("Last", agoShort(thread.updatedMs).ifBlank { "–" }, Modifier.weight(1f))
+                // the chat's numbers as one grid of joined tiles
+                Row(horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+                    Stat("Tokens", if (thread.tokens > 0) tokenLabel(thread.tokens) else "–", Modifier.weight(1f), joinedGridShape(0, 2, 0, 3))
+                    Stat("Cost", if (thread.cost > 0.0) String.format(java.util.Locale.US, "$%.2f", thread.cost) else "–", Modifier.weight(1f), joinedGridShape(0, 2, 1, 3))
+                    Stat("Last", agoShort(thread.updatedMs).ifBlank { "–" }, Modifier.weight(1f), joinedGridShape(0, 2, 2, 3))
                 }
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Stat("Asked", "${activity.asked}", Modifier.weight(1f))
-                    Stat("Steps", "${activity.steps + activity.commands}", Modifier.weight(1f))
-                    Stat("Files", "${activity.files}", Modifier.weight(1f))
-                    Stat("Worked", if (activity.workedMs > 0) tookShort(activity.workedMs) else "–", Modifier.weight(1f))
+                Spacer(Modifier.height(Joined.Gap))
+                Row(horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+                    Stat("Asked", "${activity.asked}", Modifier.weight(1f), joinedGridShape(1, 2, 0, 4))
+                    Stat("Steps", "${activity.steps + activity.commands}", Modifier.weight(1f), joinedGridShape(1, 2, 1, 4))
+                    Stat("Files", "${activity.files}", Modifier.weight(1f), joinedGridShape(1, 2, 2, 4))
+                    Stat("Worked", if (activity.workedMs > 0) tookShort(activity.workedMs) else "–", Modifier.weight(1f), joinedGridShape(1, 2, 3, 4))
                 }
             }
 
@@ -212,52 +218,65 @@ internal fun ChatInfoSheet(
             if (modes.isNotEmpty() && !thread.isStaff) {
                 Spacer(Modifier.height(18.dp))
                 SectionLabel("Mode")
-                modes.forEach { m ->
-                    val on = m.id == mode.id
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onPickMode(m.id) }
-                            .padding(horizontal = 20.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(modeIcon(m.kind), null, tint = if (on) modeColor(m.kind) else TextTertiary, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(14.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(m.label, color = if (on) TextPrimary else TextSecondary, fontSize = 14.5.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal)
-                            if (m.desc.isNotBlank()) Text(m.desc, color = TextTertiary, fontSize = 11.5.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                JoinedColumn(Modifier.padding(horizontal = 16.dp)) {
+                    modes.forEach { m ->
+                        val on = m.id == mode.id
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(if (on) Joined.FillHi else Color.Transparent)
+                                .clickable { haptics.tick(); onPickMode(m.id) }
+                                .padding(horizontal = 14.dp, vertical = 11.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(modeIcon(m.kind), null, tint = if (on) modeColor(m.kind) else TextTertiary, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(m.label, style = HealthDisplay, color = if (on) TextPrimary else TextSecondary, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold)
+                                if (m.desc.isNotBlank()) Text(m.desc, color = TextTertiary, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            }
+                            if (on) Icon(AppIcons.Check, null, tint = AiAccent, modifier = Modifier.size(16.dp))
                         }
-                        if (on) Icon(AppIcons.Check, null, tint = AiAccent, modifier = Modifier.size(16.dp))
                     }
                 }
             }
 
-            Spacer(Modifier.height(10.dp))
-            Spacer(Modifier.height(8.dp))
+            // Sorted by what it does: the chat's name and words, taking it elsewhere, where it
+            // stands in the list, and what empties or removes it last.
+            Spacer(Modifier.height(6.dp))
             SectionLabel("This chat")
-            Action(AppIcons.Edit, "Rename", onClick = { onDismiss(); onRename() })
-            Action(AppIcons.Search, "Find in chat", onClick = { onDismiss(); onFind() })
-            Action(AppIcons.Copy, "Copy chat", onClick = { onDismiss(); onCopyChat() })
-            Action(AppIcons.ExternalLink, "Share chat", onClick = { onDismiss(); onShare() })
-            if (!thread.isStaff) {
-                Action(AppIcons.Sparkles, "Name it again", onClick = { onDismiss(); onRetitle() })
-                Action(AppIcons.GitFork, "Fork into a new chat", onClick = { onDismiss(); onForkChat() })
+            JoinedColumn(Modifier.padding(horizontal = 16.dp)) {
+                TileMenuItem("Rename", AppIcons.Edit) { onDismiss(); onRename() }
+                if (!thread.isStaff) TileMenuItem("Name it again", AppIcons.Sparkles) { onDismiss(); onRetitle() }
+                TileMenuItem("Find in chat", AppIcons.Search) { onDismiss(); onFind() }
+            }
+            SectionLabel("Take it somewhere")
+            JoinedColumn(Modifier.padding(horizontal = 16.dp)) {
+                TileMenuItem("Copy chat", AppIcons.Copy) { onDismiss(); onCopyChat() }
+                TileMenuItem("Share chat", AppIcons.ExternalLink) { onDismiss(); onShare() }
+                if (!thread.isStaff) TileMenuItem("Fork into a new chat", AppIcons.GitFork) { onDismiss(); onForkChat() }
             }
             if (!thread.isStaff) {
-                Action(AppIcons.Star, if (thread.pinned) "Unpin" else "Pin to the top", onClick = { onDismiss(); onTogglePin() })
-                if (wake != null) {
-                    Action(AppIcons.Bell, "Wake now  ·  asleep for $wake", onClick = { onDismiss(); onWake() })
-                } else {
-                    Action(AppIcons.BellOff, "Snooze…", onClick = { onDismiss(); onSnooze() })
+                SectionLabel("In the list")
+                JoinedColumn(Modifier.padding(horizontal = 16.dp)) {
+                    TileMenuItem(if (thread.pinned) "Unpin" else "Pin to the top", if (thread.pinned) AppIcons.StarFilled else AppIcons.Star) { onDismiss(); onTogglePin() }
+                    if (wake != null) {
+                        TileMenuItem("Wake now", AppIcons.Bell, value = "asleep for $wake") { onDismiss(); onWake() }
+                    } else {
+                        TileMenuItem("Snooze…", AppIcons.BellOff) { onDismiss(); onSnooze() }
+                    }
+                    TileMenuItem(if (archived) "Unsettle" else "Settle", AppIcons.CheckCircle) { onDismiss(); onToggleArchive() }
                 }
-                Action(AppIcons.CheckCircle, if (archived) "Unsettle" else "Settle", onClick = { onDismiss(); onToggleArchive() })
             }
-            Action(AppIcons.Refresh, "Clear this chat", onClick = { onDismiss(); onClear() })
-            Action(AppIcons.Delete, if (thread.isStaff) "Let go" else "Delete this chat", danger = true, onClick = { onDismiss(); onDelete() })
+            Spacer(Modifier.height(14.dp))
+            JoinedColumn(Modifier.padding(horizontal = 16.dp)) {
+                TileMenuItem("Clear this chat", AppIcons.Refresh) { onDismiss(); onClear() }
+                TileMenuItem(if (thread.isStaff) "Let go" else "Delete this chat", AppIcons.Delete, danger = true) { onDismiss(); onDelete() }
+            }
             Text(
                 "Chat ${thread.id}",
                 color = TextTertiary, fontSize = 10.5.sp,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+                modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
             )
         }
     }
@@ -269,34 +288,19 @@ private fun SectionLabel(label: String) {
         label,
         style = HealthDisplay,
         color = TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 4.dp),
+        modifier = Modifier.padding(start = 22.dp, top = 16.dp, bottom = 8.dp),
     )
 }
 
 @Composable
-private fun Stat(label: String, value: String, modifier: Modifier = Modifier) {
+private fun Stat(label: String, value: String, modifier: Modifier = Modifier, shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(16.dp)) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(WellFill)
-            .padding(horizontal = 12.dp, vertical = 9.dp),
+            .clip(shape)
+            .background(Joined.Fill)
+            .padding(horizontal = 12.dp, vertical = 11.dp),
     ) {
-        Text(value, color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-        Text(label, color = TextTertiary, fontSize = 11.sp)
-    }
-}
-
-@Composable
-private fun Action(icon: ImageVector, label: String, danger: Boolean = false, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(icon, null, tint = if (danger) Error else TextSecondary, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(14.dp))
-        Text(label, color = if (danger) Error else TextPrimary, fontSize = 14.5.sp)
+        Text(value, style = HealthDisplay, color = TextPrimary, fontSize = 17.sp, maxLines = 1)
+        Text(label, color = TextTertiary, fontSize = 11.5.sp)
     }
 }

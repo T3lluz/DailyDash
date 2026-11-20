@@ -1,5 +1,9 @@
 package com.macrotracker.ui.screens.health
 
+import com.macrotracker.ui.components.joinedRowShape
+import com.macrotracker.ui.components.TilePlace
+import com.macrotracker.ui.components.joinedGridShape
+import com.macrotracker.ui.components.Joined
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -405,9 +409,9 @@ private fun Check(photo: Bitmap?, scanning: Boolean, onRead: () -> Unit, onRetak
             RoomLoading(tone = HealthNutritionTone, bars = 2)
             FoodGhostButton("Stop", onClick = onStop, icon = AppIcons.Close, modifier = Modifier.fillMaxWidth())
         } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                FoodGhostButton("Retake", onClick = onRetake, icon = AppIcons.Refresh)
-                FoodPrimaryButton("Read this label", onClick = onRead, modifier = Modifier.weight(1f), icon = AppIcons.Sparkles)
+            Row(horizontalArrangement = Arrangement.spacedBy(Joined.Gap), verticalAlignment = Alignment.CenterVertically) {
+                FoodGhostButton("Retake", onClick = onRetake, icon = AppIcons.Refresh, shape = joinedRowShape(TilePlace.FIRST, outer = 22.dp))
+                FoodPrimaryButton("Read this label", onClick = onRead, modifier = Modifier.weight(1f), icon = AppIcons.Sparkles, shape = joinedRowShape(TilePlace.LAST, outer = 22.dp))
             }
         }
     }
@@ -547,17 +551,22 @@ private fun LabelResult(viewModel: CameraScanViewModel, photo: Bitmap?, onLog: (
             tone = TextSecondary,
         )
         AnimatedVisibility(visible = fixing || mustFix, enter = MacroMotion.expandEnter, exit = MacroMotion.expandExit) {
-            Column(modifier = Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(modifier = Modifier.padding(top = 8.dp)) {
                 FoodField(value = name, onValueChange = { viewModel.setFoodNameOverride(it) }, hint = "The product's name", modifier = Modifier.fillMaxWidth())
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FoodNumberTile("Calories a serving", "kcal", NutritionCalories, calories, { viewModel.setCaloriesOverride(it) }, Modifier.weight(1f))
-                    FoodNumberTile("Protein a serving", "g", NutritionProtein, protein, { viewModel.setProteinOverride(it) }, Modifier.weight(1f))
+                Spacer(Modifier.height(8.dp))
+                // the label's numbers as one grid of joined tiles: two by two, the weight across the foot
+                val g = 22.dp
+                Row(horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+                    FoodNumberTile("Calories a serving", "kcal", NutritionCalories, calories, { viewModel.setCaloriesOverride(it) }, Modifier.weight(1f), shape = joinedGridShape(0, 3, 0, 2, outer = g))
+                    FoodNumberTile("Protein a serving", "g", NutritionProtein, protein, { viewModel.setProteinOverride(it) }, Modifier.weight(1f), shape = joinedGridShape(0, 3, 1, 2, outer = g))
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FoodNumberTile("Serving size", "g", TextSecondary, servingSize, { viewModel.setServingSizeOverride(it) }, Modifier.weight(1f))
-                    FoodNumberTile("In the package", "servings", TextSecondary, servings, { viewModel.setServingsOverride(it) }, Modifier.weight(1f))
+                Spacer(Modifier.height(Joined.Gap))
+                Row(horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+                    FoodNumberTile("Serving size", "g", TextSecondary, servingSize, { viewModel.setServingSizeOverride(it) }, Modifier.weight(1f), shape = joinedGridShape(1, 3, 0, 2, outer = g))
+                    FoodNumberTile("In the package", "servings", TextSecondary, servings, { viewModel.setServingsOverride(it) }, Modifier.weight(1f), shape = joinedGridShape(1, 3, 1, 2, outer = g))
                 }
-                FoodNumberTile("Package weight", "g", TextSecondary, packageWeight, { viewModel.setPackageWeightOverride(it) }, Modifier.fillMaxWidth())
+                Spacer(Modifier.height(Joined.Gap))
+                FoodNumberTile("Package weight", "g", TextSecondary, packageWeight, { viewModel.setPackageWeightOverride(it) }, Modifier.fillMaxWidth(), shape = joinedGridShape(2, 3, 0, 1, outer = g))
             }
         }
 
@@ -570,8 +579,8 @@ private fun LabelResult(viewModel: CameraScanViewModel, photo: Bitmap?, onLog: (
                 modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            FoodGhostButton("Scan again", onClick = onAgain, icon = AppIcons.Refresh)
+        Row(horizontalArrangement = Arrangement.spacedBy(Joined.Gap), verticalAlignment = Alignment.CenterVertically) {
+            FoodGhostButton("Scan again", onClick = onAgain, icon = AppIcons.Refresh, shape = joinedRowShape(TilePlace.FIRST, outer = 22.dp))
             FoodPrimaryButton(
                 text = "Log ${summary.loggedCalories} kcal",
                 onClick = {
@@ -586,6 +595,7 @@ private fun LabelResult(viewModel: CameraScanViewModel, photo: Bitmap?, onLog: (
                 modifier = Modifier.weight(1f),
                 enabled = missing.isEmpty(),
                 icon = AppIcons.Check,
+                shape = joinedRowShape(TilePlace.LAST, outer = 22.dp),
             )
         }
     }

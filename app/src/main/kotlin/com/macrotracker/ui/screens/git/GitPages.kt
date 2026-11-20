@@ -1,5 +1,11 @@
 package com.macrotracker.ui.screens.git
 
+import com.macrotracker.ui.components.joinedRowShape
+import com.macrotracker.ui.components.TilePlace
+import com.macrotracker.ui.components.Joined
+import androidx.compose.foundation.lazy.itemsIndexed
+import com.macrotracker.ui.components.ownTile
+import com.macrotracker.ui.components.JoinedItem
 import com.macrotracker.ui.screens.health.HealthDisplay
 import com.macrotracker.ui.screens.ai.AiSheet
 import com.macrotracker.ui.screens.ai.AiRoom
@@ -95,7 +101,7 @@ private fun DetailFrame(title: String, subtitle: String, onBack: () -> Unit, con
 @Composable
 private fun ChangedFileRow(f: GitChangedFile, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(AiRoom).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 10.dp),
+        Modifier.fillMaxWidth().ownTile(RoundedCornerShape(18.dp), AiRoom).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         StatusBadge(f.status.firstOrNull() ?: 'M')
@@ -176,9 +182,9 @@ internal fun ComparePage(base: String, vm: GitViewModel, onBack: () -> Unit, onO
                         }
                     }
                     item { Heading("Files changed", cmp.files.size) }
-                    items(cmp.files, key = { it.path }) { f -> ChangedFileRow(f) { onOpen(GitPage.Review("vs $base", st?.branch.orEmpty(), review, cmp.files.indexOf(f))) } }
+                    itemsIndexed(cmp.files, key = { _, entry -> entry.path }) { place, f -> JoinedItem(place, cmp.files.size, fill = AiRoom, outer = 22.dp) { ChangedFileRow(f) { onOpen(GitPage.Review("vs $base", st?.branch.orEmpty(), review, cmp.files.indexOf(f))) } } }
                     item { Heading("Commits", cmp.commits.size) }
-                    items(cmp.commits, key = { it.hash }) { c -> SmallCommit(c) }
+                    itemsIndexed(cmp.commits, key = { _, entry -> entry.hash }) { place, c -> JoinedItem(place, cmp.commits.size, fill = AiRoom, outer = 22.dp) { SmallCommit(c) } }
                 }
             }
         }
@@ -187,7 +193,7 @@ internal fun ComparePage(base: String, vm: GitViewModel, onBack: () -> Unit, onO
 
 @Composable
 private fun SmallCommit(c: GitCommit) {
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(AiRoom).padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().ownTile(RoundedCornerShape(18.dp), AiRoom).padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(c.short, color = AiAccent, fontSize = 11.5.sp, fontFamily = Mono, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.width(10.dp))
         Text(c.subject, color = TextPrimary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
@@ -258,7 +264,7 @@ internal fun PrPage(number: Int, vm: GitViewModel, onBack: () -> Unit, onAskHerm
                         }
                         if (d.checkList.isNotEmpty()) {
                             item { Heading("Checks", d.checkList.size) }
-                            items(d.checkList.size, key = { "c$it" }) { i ->
+                            items(d.checkList.size, key = { "c$it" }) { i -> JoinedItem(i, d.checkList.size, fill = AiRoom, outer = 22.dp) {
                                 val c = d.checkList[i]
                                 val (color, icon) = when (c.state) {
                                     "SUCCESS", "NEUTRAL", "SKIPPED" -> ServerGood to AppIcons.CheckCircle
@@ -266,52 +272,52 @@ internal fun PrPage(number: Int, vm: GitViewModel, onBack: () -> Unit, onAskHerm
                                     else -> ServerWarn to AppIcons.Clock
                                 }
                                 Row(
-                                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(AiRoom).clickable(enabled = c.url.isNotBlank()) { context.openUrl(c.url) }.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    Modifier.fillMaxWidth().ownTile(RoundedCornerShape(18.dp), AiRoom).clickable(enabled = c.url.isNotBlank()) { context.openUrl(c.url) }.padding(horizontal = 12.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Icon(icon, null, tint = color, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(10.dp))
                                     Text(c.name, color = TextPrimary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                                     Text(c.state.lowercase().replace('_', ' '), color = color, fontSize = 11.sp)
                                 }
-                            }
+                            } }
                         }
                         if (d.body.isNotBlank()) {
                             item { Heading("Description") }
                             item { Box(Modifier.fillMaxWidth().clip(Card).background(AiRoom).padding(14.dp)) { MarkdownText(d.body, color = TextSecondary, fontSize = 13.5.sp, linkColor = AiAccent) } }
                         }
                         item { Heading("Files changed", d.files.size) }
-                        items(d.files, key = { "f-${it.path}" }) { f -> ChangedFileRow(f) { onOpen(GitPage.Review("PR #$number", d.pr.title.take(50), review, d.files.indexOf(f))) } }
+                        itemsIndexed(d.files, key = { _, entry -> "f-${entry.path}" }) { place, f -> JoinedItem(place, d.files.size, fill = AiRoom, outer = 22.dp) { ChangedFileRow(f) { onOpen(GitPage.Review("PR #$number", d.pr.title.take(50), review, d.files.indexOf(f))) } } }
                         if (d.reviews.isNotEmpty() || d.comments.isNotEmpty()) item { Heading("Conversation", d.reviews.size + d.comments.size) }
-                        items(d.reviews.size, key = { "rv$it" }) { i ->
+                        items(d.reviews.size, key = { "rv$it" }) { i -> JoinedItem(i, d.reviews.size, fill = AiRoom, outer = 22.dp) {
                             val r = d.reviews[i]
                             val tint = when (r.state) { "APPROVED" -> ServerGood; "CHANGES_REQUESTED" -> ServerCritical; else -> TextSecondary }
-                            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(AiRoom).padding(12.dp)) {
+                            Column(Modifier.fillMaxWidth().ownTile(RoundedCornerShape(18.dp), AiRoom).padding(12.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(r.author, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold); Spacer(Modifier.width(8.dp))
                                     Pill(r.state.lowercase().replace('_', ' '), tint, false)
                                 }
                                 if (r.body.isNotBlank()) Text(r.body, color = TextSecondary, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.padding(top = 6.dp))
                             }
-                        }
-                        items(d.comments.size, key = { "cm$it" }) { i ->
+                        } }
+                        items(d.comments.size, key = { "cm$it" }) { i -> JoinedItem(i, d.comments.size, fill = AiRoom, outer = 22.dp) {
                             val c = d.comments[i]
-                            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(AiRoom).padding(12.dp)) {
+                            Column(Modifier.fillMaxWidth().ownTile(RoundedCornerShape(18.dp), AiRoom).padding(12.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(c.author, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                                     Text("  ·  ${agoIso(c.at)}", color = TextTertiary, fontSize = 11.sp)
                                 }
                                 Text(c.body, color = TextSecondary, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.padding(top = 6.dp))
                             }
-                        }
+                        } }
                         if (d.commits.isNotEmpty()) {
                             item { Heading("Commits", d.commits.size) }
-                            items(d.commits.size, key = { "k$it" }) { i ->
+                            items(d.commits.size, key = { "k$it" }) { i -> JoinedItem(i, d.commits.size, fill = AiRoom, outer = 22.dp) {
                                 val (h, s) = d.commits[i]
-                                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(AiRoom).padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Row(Modifier.fillMaxWidth().ownTile(RoundedCornerShape(18.dp), AiRoom).padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Text(h, color = AiAccent, fontSize = 11.5.sp, fontFamily = Mono, fontWeight = FontWeight.SemiBold); Spacer(Modifier.width(10.dp))
                                     Text(s, color = TextPrimary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
-                            }
+                            } }
                         }
                     }
                     if (open) {
@@ -322,11 +328,11 @@ internal fun PrPage(number: Int, vm: GitViewModel, onBack: () -> Unit, onAskHerm
                                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Background).padding(horizontal = 14.dp, vertical = 11.dp),
                                 decorationBox = { inner -> if (comment.isEmpty()) Text("Comment, or the words for a review", color = TextTertiary, fontSize = 14.sp); inner() },
                             )
-                            Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                ActionPill("Comment", AppIcons.Chat, comment.isNotBlank() && ui.busy == null, AiAccent, Modifier.weight(1f)) { haptics.click(); vm.prAction("comment", number, "body" to comment.trim()); comment = "" }
-                                ActionPill("Approve", AppIcons.Check, ui.busy == null, ServerGood, Modifier.weight(1f)) { haptics.click(); vm.prAction("review", number, "kind" to "approve", "body" to comment.trim()); comment = "" }
-                                ActionPill("Changes", AppIcons.Warning, comment.isNotBlank() && ui.busy == null, ServerWarn, Modifier.weight(1f)) { requesting = true }
-                                ActionPill("Merge", AppIcons.GitFork, ui.busy == null && d.pr.mergeState != "DIRTY", Color(0xFFB48EAD), Modifier.weight(1f)) { merging = true }
+                            Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+                                ActionPill("Comment", AppIcons.Chat, comment.isNotBlank() && ui.busy == null, AiAccent, Modifier.weight(1f).clip(joinedRowShape(TilePlace.FIRST, outer = 18.dp))) { haptics.click(); vm.prAction("comment", number, "body" to comment.trim()); comment = "" }
+                                ActionPill("Approve", AppIcons.Check, ui.busy == null, ServerGood, Modifier.weight(1f).clip(joinedRowShape(TilePlace.MIDDLE, outer = 18.dp))) { haptics.click(); vm.prAction("review", number, "kind" to "approve", "body" to comment.trim()); comment = "" }
+                                ActionPill("Changes", AppIcons.Warning, comment.isNotBlank() && ui.busy == null, ServerWarn, Modifier.weight(1f).clip(joinedRowShape(TilePlace.MIDDLE, outer = 18.dp))) { requesting = true }
+                                ActionPill("Merge", AppIcons.GitFork, ui.busy == null && d.pr.mergeState != "DIRTY", Color(0xFFB48EAD), Modifier.weight(1f).clip(joinedRowShape(TilePlace.LAST, outer = 18.dp))) { merging = true }
                             }
                         }
                     }

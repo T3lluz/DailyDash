@@ -11,6 +11,11 @@ data class TwitchStream(
     val startedAt: String,
     val thumbnailUrl: String,
     val profileImageUrl: String = "",
+    /** The streamer's own tags ("English", "Speedrun"), as Twitch shows them under the title. */
+    val tags: List<String> = emptyList(),
+    /** ISO 639-1 language of the stream ("en"), or blank. */
+    val language: String = "",
+    val isMature: Boolean = false,
 ) {
     fun thumbnail(width: Int = 440, height: Int = 248): String =
         thumbnailUrl

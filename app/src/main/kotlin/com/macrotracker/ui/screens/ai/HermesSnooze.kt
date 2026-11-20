@@ -1,5 +1,9 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.components.joinedRowShape
+import com.macrotracker.ui.components.TilePlace
+import com.macrotracker.ui.components.JoinedColumn
+import com.macrotracker.ui.components.Joined
 import com.macrotracker.ui.screens.home.FieldShape
 import com.macrotracker.ui.screens.home.roomFieldColors
 import androidx.compose.foundation.background
@@ -92,6 +96,7 @@ internal fun wakeLabel(untilMs: Long, nowMs: Long = System.currentTimeMillis()):
 /** The presets, and an amount of minutes, hours or days of your own. */
 @Composable
 internal fun SnoozeDialog(title: String, onPick: (Long) -> Unit, onDismiss: () -> Unit) {
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
     val presets = remember { snoozePresets() }
     var custom by rememberSaveable { mutableStateOf(false) }
     var amount by rememberSaveable { mutableStateOf("") }
@@ -102,19 +107,20 @@ internal fun SnoozeDialog(title: String, onPick: (Long) -> Unit, onDismiss: () -
         containerColor = AiSheet,
         title = { Text(title, color = TextPrimary, maxLines = 2) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column {
+            // the presets and Custom as one group of joined tiles
+            JoinedColumn(fill = Joined.Fill, outer = 18.dp) {
                 presets.forEach { p ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .clickable { onPick(p.untilMs) }
-                            .padding(horizontal = 8.dp, vertical = 11.dp),
+                            .clickable { haptics.confirm(); onPick(p.untilMs) }
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(AppIcons.Clock, null, tint = TextSecondary, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(12.dp))
-                        Text(p.label, color = TextPrimary, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                        Text(p.label, style = com.macrotracker.ui.screens.health.HealthDisplay, fontWeight = FontWeight.SemiBold, color = TextPrimary, fontSize = 14.5.sp, modifier = Modifier.weight(1f))
                         Text(p.detail, color = TextTertiary, fontSize = 12.sp)
                     }
                 }
@@ -122,16 +128,17 @@ internal fun SnoozeDialog(title: String, onPick: (Long) -> Unit, onDismiss: () -
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .clickable { custom = true }
-                            .padding(horizontal = 8.dp, vertical = 11.dp),
+                            .clickable { haptics.tick(); custom = true }
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(AppIcons.Edit, null, tint = TextSecondary, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(12.dp))
-                        Text("Custom…", color = TextPrimary, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                        Text("Custom…", style = com.macrotracker.ui.screens.health.HealthDisplay, fontWeight = FontWeight.SemiBold, color = TextPrimary, fontSize = 14.5.sp, modifier = Modifier.weight(1f))
                     }
-                } else {
+                }
+            }
+                if (custom) {
                     Spacer(Modifier.height(6.dp))
                     OutlinedTextField(
                         value = amount,
@@ -142,13 +149,13 @@ internal fun SnoozeDialog(title: String, onPick: (Long) -> Unit, onDismiss: () -
                         colors = roomFieldColors(),
                         modifier = Modifier.fillMaxWidth(), shape = FieldShape)
                     Spacer(Modifier.height(6.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
                         units.forEachIndexed { i, (name, _) ->
                             Box(
                                 Modifier
-                                    .clip(RoundedCornerShape(50))
+                                    .clip(joinedRowShape(TilePlace.of(i, units.size), outer = 16.dp, inner = 5.dp))
                                     .background(if (unit == i) AiAccent.copy(alpha = 0.18f) else androidx.compose.ui.graphics.Color.White.copy(alpha = 0.07f))
-                                    .clickable { unit = i }
+                                    .clickable { haptics.tick(); unit = i }
                                     .padding(horizontal = 12.dp, vertical = 7.dp),
                             ) {
                                 Text(

@@ -53,6 +53,7 @@ private val SubScreens = setOf(
     SubScreenRoutes.CONSOLE,
     SubScreenRoutes.GIT,
     SubScreenRoutes.HOME_PAGE_PATTERN,
+    SubScreenRoutes.HEALTH_PAGE_PATTERN,
     OnboardingRoutes.PERMISSIONS,
     OnboardingRoutes.TUTORIAL,
     SettingsRoutes.CONNECTIONS,
@@ -198,6 +199,27 @@ fun DailyDashNavHost(
             HealthScreen(
                 onNavigateToCameraScan = { foodSheet = "scan" },
                 onOpenMealChat = { foodSheet = "meal" },
+                onOpenPage = { id -> navController.navigateToSubScreen(SubScreenRoutes.healthPage(id)) },
+            )
+        }
+
+        // A full page from the Health tab (the sleep, a workout). It reads the tab's own
+        // view-model, so it opens on what the tab already showed.
+        composable(
+            route = SubScreenRoutes.HEALTH_PAGE_PATTERN,
+            arguments = listOf(navArgument("id") { defaultValue = "" }),
+            enterTransition = { MacroMotion.subScreenEnter },
+            exitTransition = { MacroMotion.subScreenExit },
+            popEnterTransition = { MacroMotion.subScreenPopEnter },
+            popExitTransition = { MacroMotion.subScreenPopExit },
+        ) { entry ->
+            val health = androidx.compose.runtime.remember(entry) {
+                runCatching { navController.getBackStackEntry(Screen.Health.route) }.getOrDefault(entry)
+            }
+            com.macrotracker.ui.screens.health.HealthPageHost(
+                id = entry.arguments?.getString("id").orEmpty(),
+                owner = health,
+                onBack = { navController.popSubScreen(entry) },
             )
         }
 

@@ -1,5 +1,9 @@
 package com.macrotracker.ui.components
 
+import androidx.compose.foundation.layout.fillMaxSize
+import dev.chrisbanes.haze.hazeSource
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.layout.layout
 import android.graphics.BlurMaskFilter
 import android.os.Build
 import androidx.compose.foundation.background
@@ -18,6 +22,8 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import com.macrotracker.ui.theme.Background
 import dev.chrisbanes.haze.HazeInputScale
 import dev.chrisbanes.haze.HazeState
@@ -42,6 +48,10 @@ object GlassSpec {
      * sharp page showed through the composer's glass with only the tint over it.
      */
     val Backdrop: Color = Background
+
+    /** A [ChromeVeil]'s blur and wash: softer than the chrome's own glass. */
+    val VeilBlur: Dp = 22.dp
+    val VeilTint: Color = Background.copy(alpha = 0.6f)
 
     /** Where blur can't run (before Android 12): the same tint, nearly opaque. */
     val Fallback: Color = Color(0xFF0B0B0D).copy(alpha = 0.94f)
@@ -165,4 +175,100 @@ fun Modifier.chromeOutline(shape: Shape): Modifier = drawWithCache {
     // Stroked on the outline at twice the width; the outer half falls outside the clip.
     val stroke = Stroke(GlassSpec.OutlineWidth.toPx() * 2f)
     onDrawBehind { drawOutline(outline, GlassSpec.OutlineColor, style = stroke) }
+}
+
+/**
+ * How far inside the chrome's own edge a [ChromeVeil] starts: it begins a little in under the
+ * island, the navbar, a dock or a composer, never out on the page beyond it.
+ */
+val VeilInset: Dp = 16.dp
+
+/** Which edge of the screen a [ChromeVeil] stands at: it is thickest there. */
+enum class VeilEdge { Top, Bottom }
+
+/**
+ * A band of the page blurred and dimmed behind the chrome at an edge of the screen (a page's
+ * bar, the island, the navbar, a dock, a composer), [height] deep: whole for [solid] from the
+ * edge, where the chrome stands, then thinning to nothing at the band's end, so what scrolls
+ * under the chrome melts away instead of running sharp between and beside it. [shown] (0 to 1)
+ * is read while drawing. Where blur can't run (before Android 12) there is no veil.
+ */
+@androidx.compose.runtime.Composable
+fun ChromeVeil(
+    hazeState: HazeState?,
+    edge: VeilEdge,
+    height: Dp,
+    modifier: Modifier = Modifier,
+    solid: Dp = 0.dp,
+    shown: () -> Float = { 1f },
+) {
+    if (hazeState == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val total = with(density) { height.toPx() }
+    val whole = with(density) { solid.toPx() }.coerceIn(0f, total)
+    androidx.compose.foundation.layout.Box(
+        modifier
+            .fillMaxWidth()
+            .height(height)
+            .hazeEffect(hazeState) {
+                alpha = shown()
+                blurRadius = GlassSpec.VeilBlur
+                backgroundColor = Background
+                noiseFactor = 0f
+                tints = listOf(HazeTint(GlassSpec.VeilTint))
+                // eased so it comes in gently where it starts and gathers towards the edge
+                progressive = if (edge == VeilEdge.Top) {
+                    dev.chrisbanes.haze.HazeProgressive.verticalGradient(
+                        easing = androidx.compose.animation.core.EaseOutQuad,
+                        startY = whole, startIntensity = 1f, endY = total, endIntensity = 0f, preferPerformance = true,
+                    )
+                } else {
+                    dev.chrisbanes.haze.HazeProgressive.verticalGradient(
+                        easing = androidx.compose.animation.core.EaseInQuad,
+                        startY = 0f, startIntensity = 0f, endY = total - whole, endIntensity = 1f, preferPerformance = true,
+                    )
+                }
+            },
+    )
+}
+
+/** How deep the soft edge at the top of a scroll area under a fixed header is. */
+val SoftEdgeDepth: Dp = 22.dp
+
+/**
+ * A scroll area under a fixed header (Git's tabs): what scrolls up melts away into a short veil
+ * at its top edge instead of being cut off flat under the header.
+ */
+@androidx.compose.runtime.Composable
+fun SoftTopBox(
+    modifier: Modifier = Modifier,
+    content: @androidx.compose.runtime.Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
+) {
+    val haze = dev.chrisbanes.haze.rememberHazeState()
+    androidx.compose.foundation.layout.Box(modifier) {
+        androidx.compose.foundation.layout.Box(
+            Modifier.fillMaxSize().hazeSource(haze),
+            content = content,
+        )
+        ChromeVeil(haze, VeilEdge.Top, SoftEdgeDepth)
+    }
+}
+
+/**
+ * The same soft edge laid over whatever comes next in a column (Usage's cards under its tabs):
+ * it takes no room of its own and draws over the top of the next child, which is a
+ * `hazeSource` of [haze].
+ */
+@androidx.compose.runtime.Composable
+fun SoftTopEdge(haze: HazeState) {
+    androidx.compose.foundation.layout.Box(
+        Modifier
+            .zIndex(1f)
+            .layout { measurable, constraints ->
+                val placeable = measurable.measure(constraints.copy(minHeight = 0, maxHeight = androidx.compose.ui.unit.Constraints.Infinity))
+                layout(placeable.width, 0) { placeable.place(0, 0) }
+            },
+    ) {
+        ChromeVeil(haze, VeilEdge.Top, SoftEdgeDepth)
+    }
 }

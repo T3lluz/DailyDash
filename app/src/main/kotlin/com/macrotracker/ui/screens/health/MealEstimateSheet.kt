@@ -1,5 +1,9 @@
 package com.macrotracker.ui.screens.health
 
+import androidx.compose.foundation.layout.heightIn
+import com.macrotracker.ui.components.joinedRowShape
+import com.macrotracker.ui.components.TilePlace
+import com.macrotracker.ui.components.Joined
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
@@ -224,14 +228,14 @@ fun MealEstimateSheet(
             if (items.isEmpty() && !loading) {
                 item(key = "start") {
                     Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            StartTile(AppIcons.Camera, "Photo of it", Modifier.weight(1f)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+                            StartTile(AppIcons.Camera, "Photo of it", Modifier.weight(1f), joinedRowShape(TilePlace.FIRST, outer = 22.dp)) {
                                 haptics.click()
                                 val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
                                 if (granted) openCamera() else cameraPermission.launch(Manifest.permission.CAMERA)
                             }
-                            StartTile(AppIcons.Images, "From gallery", Modifier.weight(1f)) { haptics.click(); gallery.launch("image/*") }
-                            StartTile(AppIcons.Search, "Scan a label", Modifier.weight(1f)) { haptics.click(); onScanLabel() }
+                            StartTile(AppIcons.Images, "From gallery", Modifier.weight(1f), joinedRowShape(TilePlace.MIDDLE, outer = 22.dp)) { haptics.click(); gallery.launch("image/*") }
+                            StartTile(AppIcons.Search, "Scan a label", Modifier.weight(1f), joinedRowShape(TilePlace.LAST, outer = 22.dp)) { haptics.click(); onScanLabel() }
                         }
                         Spacer(modifier = Modifier.height(20.dp))
                         Text("Quick bites", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary)
@@ -260,12 +264,13 @@ fun MealEstimateSheet(
                         Text(item.text, fontSize = 14.sp, lineHeight = 19.sp, color = TextPrimary)
                         if (item.retry != null || item.settings) {
                             Spacer(modifier = Modifier.height(12.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+                                val both = item.retry != null && item.settings
                                 item.retry?.let { query ->
-                                    FoodGhostButton("Try again", onClick = { haptics.click(); viewModel.retryQuery(query) }, icon = AppIcons.Refresh)
+                                    FoodGhostButton("Try again", onClick = { haptics.click(); viewModel.retryQuery(query) }, icon = AppIcons.Refresh, shape = joinedRowShape(if (both) TilePlace.FIRST else TilePlace.ONLY, outer = 20.dp))
                                 }
                                 if (item.settings) {
-                                    FoodGhostButton("AI settings", onClick = { haptics.click(); onAiSettings() }, icon = AppIcons.Settings)
+                                    FoodGhostButton("AI settings", onClick = { haptics.click(); onAiSettings() }, icon = AppIcons.Settings, shape = joinedRowShape(if (both) TilePlace.LAST else TilePlace.ONLY, outer = 20.dp))
                                 }
                             }
                         }
@@ -294,10 +299,11 @@ fun MealEstimateSheet(
         Row(
             modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(Joined.Gap),
         ) {
-            // A photo of the meal, while there is nothing typed to make room for.
-            if (draft.isBlank() && items.isNotEmpty()) {
+            // A photo of the meal, while there is nothing typed to make room for. All one row of joined tiles.
+            val photos = draft.isBlank() && items.isNotEmpty()
+            if (photos) {
                 FoodRoundButton(
                     icon = AppIcons.Camera,
                     label = "Take a photo of the meal",
@@ -307,15 +313,17 @@ fun MealEstimateSheet(
                         if (granted) openCamera() else cameraPermission.launch(Manifest.permission.CAMERA)
                     },
                     enabled = !loading,
-                    size = 48.dp,
+                    size = 52.dp,
+                    shape = joinedRowShape(TilePlace.FIRST, outer = 22.dp),
                 )
-                FoodRoundButton(AppIcons.Images, "Pick a photo of the meal", onClick = { haptics.click(); gallery.launch("image/*") }, enabled = !loading, size = 48.dp)
+                FoodRoundButton(AppIcons.Images, "Pick a photo of the meal", onClick = { haptics.click(); gallery.launch("image/*") }, enabled = !loading, size = 52.dp, shape = joinedRowShape(TilePlace.MIDDLE, outer = 22.dp))
             }
             FoodField(
                 value = draft,
                 onValueChange = { draft = it },
                 hint = "What did you eat?",
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).heightIn(min = 52.dp),
+                shape = joinedRowShape(if (photos) TilePlace.MIDDLE else TilePlace.FIRST, outer = 22.dp),
                 singleLine = false,
                 imeAction = ImeAction.Send,
                 onImeAction = { send() },
@@ -327,7 +335,8 @@ fun MealEstimateSheet(
                 onClick = { send() },
                 lit = draft.isNotBlank() && !loading,
                 enabled = draft.isNotBlank() && !loading,
-                size = 48.dp,
+                size = 52.dp,
+                shape = joinedRowShape(TilePlace.LAST, outer = 22.dp),
             )
         }
     }
@@ -344,10 +353,10 @@ fun MealEstimateSheet(
 
 /** One of the three ways in besides typing: a tall tile with its glyph over its name. */
 @Composable
-private fun StartTile(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, modifier: Modifier, onClick: () -> Unit) {
+private fun StartTile(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, modifier: Modifier, shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(22.dp), onClick: () -> Unit) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(22.dp))
+            .clip(shape)
             .background(HealthNutritionTone.copy(alpha = 0.14f))
             .clickable(onClick = onClick)
             .padding(vertical = 18.dp),
@@ -423,9 +432,9 @@ private fun EstimateCard(asked: String?, estimate: NutritionEstimate, logged: Bo
 
         Spacer(modifier = Modifier.height(16.dp))
         if (adjusting && !logged) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FoodNumberTile("Calories", "kcal", NutritionCalories, caloriesText, { caloriesText = it }, Modifier.weight(1f), decimal = false)
-                FoodNumberTile("Protein", "g", NutritionProtein, proteinText, { proteinText = it }, Modifier.weight(1f), decimal = false)
+            Row(horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+                FoodNumberTile("Calories", "kcal", NutritionCalories, caloriesText, { caloriesText = it }, Modifier.weight(1f), decimal = false, shape = joinedRowShape(TilePlace.FIRST, outer = 22.dp))
+                FoodNumberTile("Protein", "g", NutritionProtein, proteinText, { proteinText = it }, Modifier.weight(1f), decimal = false, shape = joinedRowShape(TilePlace.LAST, outer = 22.dp))
             }
         } else {
             Row(modifier = Modifier.fillMaxWidth()) {
@@ -471,8 +480,8 @@ private fun EstimateCard(asked: String?, estimate: NutritionEstimate, logged: Bo
                 )
             }
             Spacer(modifier = Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                FoodGhostButton(if (adjusting) "Done" else "Adjust", onClick = { haptics.tick(); adjusting = !adjusting })
+            Row(horizontalArrangement = Arrangement.spacedBy(Joined.Gap), verticalAlignment = Alignment.CenterVertically) {
+                FoodGhostButton(if (adjusting) "Done" else "Adjust", onClick = { haptics.tick(); adjusting = !adjusting }, shape = joinedRowShape(TilePlace.FIRST, outer = 22.dp))
                 FoodPrimaryButton(
                     text = "Log $calories kcal",
                     onClick = {
@@ -486,6 +495,7 @@ private fun EstimateCard(asked: String?, estimate: NutritionEstimate, logged: Bo
                     },
                     modifier = Modifier.weight(1f),
                     icon = AppIcons.Check,
+                    shape = joinedRowShape(TilePlace.LAST, outer = 22.dp),
                 )
             }
         }

@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import com.macrotracker.data.health.ActivityRange
 import com.macrotracker.data.health.HealthConnectRepository
-import com.macrotracker.ui.components.WidgetExpandFooter
 import com.macrotracker.ui.components.WidgetExpandSection
 import com.macrotracker.ui.screens.health.ActivityRings
 import com.macrotracker.ui.screens.health.HealthGroupLabel
@@ -140,6 +139,8 @@ import com.macrotracker.ui.theme.AppIcons
 fun HealthScreen(
     onNavigateToCameraScan: () -> Unit,
     onOpenMealChat: () -> Unit = {},
+    /** Opens a full page of the tab (HealthPageHost): "SLEEP", "WORKOUT:<id>". */
+    onOpenPage: (String) -> Unit = {},
     healthViewModel: HealthViewModel = hiltViewModel(),
     dashboardViewModel: DashboardViewModel = hiltViewModel(),
 ) {
@@ -384,6 +385,7 @@ fun HealthScreen(
                 haptics = haptics,
                 modifier = Modifier.riseIn(4, rise),
                 onRequestPermission = { requestHealthAccess() },
+                onOpenDetail = { onOpenPage("SLEEP") },
             )
         }
 
@@ -406,6 +408,7 @@ fun HealthScreen(
                 onRetry = { healthViewModel.retryHealthConnect() },
                 onOpenHealthConnect = { openHealthConnectSettings(context) },
                 onExpandActivity = { healthViewModel.onActivityExpanded(it) },
+                onOpenWorkout = { onOpenPage("WORKOUT:" + it.id) },
                 rangeLabel = activityRangeLabel(activityRange, today),
                 rangeControl = {
                     HealthSegmented(

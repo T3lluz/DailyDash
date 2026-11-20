@@ -47,24 +47,24 @@ fun OpenLinksCard() {
 
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(AppIcons.ExternalLink, contentDescription = null, tint = Primary, modifier = Modifier.size(28.dp))
-            Spacer(Modifier.width(12.dp))
-            Text("Open links in", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+            com.macrotracker.ui.components.TileIcon(AppIcons.ExternalLink, com.macrotracker.ui.screens.home.HomeTone.Upcoming, size = 44.dp)
+            Spacer(Modifier.width(14.dp))
+            Text("Open links in", style = com.macrotracker.ui.screens.health.HealthDisplay, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
         }
-        Spacer(Modifier.padding(top = 6.dp))
+        Spacer(Modifier.padding(top = 12.dp))
+        com.macrotracker.ui.components.JoinedColumn(outer = 18.dp) {
         LinkKind.entries.forEach { kind ->
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
                     .clickable {
                         haptics.tick()
                         OpenWithActivity.choose(context, kind)
                     }
-                    .padding(vertical = 10.dp),
+                    .padding(horizontal = 14.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(kind.label, fontSize = 14.sp, color = TextPrimary, modifier = Modifier.weight(1f))
+                Text(kind.label, style = com.macrotracker.ui.screens.health.HealthDisplay, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp, color = TextPrimary, modifier = Modifier.weight(1f))
                 Text(
                     picks[kind] ?: "Ask",
                     fontSize = 13.sp,
@@ -75,6 +75,7 @@ fun OpenLinksCard() {
                 Spacer(Modifier.width(6.dp))
                 Icon(AppIcons.ChevronRight, contentDescription = null, tint = TextTertiary, modifier = Modifier.size(16.dp))
             }
+        }
         }
     }
 }

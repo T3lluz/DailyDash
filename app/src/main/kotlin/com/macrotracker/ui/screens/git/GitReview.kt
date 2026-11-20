@@ -366,6 +366,7 @@ private fun CommentBubble(c: ReviewComment, onRemove: () -> Unit) {
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun CommentWriter(onAdd: (String) -> Unit, onCancel: () -> Unit) {
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
     var text by remember { mutableStateOf("") }
     val focus = remember { FocusRequester() }
     val bring = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
@@ -397,7 +398,7 @@ private fun CommentWriter(onAdd: (String) -> Unit, onCancel: () -> Unit) {
             },
         )
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-            Text("Cancel", color = TextSecondary, fontSize = 13.sp, modifier = Modifier.clip(RoundedCornerShape(50)).clickable(onClick = onCancel).padding(horizontal = 12.dp, vertical = 7.dp))
+            Text("Cancel", color = TextSecondary, fontSize = 13.sp, modifier = Modifier.clip(RoundedCornerShape(50)).clickable(onClick = { haptics.tick(); onCancel() }).padding(horizontal = 12.dp, vertical = 7.dp))
             Spacer(Modifier.width(6.dp))
             Text(
                 "Add note", style = HealthDisplay,
@@ -406,7 +407,7 @@ private fun CommentWriter(onAdd: (String) -> Unit, onCancel: () -> Unit) {
                 modifier = Modifier
                     .clip(RoundedCornerShape(50))
                     .background(if (text.isBlank()) Color.White.copy(alpha = 0.06f) else AiAccent)
-                    .clickable(enabled = text.isNotBlank()) { onAdd(text.trim()) }
+                    .clickable(enabled = text.isNotBlank()) { haptics.tick(); onAdd(text.trim()) }
                     .padding(horizontal = 14.dp, vertical = 7.dp),
             )
         }

@@ -1,5 +1,8 @@
 package com.macrotracker.ui.screens.f1
 
+import com.macrotracker.ui.components.joinedRowShape
+import com.macrotracker.ui.components.TilePlace
+import com.macrotracker.ui.components.Joined
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import androidx.compose.animation.AnimatedVisibility
@@ -399,10 +402,11 @@ private fun CarDetail(car: LiveCar, race: Boolean) {
             listOf(car.name, car.team, "#${car.number}").filter { it.isNotBlank() && it != "#" }.joinToString(", "),
             fontSize = 13.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
-        Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            car.sectors.take(3).forEachIndexed { i, (time, mark) ->
+        val sectors = car.sectors.take(3)
+        Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+            sectors.forEachIndexed { i, (time, mark) ->
                 Column(
-                    Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(lapMarkColour(mark, Color.White).copy(alpha = if (mark.isBlank()) 0.05f else 0.16f)).padding(horizontal = 10.dp, vertical = 8.dp),
+                    Modifier.weight(1f).clip(joinedRowShape(TilePlace.of(i, sectors.size), outer = 16.dp)).background(lapMarkColour(mark, Color.White).copy(alpha = if (mark.isBlank()) 0.05f else 0.16f)).padding(horizontal = 10.dp, vertical = 8.dp),
                 ) {
                     Text("Sector ${i + 1}", fontSize = 11.sp, color = TextSecondary, maxLines = 1)
                     Text(time.ifBlank { "–" }, style = F1Figure, fontSize = 15.sp, color = lapMarkColour(mark), maxLines = 1)

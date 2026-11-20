@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.components.Joined
+import com.macrotracker.ui.components.JoinedColumn
 import com.macrotracker.ui.screens.health.HealthDisplay
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
@@ -82,7 +84,6 @@ import dev.chrisbanes.haze.HazeState
  */
 
 private val CardShape = RoundedCornerShape(28.dp)
-private val OptionShape = RoundedCornerShape(20.dp)
 private val ButtonShape = RoundedCornerShape(18.dp)
 
 /** The small capitals over a card: what kind of thing is waiting. */
@@ -100,7 +101,7 @@ private enum class DockTone { PRIMARY, SECONDARY, DANGER, TEXT }
 
 /** A full-width button, in the composer's own terms: white for the thing to do, a tint for the thing to refuse. */
 @Composable
-private fun DockButton(label: String, tone: DockTone, enabled: Boolean, onClick: () -> Unit, loading: Boolean = false) {
+private fun DockButton(label: String, tone: DockTone, enabled: Boolean, onClick: () -> Unit, loading: Boolean = false, shape: androidx.compose.ui.graphics.Shape = ButtonShape) {
     val haptics = rememberHaptics()
     val fill by animateColorAsState(
         when {
@@ -123,7 +124,7 @@ private fun DockButton(label: String, tone: DockTone, enabled: Boolean, onClick:
         modifier = Modifier
             .fillMaxWidth()
             .height(if (tone == DockTone.TEXT) 40.dp else 46.dp)
-            .clip(ButtonShape)
+            .clip(shape)
             .background(fill)
             .clickable(enabled = enabled && !loading, role = Role.Button) { haptics.click(); onClick() },
         horizontalArrangement = Arrangement.Center,
@@ -272,6 +273,8 @@ internal fun PendingQuestionCard(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             MarkdownText(markdown = question.question, color = TextPrimary, fontSize = 15.sp, lineHeight = 21.sp, linkColor = AiAccent, breaks = true)
+            // the choices as one group of joined tiles
+            JoinedColumn(fill = androidx.compose.ui.graphics.Color.Transparent, outer = 20.dp) {
             question.choices.forEach { choice ->
                 val on = picked[page] == choice && typed[page].isBlank()
                 val fill by animateColorAsState(if (on) AiAccent.copy(alpha = 0.26f) else Color.White.copy(alpha = 0.06f), MacroMotion.colorTween(), label = "optionFill")
@@ -279,7 +282,6 @@ internal fun PendingQuestionCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 48.dp)
-                        .clip(OptionShape)
                         .background(fill)
                         .clickable(enabled = enabled, role = Role.RadioButton) {
                             haptics.tick()
@@ -295,6 +297,7 @@ internal fun PendingQuestionCard(
                     Text(choice, color = if (on) TextPrimary else TextSecondary, fontSize = 14.5.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
+            // an answer of your own is the group's last tile
             BasicTextField(
                 value = typed[page],
                 onValueChange = { typed[page] = it },
@@ -310,7 +313,6 @@ internal fun PendingQuestionCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 48.dp)
-                    .clip(OptionShape)
                     .background(if (typed[page].isNotBlank()) AiAccent.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.06f))
                     .padding(horizontal = 14.dp, vertical = 13.dp),
                 decorationBox = { inner ->
@@ -318,6 +320,7 @@ internal fun PendingQuestionCard(
                     inner()
                 },
             )
+            }
         }
         if (questions.size > 1) Pager(page, questions.size, onGo = { at = it }, done = { answerOf(it).isNotEmpty() })
         DockButton(
@@ -386,8 +389,17 @@ internal fun PendingApprovalCard(
             Text(riskLine(cmd), color = if (cmd.risk == "grave") Error else ServerWarn, fontSize = 12.5.sp, lineHeight = 17.sp)
         }
         if (waiting.size > 1) Pager(page, waiting.size, onGo = { at = it })
-        DockButton(if (isRunning) "Running" else "Allow once", DockTone.PRIMARY, enabled = !busy, loading = isRunning, onClick = { onDecide(index, true) })
-        DockButton("Decline", DockTone.DANGER, enabled = !busy && !isRunning, onClick = { onDecide(index, false) })
+        // Allow and Decline as one joined pair, one over the other
+        Column(verticalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+            DockButton(
+                if (isRunning) "Running" else "Allow once", DockTone.PRIMARY, enabled = !busy, loading = isRunning, onClick = { onDecide(index, true) },
+                shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 6.dp, bottomEnd = 6.dp),
+            )
+            DockButton(
+                "Decline", DockTone.DANGER, enabled = !busy && !isRunning, onClick = { onDecide(index, false) },
+                shape = RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp, bottomStart = 20.dp, bottomEnd = 20.dp),
+            )
+        }
     }
 }
 

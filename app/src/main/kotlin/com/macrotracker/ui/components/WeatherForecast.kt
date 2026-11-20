@@ -139,7 +139,7 @@ internal fun LazyListScope.weatherPageRooms(
     }
 }
 
-/** The days as rows straight on their room; a tapped one opens to its hours. */
+/** The days as joined tiles on their room; a tapped one opens to its hours. */
 @Composable
 private fun WeatherDays(weather: WeatherInfo, accent: Color, tempUnit: TempUnit, windUnit: WindUnit, clock24: Boolean) {
     var openDay by rememberSaveable { mutableStateOf<String?>(null) }
@@ -147,7 +147,7 @@ private fun WeatherDays(weather: WeatherInfo, accent: Color, tempUnit: TempUnit,
     val days = weather.dailyForecasts
     val weekLow = days.minOf { it.minTemp }
     val weekHigh = days.maxOf { it.maxTemp }
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp)) {
+    JoinedColumn(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp), fill = com.macrotracker.ui.screens.home.WellFill, outer = 18.dp) {
         days.forEachIndexed { i, day ->
             DayRow(
                 day = day,
@@ -204,9 +204,8 @@ private fun DayRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
                 .clickable(onClick = onToggle)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 12.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.width(50.dp)) {

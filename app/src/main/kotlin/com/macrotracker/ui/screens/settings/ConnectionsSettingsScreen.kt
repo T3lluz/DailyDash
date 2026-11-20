@@ -1,5 +1,10 @@
 package com.macrotracker.ui.screens.settings
 
+import com.macrotracker.ui.screens.home.HomeTone
+import com.macrotracker.ui.screens.home.RoomNeutral
+import com.macrotracker.ui.screens.home.pageRise
+import com.macrotracker.ui.components.Joined
+import com.macrotracker.ui.components.JoinedColumn
 import com.macrotracker.ui.screens.health.HealthDisplay
 import com.macrotracker.ui.screens.home.SubPage
 import android.Manifest
@@ -128,13 +133,15 @@ fun ConnectionsSettingsScreen(
 
     SubPage(title = "Connections", lede = "Services linked to DailyDash", onBack = onNavigateBack) {
 
-        MacroCard(delayMs = 50) {
+        // One group per thing it links, each in that subject's own colour, as Settings groups are.
+        SettingsGroup(title = "Health", tone = HomeTone.Body, delayMs = 30) {
+        SettingsTile(tone = HomeTone.Body) {
             ConnectionRow(
                 icon = AppIcons.Heart,
                 name = "Health Connect",
                 description = "Steps, heart rate, sleep, workouts & active calories",
                 connected = healthConnectAvailable,
-                iconTint = HealthConnectBrand,
+                iconTint = HomeTone.Body,
                 enabled = masterHealthConnectEnabled,
                 onToggle = {
                     haptics.tick()
@@ -152,6 +159,7 @@ fun ConnectionsSettingsScreen(
                         color = TextPrimary,
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
+                    JoinedColumn(outer = 18.dp) {
                     MetricToggleRow(
                         iconRes = HealthMetric.HEART_RATE.iconRes(),
                         name = "Heart rate",
@@ -224,19 +232,21 @@ fun ConnectionsSettingsScreen(
                             viewModel.setMetricEnabled("active_calories_enabled", it)
                         },
                     )
+                    }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        }
 
-        MacroCard(delayMs = 80) {
+        SettingsGroup(title = "Weather", tone = HomeTone.Weather, delayMs = 60) {
+        SettingsTile(tone = HomeTone.Weather) {
             ConnectionRow(
                 icon = AppIcons.Cloud,
                 name = "Weather data",
                 description = "Location-based weather via Yr.no",
                 connected = weatherConnected,
-                iconTint = WeatherBrand,
+                iconTint = HomeTone.Weather,
                 enabled = masterWeatherEnabled,
                 onToggle = { enabled ->
                     haptics.tick()
@@ -253,9 +263,11 @@ fun ConnectionsSettingsScreen(
                 },
             )
 
-            WidgetExpandSection(visible = masterWeatherEnabled) {
+        }
+        // what the weather does, each its own tile while the weather is on
+        WidgetExpandSection(visible = masterWeatherEnabled) {
+            SettingsTile(tone = HomeTone.Weather) {
                 Column {
-                    Spacer(modifier = Modifier.height(12.dp))
                     Text(
                         text = "Rain alerts",
                         fontSize = 13.sp,
@@ -277,7 +289,12 @@ fun ConnectionsSettingsScreen(
                             viewModel.setRainAlerts(it)
                         },
                     )
-                    Spacer(modifier = Modifier.height(14.dp))
+                }
+            }
+        }
+        WidgetExpandSection(visible = masterWeatherEnabled) {
+            SettingsTile(tone = HomeTone.Weather) {
+                Column {
                     Text(
                         text = "Units",
                         fontSize = 13.sp,
@@ -318,15 +335,16 @@ fun ConnectionsSettingsScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        }
 
-        MacroCard(delayMs = 110) {
+        SettingsGroup(title = "Calendar", tone = HomeTone.Calendar, delayMs = 90) {
+        SettingsTile(tone = HomeTone.Calendar) {
             ConnectionRow(
                 icon = AppIcons.CalendarDays,
                 name = "Google Calendar",
                 description = "Today's events & schedule on dashboard",
                 connected = calendarConnected,
-                iconTint = CalendarBrand,
+                iconTint = HomeTone.Calendar,
                 enabled = masterCalendarEnabled,
                 onToggle = { enabled ->
                     haptics.tick()
@@ -343,30 +361,25 @@ fun ConnectionsSettingsScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        }
 
-        MacroCard(delayMs = 125) {
+        SettingsGroup(title = "Dashboard", tone = HomeTone.Servers, delayMs = 120) {
+        SettingsTile(tone = HomeTone.Servers) {
             DashboardServerSection(
                 savedUrl = dashboardServerUrl,
                 onSave = { viewModel.setDashboardServerUrl(it) },
             )
         }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
         // Below the first screen: built as it scrolls in, as Android's own Settings pages do.
-        LoadWhenSeen(placeholderHeight = 360.dp) {
-            MacroCard(delayMs = 132) {
-                PhoneHubSettingsCard()
-            }
+        SettingsTile(tone = HomeTone.Servers) {
+            LoadWhenSeen(placeholderHeight = 360.dp) { PhoneHubSettingsCard() }
+        }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
-
-        LoadWhenSeen(placeholderHeight = 280.dp) {
-            MacroCard(delayMs = 140) {
-                OpenLinksCard()
-            }
+        SettingsGroup(title = "Links", tone = HomeTone.Upcoming, delayMs = 150) {
+        SettingsTile(tone = HomeTone.Upcoming) {
+            LoadWhenSeen(placeholderHeight = 280.dp) { OpenLinksCard() }
+        }
         }
     }
 }
@@ -379,10 +392,10 @@ private fun DashboardServerSection(savedUrl: String, onSave: (String) -> Unit) {
     val valid = cleaned.startsWith("https://") || cleaned.startsWith("http://")
 
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(AppIcons.TvPlay, contentDescription = null, tint = Primary, modifier = Modifier.size(28.dp))
-        Spacer(modifier = Modifier.width(12.dp))
+        com.macrotracker.ui.components.TileIcon(AppIcons.TvPlay, HomeTone.Servers, size = 44.dp)
+        Spacer(modifier = Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text("Dashboard server", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+            Text("Dashboard server", style = HealthDisplay, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
             Text(
                 "Coming up shows the schedule this t3lluz dashboard publishes: Sonarr, Radarr, Stremio and F1. " +
                     "It is tailnet-only, so keep Tailscale on.",

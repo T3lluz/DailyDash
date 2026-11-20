@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.components.joinedTile
+import com.macrotracker.ui.components.Joined
 import com.macrotracker.ui.screens.health.HealthDisplay
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
@@ -155,36 +157,37 @@ internal fun HermesModelSheet(
             Spacer(Modifier.height(8.dp))
             LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
                 @Composable
-                fun row(f: HermesCatalog.Family, withGroup: Boolean) = FamilyRow(
+                fun row(f: HermesCatalog.Family, withGroup: Boolean, index: Int, count: Int) = FamilyRow(
                     f, starred = f.key in favourites, showGroup = withGroup,
                     onPick = { haptics.tick(); onPickFamily(f) }, onToggleFavourite = { haptics.tick(); onToggleFavourite(f.key) },
+                    index = index, count = count,
                 )
                 when {
                     q.isNotEmpty() -> {
                         val hits = families.filter { "${it.label} ${it.group} ${it.key} ${it.note.orEmpty()}".lowercase().contains(q) }
-                        var last: String? = null
-                        hits.forEach { f ->
-                            if (f.group != last) {
-                                last = f.group
-                                val heading = f.group
-                                item(key = "g-$heading") { RailHeading(heading) }
-                            }
-                            item(key = "s-${f.key}") { row(f, withGroup = false) }
+                        // each provider's hits are one group of joined tiles under its name
+                        hits.groupBy { it.group }.forEach { (heading, run) ->
+                            item(key = "g-$heading") { RailHeading(heading) }
+                            run.forEachIndexed { i, f -> item(key = "s-${f.key}") { row(f, withGroup = false, i, run.size) } }
                         }
                         if (hits.isEmpty()) item(key = "none") { Empty("No match") }
                     }
                     group == STARRED -> {
-                        starred.forEach { f -> item(key = "fav-${f.key}") { row(f, withGroup = true) } }
+                        starred.forEachIndexed { i, f -> item(key = "fav-${f.key}") { row(f, withGroup = true, i, starred.size) } }
                         if (starred.isEmpty()) item(key = "nofav") { Empty("Star a model to keep it here.") }
                     }
                     else -> {
                         val tab = HermesCatalog.pickerTab(families, group)
-                        tab.shown.forEach { f -> item(key = "f-${f.key}") { row(f, withGroup = false) } }
+                        // the newest of each line, then a fold of the older ones, all one group of tiles
+                        val run = tab.shown + (if (showOlder) tab.older else emptyList())
+                        val count = run.size + (if (tab.older.isNotEmpty()) 1 else 0)
+                        tab.shown.forEachIndexed { i, f -> item(key = "f-${f.key}") { row(f, withGroup = false, i, count) } }
                         if (tab.older.isNotEmpty()) {
                             item(key = "older") {
                                 Row(
-                                    Modifier.fillMaxWidth().padding(horizontal = 8.dp).clip(RoundedCornerShape(16.dp))
-                                        .clickable { haptics.tick(); showOlder = !showOlder }.padding(horizontal = 12.dp, vertical = 11.dp),
+                                    Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = Joined.Gap)
+                                        .joinedTile(tab.shown.size, count)
+                                        .clickable { haptics.tick(); showOlder = !showOlder }.padding(horizontal = 14.dp, vertical = 13.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Icon(if (showOlder) AppIcons.ChevronDown else AppIcons.ChevronRight, null, tint = TextTertiary, modifier = Modifier.size(16.dp))
@@ -194,7 +197,7 @@ internal fun HermesModelSheet(
                                     Text("${tab.older.size}", color = TextTertiary, fontSize = 13.sp)
                                 }
                             }
-                            if (showOlder) tab.older.forEach { f -> item(key = "o-${f.key}") { row(f, withGroup = false) } }
+                            if (showOlder) tab.older.forEachIndexed { i, f -> item(key = "o-${f.key}") { row(f, withGroup = false, tab.shown.size + 1 + i, count) } }
                         }
                         if (tab.hiddenPaid > 0) item(key = "paid") { Empty("${tab.hiddenPaid} paid OpenCode models: search to find them") }
                         if (tab.shown.isEmpty() && tab.older.isEmpty() && tab.hiddenPaid == 0) item(key = "none") { Empty("No models to show.") }
@@ -256,23 +259,25 @@ private fun FamilyRow(
     showGroup: Boolean,
     onPick: () -> Unit,
     onToggleFavourite: () -> Unit,
+    /** Where it stands in its run, for the corners it shares with the rows next to it. */
+    index: Int = 0,
+    count: Int = 1,
 ) {
     // under its own tab a row need not repeat the provider: "Opus 5.5"
     val name = if (!showGroup && f.label.startsWith("${f.group} ", ignoreCase = true)) f.label.drop(f.group.length + 1) else f.label
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(if (f.current) AiAccent.copy(alpha = 0.10f) else Color.Transparent)
+            .padding(start = 16.dp, end = 16.dp, bottom = Joined.Gap)
+            .joinedTile(index, count, fill = if (f.current) AiAccent.copy(alpha = 0.18f) else AiRoom)
             .clickable(onClick = onPick)
-            .padding(start = 12.dp, top = 7.dp, bottom = 7.dp),
+            .padding(start = 12.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BrandMark(f.group, f.key)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(name, color = TextPrimary, fontSize = 14.sp, fontWeight = if (f.current) FontWeight.SemiBold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(name, style = HealthDisplay, color = TextPrimary, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val note = listOfNotNull(f.group.takeIf { showGroup }, f.note).joinToString(" · ")
             if (note.isNotBlank()) Text(note, color = TextTertiary, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
@@ -306,8 +311,17 @@ private fun ModelOptions(
     val mods = HermesCatalog.modifiers(status)
     val cur = mods.current
     val stops = remember(mods.efforts, mods.hasBase) { HermesCatalog.effortStops(mods) }
-    Spacer(Modifier.height(8.dp))
-    Column(Modifier.fillMaxWidth().background(Background.copy(alpha = 0.35f)).padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 10.dp)) {
+    // a room at the foot, as Weave's model sheet keeps its own: the model, its depth, Done
+    Spacer(Modifier.height(6.dp))
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp)
+            .padding(bottom = 8.dp)
+            .clip(RoundedCornerShape(28.dp))
+            .background(AiRoom)
+            .padding(start = 18.dp, end = 14.dp, top = 14.dp, bottom = 14.dp),
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (switching) {
                 Box(Modifier.size(26.dp), contentAlignment = Alignment.Center) { LoadingSpinner(color = AiAccent, size = 14.dp) }
@@ -317,7 +331,7 @@ private fun ModelOptions(
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    current?.label ?: "Pick a model", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                    current?.label ?: "Pick a model", style = HealthDisplay, color = TextPrimary, fontSize = 16.sp,
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
                 Text(

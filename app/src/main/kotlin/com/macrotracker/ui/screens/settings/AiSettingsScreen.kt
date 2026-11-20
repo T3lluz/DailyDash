@@ -1,5 +1,9 @@
 package com.macrotracker.ui.screens.settings
 
+import com.macrotracker.ui.components.joinedRowShape
+import com.macrotracker.ui.components.TilePlace
+import com.macrotracker.ui.components.Joined
+import com.macrotracker.ui.components.JoinedColumn
 import com.macrotracker.ui.screens.home.pageRise
 import com.macrotracker.ui.screens.home.WellFill
 import com.macrotracker.ui.screens.home.HomeTone
@@ -164,14 +168,28 @@ private fun SectionLabel(text: String) {
 private val CardShape = RoundedCornerShape(28.dp)
 
 @Composable
-private fun Card(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Column(
-        modifier
-            .fillMaxWidth()
-            .pageRise()
-            .clip(CardShape)
-            .background(roomColor(HomeTone.Neutral)),
-    ) { content() }
+private fun Card(modifier: Modifier = Modifier, tone: Color = HomeTone.Neutral, content: @Composable () -> Unit) {
+    androidx.compose.runtime.CompositionLocalProvider(com.macrotracker.ui.components.LocalRoomTone provides tone.takeIf { it != HomeTone.Neutral }) {
+        Column(
+            modifier
+                .fillMaxWidth()
+                .pageRise()
+                .clip(CardShape)
+                .background(roomColor(tone)),
+        ) { content() }
+    }
+}
+
+/** The AI's own colour, as its row in Settings shows it. */
+private val AiLavender = Color(0xFFB4A7F5)
+
+/** Each provider's colour, so the setup of the one picked reads as that provider's: Claude's clay, Gemini's blue, OpenAI's green. */
+private fun AiProvider.tone(): Color = when (this) {
+    AiProvider.ANTHROPIC -> Color(0xFFD97757)
+    AiProvider.CURSOR -> HomeTone.Neutral
+    AiProvider.HERMES -> HomeTone.Briefing
+    AiProvider.GEMINI -> Color(0xFF8AB4F8)
+    AiProvider.OPENAI -> Color(0xFF74C7A5)
 }
 
 // ── The AI in use ───────────────────────────────────────────────────────────
@@ -179,7 +197,7 @@ private fun Card(modifier: Modifier = Modifier, content: @Composable () -> Unit)
 @Composable
 private fun InUseCard(state: AiUiState, onChange: () -> Unit, onTest: () -> Unit) {
     val cur = state.current
-    Card {
+    Card(tone = AiLavender) {
         Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             if (cur != null) AiProviderLogo(cur.provider, 52.dp)
             Spacer(Modifier.width(14.dp))
@@ -203,16 +221,17 @@ private fun InUseCard(state: AiUiState, onChange: () -> Unit, onTest: () -> Unit
         }
         Row(
             Modifier.fillMaxWidth().padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(Joined.Gap),
         ) {
-            PillAction("Test", AppIcons.Bolt, filled = false, enabled = cur?.ready == true && state.test != AiTest.Running, modifier = Modifier.weight(1f), onClick = onTest)
-            PillAction("Change", AppIcons.Sparkles, filled = true, modifier = Modifier.weight(1f), onClick = onChange)
+            PillAction("Test", AppIcons.Bolt, filled = false, enabled = cur?.ready == true && state.test != AiTest.Running, modifier = Modifier.weight(1f), place = TilePlace.FIRST, onClick = onTest)
+            PillAction("Change", AppIcons.Sparkles, filled = true, modifier = Modifier.weight(1f), place = TilePlace.LAST, onClick = onChange)
         }
     }
 }
 
 @Composable
 private fun TestBanner(test: AiTest, onDismiss: () -> Unit) {
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
     val (tone, title, body) = when (test) {
         AiTest.Running -> Triple(ServerBrand, "Asking it for one word…", null)
         is AiTest.Passed -> Triple(Success, "${test.provider.displayName} answered in ${"%.1f".format(test.seconds)} s", "You're all set.")
@@ -224,7 +243,7 @@ private fun TestBanner(test: AiTest, onDismiss: () -> Unit) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
             .background(tone.copy(alpha = 0.14f))
-            .clickable(enabled = test != AiTest.Running, onClick = onDismiss)
+            .clickable(enabled = test != AiTest.Running, onClick = { haptics.tick(); onDismiss() })
             .padding(horizontal = 14.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -254,7 +273,9 @@ private fun SetupCard(
     val p = status.provider
     val haptics = rememberHaptics()
     LaunchedEffect(p, status.ready) { if (status.ready) viewModel.refreshModels(p) }
-    Card {
+    // the provider, how the phone is let in, and its models: one group of joined tiles
+    androidx.compose.runtime.CompositionLocalProvider(com.macrotracker.ui.components.LocalRoomTone provides p.tone().takeIf { it != HomeTone.Neutral }) {
+    JoinedColumn(modifier = Modifier.pageRise(), fill = roomColor(p.tone()), outer = Joined.Page, inner = Joined.Inner) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             AiProviderLogo(p, 42.dp)
             Spacer(Modifier.width(12.dp))
@@ -269,13 +290,11 @@ private fun SetupCard(
                 PillAction("Use", AppIcons.Check, filled = true, enabled = status.ready, onClick = { haptics.confirm(); viewModel.select(p) })
             }
         }
-        Spacer(Modifier.height(4.dp))
         when (p) {
             AiProvider.ANTHROPIC -> {
                 ClaudeAccountRow(state, viewModel)
                 if (status.access != AiAccess.ACCOUNT || state.keys[p].orEmpty().isNotBlank()) {
-                    Spacer(Modifier.height(4.dp))
-                    KeyRow(p, saved = state.keys[p].orEmpty(), optional = true, onSave = { viewModel.saveKey(p, it) })
+                                KeyRow(p, saved = state.keys[p].orEmpty(), optional = true, onSave = { viewModel.saveKey(p, it) })
                 }
             }
             AiProvider.CURSOR -> DashboardAccountRow(
@@ -295,8 +314,7 @@ private fun SetupCard(
                     onConsole = null,
                 )
                 if (status.ready) {
-                    Spacer(Modifier.height(4.dp))
-                    Column(Modifier.padding(16.dp)) {
+                                Column(Modifier.padding(16.dp)) {
                         RowTitle(AppIcons.Gauge, "Model")
                         Spacer(Modifier.height(10.dp))
                         HermesModelSelector(viewModel = hermesViewModel)
@@ -306,9 +324,9 @@ private fun SetupCard(
             AiProvider.GEMINI, AiProvider.OPENAI -> KeyRow(p, saved = state.keys[p].orEmpty(), optional = false, onSave = { viewModel.saveKey(p, it) })
         }
         if (p != AiProvider.HERMES) {
-            Spacer(Modifier.height(4.dp))
-            ModelList(state, status, onPick = { haptics.tick(); viewModel.setModel(p, it) }, onRefresh = { viewModel.refreshModels(p, force = true) })
+                ModelList(state, status, onPick = { haptics.tick(); viewModel.setModel(p, it) }, onRefresh = { viewModel.refreshModels(p, force = true) })
         }
+    }
     }
 }
 
@@ -363,12 +381,12 @@ private fun ClaudeAccountRow(state: AiUiState, viewModel: AiSetupViewModel) {
             claude.awaitingCode && !claude.connected -> {
                 Field(value = code, onValue = { code = it }, hint = "Paste code#state", mono = true)
                 Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PillAction(if (claude.busy) "Signing in…" else "Finish", AppIcons.Check, filled = true, enabled = code.isNotBlank() && !claude.busy, modifier = Modifier.weight(1f)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+                    PillAction(if (claude.busy) "Signing in…" else "Finish", AppIcons.Check, filled = true, enabled = code.isNotBlank() && !claude.busy, modifier = Modifier.weight(1f), place = TilePlace.FIRST) {
                         viewModel.finishClaudeLogin(code)
                         code = ""
                     }
-                    PillAction("Cancel", null, filled = false, enabled = !claude.busy, modifier = Modifier.weight(1f)) {
+                    PillAction("Cancel", null, filled = false, enabled = !claude.busy, modifier = Modifier.weight(1f), place = TilePlace.LAST) {
                         viewModel.cancelClaudeLogin()
                         code = ""
                     }
@@ -408,6 +426,7 @@ private fun DashboardAccountRow(status: AiProviderStatus, lines: List<String>, o
 /** A provider's API key: masked, with show, save, clear, and where to get one. */
 @Composable
 private fun KeyRow(provider: AiProvider, saved: String, optional: Boolean, onSave: (String) -> Unit) {
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
     val context = LocalContext.current
     var draft by remember(provider, saved) { mutableStateOf(saved) }
     var visible by remember { mutableStateOf(false) }
@@ -437,7 +456,7 @@ private fun KeyRow(provider: AiProvider, saved: String, optional: Boolean, onSav
                     if (visible) AppIcons.EyeOff else AppIcons.Eye,
                     contentDescription = if (visible) "Hide key" else "Show key",
                     tint = TextTertiary,
-                    modifier = Modifier.size(20.dp).clip(CircleShape).clickable { visible = !visible },
+                    modifier = Modifier.size(20.dp).clip(CircleShape).clickable { haptics.tick(); visible = !visible },
                 )
             },
         )
@@ -445,16 +464,18 @@ private fun KeyRow(provider: AiProvider, saved: String, optional: Boolean, onSav
             Text("That doesn't look like a ${provider.displayName} key (${AiApiClient.keyPlaceholder(provider)})", fontSize = 11.5.sp, color = Warning, modifier = Modifier.padding(top = 4.dp, start = 4.dp))
         }
         Spacer(Modifier.height(10.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PillAction("Save", AppIcons.Check, filled = true, enabled = dirty && draft.isNotBlank(), modifier = Modifier.weight(1f)) { onSave(draft.trim()) }
+        // Save and the second action as one joined pair
+        val second = saved.isNotBlank() || AiApiClient.keyUrl(provider) != null
+        Row(horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+            PillAction("Save", AppIcons.Check, filled = true, enabled = dirty && draft.isNotBlank(), modifier = Modifier.weight(1f), place = if (second) TilePlace.FIRST else TilePlace.ONLY) { onSave(draft.trim()) }
             if (saved.isNotBlank()) {
-                PillAction("Clear", null, filled = false, modifier = Modifier.weight(1f)) {
+                PillAction("Clear", null, filled = false, modifier = Modifier.weight(1f), place = TilePlace.LAST) {
                     draft = ""
                     onSave("")
                 }
             } else {
                 AiApiClient.keyUrl(provider)?.let { url ->
-                    PillAction("Get a key", AppIcons.ExternalLink, filled = false, modifier = Modifier.weight(1f)) { context.openUrl(url) }
+                    PillAction("Get a key", AppIcons.ExternalLink, filled = false, modifier = Modifier.weight(1f), place = TilePlace.LAST) { context.openUrl(url) }
                 }
             }
         }
@@ -464,6 +485,7 @@ private fun KeyRow(provider: AiProvider, saved: String, optional: Boolean, onSav
 /** The provider's models as radio rows: its own list (refreshable), search when it is long. */
 @Composable
 private fun ModelList(state: AiUiState, status: AiProviderStatus, onPick: (String) -> Unit, onRefresh: () -> Unit) {
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
     val context = LocalContext.current
     val p = status.provider
     val models = modelsFor(state, p)
@@ -482,7 +504,7 @@ private fun ModelList(state: AiUiState, status: AiProviderStatus, onPick: (Strin
                             AppIcons.Refresh,
                             contentDescription = "Refresh the list",
                             tint = TextSecondary,
-                            modifier = Modifier.size(32.dp).clip(CircleShape).clickable(onClick = onRefresh).padding(7.dp),
+                            modifier = Modifier.size(32.dp).clip(CircleShape).clickable(onClick = { haptics.tick(); onRefresh() }).padding(7.dp),
                         )
                     }
                 }
@@ -501,21 +523,21 @@ private fun ModelList(state: AiUiState, status: AiProviderStatus, onPick: (Strin
             )
             if (models.size > 8) {
                 Spacer(Modifier.height(10.dp))
-                SearchBox(value = query, onValueChange = { query = it }, hint = "Find a model…")
+                SearchBox(value = query, onValueChange = { query = it }, hint = "Find a model…", fill = com.macrotracker.ui.components.Joined.Fill)
             }
         }
-        Spacer(Modifier.height(6.dp))
-        Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+        Spacer(Modifier.height(10.dp))
+        Column(Modifier.heightIn(max = 420.dp).padding(horizontal = 10.dp).clip(RoundedCornerShape(18.dp)).verticalScroll(rememberScrollState())) {
+            JoinedColumn(outer = 18.dp) {
             shown.forEach { m ->
                 val on = m.id == status.model
+                val fill by androidx.compose.animation.animateColorAsState(if (on) ServerBrand.copy(alpha = 0.16f) else Color.Transparent, com.macrotracker.ui.theme.MacroMotion.colorTween(), label = "modelRow")
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(if (on) ServerBrand.copy(alpha = 0.10f) else Color.Transparent)
+                        .background(fill)
                         .clickable { onPick(m.id) }
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(
@@ -530,6 +552,7 @@ private fun ModelList(state: AiUiState, status: AiProviderStatus, onPick: (Strin
                         m.note?.let { Text(it, fontSize = 12.sp, color = TextTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                     }
                 }
+            }
             }
             if (shown.isEmpty()) {
                 Text(if (query.isBlank()) "No models listed yet." else "Nothing matches.", fontSize = 12.5.sp, color = TextTertiary, modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
@@ -547,12 +570,15 @@ private fun PillAction(
     filled: Boolean,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    /** Its place in a joined pair of buttons, or a pill on its own. */
+    place: TilePlace = TilePlace.ONLY,
     onClick: () -> Unit,
 ) {
     val haptics = rememberHaptics()
+    // filled, it takes the colour of the card it stands in
     val bg = when {
         !enabled -> WellFill
-        filled -> ServerBrand
+        filled -> com.macrotracker.ui.components.LocalRoomTone.current ?: ServerBrand
         else -> WellFill
     }
     val fg = when {
@@ -563,7 +589,7 @@ private fun PillAction(
     Row(
         modifier
             .height(42.dp)
-            .clip(RoundedCornerShape(21.dp))
+            .clip(joinedRowShape(place, outer = 21.dp, inner = 8.dp))
             .background(bg)
 
             .clickable(enabled = enabled) { haptics.tick(); onClick() }

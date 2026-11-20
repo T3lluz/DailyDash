@@ -80,7 +80,6 @@ fun WeatherPage(viewModel: HomeViewModel, onBack: () -> Unit, onRequestLocation:
         lede = success?.let { s -> remember(s.weather, clock24) { weatherHeadline(s.weather, clock24) } },
         actions = { haze ->
             GlassRound(AppIcons.Refresh, "Refresh", haze) {
-                haptics.tick()
                 reload()
             }
         },
@@ -120,7 +119,6 @@ fun CalendarPage(viewModel: HomeViewModel, onBack: () -> Unit) {
         lede = if (events.isEmpty()) null else calendarSummary(events),
         actions = { haze ->
             GlassRound(AppIcons.Refresh, "Refresh", haze) {
-                haptics.tick()
                 viewModel.loadCalendar(context.granted(Manifest.permission.READ_CALENDAR))
             }
         },
@@ -183,18 +181,20 @@ fun BriefPage(viewModel: BriefViewModel, onBack: () -> Unit, onOpenChat: () -> U
 fun MailPage(viewModel: MailViewModel, onBack: () -> Unit, onOpenHermes: () -> Unit) {
     val uri = LocalUriHandler.current
     val gmail = mailAccountUrl(viewModel)
+    val mail by viewModel.state.collectAsState()
+    val hasTabs = (mail as? com.macrotracker.ui.viewmodel.MailUiState.Ready)?.box?.error == null && mail is com.macrotracker.ui.viewmodel.MailUiState.Ready
     HomePage(
         title = "Mail",
         tone = HomeTone.Mail,
         onBack = onBack,
         lede = mailLede(viewModel),
-        sticky = { MailTabs(viewModel) },
         actions = { haze ->
             if (gmail != null) {
                 GlassPill("Gmail", haze, icon = AppIcons.ExternalLink) { runCatching { uri.openUri(gmail) } }
             }
         },
     ) {
+        if (hasTabs) pagePinned("tabs") { MailTabs(viewModel) }
         item(key = "mail") { MailPageBody(viewModel, onOpenHermes) }
     }
 }

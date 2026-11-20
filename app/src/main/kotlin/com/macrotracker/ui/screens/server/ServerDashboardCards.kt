@@ -1,5 +1,8 @@
 package com.macrotracker.ui.screens.server
 
+import com.macrotracker.ui.components.joinedCellShape
+import com.macrotracker.ui.components.JoinedColumn
+import com.macrotracker.ui.components.Joined
 import com.macrotracker.ui.screens.health.HealthDisplay
 import com.macrotracker.ui.screens.health.LocalRoomColor
 import androidx.compose.foundation.shape.CircleShape
@@ -103,16 +106,18 @@ internal fun ServicesWallCard(link: DashboardLink, onAskAi: (() -> Unit)?) {
         val shown = if (showAll) services else services.take(SERVICES_FOLDED)
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
             val columns = if (maxWidth >= 520.dp) 3 else 2
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                shown.chunked(columns).forEach { row ->
+            // every app a tile of one joined grid
+            Column(verticalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+                shown.chunked(columns).forEachIndexed { r, row ->
                     Row(
                         modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(Joined.Gap),
                     ) {
-                        row.forEach { service ->
+                        row.forEachIndexed { c, service ->
                             ServiceTile(
                                 service = service,
                                 modifier = Modifier.weight(1f).fillMaxHeight(),
+                                shape = joinedCellShape(r * columns + c, shown.size, columns, outer = 20.dp),
                             ) {
                                 haptics.tick()
                                 context.openUrl(service.href)
@@ -150,13 +155,12 @@ internal fun ServicesWallCard(link: DashboardLink, onAskAi: (() -> Unit)?) {
 }
 
 @Composable
-private fun ServiceTile(service: DashboardService, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun ServiceTile(service: DashboardService, modifier: Modifier = Modifier, shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(16.dp), onClick: () -> Unit) {
     val statusColor = when (service.up) {
         true -> ServerGood
         false -> ServerCritical
         null -> TextTertiary
     }
-    val shape = RoundedCornerShape(16.dp)
     Column(
         modifier = modifier
             .clip(shape)
@@ -171,8 +175,9 @@ private fun ServiceTile(service: DashboardService, modifier: Modifier = Modifier
             Spacer(Modifier.width(8.dp))
             Text(
                 service.title,
+                style = HealthDisplay,
                 color = TextPrimary,
-                fontSize = 13.sp,
+                fontSize = 13.5.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -266,53 +271,54 @@ internal fun ServerActivityCard(link: DashboardLink) {
             }
             if (activity.downloads.isNotEmpty()) Spacer(Modifier.height(12.dp))
         }
-        activity.downloads.take(3).forEachIndexed { i, d ->
-            if (i > 0) Spacer(Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (d.artUrl != null) {
-                    AsyncImage(
-                        model = d.artUrl,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.size(width = 48.dp, height = 28.dp).clip(RoundedCornerShape(14.dp)),
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier.size(width = 48.dp, height = 28.dp).clip(RoundedCornerShape(14.dp)).background(WellFill),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(AppIcons.Download, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(14.dp))
+        JoinedColumn(fill = WellFill, outer = 18.dp) {
+            activity.downloads.take(3).forEach { d ->
+                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (d.artUrl != null) {
+                        AsyncImage(
+                            model = d.artUrl,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.size(width = 48.dp, height = 28.dp).clip(RoundedCornerShape(8.dp)),
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier.size(width = 48.dp, height = 28.dp).clip(RoundedCornerShape(8.dp)).background(WellFill),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(AppIcons.Download, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(14.dp))
+                        }
                     }
-                }
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                d.title,
+                                color = TextPrimary,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                d.percent?.let { "${it.roundToInt()}%" } ?: "", style = HealthDisplay,
+                                color = TextPrimary,
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = HealthDisplayFamily,
+                            )
+                        }
                         Text(
-                            d.title,
-                            color = TextPrimary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
+                            listOfNotNull(d.sub.takeIf { it.isNotBlank() }, d.eta).joinToString(" · "),
+                            color = TextSecondary,
+                            fontSize = 11.5.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f),
                         )
-                        Text(
-                            d.percent?.let { "${it.roundToInt()}%" } ?: "", style = HealthDisplay,
-                            color = TextPrimary,
-                            fontSize = 12.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = HealthDisplayFamily,
-                        )
+                        Spacer(Modifier.height(4.dp))
+                        ServerMeterBar(percent = d.percent ?: 0f, height = 4.dp, color = ServerBrand)
                     }
-                    Text(
-                        listOfNotNull(d.sub.takeIf { it.isNotBlank() }, d.eta).joinToString(" · "),
-                        color = TextSecondary,
-                        fontSize = 11.5.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    ServerMeterBar(percent = d.percent ?: 0f, height = 4.dp, color = ServerBrand)
                 }
             }
         }
@@ -322,34 +328,35 @@ internal fun ServerActivityCard(link: DashboardLink) {
 /** App-reported problems from the collector (Sonarr health, a provider down), as advisory rows. */
 @Composable
 internal fun DashboardAlertRows(link: DashboardLink) {
-    link.alerts.forEachIndexed { i, alert ->
-        if (i > 0) Spacer(Modifier.height(8.dp))
-        val color = if (alert.level.equals("error", true)) ServerCritical else ServerWarn
-        Row(modifier = Modifier.fillMaxWidth()) {
-            // the app's own icon, with how bad it is as a dot on its corner
-            Box {
-                AppIcon(link.iconForContainer(alert.service), alert.service, 30.dp)
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .offset(x = 2.dp, y = 2.dp)
-                        .size(10.dp)
-                        .clip(CircleShape)
-                        .background(LocalRoomColor.current)
-                        .padding(2.dp)
-                        .clip(CircleShape)
-                        .background(color),
-                )
-            }
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    alert.service.replaceFirstChar { it.uppercase() },
-                    color = TextPrimary,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(alert.message, color = TextSecondary, fontSize = 12.5.sp, lineHeight = 18.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+    JoinedColumn(fill = WellFill, outer = 18.dp) {
+        link.alerts.forEach { alert ->
+            val color = if (alert.level.equals("error", true)) ServerCritical else ServerWarn
+            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp)) {
+                // the app's own icon, with how bad it is as a dot on its corner
+                Box {
+                    AppIcon(link.iconForContainer(alert.service), alert.service, 30.dp)
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .offset(x = 2.dp, y = 2.dp)
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(LocalRoomColor.current)
+                            .padding(2.dp)
+                            .clip(CircleShape)
+                            .background(color),
+                    )
+                }
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        alert.service.replaceFirstChar { it.uppercase() },
+                        color = TextPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(alert.message, color = TextSecondary, fontSize = 12.5.sp, lineHeight = 18.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                }
             }
         }
     }

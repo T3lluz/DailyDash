@@ -72,6 +72,11 @@ class TwitchViewModel @Inject constructor(
 
     fun toggleFavourite(id: String) = settings.toggleTwitchFavourite(id)
 
+    /** Which of the page's tabs show as a grid of tiles. */
+    val grids: StateFlow<Set<String>> = settings.pageGrids
+
+    fun toggleGrid(key: String) = settings.togglePageGrid(key)
+
     private val _trackedChannels = MutableStateFlow<List<TwitchChannel>>(emptyList())
     val trackedChannels: StateFlow<List<TwitchChannel>> = _trackedChannels
 

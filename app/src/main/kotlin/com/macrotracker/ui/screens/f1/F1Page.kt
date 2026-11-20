@@ -111,7 +111,6 @@ fun F1Page(homeViewModel: HomeViewModel, hubViewModel: F1HubViewModel, onBack: (
                     hero = { },
                     actions = { haze ->
                         GlassRound(AppIcons.Refresh, "Refresh", haze) {
-                            haptics.tick()
                             hubViewModel.refresh()
                             homeViewModel.loadF1Data(forceRefresh = true)
                         }

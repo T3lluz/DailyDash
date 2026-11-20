@@ -132,13 +132,15 @@ fun FoodRoundButton(
     lit: Boolean = false,
     enabled: Boolean = true,
     size: Dp = 40.dp,
+    /** Round on its own, or its place in a joined row of tiles. */
+    shape: androidx.compose.ui.graphics.Shape = CircleShape,
 ) {
     val press = remember { MutableInteractionSource() }
     Box(
         modifier = modifier
             .pressSink(press)
             .size(size)
-            .clip(CircleShape)
+            .clip(shape)
             .background(if (lit) HealthNutritionTone else FoodWell)
             .clickable(interactionSource = press, indication = LocalIndication.current, enabled = enabled, onClickLabel = label, onClick = onClick),
         contentAlignment = Alignment.Center,
@@ -158,13 +160,13 @@ fun FoodRoundButton(
 
 /** The one thing a card is there to do: a full-width green button with its words in the display face. */
 @Composable
-fun FoodPrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, icon: ImageVector? = null) {
+fun FoodPrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, icon: ImageVector? = null, shape: androidx.compose.ui.graphics.Shape = FoodTile) {
     val press = remember { MutableInteractionSource() }
     Row(
         modifier = modifier
             .fillMaxWidth()
             .pressSink(press)
-            .clip(FoodTile)
+            .clip(shape)
             .background(if (enabled) HealthNutritionTone else FoodWell)
             .clickable(interactionSource = press, indication = LocalIndication.current, enabled = enabled, onClick = onClick)
             .padding(vertical = 15.dp),
@@ -181,12 +183,12 @@ fun FoodPrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Mo
 
 /** A second choice beside or under the main one: a tile tinted green with green words. */
 @Composable
-fun FoodGhostButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, icon: ImageVector? = null, tone: Color = HealthNutritionTone) {
+fun FoodGhostButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, icon: ImageVector? = null, tone: Color = HealthNutritionTone, shape: androidx.compose.ui.graphics.Shape = FoodTile) {
     val press = remember { MutableInteractionSource() }
     Row(
         modifier = modifier
             .pressSink(press)
-            .clip(FoodTile)
+            .clip(shape)
             .background(tone.copy(alpha = 0.14f))
             .clickable(interactionSource = press, indication = LocalIndication.current, onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 14.dp),
@@ -212,10 +214,11 @@ fun FoodField(
     imeAction: ImeAction = ImeAction.Default,
     onImeAction: () -> Unit = {},
     enabled: Boolean = true,
+    shape: androidx.compose.ui.graphics.Shape = FoodTile,
 ) {
     Box(
         modifier = modifier
-            .clip(FoodTile)
+            .clip(shape)
             .background(FoodWell)
             .padding(horizontal = 16.dp, vertical = 15.dp),
     ) {
@@ -248,11 +251,13 @@ fun FoodNumberTile(
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     decimal: Boolean = true,
+    /** Its corners: its own, or its place in a joined row of tiles. */
+    shape: androidx.compose.ui.graphics.Shape = FoodTile,
     below: (@Composable () -> Unit)? = null,
 ) {
     Column(
         modifier = modifier
-            .clip(FoodTile)
+            .clip(shape)
             .background(tone.copy(alpha = 0.12f))
             .padding(horizontal = 14.dp, vertical = 12.dp),
     ) {

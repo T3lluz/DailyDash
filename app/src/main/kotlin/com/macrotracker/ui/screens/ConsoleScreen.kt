@@ -1,5 +1,11 @@
 package com.macrotracker.ui.screens
 
+import com.macrotracker.ui.components.joinedRowShape
+import com.macrotracker.ui.components.TilePlace
+import com.macrotracker.ui.components.Joined
+import com.macrotracker.ui.components.TileMenu
+import com.macrotracker.ui.components.TileMenuGroup
+import com.macrotracker.ui.components.TileMenuItem
 import com.macrotracker.ui.screens.home.RoomNeutral
 import android.annotation.SuppressLint
 import android.content.Context
@@ -63,7 +69,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.macrotracker.ui.components.LoadingSpinner
 import com.macrotracker.ui.components.PillButton
 import com.macrotracker.ui.components.SubScreenHeader
-import com.macrotracker.ui.screens.ai.MenuRow
 import com.macrotracker.ui.theme.AiAccent
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Surface
@@ -145,20 +150,32 @@ fun ConsoleScreen(
                     IconButton(onClick = { haptics.tick(); viewModel.refreshSessions(); menu = true }, modifier = Modifier.size(40.dp)) {
                         Icon(AppIcons.List, "Shells and more", tint = TextSecondary, modifier = Modifier.size(20.dp))
                     }
-                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, modifier = Modifier.background(RoomNeutral)) {
-                        state.sessions.forEachIndexed { i, s ->
-                            MenuRow(
-                                label = "${i + 1}  ${s.cwd}${if (s.cmd.isNotBlank()) " · ${s.cmd}" else ""}${if (s.id == state.currentId) "  ✓" else ""}",
-                                icon = AppIcons.Terminal,
-                            ) { menu = false; viewModel.open(s.id) }
+                    TileMenu(expanded = menu, onDismissRequest = { menu = false }, minWidth = 260.dp) {
+                        if (state.sessions.isNotEmpty()) {
+                            TileMenuGroup(label = "Shells") {
+                                state.sessions.forEachIndexed { i, s ->
+                                    TileMenuItem(
+                                        label = "${i + 1}  ${s.cwd}",
+                                        icon = AppIcons.Terminal,
+                                        summary = s.cmd.takeIf { it.isNotBlank() },
+                                        checked = s.id == state.currentId,
+                                    ) { menu = false; viewModel.open(s.id) }
+                                }
+                            }
                         }
-                        MenuRow("Copy the screen", AppIcons.Copy) {
-                            menu = false
-                            val text = viewModel.emulator?.screen?.transcriptText.orEmpty()
-                            scope.launch { clipboard.setClipEntry(ClipEntry(android.content.ClipData.newPlainText("Console", text))) }
+                        TileMenuGroup {
+                            TileMenuItem("Copy the screen", AppIcons.Copy) {
+                                menu = false
+                                val text = viewModel.emulator?.screen?.transcriptText.orEmpty()
+                                scope.launch { clipboard.setClipEntry(ClipEntry(android.content.ClipData.newPlainText("Console", text))) }
+                            }
+                            TileMenuItem("Reconnect", AppIcons.Refresh) { menu = false; viewModel.reconnect() }
                         }
-                        MenuRow("Reconnect", AppIcons.Refresh) { menu = false; viewModel.reconnect() }
-                        if (state.currentId != null) MenuRow("Close this shell", AppIcons.Close, danger = true) { menu = false; viewModel.closeCurrent() }
+                        if (state.currentId != null) {
+                            TileMenuGroup {
+                                TileMenuItem("Close this shell", AppIcons.Close, danger = true) { menu = false; viewModel.closeCurrent() }
+                            }
+                        }
                     }
                 }
             },
@@ -208,38 +225,44 @@ fun ConsoleScreen(
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 8.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(Joined.Gap),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ConsoleKey("esc") { type("\u001b") }
-            ConsoleKey("tab") { type("\t") }
-            ConsoleKey("ctrl", on = ctrl) { ctrl = !ctrl }
-            ConsoleKey("↑") { key(KeyEvent.KEYCODE_DPAD_UP) }
-            ConsoleKey("↓") { key(KeyEvent.KEYCODE_DPAD_DOWN) }
-            ConsoleKey("←") { key(KeyEvent.KEYCODE_DPAD_LEFT) }
-            ConsoleKey("→") { key(KeyEvent.KEYCODE_DPAD_RIGHT) }
-            listOf("/", "-", "|", "~", "&", ";").forEach { c -> ConsoleKey(c) { type(c) } }
-            ConsoleKey("home") { key(KeyEvent.KEYCODE_MOVE_HOME) }
-            ConsoleKey("end") { key(KeyEvent.KEYCODE_MOVE_END) }
-            ConsoleKey("paste") {
-                scope.launch {
-                    val text = clipboard.getClipEntry()?.clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString().orEmpty()
-                    if (text.isNotEmpty()) type(text.replace("\r\n", "\r").replace('\n', '\r'))
-                }
+            // one strip of joined keys, round at its two ends
+            val keys: List<Triple<String, Boolean, () -> Unit>> = listOf(
+                Triple("esc", false) { type("\u001b") },
+                Triple("tab", false) { type("\t") },
+                Triple("ctrl", ctrl) { ctrl = !ctrl },
+                Triple("↑", false) { key(KeyEvent.KEYCODE_DPAD_UP) },
+                Triple("↓", false) { key(KeyEvent.KEYCODE_DPAD_DOWN) },
+                Triple("←", false) { key(KeyEvent.KEYCODE_DPAD_LEFT) },
+                Triple("→", false) { key(KeyEvent.KEYCODE_DPAD_RIGHT) },
+            ) + listOf("/", "-", "|", "~", "&", ";").map { c -> Triple<String, Boolean, () -> Unit>(c, false) { type(c) } } + listOf(
+                Triple("home", false) { key(KeyEvent.KEYCODE_MOVE_HOME) },
+                Triple("end", false) { key(KeyEvent.KEYCODE_MOVE_END) },
+                Triple("paste", false) {
+                    scope.launch {
+                        val text = clipboard.getClipEntry()?.clipData?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString().orEmpty()
+                        if (text.isNotEmpty()) type(text.replace("\r\n", "\r").replace('\n', '\r'))
+                    }
+                },
+                Triple("keys", false) { terminal?.showKeyboard() },
+            )
+            keys.forEachIndexed { i, (label, on, action) ->
+                ConsoleKey(label, on = on, shape = joinedRowShape(TilePlace.of(i, keys.size), outer = 16.dp, inner = 5.dp), onClick = action)
             }
-            ConsoleKey("keys") { terminal?.showKeyboard() }
         }
     }
 }
 
 @Composable
-private fun ConsoleKey(label: String, on: Boolean = false, onClick: () -> Unit) {
+private fun ConsoleKey(label: String, on: Boolean = false, shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(14.dp), onClick: () -> Unit) {
     val haptics = rememberHaptics()
     Box(
         Modifier
-            .height(38.dp)
-            .widthIn(min = 42.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .height(40.dp)
+            .widthIn(min = 44.dp)
+            .clip(shape)
             .background(if (on) AiAccent.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.07f))
             .clickable(role = Role.Button) { haptics.tick(); onClick() }
             .padding(horizontal = 10.dp),

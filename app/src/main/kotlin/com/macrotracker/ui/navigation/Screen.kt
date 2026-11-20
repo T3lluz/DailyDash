@@ -60,6 +60,11 @@ object SubScreenRoutes {
 
     fun homePage(id: String): String = "home_page/$id"
 
+    /** A full page opened from the Health tab (HealthPageHost): "SLEEP", or "WORKOUT:<id>". */
+    const val HEALTH_PAGE_PATTERN = "health_page/{id}"
+
+    fun healthPage(id: String): String = "health_page/${android.net.Uri.encode(id)}"
+
     /** The Tilesmith studio: a saved design, a starter, or a request for the AI (TilesmithStudioScreen). */
     const val TILESMITH = "tilesmith"
     const val TILESMITH_PATTERN = "tilesmith?design={design}&prompt={prompt}&starter={starter}"

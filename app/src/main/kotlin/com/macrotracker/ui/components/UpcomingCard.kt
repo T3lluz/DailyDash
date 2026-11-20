@@ -1,7 +1,9 @@
 package com.macrotracker.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import com.macrotracker.ui.screens.home.WellFill
 import com.macrotracker.ui.screens.home.RoomNeutral
-import com.macrotracker.ui.screens.home.pageStickyAnchor
+import com.macrotracker.ui.screens.home.pagePinned
 import androidx.compose.foundation.layout.fillMaxSize
 import com.macrotracker.ui.screens.health.HealthDisplay
 import com.macrotracker.ui.screens.health.RoomLoading
@@ -263,36 +265,24 @@ fun UpcomingPage(viewModel: UpcomingViewModel, onBack: () -> Unit) {
         tone = UpcomingAccent,
         onBack = onBack,
         lede = lede,
-        sticky = {
-            if (sources.size > 1) {
-                SourceFilter(
-                    sources = sources,
-                    selected = source,
-                    total = shown.size,
-                    onSelect = { id ->
-                        haptics.tick()
-                        picked = if (id == source) null else id
-                    },
-                )
-            }
-        },
     ) {
         when (val s = state) {
             is UpcomingUiState.Success -> {
+                if (sources.size > 1) {
+                    pagePinned("sources") {
+                        SourceFilter(
+                            sources = sources,
+                            selected = source,
+                            total = shown.size,
+                            onSelect = { id ->
+                                haptics.tick()
+                                picked = if (id == source) null else id
+                            },
+                        )
+                    }
+                }
                 item(key = "strip") {
                     PageRoom(UpcomingAccent) {
-                        if (sources.size > 1) {
-                            SourceFilter(
-                                sources = sources,
-                                selected = source,
-                                total = shown.size,
-                                onSelect = { id ->
-                                    haptics.tick()
-                                    picked = if (id == source) null else id
-                                },
-                                modifier = Modifier.pageStickyAnchor().padding(bottom = 14.dp),
-                            )
-                        }
                         UpcomingStrip(events = events, error = s.error, stremioError = s.feed.stremioError, tools = true, sourceKey = source)
                     }
                 }
@@ -306,7 +296,7 @@ fun UpcomingPage(viewModel: UpcomingViewModel, onBack: () -> Unit) {
                             meta = day.format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault())),
                             flush = true,
                         ) {
-                            Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+                            JoinedColumn(Modifier.fillMaxWidth().padding(horizontal = 12.dp), fill = WellFill, outer = 18.dp) {
                                 list.forEach { event ->
                                     UpcomingRow(event, zone, clock) {
                                         event.href?.let { href ->
@@ -338,9 +328,8 @@ private fun UpcomingRow(event: UpcomingEvent, zone: ZoneId, clock: DateTimeForma
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
             .clickable(enabled = event.href != null, onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -637,11 +626,14 @@ private fun SourceFilter(
             .fillMaxWidth()
             .horizontalEdgeFade(scroll)
             .horizontalScroll(scroll),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(Joined.Gap),
     ) {
-        SourceChip(label = "All", count = total, color = null, iconUrl = null, selected = selected == null, onClick = { onSelect(null) })
-        sources.forEach { src ->
+        // one joined strip of sources, round at its two ends
+        val count = sources.size + 1
+        SourceChip(label = "All", count = total, color = null, iconUrl = null, selected = selected == null, onClick = { onSelect(null) }, shape = joinedRowShape(TilePlace.of(0, count), outer = 18.dp, inner = 6.dp))
+        sources.forEachIndexed { i, src ->
             SourceChip(
+                shape = joinedRowShape(TilePlace.of(i + 1, count), outer = 18.dp, inner = 6.dp),
                 label = src.label,
                 count = src.count,
                 color = src.color,
@@ -655,18 +647,18 @@ private fun SourceFilter(
 
 /** A source by its own mark (Sonarr's, Stremio's, Google Calendar's, F1's), its name and count. */
 @Composable
-private fun SourceChip(label: String, count: Int, color: Color?, iconUrl: String?, selected: Boolean, onClick: () -> Unit) {
+private fun SourceChip(label: String, count: Int, color: Color?, iconUrl: String?, selected: Boolean, onClick: () -> Unit, shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(50)) {
     val context = LocalContext.current
     val request = remember(iconUrl) {
         iconUrl?.let { ImageRequest.Builder(context).data(it).decoderFactory(SvgDecoder.Factory()).build() }
     }
-    val shape = RoundedCornerShape(50)
+    val fill by animateColorAsState(if (selected) UpcomingAccent.copy(alpha = 0.26f) else Color.White.copy(alpha = 0.06f), MacroMotion.colorTween(), label = "sourceChip")
     Row(
         modifier = Modifier
             .clip(shape)
-            .background(if (selected) UpcomingAccent.copy(alpha = 0.26f) else Color.White.copy(alpha = 0.06f))
+            .background(fill)
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 7.dp),
+            .padding(horizontal = 13.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         when {

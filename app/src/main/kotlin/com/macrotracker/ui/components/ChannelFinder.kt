@@ -185,7 +185,7 @@ internal fun FinderChip(
 ) {
     val press = remember { MutableInteractionSource() }
     val pressed by press.collectIsPressedAsState()
-    val scale = androidx.compose.animation.core.animateFloatAsState(if (pressed) 0.9f else 1f, MacroMotion.pressSpring(), label = "finder_press")
+    val scale = androidx.compose.animation.core.animateFloatAsState(if (pressed) 0.9f else 1f, MacroMotion.giveSpring(), label = "finder_press")
     val ring = animateColorAsState(if (active) accent else Border, MacroMotion.colorTween(), label = "finder_ring")
     Box(
         Modifier

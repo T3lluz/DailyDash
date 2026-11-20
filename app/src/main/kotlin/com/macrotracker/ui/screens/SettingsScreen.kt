@@ -103,8 +103,7 @@ fun SettingsScreen(
     val aiProvider by viewModel.aiProvider.collectAsState()
     val aiReady by viewModel.aiReady.collectAsState()
     val widgetsPlaced by viewModel.widgetsPlaced.collectAsState()
-    val calGoal by goalsViewModel.calGoal.collectAsState()
-    val protGoal by goalsViewModel.protGoal.collectAsState()
+    val healthGoals by goalsViewModel.healthGoals.collectAsState()
     val servers by serverViewModel.profiles.collectAsState()
     val runtimes by serverViewModel.runtimes.collectAsState()
 
@@ -215,9 +214,9 @@ fun SettingsScreen(
             SettingsNavRow(
                 icon = AppIcons.Flame,
                 tint = NutritionCalories,
-                title = "Nutrition goals",
-                summary = "Calorie and protein targets",
-                status = calGoal.takeIf { it.isNotBlank() }?.let { "$it kcal · ${protGoal}g" },
+                title = "Goals",
+                summary = "Steps, sleep, calories and protein",
+                status = "${String.format(java.util.Locale.US, "%,d", healthGoals.steps)} steps",
                 onClick = onNavigateToNutrition,
             )
         }

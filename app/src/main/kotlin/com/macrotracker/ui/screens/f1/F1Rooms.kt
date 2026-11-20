@@ -1,5 +1,9 @@
 package com.macrotracker.ui.screens.f1
 
+import com.macrotracker.ui.components.joinedGridShape
+import com.macrotracker.ui.components.Joined
+import com.macrotracker.ui.screens.home.WellFill
+import com.macrotracker.ui.components.JoinedColumn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -295,7 +299,8 @@ internal fun SessionRows(weekend: Weekend, up: HubSession?, nowMs: Long, liveNow
     val clock = rememberClockFormatter()
     val now = Instant.ofEpochMilli(nowMs)
     val open = LocalF1Open.current
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    // the weekend's sessions as joined tiles, the next one lit
+    JoinedColumn(fill = WellFill, outer = 18.dp) {
         weekend.race.sessions.forEach { s ->
             val result = weekend.resultFor(s)
             val over = result != null || s.over(now)
@@ -305,16 +310,15 @@ internal fun SessionRows(weekend: Weekend, up: HubSession?, nowMs: Long, liveNow
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
                     .background(
                         when {
-                            on -> F1Tone.copy(alpha = 0.22f)
-                            next -> Color.White.copy(alpha = 0.07f)
+                            on -> F1Tone.copy(alpha = 0.26f)
+                            next -> Color.White.copy(alpha = 0.08f)
                             else -> Color.Transparent
                         },
                     )
                     .clickable(enabled = openable) { open(F1Dest.Session(weekend.race.round, s.kind)) }
-                    .padding(start = 10.dp, end = 6.dp, top = 9.dp, bottom = 9.dp),
+                    .padding(start = 12.dp, end = 8.dp, top = 11.dp, bottom = 11.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(at.format(DayShort), fontSize = 13.sp, color = TextSecondary, modifier = Modifier.width(36.dp), maxLines = 1)
@@ -416,7 +420,7 @@ internal fun ResultBody(result: SessionResult, hub: F1Hub, limit: Int = Int.MAX_
                 }
                 Spacer(Modifier.height(10.dp))
                 val lead = result.rows.firstOrNull()?.laps
-                Column(Modifier.padding(horizontal = 8.dp)) {
+                JoinedColumn(Modifier.padding(horizontal = 12.dp), fill = WellFill, outer = 18.dp) {
                     result.rows.drop(if (result.rows.size >= 3) 3 else 0).take(limit).forEach { row ->
                         ResultLine(row, hub) {
                             Gained(row.gained)
@@ -426,23 +430,31 @@ internal fun ResultBody(result: SessionResult, hub: F1Hub, limit: Int = Int.MAX_
                     }
                 }
             }
-            result.isQualifying -> Column(Modifier.padding(horizontal = 8.dp)) {
-                var part = ""
+            result.isQualifying -> Column {
+                // each part of qualifying is its own group of tiles under its name
+                val parts = mutableListOf<Pair<String, MutableList<ResultRow>>>()
                 result.rows.take(limit).forEach { row ->
-                    if (row.out.isNotBlank() && row.out != part) {
-                        part = row.out
+                    if (parts.isEmpty() || (row.out.isNotBlank() && row.out != parts.last().first)) parts += row.out to mutableListOf()
+                    parts.last().second += row
+                }
+                parts.forEach { (part, rows) ->
+                    if (part.isNotBlank()) {
                         Text(
                             if (part == "Q3") "The top ten" else "Out in $part",
                             style = HealthDisplay, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = TextSecondary,
-                            modifier = Modifier.padding(start = 10.dp, top = 10.dp, bottom = 4.dp),
+                            modifier = Modifier.padding(start = 22.dp, top = 12.dp, bottom = 7.dp),
                         )
                     }
-                    ResultLine(row, hub) {
-                        Cell(F1HubMath.qualiTime(row), if (row.pos == 1) LapPurple else TextPrimary, 78.dp, bold = row.pos == 1)
+                    JoinedColumn(Modifier.padding(horizontal = 12.dp), fill = WellFill, outer = 18.dp) {
+                        rows.forEach { row ->
+                            ResultLine(row, hub) {
+                                Cell(F1HubMath.qualiTime(row), if (row.pos == 1) LapPurple else TextPrimary, 78.dp, bold = row.pos == 1)
+                            }
+                        }
                     }
                 }
             }
-            else -> Column(Modifier.padding(horizontal = 8.dp)) {
+            else -> JoinedColumn(Modifier.padding(horizontal = 12.dp), fill = WellFill, outer = 18.dp) {
                 result.rows.take(limit).forEachIndexed { i, row ->
                     ResultLine(row, hub) {
                         Cell(if (i == 0) row.best else row.gap.ifBlank { row.best }, if (i == 0) LapPurple else TextSecondary, 78.dp, bold = i == 0)
@@ -460,7 +472,7 @@ internal fun ResultLine(row: ResultRow, hub: F1Hub, cells: @Composable RowScope.
     val colour = teamColour(row.colour)
     val open = LocalF1Open.current
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable { open(F1Dest.Driver(row.code)) }.padding(horizontal = 10.dp, vertical = 6.dp),
+        Modifier.fillMaxWidth().clickable { open(F1Dest.Driver(row.code)) }.padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -639,13 +651,13 @@ internal fun PointsBar(fraction: Float, colour: Color, modifier: Modifier = Modi
 
 /** Who leads the season in one count: the count set large over the driver it belongs to. */
 @Composable
-private fun LeaderTile(label: String, hub: F1Hub, count: (HubDriver) -> Int, modifier: Modifier = Modifier) {
+private fun LeaderTile(label: String, hub: F1Hub, count: (HubDriver) -> Int, modifier: Modifier = Modifier, shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(20.dp)) {
     val best = remember(hub, label) { hub.drivers.maxByOrNull { count(it) }?.takeIf { count(it) > 0 } }
     val open = LocalF1Open.current
     val colour = best?.let { teamColour(it.colour) } ?: TextTertiary
     Column(
         modifier
-            .clip(RoundedCornerShape(20.dp))
+            .clip(shape)
             .background(colour.copy(alpha = 0.13f))
             .clickable(enabled = best != null) { best?.let { open(F1Dest.Driver(it.code)) } }
             .padding(14.dp),
@@ -690,14 +702,15 @@ fun LazyListScope.f1DriverRooms(hub: F1Hub, table: Championship<HubDriver>) {
     if (hub.history.rounds.isNotEmpty()) {
         item(key = "drv-leaders") {
             PageRoom(Gold, title = "Season leaders", icon = AppIcons.Trophy) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    LeaderTile("Wins", hub, { hub.history.wins(it.code) }, Modifier.weight(1f))
-                    LeaderTile("Poles", hub, { hub.history.poles(it.code) }, Modifier.weight(1f))
+                // four tiles, one joined grid
+                Row(horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+                    LeaderTile("Wins", hub, { hub.history.wins(it.code) }, Modifier.weight(1f), joinedGridShape(0, 2, 0, 2))
+                    LeaderTile("Poles", hub, { hub.history.poles(it.code) }, Modifier.weight(1f), joinedGridShape(0, 2, 1, 2))
                 }
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    LeaderTile("Podiums", hub, { hub.history.podiums(it.code) }, Modifier.weight(1f))
-                    LeaderTile("Races in the points", hub, { c -> hub.history.finish[c.code].orEmpty().count { it != null && it <= 10 } }, Modifier.weight(1f))
+                Spacer(Modifier.height(Joined.Gap))
+                Row(horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+                    LeaderTile("Podiums", hub, { hub.history.podiums(it.code) }, Modifier.weight(1f), joinedGridShape(1, 2, 0, 2))
+                    LeaderTile("Races in the points", hub, { c -> hub.history.finish[c.code].orEmpty().count { it != null && it <= 10 } }, Modifier.weight(1f), joinedGridShape(1, 2, 1, 2))
                 }
             }
         }
@@ -711,16 +724,15 @@ fun LazyListScope.f1DriverRooms(hub: F1Hub, table: Championship<HubDriver>) {
         PageRoom(F1Tone, title = "Standings", icon = AppIcons.Trophy, meta = "Tap a driver", flush = true) {
             val top = table.rows.firstOrNull()?.points?.coerceAtLeast(1.0) ?: 1.0
             val open = LocalF1Open.current
-            Column(Modifier.padding(horizontal = 8.dp)) {
+            JoinedColumn(Modifier.padding(horizontal = 12.dp), fill = WellFill, outer = 18.dp) {
                 table.rows.forEachIndexed { i, s ->
                     val d = s.entry
                     val colour = teamColour(d.colour)
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(18.dp))
                             .clickable { open(F1Dest.Driver(d.code)) }
-                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                            .padding(horizontal = 10.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text("${s.pos}", style = F1Figure, fontSize = 15.sp, color = medal(s.pos) ?: TextSecondary, textAlign = TextAlign.Center, modifier = Modifier.width(24.dp))
@@ -790,10 +802,11 @@ fun LazyListScope.f1TeamRooms(hub: F1Hub, table: Championship<HubTeam>) {
                     }
                     Icon(AppIcons.ChevronRight, contentDescription = null, tint = colour, modifier = Modifier.padding(start = 6.dp).size(18.dp))
                 }
-                PointsBar((s.points / top).toFloat(), colour, Modifier.padding(top = 12.dp, bottom = 8.dp))
+                PointsBar((s.points / top).toFloat(), colour, Modifier.padding(top = 12.dp, bottom = 12.dp))
+                JoinedColumn(fill = WellFill, outer = 18.dp) {
                 hub.teamDrivers(t.name).forEach { d ->
                     Row(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable { open(F1Dest.Driver(d.code)) }.padding(vertical = 5.dp),
+                        Modifier.fillMaxWidth().clickable { open(F1Dest.Driver(d.code)) }.padding(horizontal = 10.dp, vertical = 9.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         DriverFace(d.image, d.code, colour, 38.dp)
@@ -810,6 +823,7 @@ fun LazyListScope.f1TeamRooms(hub: F1Hub, table: Championship<HubTeam>) {
                             Text("P${d.pos}", fontSize = 11.5.sp, color = TextSecondary)
                         }
                     }
+                }
                 }
             }
         }
@@ -859,7 +873,7 @@ fun LazyListScope.f1SeasonRooms(hub: F1Hub, nowMs: Long) {
     }
     item(key = "season-rounds") {
         PageRoom(F1Tone, title = "${hub.season}, ${hub.rounds} rounds", icon = AppIcons.CalendarDays, meta = "Tap a round", flush = true) {
-            Column(Modifier.padding(horizontal = 8.dp)) {
+            JoinedColumn(Modifier.padding(horizontal = 12.dp), fill = WellFill, outer = 18.dp) {
                 hub.races.forEach { race -> SeasonRow(race = race, hub = hub, nowMs = nowMs) }
             }
         }
@@ -876,10 +890,9 @@ private fun SeasonRow(race: HubRace, hub: F1Hub, nowMs: Long) {
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(if (isNext) F1Tone.copy(alpha = 0.16f) else Color.Transparent)
+            .background(if (isNext) F1Tone.copy(alpha = 0.22f) else Color.Transparent)
             .clickable { open(F1Dest.Round(race.round)) }
-            .padding(horizontal = 10.dp, vertical = 9.dp),
+            .padding(horizontal = 10.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text("${race.round}", style = F1Figure, fontSize = 14.sp, color = if (isNext) F1Tone else TextTertiary, textAlign = TextAlign.Center, modifier = Modifier.width(24.dp))

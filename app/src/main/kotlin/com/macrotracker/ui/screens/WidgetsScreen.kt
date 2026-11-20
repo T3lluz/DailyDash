@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens
 
+import androidx.compose.foundation.clickable
+import com.macrotracker.ui.components.JoinedColumn
 import com.macrotracker.ui.screens.home.roomSwitchColors
 import com.macrotracker.ui.screens.health.HealthDisplay
 import com.macrotracker.ui.screens.home.WellFill
@@ -265,18 +267,24 @@ private fun AiLinesCard(
                 )
             }
         }
-        Spacer(Modifier.height(6.dp))
-        specs.forEach { spec ->
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().padding(start = 34.dp, top = 2.dp),
-            ) {
-                Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(spec.accent))
-                Spacer(Modifier.width(10.dp))
-                Text(spec.title, fontSize = 13.5.sp, color = TextPrimary, modifier = Modifier.weight(1f))
-                Switch(checked = enabled[spec.key] == true, enabled = available, onCheckedChange = { onToggle(spec.key, it) }, colors = roomSwitchColors())
+        Spacer(Modifier.height(12.dp))
+// one switch per widget, as joined tiles
+        JoinedColumn(fill = WellFill, outer = 18.dp) {
+            specs.forEach { spec ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = available, role = androidx.compose.ui.semantics.Role.Switch) { onToggle(spec.key, enabled[spec.key] != true) }
+                        .padding(start = 14.dp, end = 12.dp, top = 5.dp, bottom = 5.dp),
+                ) {
+                    Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(spec.accent))
+                    Spacer(Modifier.width(12.dp))
+                    Text(spec.title, style = com.macrotracker.ui.screens.health.HealthDisplay, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp, color = TextPrimary, modifier = Modifier.weight(1f))
+                    Switch(checked = enabled[spec.key] == true, enabled = available, onCheckedChange = { onToggle(spec.key, it) }, colors = roomSwitchColors())
+                }
             }
-        }
+}
     }
 }
 

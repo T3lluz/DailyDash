@@ -1,5 +1,9 @@
 package com.macrotracker.ui.screens.health
 
+import com.macrotracker.ui.components.JoinedColumn
+import com.macrotracker.ui.components.joinedRowShape
+import com.macrotracker.ui.components.TilePlace
+import com.macrotracker.ui.components.Joined
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -214,16 +218,17 @@ private fun FoodComposer(
     val ready = foodNumber(calories) > 0 || foodNumber(protein) > 0
 
     Column(modifier = Modifier.fillMaxWidth().animateContentSize(MacroMotion.slideTween())) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // the line and its two buttons as one row of joined tiles
+        Row(modifier = Modifier.height(androidx.compose.foundation.layout.IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
             if (open) {
-                FoodField(value = name, onValueChange = { name = it }, hint = "What did you eat?", modifier = Modifier.weight(1f))
+                FoodField(value = name, onValueChange = { name = it }, hint = "What did you eat?", modifier = Modifier.weight(1f), shape = joinedRowShape(TilePlace.FIRST, outer = 22.dp))
             } else {
                 val press = remember { MutableInteractionSource() }
                 Row(
                     modifier = Modifier
                         .weight(1f)
                         .pressSink(press)
-                        .clip(FoodTile)
+                        .clip(joinedRowShape(TilePlace.FIRST, outer = 22.dp))
                         .background(FoodWell)
                         .clickable(interactionSource = press, indication = LocalIndication.current) {
                             haptics.tick()
@@ -237,20 +242,20 @@ private fun FoodComposer(
                     Text("Log a meal", fontSize = 16.sp, color = TextSecondary)
                 }
             }
-            FoodRoundButton(AppIcons.Sparkles, "Estimate with AI", onClick = { haptics.tick(); onAskAi() }, size = 50.dp)
-            FoodRoundButton(AppIcons.Camera, "Scan a label", onClick = { haptics.tick(); onScan() }, size = 50.dp)
+            FoodRoundButton(AppIcons.Sparkles, "Estimate with AI", onClick = { haptics.tick(); onAskAi() }, size = 52.dp, shape = joinedRowShape(TilePlace.MIDDLE, outer = 22.dp))
+            FoodRoundButton(AppIcons.Camera, "Scan a label", onClick = { haptics.tick(); onScan() }, size = 52.dp, shape = joinedRowShape(TilePlace.LAST, outer = 22.dp))
         }
 
         if (open) {
             Spacer(modifier = Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FoodNumberTile("Calories", "kcal", NutritionCalories, calories, { calories = it }, Modifier.weight(1f)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+                FoodNumberTile("Calories", "kcal", NutritionCalories, calories, { calories = it }, Modifier.weight(1f), shape = joinedRowShape(TilePlace.FIRST, outer = 22.dp)) {
                     Steps(listOf(50, 100, 250), NutritionCalories) {
                         haptics.tick()
                         calories = (foodNumber(calories) + it).toString()
                     }
                 }
-                FoodNumberTile("Protein", "g", NutritionProtein, protein, { protein = it }, Modifier.weight(1f)) {
+                FoodNumberTile("Protein", "g", NutritionProtein, protein, { protein = it }, Modifier.weight(1f), shape = joinedRowShape(TilePlace.LAST, outer = 22.dp)) {
                     Steps(listOf(5, 10, 25), NutritionProtein) {
                         haptics.tick()
                         protein = (foodNumber(protein) + it).toString()
@@ -279,7 +284,8 @@ private fun FoodComposer(
                 }
             }
             Spacer(modifier = Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            // Close and Log as one joined pair
+            Row(horizontalArrangement = Arrangement.spacedBy(Joined.Gap), verticalAlignment = Alignment.CenterVertically) {
                 FoodGhostButton(
                     "Close",
                     onClick = {
@@ -287,6 +293,7 @@ private fun FoodComposer(
                         open = false
                     },
                     tone = TextSecondary,
+                    shape = joinedRowShape(TilePlace.FIRST, outer = 22.dp),
                 )
                 AnimatedContent(
                     targetState = justLogged,
@@ -295,7 +302,7 @@ private fun FoodComposer(
                     modifier = Modifier.weight(1f),
                 ) { done ->
                     if (done) {
-                        FoodGhostButton("Logged", onClick = {}, icon = AppIcons.CheckCircle, modifier = Modifier.fillMaxWidth())
+                        FoodGhostButton("Logged", onClick = {}, icon = AppIcons.CheckCircle, modifier = Modifier.fillMaxWidth(), shape = joinedRowShape(TilePlace.LAST, outer = 22.dp))
                     } else {
                         FoodPrimaryButton(
                             text = if (ready) "Log ${foodNumber(calories)} kcal" else "Log it",
@@ -309,6 +316,7 @@ private fun FoodComposer(
                             },
                             enabled = ready,
                             icon = AppIcons.Check,
+                            shape = joinedRowShape(TilePlace.LAST, outer = 22.dp),
                         )
                     }
                 }
@@ -320,8 +328,9 @@ private fun FoodComposer(
 /** "+50 +100 +250" under a number: each tap adds that much. */
 @Composable
 private fun Steps(steps: List<Int>, tone: Color, onStep: (Int) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-        steps.forEach { step ->
+    // the steps as one joined strip
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        steps.forEachIndexed { i, step ->
             Text(
                 "+$step",
                 fontSize = 11.sp,
@@ -330,10 +339,10 @@ private fun Steps(steps: List<Int>, tone: Color, onStep: (Int) -> Unit) {
                 maxLines = 1,
                 softWrap = false,
                 modifier = Modifier
-                    .clip(CircleShape)
+                    .clip(joinedRowShape(TilePlace.of(i, steps.size), outer = 13.dp, inner = 4.dp))
                     .background(tone.copy(alpha = 0.16f))
                     .clickable { onStep(step) }
-                    .padding(horizontal = 8.dp, vertical = 5.dp),
+                    .padding(horizontal = 9.dp, vertical = 6.dp),
             )
         }
     }
@@ -345,13 +354,15 @@ private fun Steps(steps: List<Int>, tone: Color, onStep: (Int) -> Unit) {
  */
 @Composable
 private fun FoodRows(logs: List<MacroLogEntity>, haptics: HapticHelper, onDelete: (String) -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth().animateContentSize(MacroMotion.slideTween())) {
+    // the day's meals as joined tiles
+    JoinedColumn(modifier = Modifier.fillMaxWidth().animateContentSize(MacroMotion.slideTween()), fill = FoodWell, outer = 18.dp) {
         logs.forEach { log ->
             key(log.id) {
-                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 8.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             log.foodName.ifBlank { UNNAMED_FOOD },
+                            style = HealthDisplay,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = TextPrimary,
@@ -366,7 +377,7 @@ private fun FoodRows(logs: List<MacroLogEntity>, haptics: HapticHelper, onDelete
                         modifier = Modifier
                             .size(30.dp)
                             .clip(CircleShape)
-                            .background(FoodWell)
+                            .background(Color.White.copy(alpha = 0.07f))
                             .clickable(onClickLabel = "Remove ${log.foodName.ifBlank { UNNAMED_FOOD }}") {
                                 haptics.reject()
                                 onDelete(log.id)

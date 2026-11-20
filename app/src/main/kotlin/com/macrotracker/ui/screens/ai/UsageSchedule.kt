@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.components.JoinedColumn
+import com.macrotracker.ui.screens.home.WellFill
 import com.macrotracker.ui.screens.home.FieldShape
 import com.macrotracker.ui.screens.home.roomFieldColors
 import androidx.compose.foundation.layout.height
@@ -84,47 +86,49 @@ internal fun LazyListScope.usageSchedule(
             )
         }) {
             if (jobs.isEmpty()) Text("No scheduled asks.", fontSize = 13.sp, color = TextSecondary)
-            jobs.forEachIndexed { i, j ->
-                if (i > 0) Spacer(Modifier.height(6.dp))
-                AskRow(
-                    j,
-                    onRun = { onRun(j) }, onToggle = { onToggle(j) }, onEdit = { onEdit(j) }, onDelete = { onDelete(j) },
-                    onChat = j.thread?.let { id -> { onChat(id) } },
-                )
-            }
+JoinedColumn(fill = WellFill, outer = 18.dp) {
+                jobs.forEach { j ->
+                    AskRow(
+                        j,
+                        onRun = { onRun(j) }, onToggle = { onToggle(j) }, onEdit = { onEdit(j) }, onDelete = { onDelete(j) },
+                        onChat = j.thread?.let { id -> { onChat(id) } },
+                    )
+                }
+}
         }
     }
     val fixed = schedule?.fixed.orEmpty()
     if (fixed.isNotEmpty()) item(key = "fixed") {
         UsageCard("Runs by itself", AppIcons.History) {
-            fixed.forEachIndexed { i, f ->
-                if (i > 0) Spacer(Modifier.height(6.dp))
-                Row(Modifier.fillMaxWidth().padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        when (f.icon) { "sparkles" -> AppIcons.Sparkles; "timer" -> AppIcons.Clock; else -> AppIcons.Bot },
-                        null, tint = TextSecondary, modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(f.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(f.detail, fontSize = 12.sp, color = TextTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                    f.nextMs?.let {
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(whenText(it), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-                            Text("in ${untilText(it)}", fontSize = 11.sp, color = TextTertiary)
+JoinedColumn(fill = WellFill, outer = 18.dp) {
+                fixed.forEach { f ->
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            when (f.icon) { "sparkles" -> AppIcons.Sparkles; "timer" -> AppIcons.Clock; else -> AppIcons.Bot },
+                            null, tint = TextSecondary, modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(f.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(f.detail, fontSize = 12.sp, color = TextTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        f.nextMs?.let {
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(whenText(it), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                                Text("in ${untilText(it)}", fontSize = 11.sp, color = TextTertiary)
+                            }
                         }
                     }
                 }
-            }
+}
         }
     }
 }
 
 @Composable
 private fun AskRow(j: ScheduledAsk, onRun: () -> Unit, onToggle: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit, onChat: (() -> Unit)?) {
-    Column(Modifier.fillMaxWidth().padding(vertical = 9.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+    Column(Modifier.fillMaxWidth().padding(start = 12.dp, end = 6.dp, top = 11.dp, bottom = 4.dp)) {
+        Row(Modifier.padding(end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(if (j.on) AppIcons.Repeat else AppIcons.Pause, null, tint = if (j.on) Primary else TextTertiary, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
@@ -162,6 +166,7 @@ private fun SmallAction(icon: ImageVector, label: String, onClick: () -> Unit, t
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun AskSheet(initial: ScheduledAsk, onDismiss: () -> Unit, onSave: (ScheduledAsk) -> Unit) {
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
     var ask by remember(initial) { mutableStateOf(initial) }
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val colors = roomFieldColors()
@@ -207,7 +212,7 @@ internal fun AskSheet(initial: ScheduledAsk, onDismiss: () -> Unit, onSave: (Sch
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
                     .background(if (valid) TextPrimary else Color.White.copy(alpha = 0.06f))
-                    .clickable(enabled = valid) { onSave(ask) }
+                    .clickable(enabled = valid) { haptics.tick(); onSave(ask) }
                     .padding(vertical = 13.dp),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )

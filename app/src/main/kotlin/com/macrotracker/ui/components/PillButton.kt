@@ -52,6 +52,8 @@ fun PillButton(
     modifier: Modifier = Modifier,
     accent: Color = Primary,
     emphasized: Boolean = false,
+    /** A pill on its own, or its place in a joined row of buttons. */
+    shape: androidx.compose.ui.graphics.Shape = PillShape,
 ) {
     val haptics = rememberHaptics()
     val interactionSource = remember { MutableInteractionSource() }
@@ -72,7 +74,7 @@ fun PillButton(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .clip(PillShape)
+                .clip(shape)
                 .background(if (emphasized) accent.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.07f))
                 // The press ripple stays inside the pill, not the taller tap area.
                 .indication(interactionSource, ripple())

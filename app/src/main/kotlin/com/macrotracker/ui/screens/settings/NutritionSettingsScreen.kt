@@ -1,128 +1,124 @@
 package com.macrotracker.ui.screens.settings
 
-import com.macrotracker.ui.screens.home.SubPage
-import androidx.compose.foundation.background
-import android.widget.Toast
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.macrotracker.ui.components.CardHeader
-import com.macrotracker.ui.components.SubScreenHeader
-import com.macrotracker.ui.components.subScreenBottomPadding
-import com.macrotracker.ui.components.MacroButton
-import com.macrotracker.ui.components.MacroCard
-import com.macrotracker.ui.components.MacroTextField
-import com.macrotracker.ui.theme.Background
-import com.macrotracker.ui.theme.Primary
-import com.macrotracker.ui.theme.TextPrimary
-import com.macrotracker.ui.theme.TextSecondary
-import com.macrotracker.ui.viewmodel.GoalsViewModel
+import com.macrotracker.data.health.HealthGoals
+import com.macrotracker.ui.screens.health.GoalRow
+import com.macrotracker.ui.screens.health.formatGoalMinutes
+import com.macrotracker.ui.screens.home.HomeTone
+import com.macrotracker.ui.screens.home.SubPage
 import com.macrotracker.ui.theme.AppIcons
+import com.macrotracker.ui.theme.HealthActivityTone
+import com.macrotracker.ui.theme.HealthMove
+import com.macrotracker.ui.theme.HealthSleep
+import com.macrotracker.ui.theme.HealthSleepTone
+import com.macrotracker.ui.theme.HealthSteps
+import com.macrotracker.ui.theme.NutritionCalories
+import com.macrotracker.ui.theme.NutritionProtein
+import com.macrotracker.ui.util.rememberHaptics
+import com.macrotracker.ui.viewmodel.GoalsViewModel
+import java.util.Locale
 
+/**
+ * Settings → Goals: every daily goal on one page, in groups by what they are about (Activity,
+ * Sleep, Food), each in its own colour. Every row is the goals sheet's row: the number set
+ * large, minus and plus that run while held, and each step saves at once. The Health tab's
+ * meters still open the same goals in a sheet on a hold.
+ */
 @Composable
 fun NutritionSettingsScreen(
     onNavigateBack: () -> Unit,
     goalsViewModel: GoalsViewModel = hiltViewModel(),
 ) {
-    val context = LocalContext.current
+    val haptics = rememberHaptics()
     val calGoal by goalsViewModel.calGoal.collectAsState()
     val protGoal by goalsViewModel.protGoal.collectAsState()
-    var goalsSaved by remember { mutableStateOf(false) }
+    val goals by goalsViewModel.healthGoals.collectAsState()
+    LaunchedEffect(Unit) { goalsViewModel.loadData() }
 
-    LaunchedEffect(Unit) {
-        goalsViewModel.loadData()
-    }
+    val cal = calGoal.toIntOrNull() ?: GoalsViewModel.FOOD_CAL_DEFAULT
+    val prot = protGoal.toIntOrNull() ?: GoalsViewModel.FOOD_PROTEIN_DEFAULT
 
-    SubPage(title = "Nutrition", lede = "Daily calorie and protein targets", onBack = onNavigateBack) {
-
-        MacroCard(delayMs = 50) {
-            CardHeader(
-                title = "Daily goals",
-                icon = AppIcons.Dumbbell,
-                accent = Primary,
-                subtitle = "Used by progress bars on Home and Health",
-                modifier = Modifier.padding(bottom = 14.dp),
+    SubPage(title = "Goals", lede = "What Home, Health and the widgets count your days against.", onBack = onNavigateBack) {
+        SettingsGroup(title = "Activity", tone = HealthActivityTone, delayMs = 30) {
+            GoalRow(
+                label = "Steps",
+                icon = AppIcons.Footprints,
+                tone = HealthSteps,
+                value = String.format(Locale.US, "%,d", goals.steps),
+                unit = "a day",
+                reached = null,
+                canLower = goals.steps > HealthGoals.STEPS_RANGE.first,
+                canRaise = goals.steps < HealthGoals.STEPS_RANGE.last,
+                haptics = haptics,
+                onLower = { goalsViewModel.setHealthGoals(goals.copy(steps = goals.steps - HealthGoals.STEPS_STEP)) },
+                onRaise = { goalsViewModel.setHealthGoals(goals.copy(steps = goals.steps + HealthGoals.STEPS_STEP)) },
+                fill = null,
             )
+            GoalRow(
+                label = "Calories burned",
+                icon = AppIcons.Flame,
+                tone = HealthMove,
+                value = String.format(Locale.US, "%,d", goals.caloriesKcal),
+                unit = "kcal a day",
+                reached = null,
+                canLower = goals.caloriesKcal > HealthGoals.CALORIES_RANGE.first,
+                canRaise = goals.caloriesKcal < HealthGoals.CALORIES_RANGE.last,
+                haptics = haptics,
+                onLower = { goalsViewModel.setHealthGoals(goals.copy(caloriesKcal = goals.caloriesKcal - HealthGoals.CALORIES_STEP)) },
+                onRaise = { goalsViewModel.setHealthGoals(goals.copy(caloriesKcal = goals.caloriesKcal + HealthGoals.CALORIES_STEP)) },
+                fill = null,
+            )
+        }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        "Calories",
-                        color = TextSecondary,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(bottom = 6.dp),
-                    )
-                    MacroTextField(
-                        value = calGoal,
-                        onValueChange = {
-                            goalsSaved = false
-                            goalsViewModel.setCalGoal(it)
-                        },
-                        placeholder = "2000",
-                        keyboardType = KeyboardType.Number,
-                    )
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        "Protein (g)",
-                        color = TextSecondary,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(bottom = 6.dp),
-                    )
-                    MacroTextField(
-                        value = protGoal,
-                        onValueChange = {
-                            goalsSaved = false
-                            goalsViewModel.setProtGoal(it)
-                        },
-                        placeholder = "150",
-                        keyboardType = KeyboardType.Number,
-                    )
-                }
-            }
+        SettingsGroup(title = "Sleep", tone = HealthSleepTone, delayMs = 60) {
+            GoalRow(
+                label = "Sleep",
+                icon = AppIcons.Moon,
+                tone = HealthSleep,
+                value = formatGoalMinutes(goals.sleepMinutes),
+                unit = "a night",
+                reached = null,
+                canLower = goals.sleepMinutes > HealthGoals.SLEEP_RANGE.first,
+                canRaise = goals.sleepMinutes < HealthGoals.SLEEP_RANGE.last,
+                haptics = haptics,
+                onLower = { goalsViewModel.setHealthGoals(goals.copy(sleepMinutes = goals.sleepMinutes - HealthGoals.SLEEP_STEP)) },
+                onRaise = { goalsViewModel.setHealthGoals(goals.copy(sleepMinutes = goals.sleepMinutes + HealthGoals.SLEEP_STEP)) },
+                fill = null,
+            )
+        }
 
-            MacroButton(
-                text = if (goalsSaved) "Goals saved" else "Save goals",
-                onClick = {
-                    if (goalsViewModel.saveGoals()) {
-                        goalsSaved = true
-                    } else {
-                        Toast.makeText(context, "Enter a number above 0 for both goals", Toast.LENGTH_SHORT).show()
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp),
+        SettingsGroup(title = "Food", tone = HomeTone.Food, delayMs = 90) {
+            GoalRow(
+                label = "Calories eaten",
+                icon = AppIcons.Flame,
+                tone = NutritionCalories,
+                value = String.format(Locale.US, "%,d", cal),
+                unit = "kcal a day",
+                reached = null,
+                canLower = cal > GoalsViewModel.FOOD_CAL_RANGE.first,
+                canRaise = cal < GoalsViewModel.FOOD_CAL_RANGE.last,
+                haptics = haptics,
+                onLower = { goalsViewModel.stepFood(calories = -GoalsViewModel.FOOD_CAL_STEP) },
+                onRaise = { goalsViewModel.stepFood(calories = GoalsViewModel.FOOD_CAL_STEP) },
+                fill = null,
+            )
+            GoalRow(
+                label = "Protein",
+                icon = AppIcons.Dumbbell,
+                tone = NutritionProtein,
+                value = prot.toString(),
+                unit = "g a day",
+                reached = null,
+                canLower = prot > GoalsViewModel.FOOD_PROTEIN_RANGE.first,
+                canRaise = prot < GoalsViewModel.FOOD_PROTEIN_RANGE.last,
+                haptics = haptics,
+                onLower = { goalsViewModel.stepFood(protein = -GoalsViewModel.FOOD_PROTEIN_STEP) },
+                onRaise = { goalsViewModel.stepFood(protein = GoalsViewModel.FOOD_PROTEIN_STEP) },
+                fill = null,
             )
         }
     }

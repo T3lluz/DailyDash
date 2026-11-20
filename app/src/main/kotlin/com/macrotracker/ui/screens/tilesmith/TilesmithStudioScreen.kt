@@ -1,5 +1,12 @@
 package com.macrotracker.ui.screens.tilesmith
 
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.ui.graphics.Shape
+import com.macrotracker.ui.components.TileMenuItem
+import com.macrotracker.ui.components.joinedCellShape
+import com.macrotracker.ui.components.Joined
+import com.macrotracker.ui.components.JoinedColumn
 import com.macrotracker.ui.screens.home.pageRise
 import com.macrotracker.ui.screens.health.roomColor
 import com.macrotracker.ui.screens.health.HealthDisplay
@@ -278,7 +285,7 @@ fun TilesmithStudioScreen(
             }
         } else {
             val ime = WindowInsets.isImeVisible
-            Stage(state, dark, compact = ime, onToggleDark = { haptics.tick(); dark = !dark })
+            Stage(state, dark, compact = ime, onToggleDark = { dark = !dark })
 
             if (state.asks.isNotEmpty()) {
                 NeedsStrip(
@@ -327,7 +334,7 @@ fun TilesmithStudioScreen(
 
         Composer(
             state = state,
-            aiPill = { AiPill(ai.current, open = pickingAi, onClick = { pickingAi = true }) },
+            aiPill = { shape -> AiPill(ai.current, open = pickingAi, onClick = { pickingAi = true }, tile = shape, modifier = Modifier.fillMaxWidth()) },
             aiReady = state.aiReady,
             input = input,
             onInput = { input = it },
@@ -621,9 +628,12 @@ private fun EmptyStudio(
             }
         }
         if (aiReady) {
-            Spacer(Modifier.height(12.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                EXAMPLES.forEach { e -> SuggestionChip(e) { onExample(e) } }
+            Spacer(Modifier.height(14.dp))
+            // what people ask for, as one group of joined tiles
+            JoinedColumn(fill = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.06f), outer = 18.dp) {
+                EXAMPLES.forEach { e ->
+                    TileMenuItem(e, AppIcons.Sparkles, tint = TilesmithAccent) { onExample(e) }
+                }
             }
         }
     }
@@ -634,15 +644,16 @@ private fun EmptyStudio(
     }
 
     SectionTitle("Start from")
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        TileStarters.all.chunked(2).forEach { pair ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                pair.forEach { s ->
+    // the starters as one joined grid
+    Column(verticalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+        TileStarters.all.chunked(2).forEachIndexed { r, pair ->
+            Row(horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+                pair.forEachIndexed { c, s ->
                     Row(
                         Modifier
                             .weight(1f)
                             .pageRise()
-                            .clip(RoundedCornerShape(22.dp))
+                            .clip(joinedCellShape(r * 2 + c, TileStarters.all.size, 2, outer = 22.dp))
                             .background(RoomNeutral)
                             .clickable { onStarter(s.id) }
                             .padding(12.dp),
@@ -672,10 +683,12 @@ private fun EmptyStudio(
 private fun DesignGrid(designs: List<TileDesign>, current: String?, onOpen: (TileDesign) -> Unit, onManage: (TileDesign) -> Unit) {
     val context = LocalContext.current
     val placedTick by TilesmithStore.placedChanges.collectAsState()
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        designs.chunked(2).forEach { pair ->
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                pair.forEach { d ->
+    // your designs as one joined grid
+    Column(verticalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+        designs.chunked(2).forEachIndexed { r, pair ->
+            Row(horizontalArrangement = Arrangement.spacedBy(Joined.Gap)) {
+                pair.forEachIndexed { c, d ->
+                    val cell = joinedCellShape(r * 2 + c, designs.size, 2, outer = 22.dp)
                     val placed by produceState(0, d.id, placedTick) {
                         value = withContext(Dispatchers.IO) { TilesmithPin.placedCount(context, d.id) }
                     }
@@ -683,9 +696,9 @@ private fun DesignGrid(designs: List<TileDesign>, current: String?, onOpen: (Til
                     Column(
                         Modifier
                             .weight(1f)
-                            .clip(RoundedCornerShape(18.dp))
+                            .clip(cell)
                             .background(if (on) TilesmithAccent.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.07f))
-                            .then(if (on) Modifier.border(2.dp, TilesmithAccent, RoundedCornerShape(18.dp)) else Modifier)
+                            .then(if (on) Modifier.border(2.dp, TilesmithAccent, cell) else Modifier)
                             .combinedClickable(onClick = { onOpen(d) }, onLongClick = { onManage(d) })
                             .padding(10.dp),
                     ) {
@@ -724,6 +737,7 @@ private fun DesignGrid(designs: List<TileDesign>, current: String?, onOpen: (Til
  */
 @Composable
 private fun Stage(state: StudioState, dark: Boolean, compact: Boolean, onToggleDark: () -> Unit) {
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
     val design = state.design
     val (top, bottom) = stageColors(design?.palette ?: TilePalette.WALLPAPER, dark)
     val shape = RoundedCornerShape(26.dp)
@@ -754,7 +768,7 @@ private fun Stage(state: StudioState, dark: Boolean, compact: Boolean, onToggleD
                 .padding(10.dp)
                 .clip(RoundedCornerShape(50))
                 .background(Color.Black.copy(alpha = 0.28f))
-                .clickable(onClick = onToggleDark)
+                .clickable(onClick = { haptics.tick(); onToggleDark() })
                 .padding(horizontal = 10.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -985,14 +999,9 @@ private fun BlocksPane(design: TileDesign, onEdit: (Int) -> Unit) {
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
     ) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
-                .background(RoomNeutral)
-        ) {
+        // the design's blocks as joined tiles
+        JoinedColumn(Modifier.fillMaxWidth(), fill = RoomNeutral, outer = 22.dp) {
             design.blocks.forEachIndexed { i, b ->
-                if (i > 0) HorizontalDivider(color = Border, modifier = Modifier.padding(start = 56.dp))
                 Row(
                     Modifier
                         .fillMaxWidth()
@@ -1005,7 +1014,7 @@ private fun BlocksPane(design: TileDesign, onEdit: (Int) -> Unit) {
                     }
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(blockTitle(b), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(blockTitle(b), style = com.macrotracker.ui.screens.health.HealthDisplay, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(
                             listOfNotNull(b.type.label, b.query?.let { "“$it”" }, b.url?.let { TilesmithStore.siteHost(it) }).joinToString(" · "),
                             fontSize = 12.sp,
@@ -1390,7 +1399,7 @@ private fun ShapeChip(shape: TileShape, selected: Boolean, onClick: () -> Unit) 
 @Composable
 private fun Composer(
     state: StudioState,
-    aiPill: @Composable () -> Unit,
+    aiPill: @Composable (Shape) -> Unit,
     aiReady: Boolean,
     input: String,
     onInput: (String) -> Unit,
@@ -1401,6 +1410,7 @@ private fun Composer(
     onConnectAi: () -> Unit,
     pictureNote: String?,
 ) {
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
     Column(
         Modifier
             .fillMaxWidth()
@@ -1437,20 +1447,36 @@ private fun Composer(
         }
         val composerShape = RoundedCornerShape(26.dp)
         val canSend = aiReady && input.isNotBlank() && !state.busy
+        // A room with its controls as joined tiles: the line across the top, the AI, a picture and
+        // send under it. Round only at the room's own corners, less the 6 dp they stand in by.
+        val busyTint by animateColorAsState(if (state.busy) TilesmithAccent.copy(alpha = 0.10f) else Color.Transparent, label = "composerBusy")
+        fun tile(top: Boolean, first: Boolean, last: Boolean) = RoundedCornerShape(
+            topStart = if (top && first) 20.dp else 6.dp,
+            topEnd = if (top && last) 20.dp else 6.dp,
+            bottomEnd = if (!top && last) 20.dp else 6.dp,
+            bottomStart = if (!top && first) 20.dp else 6.dp,
+        )
         Column(
             Modifier
                 .fillMaxWidth()
                 .clip(composerShape)
                 .background(RoomNeutral)
-                .then(if (state.busy) Modifier.border(2.dp, TilesmithAccent.copy(alpha = 0.5f), composerShape) else Modifier)
-                .padding(6.dp),
+                .background(busyTint)
+                .padding(Joined.GlassGap),
+            verticalArrangement = Arrangement.spacedBy(Joined.GlassGap),
         ) {
+            val haptics = com.macrotracker.ui.util.rememberHaptics()
             if (aiReady) {
                 BasicTextField(
                     value = input,
                     onValueChange = onInput,
                     enabled = !state.busy,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(tile(top = true, first = true, last = true))
+                        .background(Color.White.copy(alpha = 0.06f))
+                        .heightIn(min = 52.dp)
+                        .padding(horizontal = 14.dp, vertical = 14.dp),
                     textStyle = TextStyle(color = TextPrimary, fontSize = 15.sp, lineHeight = 21.sp),
                     cursorBrush = SolidColor(TilesmithAccent),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
@@ -1479,27 +1505,32 @@ private fun Composer(
                     fontSize = 13.sp,
                     color = TextSecondary,
                     lineHeight = 18.sp,
-                    modifier = Modifier.fillMaxWidth().clickable(onClick = onConnectAi).padding(horizontal = 10.dp, vertical = 10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(tile(top = true, first = true, last = true))
+                        .background(Color.White.copy(alpha = 0.06f))
+                        .clickable(onClick = { haptics.tick(); onConnectAi() })
+                        .padding(horizontal = 14.dp, vertical = 14.dp),
                 )
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                aiPill()
-                Spacer(Modifier.width(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(Joined.GlassGap), verticalAlignment = Alignment.CenterVertically) {
+                // the AI is the wide tile: it takes the rest of the row
+                Box(Modifier.weight(1f)) { aiPill(tile(top = false, first = true, last = false)) }
                 Box(
                     Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
+                        .size(44.dp)
+                        .clip(tile(top = false, first = false, last = false))
+                        .background(Color.White.copy(alpha = 0.06f))
                         .clickable(enabled = !state.busy && aiReady, onClick = onAttach),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(AppIcons.ImagePlus, contentDescription = "Attach a picture", tint = if (state.attachment != null) TilesmithAccent else TextSecondary, modifier = Modifier.size(19.dp))
                 }
-                Spacer(Modifier.weight(1f))
                 Box(
                     Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(if (state.busy || canSend) TilesmithAccent else Border)
+                        .size(44.dp)
+                        .clip(tile(top = false, first = false, last = true))
+                        .background(if (state.busy || canSend) TilesmithAccent else Color.White.copy(alpha = 0.06f))
                         .clickable(enabled = state.busy || canSend) { if (state.busy) onStop() else onSend() },
                     contentAlignment = Alignment.Center,
                 ) {

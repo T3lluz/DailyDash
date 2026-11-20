@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens
 
+import com.macrotracker.ui.util.riseWhenScrolledIn
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -270,6 +272,7 @@ fun HomeScreen(
         }
 
         val listState = rememberLazyListState()
+        val seenTiles = remember { HashSet<Any>() }
         val dragState = rememberDraggableWidgetListState(
             items = visibleConfigs,
             lazyListState = listState,
@@ -410,12 +413,15 @@ fun HomeScreen(
                     haptics = haptics,
                 ) { _, config, isDragging ->
                     CompositionLocalProvider(LocalTileDragging provides { isDragging || dragState.isDragActive }) {
-                        HomeWidgetItem(
-                            config = config,
-                            isVisible = config.id in visibleWidgetIds,
-                            viewModel = viewModel,
-                            actions = tileActions,
-                        )
+                        // a tile the scroll brings in for the first time rises into place
+                        Box(Modifier.riseWhenScrolledIn(listState, seenTiles, config.id)) {
+                            HomeWidgetItem(
+                                config = config,
+                                isVisible = config.id in visibleWidgetIds,
+                                viewModel = viewModel,
+                                actions = tileActions,
+                            )
+                        }
                     }
                 }
             }

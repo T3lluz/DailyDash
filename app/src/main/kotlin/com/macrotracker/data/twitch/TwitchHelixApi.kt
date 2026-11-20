@@ -135,6 +135,9 @@ class TwitchHelixApi @Inject constructor(
                         viewerCount = item.optInt("viewer_count", 0),
                         startedAt = item.optString("started_at"),
                         thumbnailUrl = item.optString("thumbnail_url"),
+                        tags = item.optJSONArray("tags")?.let { arr -> (0 until arr.length()).mapNotNull { arr.optString(it).takeIf { t -> t.isNotBlank() } } }.orEmpty(),
+                        language = item.optString("language"),
+                        isMature = item.optBoolean("is_mature", false),
                     )
                 }
             }

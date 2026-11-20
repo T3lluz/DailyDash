@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.components.JoinedColumn
+import com.macrotracker.ui.screens.home.WellFill
 import com.macrotracker.ui.theme.AiAccent
 import com.macrotracker.ui.screens.health.HealthDisplay
 import androidx.compose.foundation.Canvas
@@ -180,7 +182,7 @@ private fun ChartCard(u: UsageSnapshot, view: UsageView, cost: Boolean) {
     UsageCard(
         title = "${if (view.hourly) "Hourly" else "Daily"} ${if (cost) "cost" else "tokens"}",
         icon = AppIcons.ChartColumn,
-        action = { MiniSwitch(UsageSplit.entries.map { it to it.label }, split) { haptics.tick(); split = it } },
+        action = { MiniSwitch(UsageSplit.entries.map { it to it.label }, split) { split = it } },
     ) {
         if (rows.isEmpty() || series.peak <= 0.0) {
             Text("No usage in this window.", fontSize = 13.sp, color = TextSecondary)
@@ -341,26 +343,27 @@ private fun BreakdownCard(u: UsageSnapshot, view: UsageView, cost: Boolean) {
         title = when { mode == Breakdown.MODEL -> "By model"; view.hourly -> "By hour"; else -> "By day" },
         icon = AppIcons.Sparkles,
         action = {
-            MiniSwitch(listOf(Breakdown.MODEL to "Model", Breakdown.TIME to if (view.hourly) "Hour" else "Day"), mode) { haptics.tick(); mode = it }
+            MiniSwitch(listOf(Breakdown.MODEL to "Model", Breakdown.TIME to if (view.hourly) "Hour" else "Day"), mode) { mode = it }
         },
     ) {
         if (mode == Breakdown.MODEL) {
             val list = remember(view, cost) { usageModelRows(view, cost) }
             if (list.isEmpty()) Text("Nothing in this window.", fontSize = 13.sp, color = TextSecondary)
             val top = list.maxOfOrNull { value(it.totals, cost) }?.coerceAtLeast(1e-9) ?: 1.0
-            (if (all) list else list.take(MODELS_SHOWN)).forEachIndexed { i, m ->
-                if (i > 0) Spacer(Modifier.height(6.dp))
-                ShareRow(
-                    mark = { UsageMark(m.label, 26.dp, modelId = m.id) },
-                    title = m.label,
-                    sub = listOfNotNull(
-                        if (m.provider == "cursor") "via Cursor" else null,
-                        if (cost) sourceWords(m.source) else m.lastMs.takeIf { it > 0 }?.let { agoWords(it) },
-                    ).joinToString(" · "),
-                    value = fmt(value(m.totals, cost), cost), value2 = other(m.totals, cost),
-                    fraction = (value(m.totals, cost) / top).toFloat(), color = Primary,
-                )
-            }
+JoinedColumn(fill = WellFill, outer = 18.dp) {
+                (if (all) list else list.take(MODELS_SHOWN)).forEach { m ->
+                    ShareRow(
+                        mark = { UsageMark(m.label, 26.dp, modelId = m.id) },
+                        title = m.label,
+                        sub = listOfNotNull(
+                            if (m.provider == "cursor") "via Cursor" else null,
+                            if (cost) sourceWords(m.source) else m.lastMs.takeIf { it > 0 }?.let { agoWords(it) },
+                        ).joinToString(" · "),
+                        value = fmt(value(m.totals, cost), cost), value2 = other(m.totals, cost),
+                        fraction = (value(m.totals, cost) / top).toFloat(), color = Primary,
+                    )
+                }
+}
             ShowMore(list.size - MODELS_SHOWN, all, "models") { all = !all }
         } else {
             val rows = remember(u, view.key) { u.buckets(view).filter { it.totals.tokens > 0 }.asReversed() }
@@ -379,12 +382,13 @@ private fun sourceWords(src: String) = when (src) {
 
 @Composable
 private fun ShowMore(hidden: Int, all: Boolean, noun: String, onToggle: () -> Unit) {
+    val haptics = com.macrotracker.ui.util.rememberHaptics()
     if (hidden <= 0) return
     Spacer(Modifier.height(8.dp))
     Text(
         if (all) "Show fewer" else "Show $hidden more $noun",
         fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Primary,
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable(onClick = onToggle).padding(vertical = 10.dp),
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable(onClick = { haptics.tick(); onToggle() }).padding(vertical = 10.dp),
         textAlign = TextAlign.Center,
     )
 }
@@ -429,7 +433,7 @@ private fun ShareRow(
     fraction: Float,
     color: Color,
 ) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         mark()
         Spacer(Modifier.width(11.dp))
         Column(Modifier.weight(1f)) {
@@ -453,15 +457,16 @@ private fun AgentsCard(view: UsageView, cost: Boolean) {
     UsageCard("By agent", AppIcons.Bot) {
         val agents = view.agents.sortedByDescending { value(it.totals, cost) }
         val top = agents.maxOfOrNull { value(it.totals, cost) }?.coerceAtLeast(1e-9) ?: 1.0
-        agents.forEachIndexed { i, a: UsageShare ->
-            if (i > 0) Spacer(Modifier.height(6.dp))
-            ShareRow(
-                mark = { UsageMark(a.id, 26.dp) },
-                title = a.id, sub = a.topLabel,
-                value = fmt(value(a.totals, cost), cost), value2 = other(a.totals, cost),
-                fraction = (value(a.totals, cost) / top).toFloat(), color = Primary,
-            )
-        }
+JoinedColumn(fill = WellFill, outer = 18.dp) {
+            agents.forEach { a: UsageShare ->
+                ShareRow(
+                    mark = { UsageMark(a.id, 26.dp) },
+                    title = a.id, sub = a.topLabel,
+                    value = fmt(value(a.totals, cost), cost), value2 = other(a.totals, cost),
+                    fraction = (value(a.totals, cost) / top).toFloat(), color = Primary,
+                )
+            }
+}
     }
 }
 
@@ -471,15 +476,16 @@ private fun ProjectsCard(u: UsageSnapshot, cost: Boolean) {
     UsageCard("By project", AppIcons.Grid, note = "30 days") {
         val list = u.projects.sortedByDescending { value(it.totals, cost) }
         val top = list.maxOfOrNull { value(it.totals, cost) }?.coerceAtLeast(1e-9) ?: 1.0
-        (if (all) list else list.take(6)).forEachIndexed { i, p ->
-            if (i > 0) Spacer(Modifier.height(6.dp))
-            ShareRow(
-                mark = { UsageMark(p.id, 26.dp) },
-                title = p.id, sub = "${count(p.totals.calls)} calls",
-                value = fmt(value(p.totals, cost), cost), value2 = other(p.totals, cost),
-                fraction = (value(p.totals, cost) / top).toFloat(), color = Primary,
-            )
-        }
+JoinedColumn(fill = WellFill, outer = 18.dp) {
+            (if (all) list else list.take(6)).forEach { p ->
+                ShareRow(
+                    mark = { UsageMark(p.id, 26.dp) },
+                    title = p.id, sub = "${count(p.totals.calls)} calls",
+                    value = fmt(value(p.totals, cost), cost), value2 = other(p.totals, cost),
+                    fraction = (value(p.totals, cost) / top).toFloat(), color = Primary,
+                )
+            }
+}
         ShowMore(list.size - 6, all, "projects") { all = !all }
     }
 }
