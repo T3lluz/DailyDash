@@ -1,5 +1,6 @@
 package com.macrotracker.ui.components
 
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -39,7 +40,6 @@ import com.macrotracker.ui.theme.ServerGood
 import com.macrotracker.ui.theme.ServerMemory
 import com.macrotracker.ui.theme.ServerThermal
 import com.macrotracker.ui.theme.ServerWarn
-import com.macrotracker.ui.theme.ServerWell
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import kotlin.math.roundToInt
@@ -269,17 +269,17 @@ fun serverFacts(runtime: ServerRuntime, link: DashboardLink?, compact: Boolean):
 fun ServerFactChip(fact: ServerFact, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(ServerWell)
-            .padding(horizontal = 7.dp, vertical = 4.dp),
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = 0.07f))
+            .padding(horizontal = 10.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(fact.icon, contentDescription = null, tint = fact.color, modifier = Modifier.size(11.dp))
-        Spacer(Modifier.width(4.dp))
+        Icon(fact.icon, contentDescription = null, tint = fact.color, modifier = Modifier.size(13.dp))
+        Spacer(Modifier.width(5.dp))
         Text(
             fact.text,
             color = if (fact.color == TextSecondary) TextPrimary else fact.color,
-            fontSize = 10.5.sp,
+            fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

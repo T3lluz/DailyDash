@@ -1,5 +1,6 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.screens.health.HealthDisplay
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.foundation.background
@@ -98,7 +99,7 @@ internal fun BrandMark(group: String, family: String, size: Dp = 32.dp) {
 @Composable
 internal fun SheetTitle(title: String, subtitle: String? = null) {
     Column(Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp)) {
-        Text(title, color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text(title, color = TextPrimary, style = HealthDisplay, fontSize = 18.sp)
         if (subtitle != null) Text(subtitle, color = TextTertiary, fontSize = 12.sp, lineHeight = 16.sp)
     }
 }
@@ -134,7 +135,7 @@ internal fun HermesModelSheet(
     var showOlder by rememberSaveable(group) { mutableStateOf(false) }
     val q = query.trim().lowercase()
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = Surface) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = AiSheet) {
         Column(Modifier.fillMaxWidth().fillMaxHeight(0.92f).navigationBarsPadding().imePadding()) {
             SearchBox(value = query, onValueChange = { query = it }, hint = "Search all models", modifier = Modifier.padding(horizontal = 16.dp))
             if (q.isEmpty()) {
@@ -182,7 +183,7 @@ internal fun HermesModelSheet(
                         if (tab.older.isNotEmpty()) {
                             item(key = "older") {
                                 Row(
-                                    Modifier.fillMaxWidth().padding(horizontal = 8.dp).clip(RoundedCornerShape(12.dp))
+                                    Modifier.fillMaxWidth().padding(horizontal = 8.dp).clip(RoundedCornerShape(16.dp))
                                         .clickable { haptics.tick(); showOlder = !showOlder }.padding(horizontal = 12.dp, vertical = 11.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
@@ -229,7 +230,6 @@ internal fun PickerTab(label: String, selected: Boolean, picked: Boolean, onClic
         Modifier
             .clip(RoundedCornerShape(50))
             .background(if (selected) SelectedFill else Color.Transparent)
-            .border(1.dp, if (selected) Color.Transparent else Border, RoundedCornerShape(50))
             .clickable(onClick = onClick)
             .semantics { role = Role.Tab; stateDescription = if (selected) "selected" else "" }
             .padding(start = 5.dp, end = 12.dp, top = 5.dp, bottom = 5.dp),
@@ -263,7 +263,7 @@ private fun FamilyRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(if (f.current) AiAccent.copy(alpha = 0.10f) else Color.Transparent)
             .clickable(onClick = onPick)
             .padding(start = 12.dp, top = 7.dp, bottom = 7.dp),
@@ -306,7 +306,7 @@ private fun ModelOptions(
     val mods = HermesCatalog.modifiers(status)
     val cur = mods.current
     val stops = remember(mods.efforts, mods.hasBase) { HermesCatalog.effortStops(mods) }
-    Hairline()
+    Spacer(Modifier.height(8.dp))
     Column(Modifier.fillMaxWidth().background(Background.copy(alpha = 0.35f)).padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (switching) {
@@ -413,7 +413,7 @@ private fun ModeChips(modes: List<com.macrotracker.data.hermes.HermesMode>, mode
 @Composable
 private fun OptionSwitch(label: String, checked: Boolean, enabled: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
     Row(
-        modifier.clip(RoundedCornerShape(10.dp)).toggleable(value = checked, enabled = enabled, role = Role.Switch) { onToggle() },
+        modifier.clip(RoundedCornerShape(14.dp)).toggleable(value = checked, enabled = enabled, role = Role.Switch) { onToggle() },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(label, color = if (enabled) TextSecondary else TextTertiary, fontSize = 13.sp, modifier = Modifier.weight(1f))

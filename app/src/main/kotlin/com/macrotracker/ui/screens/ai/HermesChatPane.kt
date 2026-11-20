@@ -1,5 +1,8 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.screens.home.RoomNeutral
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.home.WellFill
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.navigationBars
@@ -175,7 +178,7 @@ private val HermesStarters = listOf(
 /** The least time between two ticks of a reply streaming in (T3 Code's `STREAM_HAPTIC_THROTTLE_MS`). */
 private const val STREAM_TICK_MS = 320L
 
-private val CardShape = RoundedCornerShape(14.dp)
+private val CardShape = RoundedCornerShape(18.dp)
 private val Mono = FontFamily.Monospace
 
 /**
@@ -521,7 +524,7 @@ fun HermesChatPane(
         drawerContent = {
             // A card that floats clear of the edges, its corners all round, with the navbar slid away below it.
             ModalDrawerSheet(
-                drawerContainerColor = Surface,
+                drawerContainerColor = AiSheet,
                 drawerShape = RoundedCornerShape(28.dp),
                 windowInsets = WindowInsets(0, 0, 0, 0),
                 modifier = Modifier
@@ -859,8 +862,8 @@ fun HermesChatPane(
                     Row(
                         modifier = Modifier
                             .padding(horizontal = 16.dp, vertical = 4.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(com.macrotracker.ui.theme.TileDark)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(AiRoom)
                             .clickable { viewModel.dismissNotice() }
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -875,8 +878,8 @@ fun HermesChatPane(
                     Row(
                         modifier = Modifier
                             .padding(horizontal = 16.dp, vertical = 4.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(com.macrotracker.ui.theme.TileDark)
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(AiRoom)
                             .clickable(onClickLabel = "Open the queue") { haptics.tick(); queueSheet = true }
                             .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -891,7 +894,7 @@ fun HermesChatPane(
                         if (state.queue.size > 1) Text("  +${state.queue.size - 1}", color = TextTertiary, fontSize = 12.sp, maxLines = 1)
                         Spacer(Modifier.width(6.dp))
                         Text(
-                            if (state.busy) "Steer" else "Send",
+                            if (state.busy) "Steer" else "Send", style = HealthDisplay,
                             color = TextPrimary, fontSize = 12.5.sp, fontWeight = FontWeight.Bold,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(50))
@@ -1057,7 +1060,7 @@ fun HermesChatPane(
         if (changes.isEmpty()) {
             changesOf = null
         } else {
-            ModalBottomSheet(onDismissRequest = { changesOf = null }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = Surface) {
+            ModalBottomSheet(onDismissRequest = { changesOf = null }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = AiSheet) {
                 Column(
                     Modifier
                         .fillMaxWidth()
@@ -1190,7 +1193,7 @@ fun HermesChatPane(
     state.revertConflict?.let { change ->
         AlertDialog(
             onDismissRequest = viewModel::dismissRevertConflict,
-            containerColor = Surface,
+            containerColor = AiSheet,
             title = { Text("Edited since", color = TextPrimary) },
             text = {
                 Text(
@@ -1253,7 +1256,7 @@ private fun QueueSheet(
     onEdit: (Int) -> Unit,
     onRemove: (Int) -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = Surface) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = AiSheet) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp)) {
             SheetTitle("Queued", if (working) "Each goes when the turn before it ends. Steer says one now." else null)
             queue.forEachIndexed { i, text ->
@@ -1261,8 +1264,8 @@ private fun QueueSheet(
                     Modifier
                         .padding(horizontal = 12.dp, vertical = 4.dp)
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(com.macrotracker.ui.theme.TileDark)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(AiRoom)
                         .padding(start = 14.dp, end = 6.dp, top = 10.dp, bottom = 4.dp),
                 ) {
                     Text(text, color = TextPrimary, fontSize = 14.sp, lineHeight = 20.sp, maxLines = 4, overflow = TextOverflow.Ellipsis)
@@ -1284,7 +1287,7 @@ private fun QueueSheet(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AttachSheet(onDismiss: () -> Unit, onPhoto: () -> Unit, onCamera: () -> Unit, onFile: () -> Unit, onServerFile: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Surface) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = AiSheet) {
         Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp)) {
             SheetTitle("Add to the message")
             @Composable
@@ -1363,7 +1366,7 @@ private fun HermesUnreachable(
     ) {
         BotAvatar(HermesIdentity, size = 56.dp, live = false)
         Spacer(Modifier.height(14.dp))
-        Text("Hermes is out of reach", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        Text("Hermes is out of reach", color = TextPrimary, style = HealthDisplay, fontSize = 17.sp)
         Spacer(Modifier.height(6.dp))
         Text(message, color = TextSecondary, fontSize = 13.sp, lineHeight = 18.sp)
         Spacer(Modifier.height(16.dp))
@@ -1415,8 +1418,8 @@ private fun HermesUserBubble(item: HermesItem.User, canEdit: Boolean, actions: B
                             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                             modifier = Modifier
                                 .size(width = 150.dp, height = 112.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(SurfaceChrome)
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(WellFill)
                                 .clickable { actions.onOpenImage(a) },
                         )
                     } else {
@@ -1430,7 +1433,7 @@ private fun HermesUserBubble(item: HermesItem.User, canEdit: Boolean, actions: B
                 UserBubble(item.text, onLongPress = { haptics.gestureStart(); menu = true })
                 // anchored at the bubble's right edge, where the message is
                 Box(Modifier.align(Alignment.BottomEnd)) {
-                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, modifier = Modifier.background(Surface)) {
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, modifier = Modifier.background(RoomNeutral)) {
                         MenuRow("Copy", AppIcons.Copy) { menu = false; copy() }
                         if (canEdit) MenuRow("Edit and resend", AppIcons.Edit) { menu = false; actions.onEdit(item) }
                         if (item.ts > 0) MenuRow("Fork from here", AppIcons.GitFork) { menu = false; actions.onFork(item.ts) }
@@ -1461,12 +1464,12 @@ internal fun ChangesCard(changes: List<HermesFileChange>, onOpenFile: (HermesFil
     val plus = changes.sumOf { it.plus }
     val minus = changes.sumOf { it.minus }
     val shown = if (showAll) changes else changes.take(CHANGES_SHOWN)
-    val shape = RoundedCornerShape(12.dp)
+    val shape = RoundedCornerShape(16.dp)
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(com.macrotracker.ui.theme.TileDark),
+            .background(AiRoom),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 14.dp, top = 10.dp, bottom = 9.dp),
@@ -1486,11 +1489,11 @@ internal fun ChangesCard(changes: List<HermesFileChange>, onOpenFile: (HermesFil
             Text("−$minus", color = ServerCritical, fontSize = 12.sp, fontFamily = Mono, fontWeight = FontWeight.SemiBold)
         }
         shown.forEach { change ->
-            HorizontalDivider(color = Border, thickness = 1.dp)
+            Spacer(Modifier.height(8.dp))
             FileChangeRow(change, onOpenFile, onRevert)
         }
         if (changes.size > CHANGES_SHOWN && !showAll) {
-            HorizontalDivider(color = Border, thickness = 1.dp)
+            Spacer(Modifier.height(8.dp))
             Text(
                 "Show ${changes.size - CHANGES_SHOWN} more",
                 color = AiAccent,
@@ -1584,7 +1587,7 @@ private fun ChangeStatusBadge(status: String) {
             .background(color.copy(alpha = 0.14f)),
         contentAlignment = Alignment.Center,
     ) {
-        Text(letter, color = color, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = Mono)
+        Text(letter, style = HealthDisplay, color = color, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = Mono)
     }
 }
 
@@ -1617,8 +1620,8 @@ private fun DiffBlock(diff: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(ServerWell),
+            .clip(RoundedCornerShape(16.dp))
+            .background(WellFill),
     ) {
         Text(
             body,
@@ -1648,7 +1651,7 @@ private const val DIFF_LINES = 160
 private fun ExitChip(code: Int?) {
     val ok = code == 0
     Text(
-        if (code == null) "…" else if (ok) "ok" else "exit $code",
+        if (code == null) "…" else if (ok) "ok" else "exit $code", style = HealthDisplay,
         color = if (ok) ServerGood else ServerCritical,
         fontSize = 10.sp,
         fontWeight = FontWeight.Bold,
@@ -1665,8 +1668,8 @@ private fun MonoBlock(text: String, maxLines: Int) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(ServerWell)
+            .clip(RoundedCornerShape(16.dp))
+            .background(WellFill)
             .horizontalScroll(rememberScrollState())
             .padding(10.dp),
     ) {
@@ -1708,10 +1711,15 @@ private fun DayDivider(dayStartMs: Long) {
             java.time.format.DateTimeFormatter.ofPattern(if (date.year == today.year) "EEE d MMM" else "d MMM yyyy", java.util.Locale.getDefault()),
         )
     }
-    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        HorizontalDivider(Modifier.weight(1f), color = Border)
-        Text(label, color = TextTertiary, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 10.dp))
-        HorizontalDivider(Modifier.weight(1f), color = Border)
+    Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+        Text(
+            label,
+            style = com.macrotracker.ui.screens.health.HealthDisplay,
+            color = TextSecondary,
+            fontSize = 12.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.clip(CircleShape).background(AiRoom).padding(horizontal = 12.dp, vertical = 5.dp),
+        )
     }
 }
 

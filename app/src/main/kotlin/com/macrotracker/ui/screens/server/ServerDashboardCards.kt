@@ -1,5 +1,13 @@
 package com.macrotracker.ui.screens.server
 
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.health.LocalRoomColor
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.offset
+import com.macrotracker.ui.theme.ServerCpu
+import com.macrotracker.ui.screens.health.HealthDisplayFamily
+import com.macrotracker.ui.screens.home.HomeTone
+import com.macrotracker.ui.screens.home.WellFill
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
@@ -50,7 +58,6 @@ import com.macrotracker.ui.theme.ServerBrand
 import com.macrotracker.ui.theme.ServerCritical
 import com.macrotracker.ui.theme.ServerGood
 import com.macrotracker.ui.theme.ServerWarn
-import com.macrotracker.ui.theme.ServerWell
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.theme.TextTertiary
@@ -81,7 +88,7 @@ internal fun ServicesWallCard(link: DashboardLink, onAskAi: (() -> Unit)?) {
     val down = services.count { it.up == false }
     val average = services.mapNotNull { it.uptimePercent }.takeIf { it.isNotEmpty() }?.average()
 
-    MacroCard(delayMs = 90, borderColor = if (down > 0) ServerCritical.copy(alpha = 0.4f) else Border) {
+    ServerRoom(if (down > 0) ServerCritical else ServerGood) {
         SectionHeader(
             title = "Services",
             icon = AppIcons.Activity,
@@ -122,10 +129,10 @@ internal fun ServicesWallCard(link: DashboardLink, onAskAi: (() -> Unit)?) {
             Text(
                 if (showAll) "Show fewer" else "Show all ${services.size}",
                 color = ServerBrand,
-                fontSize = 12.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(16.dp))
                     .clickable {
                         haptics.tick()
                         showAll = !showAll
@@ -137,7 +144,7 @@ internal fun ServicesWallCard(link: DashboardLink, onAskAi: (() -> Unit)?) {
         Text(
             "Probed by the server every 30 s · 24 h, one bar per half hour",
             color = TextTertiary,
-            fontSize = 10.sp,
+            fontSize = 11.5.sp,
         )
     }
 }
@@ -149,14 +156,11 @@ private fun ServiceTile(service: DashboardService, modifier: Modifier = Modifier
         false -> ServerCritical
         null -> TextTertiary
     }
-    val shape = RoundedCornerShape(10.dp)
+    val shape = RoundedCornerShape(16.dp)
     Column(
         modifier = modifier
             .clip(shape)
-            .background(ServerWell)
-            .then(
-                if (service.up == false) Modifier.border(1.dp, ServerCritical.copy(alpha = 0.55f), shape) else Modifier,
-            )
+            .background(if (service.up == false) ServerCritical.copy(alpha = 0.16f) else WellFill)
             .clickable(onClick = onClick)
             // The bars sit inside this padding, so the tile's rounded corners never cut
             // the first and last half hour off.
@@ -185,7 +189,7 @@ private fun ServiceTile(service: DashboardService, modifier: Modifier = Modifier
                 else -> " "
             },
             color = if (service.up == false) ServerCritical else TextSecondary,
-            fontSize = 11.sp,
+            fontSize = 12.5.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -193,7 +197,7 @@ private fun ServiceTile(service: DashboardService, modifier: Modifier = Modifier
         Spacer(Modifier.height(6.dp))
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
-                service.uptimePercent?.let { if (it >= 99.95f) "100%" else "%.1f%%".format(it) } ?: "—",
+                service.uptimePercent?.let { if (it >= 99.95f) "100%" else "%.1f%%".format(it) } ?: "—", style = HealthDisplay,
                 color = when {
                     service.uptimePercent == null -> TextTertiary
                     service.uptimePercent >= 99.5f -> TextPrimary
@@ -202,14 +206,14 @@ private fun ServiceTile(service: DashboardService, modifier: Modifier = Modifier
                 },
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = HealthDisplayFamily,
                 modifier = Modifier.weight(1f),
             )
             service.drops.takeIf { it > 0 }?.let { drops ->
                 Text(
                     if (drops == 1) "1 drop" else "$drops drops",
                     color = ServerWarn,
-                    fontSize = 10.sp,
+                    fontSize = 11.5.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                 )
@@ -222,33 +226,7 @@ private fun ServiceTile(service: DashboardService, modifier: Modifier = Modifier
 
 @Composable
 private fun ServiceIcon(service: DashboardService) {
-    val context = LocalContext.current
-    val request = remember(service.iconUrl) {
-        service.iconUrl?.let { url ->
-            ImageRequest.Builder(context)
-                .data(url)
-                .apply { if (url.endsWith(".svg", ignoreCase = true)) decoderFactory(SvgDecoder.Factory()) }
-                .build()
-        }
-    }
-    Box(
-        modifier = Modifier
-            .size(26.dp)
-            .clip(RoundedCornerShape(7.dp))
-            .background(ServerWell),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (request != null) {
-            AsyncImage(
-                model = request,
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.size(18.dp),
-            )
-        } else {
-            Text(service.title.take(1), color = TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-        }
-    }
+    AppIcon(service.iconUrl, service.title, 26.dp)
 }
 
 /**
@@ -260,7 +238,7 @@ private fun ServiceIcon(service: DashboardService) {
 internal fun ServerActivityCard(link: DashboardLink) {
     val activity = link.activity
     if (activity.nowPlaying == null && activity.downloads.isEmpty()) return
-    MacroCard(delayMs = 60) {
+    ServerRoom(ServerBrand) {
         SectionHeader(
             title = "Happening now",
             icon = AppIcons.Play,
@@ -272,12 +250,7 @@ internal fun ServerActivityCard(link: DashboardLink) {
         )
         activity.nowPlaying?.let { np ->
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier.size(34.dp).clip(RoundedCornerShape(8.dp)).background(ServerBrand.copy(alpha = 0.16f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(AppIcons.Play, contentDescription = null, tint = ServerBrand, modifier = Modifier.size(16.dp))
-                }
+                AppIcon(link.iconForContainer("jellyfin"), "Jellyfin", 34.dp)
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(np.title, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -285,7 +258,7 @@ internal fun ServerActivityCard(link: DashboardLink) {
                         listOf(np.sub, listOf(np.user, np.device).filter { it.isNotBlank() }.joinToString(" on "))
                             .filter { it.isNotBlank() }.joinToString(" · "),
                         color = TextSecondary,
-                        fontSize = 11.sp,
+                        fontSize = 12.5.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -301,11 +274,11 @@ internal fun ServerActivityCard(link: DashboardLink) {
                         model = d.artUrl,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.size(width = 48.dp, height = 28.dp).clip(RoundedCornerShape(6.dp)),
+                        modifier = Modifier.size(width = 48.dp, height = 28.dp).clip(RoundedCornerShape(14.dp)),
                     )
                 } else {
                     Box(
-                        modifier = Modifier.size(width = 48.dp, height = 28.dp).clip(RoundedCornerShape(6.dp)).background(ServerWell),
+                        modifier = Modifier.size(width = 48.dp, height = 28.dp).clip(RoundedCornerShape(14.dp)).background(WellFill),
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(AppIcons.Download, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(14.dp))
@@ -317,24 +290,24 @@ internal fun ServerActivityCard(link: DashboardLink) {
                         Text(
                             d.title,
                             color = TextPrimary,
-                            fontSize = 12.sp,
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f),
                         )
                         Text(
-                            d.percent?.let { "${it.roundToInt()}%" } ?: "",
+                            d.percent?.let { "${it.roundToInt()}%" } ?: "", style = HealthDisplay,
                             color = TextPrimary,
-                            fontSize = 11.sp,
+                            fontSize = 12.5.sp,
                             fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = HealthDisplayFamily,
                         )
                     }
                     Text(
                         listOfNotNull(d.sub.takeIf { it.isNotBlank() }, d.eta).joinToString(" · "),
                         color = TextSecondary,
-                        fontSize = 10.sp,
+                        fontSize = 11.5.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -353,13 +326,21 @@ internal fun DashboardAlertRows(link: DashboardLink) {
         if (i > 0) Spacer(Modifier.height(8.dp))
         val color = if (alert.level.equals("error", true)) ServerCritical else ServerWarn
         Row(modifier = Modifier.fillMaxWidth()) {
-            Box(
-                modifier = Modifier
-                    .padding(top = 5.dp)
-                    .size(6.dp)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(color),
-            )
+            // the app's own icon, with how bad it is as a dot on its corner
+            Box {
+                AppIcon(link.iconForContainer(alert.service), alert.service, 30.dp)
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .offset(x = 2.dp, y = 2.dp)
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(LocalRoomColor.current)
+                        .padding(2.dp)
+                        .clip(CircleShape)
+                        .background(color),
+                )
+            }
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(
@@ -368,7 +349,7 @@ internal fun DashboardAlertRows(link: DashboardLink) {
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
-                Text(alert.message, color = TextSecondary, fontSize = 11.sp, lineHeight = 15.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                Text(alert.message, color = TextSecondary, fontSize = 12.5.sp, lineHeight = 18.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
             }
         }
     }

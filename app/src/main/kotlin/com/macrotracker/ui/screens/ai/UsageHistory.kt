@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.theme.AiAccent
+import com.macrotracker.ui.screens.health.HealthDisplay
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -102,7 +104,7 @@ private fun TotalCard(view: UsageView, cost: Boolean) {
     val now = value(view.totals, cost)
     val was = view.prev?.let { if (cost) it.cost else it.tokens.toDouble() } ?: 0.0
     val change = usageChange(now, was)
-    MacroCard {
+    MacroCard(tone = AiAccent) {
         Row(verticalAlignment = Alignment.Bottom) {
             Text(fmt(now, cost), fontSize = 34.sp, fontWeight = FontWeight.Bold, color = TextPrimary, letterSpacing = (-0.8).sp, style = TabularNumbers)
             if (!cost) Text("  tokens", fontSize = 14.sp, color = TextTertiary, modifier = Modifier.padding(bottom = 6.dp))
@@ -296,7 +298,7 @@ private fun TypesCard(view: UsageView, cost: Boolean) {
 private fun Stat(label: String, value: String, sub: String, modifier: Modifier) {
     Column(modifier) {
         Text(label, fontSize = 11.5.sp, color = TextTertiary, maxLines = 1)
-        Text(value, fontSize = 19.sp, fontWeight = FontWeight.Bold, color = TextPrimary, letterSpacing = (-0.3).sp, maxLines = 1, style = TabularNumbers)
+        Text(value, style = HealthDisplay, fontSize = 19.sp, color = TextPrimary, letterSpacing = (-0.3).sp, maxLines = 1)
         Text(sub, fontSize = 11.5.sp, color = TextTertiary, maxLines = 1)
     }
 }
@@ -347,7 +349,7 @@ private fun BreakdownCard(u: UsageSnapshot, view: UsageView, cost: Boolean) {
             if (list.isEmpty()) Text("Nothing in this window.", fontSize = 13.sp, color = TextSecondary)
             val top = list.maxOfOrNull { value(it.totals, cost) }?.coerceAtLeast(1e-9) ?: 1.0
             (if (all) list else list.take(MODELS_SHOWN)).forEachIndexed { i, m ->
-                if (i > 0) Hairline()
+                if (i > 0) Spacer(Modifier.height(6.dp))
                 ShareRow(
                     mark = { UsageMark(m.label, 26.dp, modelId = m.id) },
                     title = m.label,
@@ -378,11 +380,11 @@ private fun sourceWords(src: String) = when (src) {
 @Composable
 private fun ShowMore(hidden: Int, all: Boolean, noun: String, onToggle: () -> Unit) {
     if (hidden <= 0) return
-    Hairline()
+    Spacer(Modifier.height(8.dp))
     Text(
         if (all) "Show fewer" else "Show $hidden more $noun",
         fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Primary,
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(onClick = onToggle).padding(vertical = 10.dp),
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable(onClick = onToggle).padding(vertical = 10.dp),
         textAlign = TextAlign.Center,
     )
 }
@@ -406,7 +408,7 @@ private fun TimeTable(rows: List<UsageBucket>, hourly: Boolean) {
         Cell("Cost", 1f, head = true); Cell("Tokens", 1f, head = true); Cell("Cached", 1f, head = true); Cell("Calls", 0.8f, head = true)
     }
     rows.forEach { r ->
-        Hairline()
+        Spacer(Modifier.height(8.dp))
         Row(Modifier.padding(vertical = 7.dp)) {
             Cell(bucketLabel(r, hourly, long = hourly), 1.7f, strong = true, start = true)
             Cell(formatUsd(r.totals.cost), 1f, strong = true)
@@ -452,7 +454,7 @@ private fun AgentsCard(view: UsageView, cost: Boolean) {
         val agents = view.agents.sortedByDescending { value(it.totals, cost) }
         val top = agents.maxOfOrNull { value(it.totals, cost) }?.coerceAtLeast(1e-9) ?: 1.0
         agents.forEachIndexed { i, a: UsageShare ->
-            if (i > 0) Hairline()
+            if (i > 0) Spacer(Modifier.height(6.dp))
             ShareRow(
                 mark = { UsageMark(a.id, 26.dp) },
                 title = a.id, sub = a.topLabel,
@@ -470,7 +472,7 @@ private fun ProjectsCard(u: UsageSnapshot, cost: Boolean) {
         val list = u.projects.sortedByDescending { value(it.totals, cost) }
         val top = list.maxOfOrNull { value(it.totals, cost) }?.coerceAtLeast(1e-9) ?: 1.0
         (if (all) list else list.take(6)).forEachIndexed { i, p ->
-            if (i > 0) Hairline()
+            if (i > 0) Spacer(Modifier.height(6.dp))
             ShareRow(
                 mark = { UsageMark(p.id, 26.dp) },
                 title = p.id, sub = "${count(p.totals.calls)} calls",

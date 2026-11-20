@@ -73,8 +73,7 @@ fun PillButton(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .clip(PillShape)
-                .background(if (emphasized) accent.copy(alpha = 0.16f) else Surface)
-                .border(1.dp, if (emphasized) accent.copy(alpha = 0.38f) else Border, PillShape)
+                .background(if (emphasized) accent.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.07f))
                 // The press ripple stays inside the pill, not the taller tap area.
                 .indication(interactionSource, ripple())
                 .padding(horizontal = 13.dp, vertical = 8.dp),

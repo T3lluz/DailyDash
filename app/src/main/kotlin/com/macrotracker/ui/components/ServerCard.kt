@@ -1,5 +1,10 @@
 package com.macrotracker.ui.components
 
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.home.HomeTile
+import com.macrotracker.ui.screens.home.HomeTilePrompt
+import com.macrotracker.ui.screens.home.HomeTone
+import com.macrotracker.ui.screens.home.RoundAction
 import com.macrotracker.ui.screens.server.StatusDot
 import androidx.compose.foundation.background
 import com.macrotracker.ui.util.rememberIsResumed
@@ -89,69 +94,54 @@ fun ServerCard(
         if (polling && profiles.isNotEmpty()) viewModel.followDashboard(HOME_DASHBOARD_REFRESH_MS)
     }
 
+    val tone = HomeTone.Servers
     if (profiles.isEmpty()) {
-        MacroCard {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        haptics.click()
-                        onOpenServers()
-                    },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(AppIcons.Server, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    CardTitle("Servers")
-                    Text("Add an SSH host to watch it live", color = TextSecondary, fontSize = 12.sp)
-                }
-            }
-        }
+        HomeTilePrompt(
+            title = "Servers",
+            tone = tone,
+            icon = AppIcons.Server,
+            message = "Add an SSH host to watch it live.",
+            actionLabel = "Add",
+            actionIcon = AppIcons.Add,
+            onAction = onOpenServers,
+        )
         return
     }
 
-    MacroCard(borderColor = ServerBrand.copy(alpha = 0.14f)) {
-        val criticalCount = runtimes.values.sumOf { runtime ->
-            runtime.advisories.count { it.severity == AdvisorySeverity.CRITICAL }
-        }
-        val online = runtimes.values.count { it.isOnline }
-        CardHeader(
-            title = "Servers",
-            icon = AppIcons.Server,
-            accent = ServerBrand,
-            subtitle = when {
-                profiles.size == 1 -> runtimes[profiles.first().id]?.hostProfile?.prettyName?.takeIf { it.isNotBlank() }
-                    ?: profiles.first().displayTarget
-                else -> "$online of ${profiles.size} online"
-            },
-            modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
-                .clickable {
-                    haptics.click()
-                    onOpenServers()
-                },
-        ) {
-            onOpenConsole?.let { HubHeaderAction(AppIcons.SquareTerminal, "Console", it) }
+    val criticalCount = runtimes.values.sumOf { runtime ->
+        runtime.advisories.count { it.severity == AdvisorySeverity.CRITICAL }
+    }
+    val online = runtimes.values.count { it.isOnline }
+    HomeTile(
+        title = "Servers",
+        tone = tone,
+        icon = AppIcons.Server,
+        meta = when {
+            profiles.size == 1 -> runtimes[profiles.first().id]?.hostProfile?.prettyName?.takeIf { it.isNotBlank() }
+                ?: profiles.first().displayTarget
+            else -> "$online of ${profiles.size} online"
+        },
+        onOpen = onOpenServers,
+        actions = {
             if (criticalCount > 0) {
                 ServerTag("$criticalCount critical", ServerCritical)
-            } else {
-                ServerTag("$online/${profiles.size} up", if (online == profiles.size) ServerGood else ServerWarn)
+            } else if (online < profiles.size) {
+                ServerTag("$online/${profiles.size} up", ServerWarn)
             }
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-
+            onOpenConsole?.let {
+                Spacer(Modifier.width(6.dp))
+                RoundAction(AppIcons.SquareTerminal, "Console", tone, size = 30.dp, onClick = it)
+            }
+        },
+    ) {
         profiles.forEachIndexed { index, profile ->
-            if (index > 0) Spacer(modifier = Modifier.height(10.dp))
+            if (index > 0) Spacer(modifier = Modifier.height(16.dp))
             val runtime = runtimes[profile.id]
             ServerTile(
                 runtime = runtime,
                 fallbackLabel = profile.label,
                 link = link?.takeIf { it.belongsTo(runtime?.hostProfile?.hostname) },
-                onClick = {
-                    haptics.click()
-                    onOpenServers()
-                },
+                showName = profiles.size > 1,
             )
         }
     }
@@ -162,28 +152,24 @@ private fun ServerTile(
     runtime: ServerRuntime?,
     fallbackLabel: String,
     link: DashboardLink?,
-    onClick: () -> Unit,
+    showName: Boolean,
 ) {
     val snapshot = runtime?.snapshot
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(Background)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 11.dp)
-            // Reserves the tile so the card does not resize under a finger when the
+            // Reserves the block so the tile does not resize under a finger when the
             // first sample lands a few seconds in.
-            .heightIn(min = 148.dp),
+            .heightIn(min = 132.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        if (showName || snapshot == null) Row(verticalAlignment = Alignment.CenterVertically) {
             StatusDot(runtime)
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = runtime?.profile?.label ?: fallbackLabel,
                 color = TextPrimary,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
+                fontSize = 15.sp,
+                style = HealthDisplay,
                 modifier = Modifier.weight(1f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -192,9 +178,8 @@ private fun ServerTile(
                 text = snapshot?.uptimeSeconds?.let { "up ${formatUptime(it)}" }
                     ?: (runtime?.connection as? ServerConnectionState.Offline)?.let { "offline" }
                     ?: "",
-                color = TextTertiary,
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace,
+                color = TextSecondary,
+                fontSize = 12.5.sp,
                 maxLines = 1,
             )
         }
@@ -214,7 +199,7 @@ private fun ServerTile(
 
         Spacer(modifier = Modifier.height(10.dp))
         val readings = remember(snapshot, link, runtime.cpuHistory.size) { dialReadings(runtime, link) }
-        ServerDialRow(readings = readings, dialSize = 54.dp, valueSize = 13.sp, showCaptions = false)
+        ServerDialRow(readings = readings, dialSize = 58.dp, valueSize = 14.sp, showCaptions = false)
 
         Spacer(modifier = Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -256,7 +241,7 @@ private fun ServerTile(
             }
             happening != null -> {
                 Spacer(Modifier.height(9.dp))
-                NewsLine(icon = happening.first, text = happening.second, color = ServerBrand)
+                NewsLine(icon = happening.first, text = happening.second, color = HomeTone.Servers)
             }
         }
 
@@ -285,7 +270,7 @@ private fun NewsLine(icon: androidx.compose.ui.graphics.vector.ImageVector, text
         Text(
             text,
             color = TextPrimary,
-            fontSize = 12.sp,
+            fontSize = 13.5.sp,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

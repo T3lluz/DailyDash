@@ -1,5 +1,8 @@
 package com.macrotracker.ui.screens.git
 
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.ai.AiSheet
+import com.macrotracker.ui.screens.ai.AiRoom
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -78,10 +81,10 @@ private val Card = RoundedCornerShape(18.dp)
 private fun DetailFrame(title: String, subtitle: String, onBack: () -> Unit, content: @Composable () -> Unit) {
     val haptics = rememberHaptics()
     Column(Modifier.fillMaxSize().background(Background)) {
-        Row(Modifier.fillMaxWidth().background(Background).padding(top = 36.dp, bottom = 8.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { haptics.tick(); onBack() }) { Icon(AppIcons.ArrowBack, "Back", tint = TextPrimary, modifier = Modifier.size(22.dp)) }
+        Row(Modifier.fillMaxWidth().background(Background).padding(top = 12.dp, bottom = 8.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.padding(start = 12.dp, end = 10.dp)) { com.macrotracker.ui.screens.ai.HeaderRound(AppIcons.ArrowBack, "Back") { haptics.tick(); onBack() } }
             Column(Modifier.weight(1f)) {
-                Text(title, color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(title, color = TextPrimary, style = HealthDisplay, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (subtitle.isNotBlank()) Text(subtitle, color = TextTertiary, fontSize = 11.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
@@ -92,7 +95,7 @@ private fun DetailFrame(title: String, subtitle: String, onBack: () -> Unit, con
 @Composable
 private fun ChangedFileRow(f: GitChangedFile, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(TileDark).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 10.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(AiRoom).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         StatusBadge(f.status.firstOrNull() ?: 'M')
@@ -111,7 +114,7 @@ private fun ChangedFileRow(f: GitChangedFile, onClick: () -> Unit) {
 @Composable
 private fun Heading(text: String, count: Int? = null) {
     Row(Modifier.padding(top = 18.dp, bottom = 6.dp, start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(text.uppercase(), color = TextTertiary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+        Text(text, style = HealthDisplay, color = TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
         if (count != null) Text("  $count", color = TextTertiary, fontSize = 11.sp)
     }
 }
@@ -128,9 +131,9 @@ internal fun CommitPage(page: GitPage.Commit, vm: GitViewModel, onBack: () -> Un
             info == null -> Note(AppIcons.Warning, load.error ?: "Could not read it.")
             else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 item {
-                    Column(Modifier.fillMaxWidth().clip(Card).background(TileDark).padding(16.dp)) {
+                    Column(Modifier.fillMaxWidth().clip(Card).background(AiRoom).padding(16.dp)) {
                         val lines = info.message.lines()
-                        Text(lines.firstOrNull().orEmpty(), color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold, lineHeight = 23.sp)
+                        Text(lines.firstOrNull().orEmpty(), color = TextPrimary, style = HealthDisplay, fontSize = 17.sp, lineHeight = 23.sp)
                         val body = lines.drop(1).joinToString("\n").trim()
                         if (body.isNotBlank()) Text(body, color = TextSecondary, fontSize = 13.5.sp, lineHeight = 20.sp, modifier = Modifier.padding(top = 10.dp))
                         Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -184,7 +187,7 @@ internal fun ComparePage(base: String, vm: GitViewModel, onBack: () -> Unit, onO
 
 @Composable
 private fun SmallCommit(c: GitCommit) {
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(TileDark).padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(AiRoom).padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(c.short, color = AiAccent, fontSize = 11.5.sp, fontFamily = Mono, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.width(10.dp))
         Text(c.subject, color = TextPrimary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
@@ -215,7 +218,7 @@ internal fun PrPage(number: Int, vm: GitViewModel, onBack: () -> Unit, onAskHerm
                 Column(Modifier.fillMaxSize()) {
                     LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         item {
-                            Column(Modifier.fillMaxWidth().clip(Card).background(TileDark).padding(16.dp)) {
+                            Column(Modifier.fillMaxWidth().clip(Card).background(AiRoom).padding(16.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Pill(label, tone, false)
                                     ChecksPill(d.pr)
@@ -225,7 +228,7 @@ internal fun PrPage(number: Int, vm: GitViewModel, onBack: () -> Unit, onAskHerm
                                         "REVIEW_REQUIRED" -> Pill("Needs review", ServerWarn, false)
                                     }
                                 }
-                                Text(d.pr.title, color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold, lineHeight = 24.sp, modifier = Modifier.padding(top = 10.dp))
+                                Text(d.pr.title, color = TextPrimary, style = HealthDisplay, fontSize = 18.sp, lineHeight = 24.sp, modifier = Modifier.padding(top = 10.dp))
                                 Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Text(d.pr.head, color = AiAccent, fontSize = 12.sp, fontFamily = Mono, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                                     Text("  →  ${d.pr.base}", color = TextTertiary, fontSize = 12.sp, fontFamily = Mono)
@@ -263,7 +266,7 @@ internal fun PrPage(number: Int, vm: GitViewModel, onBack: () -> Unit, onAskHerm
                                     else -> ServerWarn to AppIcons.Clock
                                 }
                                 Row(
-                                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(TileDark).clickable(enabled = c.url.isNotBlank()) { context.openUrl(c.url) }.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(AiRoom).clickable(enabled = c.url.isNotBlank()) { context.openUrl(c.url) }.padding(horizontal = 12.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Icon(icon, null, tint = color, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(10.dp))
@@ -274,7 +277,7 @@ internal fun PrPage(number: Int, vm: GitViewModel, onBack: () -> Unit, onAskHerm
                         }
                         if (d.body.isNotBlank()) {
                             item { Heading("Description") }
-                            item { Box(Modifier.fillMaxWidth().clip(Card).background(TileDark).padding(14.dp)) { MarkdownText(d.body, color = TextSecondary, fontSize = 13.5.sp, linkColor = AiAccent) } }
+                            item { Box(Modifier.fillMaxWidth().clip(Card).background(AiRoom).padding(14.dp)) { MarkdownText(d.body, color = TextSecondary, fontSize = 13.5.sp, linkColor = AiAccent) } }
                         }
                         item { Heading("Files changed", d.files.size) }
                         items(d.files, key = { "f-${it.path}" }) { f -> ChangedFileRow(f) { onOpen(GitPage.Review("PR #$number", d.pr.title.take(50), review, d.files.indexOf(f))) } }
@@ -282,7 +285,7 @@ internal fun PrPage(number: Int, vm: GitViewModel, onBack: () -> Unit, onAskHerm
                         items(d.reviews.size, key = { "rv$it" }) { i ->
                             val r = d.reviews[i]
                             val tint = when (r.state) { "APPROVED" -> ServerGood; "CHANGES_REQUESTED" -> ServerCritical; else -> TextSecondary }
-                            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(TileDark).padding(12.dp)) {
+                            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(AiRoom).padding(12.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(r.author, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold); Spacer(Modifier.width(8.dp))
                                     Pill(r.state.lowercase().replace('_', ' '), tint, false)
@@ -292,7 +295,7 @@ internal fun PrPage(number: Int, vm: GitViewModel, onBack: () -> Unit, onAskHerm
                         }
                         items(d.comments.size, key = { "cm$it" }) { i ->
                             val c = d.comments[i]
-                            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(TileDark).padding(12.dp)) {
+                            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(AiRoom).padding(12.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(c.author, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                                     Text("  ·  ${agoIso(c.at)}", color = TextTertiary, fontSize = 11.sp)
@@ -304,7 +307,7 @@ internal fun PrPage(number: Int, vm: GitViewModel, onBack: () -> Unit, onAskHerm
                             item { Heading("Commits", d.commits.size) }
                             items(d.commits.size, key = { "k$it" }) { i ->
                                 val (h, s) = d.commits[i]
-                                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(TileDark).padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(AiRoom).padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Text(h, color = AiAccent, fontSize = 11.5.sp, fontFamily = Mono, fontWeight = FontWeight.SemiBold); Spacer(Modifier.width(10.dp))
                                     Text(s, color = TextPrimary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
@@ -312,11 +315,11 @@ internal fun PrPage(number: Int, vm: GitViewModel, onBack: () -> Unit, onAskHerm
                         }
                     }
                     if (open) {
-                        Column(Modifier.fillMaxWidth().background(TileDark).navigationBarsPadding().imePadding().padding(horizontal = 14.dp, vertical = 10.dp)) {
+                        Column(Modifier.fillMaxWidth().background(AiRoom).navigationBarsPadding().imePadding().padding(horizontal = 14.dp, vertical = 10.dp)) {
                             BasicTextField(
                                 value = comment, onValueChange = { comment = it },
                                 textStyle = TextStyle(color = TextPrimary, fontSize = 14.sp, lineHeight = 20.sp), cursorBrush = SolidColor(AiAccent), maxLines = 4,
-                                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Background).padding(horizontal = 14.dp, vertical = 11.dp),
+                                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Background).padding(horizontal = 14.dp, vertical = 11.dp),
                                 decorationBox = { inner -> if (comment.isEmpty()) Text("Comment, or the words for a review", color = TextTertiary, fontSize = 14.sp); inner() },
                             )
                             Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -329,14 +332,14 @@ internal fun PrPage(number: Int, vm: GitViewModel, onBack: () -> Unit, onAskHerm
                     }
                 }
                 if (merging) AlertDialog(
-                    onDismissRequest = { merging = false }, containerColor = Surface,
+                    onDismissRequest = { merging = false }, containerColor = AiSheet,
                     title = { Text("Merge #$number?", color = TextPrimary) },
                     text = { Text("${d.pr.head} goes into ${d.pr.base}${if (d.checks().bad > 0) ". ${d.pr.checks.bad} checks are failing" else ""}. This is on GitHub straight away.", color = TextSecondary, fontSize = 14.sp, lineHeight = 20.sp) },
                     confirmButton = { TextButton(onClick = { haptics.confirm(); merging = false; vm.prAction("merge", number, "how" to "squash") }) { Text("Squash and merge", color = AiAccent) } },
                     dismissButton = { TextButton(onClick = { merging = false }) { Text("Not yet", color = TextSecondary) } },
                 )
                 if (requesting) AlertDialog(
-                    onDismissRequest = { requesting = false }, containerColor = Surface,
+                    onDismissRequest = { requesting = false }, containerColor = AiSheet,
                     title = { Text("Request changes?", color = TextPrimary) },
                     text = { Text("Your words are sent to ${d.pr.author} as a review that blocks the merge.", color = TextSecondary, fontSize = 14.sp, lineHeight = 20.sp) },
                     confirmButton = { TextButton(onClick = { haptics.click(); requesting = false; vm.prAction("review", number, "kind" to "changes", "body" to comment.trim()); comment = "" }) { Text("Request", color = ServerWarn) } },
@@ -352,11 +355,11 @@ private fun com.macrotracker.data.hermes.GitPrDetail.checks() = pr.checks
 @Composable
 private fun ActionPill(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, enabled: Boolean, tint: Color, modifier: Modifier, onClick: () -> Unit) {
     Row(
-        modifier.clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = if (enabled) 0.09f else 0.04f)).clickable(enabled = enabled, onClick = onClick).padding(vertical = 10.dp),
+        modifier.clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = if (enabled) 0.09f else 0.04f)).clickable(enabled = enabled, onClick = onClick).padding(vertical = 10.dp),
         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, null, tint = if (enabled) tint else TextTertiary, modifier = Modifier.size(14.dp))
         Spacer(Modifier.width(5.dp))
-        Text(label, color = if (enabled) tint else TextTertiary, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text(label, style = HealthDisplay, color = if (enabled) tint else TextTertiary, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
     }
 }

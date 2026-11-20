@@ -1,5 +1,6 @@
 package com.macrotracker.ui.screens.health
 
+import com.macrotracker.ui.screens.home.SheetColor
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.Box
@@ -268,7 +269,7 @@ fun VitalsSection(
 
         val askForYear = vitals != null && knownYear == null && tiles.isNotEmpty() && wantsBirthYear(vitals)
         val missing = vitals?.notShared.orEmpty()
-        if (askForYear || (tiles.isNotEmpty() && missing.isNotEmpty())) Hairline()
+        if (askForYear || (tiles.isNotEmpty() && missing.isNotEmpty())) Spacer(Modifier.height(6.dp))
         if (askForYear) {
             HealthPromptRow(
                 icon = AppIcons.Gauge,
@@ -1144,7 +1145,7 @@ private fun BirthYearDialog(current: Int?, onDismiss: () -> Unit, onSave: (Int) 
     val year = text.toIntOrNull()?.takeIf { it in (thisYear - 100)..(thisYear - 10) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Surface,
+        containerColor = SheetColor,
         title = { Text("Your birth year", color = TextPrimary) },
         text = {
             Column {

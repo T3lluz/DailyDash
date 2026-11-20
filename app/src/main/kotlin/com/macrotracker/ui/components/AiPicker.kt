@@ -1,5 +1,8 @@
 package com.macrotracker.ui.components
 
+import com.macrotracker.ui.screens.home.SheetColor
+import com.macrotracker.ui.screens.home.WellFill
+import com.macrotracker.ui.screens.health.roomColor
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.animation.AnimatedVisibility
@@ -149,8 +152,7 @@ fun AiPill(status: AiProviderStatus?, onClick: () -> Unit, modifier: Modifier = 
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(999.dp))
-            .background(if (open) ServerBrand.copy(alpha = 0.16f) else ServerWell)
-            .border(1.dp, if (open) ServerBrand.copy(alpha = 0.5f) else Border, RoundedCornerShape(999.dp))
+            .background(if (open) ServerBrand.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.07f))
             .clickable { haptics.tick(); onClick() }
             .semantics { contentDescription = "AI: $name, ${status?.access?.label ?: "not set up"}" }
             .padding(start = 4.dp, end = if (compact) 6.dp else 9.dp, top = 4.dp, bottom = 4.dp),
@@ -164,7 +166,7 @@ fun AiPill(status: AiProviderStatus?, onClick: () -> Unit, modifier: Modifier = 
                         .align(Alignment.BottomEnd)
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(ServerWell)
+                        .background(WellFill)
                         .padding(1.5.dp)
                         .clip(CircleShape)
                         .background(status.access.tone()),
@@ -208,7 +210,7 @@ fun AiPickerSheet(
         state.providers.filter { it.ready }.forEach { viewModel.refreshModels(it.provider) }
     }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = Surface) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState, containerColor = SheetColor) {
         Column(Modifier.fillMaxWidth().fillMaxHeight(0.8f).navigationBarsPadding().imePadding()) {
             AiModelList(
                 state = state,
@@ -326,8 +328,8 @@ private fun ColumnScope.AiModelList(
             Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 10.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .border(1.dp, Border, RoundedCornerShape(14.dp))
+                .clip(RoundedCornerShape(20.dp))
+                .background(Color.White.copy(alpha = 0.06f))
                 .clickable(onClick = onManage)
                 .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -349,7 +351,7 @@ private fun ModelOption(logo: AiProvider, title: String, note: String?, selected
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(if (selected) ServerBrand.copy(alpha = 0.10f) else Color.Transparent)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 9.dp),
@@ -383,13 +385,12 @@ fun AiProviderGrid(state: AiUiState, focused: AiProvider, onFocus: (AiProvider) 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 pair.forEach { p ->
                     val on = p.provider == focused
-                    val shape = RoundedCornerShape(18.dp)
+                    val shape = RoundedCornerShape(22.dp)
                     Row(
                         Modifier
                             .weight(1f)
                             .clip(shape)
-                            .background(if (on) ServerBrand.copy(alpha = 0.10f) else ServerWell)
-                            .border(if (on) 1.5.dp else 1.dp, if (on) ServerBrand.copy(alpha = 0.7f) else Border, shape)
+                            .background(if (on) roomColor(ServerBrand).let { androidx.compose.ui.graphics.lerp(it, ServerBrand, 0.12f) } else roomColor(com.macrotracker.ui.screens.home.HomeTone.Neutral))
                             .clickable { onFocus(p.provider) }
                             .padding(horizontal = 12.dp, vertical = 11.dp),
                         verticalAlignment = Alignment.CenterVertically,

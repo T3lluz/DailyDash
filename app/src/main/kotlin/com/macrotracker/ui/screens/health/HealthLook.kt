@@ -39,9 +39,9 @@ import com.macrotracker.ui.theme.Background
 import com.macrotracker.ui.theme.Surface
 import java.io.File
 
-// The Health tab's own look. Home's cards are grey panels with an edge; Health is a body
-// clock standing on the page and a room per subject, each a flat dark tint of its colour
-// with no edge, and every number set in one rounded heavy face.
+// The Health tab's look, which Home's tiles and pages share (ui/screens/home): a body clock
+// standing on the page and a room per subject, each a flat dark tint of its colour with no
+// edge, and every number set in one rounded heavy face.
 
 /**
  * The tab's display face: Google Sans Flex pushed round and heavy, the face Google's own

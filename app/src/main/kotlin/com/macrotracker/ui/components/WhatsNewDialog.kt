@@ -1,5 +1,6 @@
 package com.macrotracker.ui.components
 
+import com.macrotracker.ui.screens.health.HealthDisplay
 import androidx.compose.foundation.layout.Arrangement
 import com.macrotracker.data.update.prettyVersion
 import androidx.compose.foundation.layout.Column
@@ -68,8 +69,9 @@ fun WhatsNewDialog(
                     Column {
                         Text(
                             text = "What's new",
+                            style = HealthDisplay,
                             fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.Black,
                             color = TextPrimary,
                         )
                         Text(

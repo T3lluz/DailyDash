@@ -1,5 +1,10 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.screens.home.FieldShape
+import com.macrotracker.ui.screens.home.roomFieldColors
+import com.macrotracker.ui.screens.home.RoomNeutral
+import com.macrotracker.ui.theme.Background
+import com.macrotracker.ui.screens.health.HealthDisplay
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
@@ -164,29 +169,31 @@ internal fun HermesHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 4.dp, end = 4.dp),
+            .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box {
-            IconButton(onClick = { haptics.tick(); onOpenRail() }) {
-                Icon(AppIcons.PanelLeft, contentDescription = "Chats", tint = TextSecondary, modifier = Modifier.size(21.dp))
-            }
+            HeaderRound(AppIcons.PanelLeft, "Chats") { haptics.tick(); onOpenRail() }
             if (railAttention) {
                 Box(
                     Modifier
                         .align(Alignment.TopEnd)
-                        .padding(top = 10.dp, end = 10.dp)
-                        .size(7.dp)
+                        .padding(top = 2.dp, end = 2.dp)
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(Background)
+                        .padding(2.dp)
                         .clip(CircleShape)
                         .background(ServerWarn),
                 )
             }
         }
+        Spacer(Modifier.width(8.dp))
         // The title opens the chats too, as ChatGPT's and Claude's do; rename is in the menu.
         Column(
             modifier = Modifier
                 .weight(1f)
-                .clip(RoundedCornerShape(8.dp))
+                .clip(RoundedCornerShape(16.dp))
                 .clickable { haptics.tick(); onOpenRail() }
                 .padding(horizontal = 4.dp, vertical = 2.dp),
         ) {
@@ -194,8 +201,8 @@ internal fun HermesHeader(
                 Text(
                     title.ifBlank { "New chat" },
                     color = TextPrimary,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    style = HealthDisplay,
+                    fontSize = 19.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
@@ -206,7 +213,7 @@ internal fun HermesHeader(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 // the model and mode are the chat's details: a tap opens them
-                modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable(enabled = hasThread) { haptics.tick(); onOpenInfo() },
+                modifier = Modifier.clip(RoundedCornerShape(14.dp)).clickable(enabled = hasThread) { haptics.tick(); onOpenInfo() },
             ) {
                 if (hasThread && brand.isNotBlank()) {
                     ModelLogo(brand, 16.dp)
@@ -217,17 +224,15 @@ internal fun HermesHeader(
         }
         // Usage, one tap away: the square fills with the plan in use.
         UsageButton(usage, onOpenUsage)
-        IconButton(onClick = { haptics.tick(); onNewChat() }) {
-            Icon(AppIcons.NewChat, contentDescription = "New chat", tint = TextSecondary, modifier = Modifier.size(21.dp))
-        }
+        Spacer(Modifier.width(6.dp))
+        HeaderRound(AppIcons.NewChat, "New chat") { haptics.tick(); onNewChat() }
+        Spacer(Modifier.width(8.dp))
         Box {
-            IconButton(onClick = { haptics.tick(); menuOpen = true }) {
-                Icon(AppIcons.Settings, contentDescription = "Chat options", tint = TextSecondary, modifier = Modifier.size(20.dp))
-            }
+            HeaderRound(AppIcons.Settings, "Chat options") { haptics.tick(); menuOpen = true }
             DropdownMenu(
                 expanded = menuOpen,
                 onDismissRequest = { menuOpen = false },
-                modifier = Modifier.background(Surface).widthIn(min = 220.dp),
+                modifier = Modifier.background(RoomNeutral).widthIn(min = 220.dp),
             ) {
                 if (hasThread) {
                     MenuRow("Rename", AppIcons.Edit) { menuOpen = false; onRename() }
@@ -237,7 +242,7 @@ internal fun HermesHeader(
                     MenuRow("Copy chat", AppIcons.Copy) { menuOpen = false; onCopyChat() }
                     MenuRow("Clear this chat", AppIcons.Refresh) { menuOpen = false; onClear() }
                     MenuRow("Delete this chat", AppIcons.Delete, danger = true) { menuOpen = false; onDelete() }
-                    HorizontalDivider(color = Border)
+                    Spacer(Modifier.height(8.dp))
                 }
                 MenuRow(if (followUp == "steer") "While working: Steer" else "While working: Queue", if (followUp == "steer") AppIcons.Bolt else AppIcons.ListChecks) { menuOpen = false; onToggleFollowUp() }
                 MenuRow("Git and pull requests", AppIcons.GitFork) { menuOpen = false; onOpenGit() }
@@ -249,6 +254,21 @@ internal fun HermesHeader(
                 }
             }
         }
+    }
+}
+
+/** A round button of the AI tab's header, as a page's bar draws its own. */
+@Composable
+internal fun HeaderRound(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(42.dp)
+            .clip(CircleShape)
+            .background(AiRoom)
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClickLabel = label, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = label, tint = TextPrimary, modifier = Modifier.size(19.dp))
     }
 }
 
@@ -264,11 +284,11 @@ internal fun MenuRow(label: String, icon: ImageVector, danger: Boolean = false, 
 @Composable
 internal fun RailHeading(label: String) {
     Text(
-        label.uppercase(),
-        color = TextTertiary,
-        fontSize = 10.sp,
-        fontWeight = FontWeight.Bold,
-        letterSpacing = 0.8.sp,
+        label,
+        style = HealthDisplay,
+        color = TextSecondary,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.SemiBold,
         modifier = Modifier.padding(start = 20.dp, top = 14.dp, bottom = 4.dp),
     )
 }
@@ -284,8 +304,8 @@ internal fun SearchBox(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(com.macrotracker.ui.theme.TileDark)
+            .clip(RoundedCornerShape(16.dp))
+            .background(AiRoom)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -622,8 +642,8 @@ private fun ModeTag(mode: HermesMode, onClear: () -> Unit) {
 internal fun AttachmentChip(attachment: HermesAttachment, onRemove: (() -> Unit)? = null) {
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(com.macrotracker.ui.theme.TileDark)
+            .clip(RoundedCornerShape(14.dp))
+            .background(AiRoom)
             .padding(start = 8.dp, end = if (onRemove != null) 4.dp else 8.dp, top = 5.dp, bottom = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -707,8 +727,8 @@ internal fun SkillPalette(entries: List<com.macrotracker.data.hermes.HermesSkill
             .padding(horizontal = 12.dp)
             .fillMaxWidth()
             .heightIn(max = 260.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(com.macrotracker.ui.theme.TileDark),
+            .clip(RoundedCornerShape(20.dp))
+            .background(AiRoom),
         contentPadding = PaddingValues(vertical = 6.dp),
     ) {
         var group: Boolean? = null
@@ -717,8 +737,8 @@ internal fun SkillPalette(entries: List<com.macrotracker.data.hermes.HermesSkill
                 group = e.fleet
                 item(key = "g-$i") {
                     Text(
-                        if (e.fleet) "YOUR FLEET" else "HERMES",
-                        color = TextTertiary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp,
+                        if (e.fleet) "Your fleet" else "Hermes",
+                        color = TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, style = HealthDisplay,
                         modifier = Modifier.padding(start = 14.dp, top = 8.dp, bottom = 2.dp),
                     )
                 }
@@ -745,8 +765,8 @@ internal fun SlashPalette(entries: List<SlashEntry>, onPick: (SlashEntry) -> Uni
             .padding(horizontal = 12.dp)
             .fillMaxWidth()
             .heightIn(max = 260.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(com.macrotracker.ui.theme.TileDark),
+            .clip(RoundedCornerShape(20.dp))
+            .background(AiRoom),
         contentPadding = PaddingValues(vertical = 6.dp),
     ) {
         var group: String? = null
@@ -757,11 +777,11 @@ internal fun SlashPalette(entries: List<SlashEntry>, onPick: (SlashEntry) -> Uni
                 val heading = e.group
                 item(key = "g-$i-$heading") {
                     Text(
-                        heading.uppercase(),
-                        color = TextTertiary,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.8.sp,
+                        heading,
+        style = HealthDisplay,
+                        color = TextSecondary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.padding(start = 14.dp, top = 8.dp, bottom = 2.dp),
                     )
                 }
@@ -794,21 +814,14 @@ internal fun RenameThreadDialog(current: String, onDismiss: () -> Unit, onRename
     var text by rememberSaveable { mutableStateOf(current) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Surface,
+        containerColor = AiSheet,
         title = { Text("Rename chat", color = TextPrimary) },
         text = {
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it.take(120) },
                 singleLine = true,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = AiAccent,
-                    unfocusedBorderColor = Border,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary,
-                    cursorColor = AiAccent,
-                ),
-            )
+                colors = roomFieldColors(), shape = FieldShape)
         },
         confirmButton = {
             TextButton(onClick = { onRename(text) }, enabled = text.isNotBlank()) {
@@ -832,7 +845,7 @@ internal fun ConfirmThreadDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Surface,
+        containerColor = AiSheet,
         title = { Text(title, color = TextPrimary) },
         text = { Text(body, color = TextSecondary, fontSize = 14.sp, lineHeight = 20.sp) },
         confirmButton = { TextButton(onClick = onConfirm) { Text(action, color = Error) } },
@@ -870,8 +883,8 @@ private fun SendControl(
         else -> SendMode.SEND
     }
     val lit = mode == SendMode.STOP || canSend
-    val bg by animateColorAsState(if (lit) TextPrimary else Color.White.copy(alpha = 0.10f), MacroMotion.colorTween(), label = "sendBg")
-    val fg = if (lit) com.macrotracker.ui.theme.Background else TextTertiary
+    val bg by animateColorAsState(if (lit) AiAccent else Color.White.copy(alpha = 0.10f), MacroMotion.colorTween(), label = "sendBg")
+    val fg = if (lit) Color(0xFF1A120C) else TextTertiary
     val label = when (mode) { SendMode.STEER -> "Steer"; SendMode.QUEUE -> "Queue"; else -> null }
     Box {
         Row(
@@ -906,10 +919,10 @@ private fun SendControl(
             }
             if (label != null) {
                 Spacer(Modifier.width(7.dp))
-                Text(label, color = fg, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text(label, style = HealthDisplay, color = fg, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             }
         }
-        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, modifier = Modifier.background(Surface).widthIn(min = 250.dp)) {
+        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, modifier = Modifier.background(RoomNeutral).widthIn(min = 250.dp)) {
             listOf(SendMode.STEER, SendMode.QUEUE).forEach { m ->
                 val current = m == mode
                 DropdownMenuItem(

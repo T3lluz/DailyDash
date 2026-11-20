@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens.settings
 
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.home.SubPage
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -124,21 +126,7 @@ fun ConnectionsSettingsScreen(
         viewModel.refreshConnectionStatus()
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Background)
-            .imePadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp)
-            .subScreenBottomPadding(),
-    ) {
-        SubScreenHeader(
-            title = "Connections",
-            subtitle = "Services linked to DailyDash",
-            onNavigateBack = onNavigateBack,
-        )
-        Spacer(modifier = Modifier.height(12.dp))
+    SubPage(title = "Connections", lede = "Services linked to DailyDash", onBack = onNavigateBack) {
 
         MacroCard(delayMs = 50) {
             ConnectionRow(
@@ -158,15 +146,15 @@ fun ConnectionsSettingsScreen(
                 Column {
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "Health Connect Metrics",
+                        text = "Health Connect metrics",
+                        style = HealthDisplay,
                         fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
                         color = TextPrimary,
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
                     MetricToggleRow(
                         iconRes = HealthMetric.HEART_RATE.iconRes(),
-                        name = "Heart Rate",
+                        name = "Heart rate",
                         enabled = heartRateEnabled,
                         onCheckedChange = {
                             haptics.tick()
@@ -175,7 +163,7 @@ fun ConnectionsSettingsScreen(
                     )
                     MetricToggleRow(
                         iconRes = HealthMetric.RESTING_HEART_RATE.iconRes(),
-                        name = "Resting Heart Rate",
+                        name = "Resting heart rate",
                         enabled = restingHeartRateEnabled,
                         onCheckedChange = {
                             haptics.tick()
@@ -184,7 +172,7 @@ fun ConnectionsSettingsScreen(
                     )
                     MetricToggleRow(
                         iconRes = HealthMetric.OXYGEN_SATURATION.iconRes(),
-                        name = "Oxygen Saturation",
+                        name = "Oxygen saturation",
                         enabled = oxygenSaturationEnabled,
                         onCheckedChange = {
                             haptics.tick()
@@ -193,7 +181,7 @@ fun ConnectionsSettingsScreen(
                     )
                     MetricToggleRow(
                         iconRes = HealthMetric.RESPIRATORY_RATE.iconRes(),
-                        name = "Respiratory Rate",
+                        name = "Respiratory rate",
                         enabled = respiratoryRateEnabled,
                         onCheckedChange = {
                             haptics.tick()
@@ -220,7 +208,7 @@ fun ConnectionsSettingsScreen(
                     )
                     MetricToggleRow(
                         iconRes = HealthMetric.FLOORS_CLIMBED.iconRes(),
-                        name = "Floors Climbed",
+                        name = "Floors climbed",
                         enabled = floorsClimbedEnabled,
                         onCheckedChange = {
                             haptics.tick()
@@ -229,7 +217,7 @@ fun ConnectionsSettingsScreen(
                     )
                     MetricToggleRow(
                         iconRes = HealthMetric.CALORIES.iconRes(),
-                        name = "Active Calories",
+                        name = "Active calories",
                         enabled = activeCaloriesEnabled,
                         onCheckedChange = {
                             haptics.tick()

@@ -141,7 +141,7 @@ fun ActivitySection(
         }
         trends()
         Spacer(modifier = Modifier.height(18.dp))
-        Hairline()
+        Spacer(Modifier.height(8.dp))
         val olderOnly = (state as? ActivitiesUiState.Success)?.olderOnly == true
         val count = (state as? ActivitiesUiState.Success)?.activities?.size ?: 0
         HealthGroupLabel(
@@ -332,7 +332,7 @@ private fun ActivitiesList(
     }
 
     if (canExpand) {
-        Hairline()
+        Spacer(Modifier.height(8.dp))
         ShowMoreRow(
             expanded = showAll,
             hiddenCount = workouts.size - CollapsedRowCount,
@@ -676,7 +676,7 @@ private fun WorkoutLaps(activity: HealthActivity) {
     Spacer(modifier = Modifier.height(6.dp))
     LapRow("Lap", "Distance", "Time", "Pace", header = true, style = numberStyle)
     shown.forEach { lap ->
-        Hairline()
+        Spacer(Modifier.height(8.dp))
         val km = lap.distanceKm?.takeIf { it > 0.0 }
         val pace = km?.let { formatPace(lap.duration.seconds / 60.0 / it)?.removeSuffix(" /km") }
         LapRow(

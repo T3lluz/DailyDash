@@ -38,7 +38,7 @@ booted() { [ "$(a shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 
 up() {
   if booted; then return; fi
   mkdir -p "$LOG"
-  local run="$SDK/emulator/emulator -avd $AVD -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -cores 2 -memory 2048"
+  local run="$SDK/emulator/emulator -avd $AVD -no-window -no-audio -no-boot-anim -gpu swangle_indirect -cores 2 -memory 2048"
   if id -nG | grep -qw kvm; then setsid $run >"$LOG/emu.log" 2>&1 &
   else setsid sg kvm -c "$run" >"$LOG/emu.log" 2>&1 & fi
   for _ in $(seq 100); do booted && break; sleep 3; done

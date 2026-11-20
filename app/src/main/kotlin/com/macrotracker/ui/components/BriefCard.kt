@@ -1,5 +1,14 @@
 package com.macrotracker.ui.components
 
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.shape.RoundedCornerShape
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.home.HomeTile
+import com.macrotracker.ui.screens.home.HomeTileLoading
+import com.macrotracker.ui.screens.home.HomeTilePrompt
+import com.macrotracker.ui.screens.home.HomeTone
+import com.macrotracker.ui.screens.home.PageRoom
+import com.macrotracker.ui.screens.home.TonePill
 import com.macrotracker.ui.viewmodel.IslandViewModel
 import com.macrotracker.ui.util.findActivity
 import com.macrotracker.data.dashboard.IslandItem
@@ -59,24 +68,56 @@ import com.macrotracker.ui.util.rememberClockFormatter
  * Until the afternoon it opens in full, as the web's island keeps it up until 14:00.
  */
 
-private val BriefAccent = ServerBrand
+private val BriefAccent = HomeTone.Briefing
 
+private val BriefZone: ZoneId = ZoneId.of("Europe/Oslo")
+
+/** Where today's briefing stands, worked out once for the tile and the page. */
+internal class BriefStanding(val brief: DailyBrief, val done: Boolean, val writing: Boolean, val failed: Boolean, val fresh: Boolean, val note: String)
+
+@Composable
+internal fun rememberBriefStanding(brief: DailyBrief): BriefStanding {
+    // The server writes it on Oslo's day, so "today" is Oslo's too.
+    val today = LocalDate.now(BriefZone).toString()
+    val fresh = brief.date == today
+    val done = fresh && brief.isDone
+    val writing = fresh && brief.isWriting
+    val failed = fresh && brief.isFailed
+    val clock = rememberClockFormatter()
+    val note = when {
+        done -> listOfNotNull(
+            brief.by,
+            brief.atSec?.let { Instant.ofEpochSecond(it).atZone(ZoneId.systemDefault()).format(clock) },
+        ).joinToString(", ")
+        writing -> "${brief.by} is writing it"
+        failed -> "${brief.by} did not finish"
+        else -> "Every morning at 06:45"
+    }
+    return BriefStanding(brief, done, writing, failed, fresh, note)
+}
+
+/** The island's own items, for "Right now": never stale by the evening as the morning's words are. */
+@Composable
+internal fun rememberBriefNow(): List<IslandItem> {
+    val activity = LocalContext.current.findActivity()
+    val island: IslandViewModel = hiltViewModel(viewModelStoreOwner = activity)
+    val islandItems by island.items.collectAsState()
+    return remember(islandItems) { islandItems.filterNot { it.isBrief || it.kind == "update" }.take(NOW_ROWS) }
+}
+
+/**
+ * The morning briefing as a Home tile: who wrote it and when, its lead, and what is on
+ * right now. A tap opens the page with the morning's notes in full.
+ */
 @Composable
 fun BriefCard(
     isVisible: Boolean,
     onOpenChat: () -> Unit,
+    onOpen: () -> Unit = {},
     viewModel: BriefViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
-    // The island's own items (the activity's view model, the same one the island reads):
-    // what is on now and next, the weather, a server in trouble, steps, mail. The morning's
-    // words go stale by the afternoon; these don't.
-    val activity = LocalContext.current.findActivity()
-    val island: IslandViewModel = hiltViewModel(viewModelStoreOwner = activity)
-    val islandItems by island.items.collectAsState()
-    val now = remember(islandItems) {
-        islandItems.filterNot { it.isBrief || it.kind == "update" }.take(NOW_ROWS)
-    }
+    val now = rememberBriefNow()
 
     // On every return to Home, and every 10 minutes while it is open: a phone left alive
     // overnight showed yesterday's briefing. While one is being written, look sooner, in
@@ -91,189 +132,162 @@ fun BriefCard(
     }
 
     WidgetStateSwitch(targetState = state, contentKey = { it::class }, label = "brief") { s ->
-    when (s) {
-        BriefUiState.Loading -> WidgetPlaceholderCard(
-            title = "Briefing",
-            icon = AppIcons.Sparkles,
-            accent = BriefAccent,
-            lines = 3,
-        )
-        is BriefUiState.Error -> MacroCard(borderColor = BriefAccent.copy(alpha = 0.16f)) {
-            CardHeader(title = "Briefing", icon = AppIcons.Sparkles, accent = BriefAccent, subtitle = "From your dashboard server")
-            Spacer(Modifier.height(12.dp))
-            HubErrorState(message = s.message, accent = BriefAccent, onRetry = viewModel::load)
+        when (s) {
+            BriefUiState.Loading -> HomeTileLoading("Briefing", BriefAccent, icon = AppIcons.Sparkles)
+            is BriefUiState.Error -> HomeTilePrompt(
+                title = "Briefing",
+                tone = BriefAccent,
+                icon = AppIcons.Sparkles,
+                message = s.message,
+                actionLabel = "Retry",
+                actionIcon = AppIcons.Refresh,
+                onAction = viewModel::load,
+            )
+            is BriefUiState.Ready -> {
+                val st = rememberBriefStanding(s.brief)
+                HomeTile(title = "Briefing", tone = BriefAccent, icon = AppIcons.Sparkles, meta = st.note, onOpen = onOpen) {
+                    BriefLead(st)
+                    if (st.done) NowRows(now.take(3))
+                    BriefErrorLine(s.error)
+                }
+            }
         }
-        is BriefUiState.Ready -> BriefContent(
-            brief = s.brief,
-            now = now,
-            error = s.error,
-            onRun = viewModel::run,
-            onChat = s.brief.thread?.let { id -> { viewModel.openThread(id); onOpenChat() } },
-        )
-    }
     }
 }
 
-private val BriefZone: ZoneId = ZoneId.of("Europe/Oslo")
+/** The briefing's lead, or where it stands when there is none yet. */
+@Composable
+private fun BriefLead(st: BriefStanding, big: Boolean = false) {
+    val brief = st.brief
+    when {
+        st.done -> MarkdownText(brief.lead, color = TextPrimary, fontSize = if (big) 19.sp else 16.sp, lineHeight = if (big) 27.sp else 23.sp)
+        st.writing -> Row(verticalAlignment = Alignment.CenterVertically) {
+            TypingDots(color = BriefAccent)
+            Spacer(Modifier.width(10.dp))
+            Text("${brief.by} is doing the morning round and reading your day", fontSize = 14.sp, color = TextSecondary)
+        }
+        else -> {
+            val old = brief.takeIf { !st.fresh && it.isDone }?.lead
+                ?: brief.prev?.text?.lineSequence()?.firstOrNull { it.isNotBlank() }
+            val line = when {
+                st.failed -> brief.error ?: "The briefing did not finish."
+                old != null -> "Last time: $old"
+                else -> "${brief.by} writes one each morning with the routine round."
+            }
+            MarkdownText(line, color = TextSecondary, fontSize = 14.sp)
+        }
+    }
+}
 
 @Composable
-private fun BriefContent(
-    brief: DailyBrief,
+private fun BriefErrorLine(error: String?) {
+    error ?: return
+    Row(modifier = Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(AppIcons.Warning, contentDescription = null, tint = Warning, modifier = Modifier.size(14.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(error, fontSize = 12.5.sp, color = TextSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** The briefing page's rooms: the lead with its two actions, right now, then each of the morning's parts. */
+internal fun LazyListScope.briefPageRooms(
+    st: BriefStanding,
     now: List<IslandItem>,
     error: String?,
     onRun: () -> Unit,
     onChat: (() -> Unit)?,
 ) {
-    val context = LocalContext.current
-    // The server writes it on Oslo's day, so "today" is Oslo's too.
-    val today = LocalDate.now(BriefZone).toString()
-    val fresh = brief.date == today
-    val done = fresh && brief.isDone
-    val writing = fresh && brief.isWriting
-    val failed = fresh && brief.isFailed
-    val clock = rememberClockFormatter()
-    val note = when {
-        done -> listOfNotNull(
-            brief.by,
-            brief.atSec?.let { Instant.ofEpochSecond(it).atZone(ZoneId.systemDefault()).format(clock) },
-        ).joinToString(" · ")
-        writing -> "${brief.by} is writing it"
-        failed -> "${brief.by} did not finish"
-        else -> "every morning at 06:45"
+    val brief = st.brief
+    item(key = "lead") {
+        PageRoom(BriefAccent) {
+            BriefLead(st, big = true)
+            BriefErrorLine(error)
+            Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                onChat?.let { TonePill("Ask ${brief.by}", BriefAccent, icon = AppIcons.Chat, primary = true, onClick = it) }
+                if (!st.writing) {
+                    TonePill(if (st.done) "Write it again" else "Write it now", BriefAccent, icon = AppIcons.Refresh, onClick = onRun)
+                }
+            }
+        }
     }
-    var expanded by rememberSaveable(brief.date) { mutableStateOf(LocalTime.now().hour < 14) }
-
-    MacroCard(borderColor = BriefAccent.copy(alpha = 0.16f)) {
-        CardHeader(title = "Briefing", icon = AppIcons.Sparkles, accent = BriefAccent, subtitle = note) {
-            onChat?.let { HubHeaderAction(AppIcons.Chat, "Ask ${brief.by}", it) }
-            HubHeaderAction(
-                icon = AppIcons.Refresh,
-                contentDescription = if (done) "Write the briefing again" else "Write the briefing now",
-                onClick = { if (!writing) onRun() },
-                tint = if (writing) TextPlaceholder else TextSecondary,
-            )
+    if (now.isNotEmpty()) {
+        item(key = "now") {
+            PageRoom(HomeTone.Weather, title = "Right now", icon = AppIcons.Clock) { NowRows(now, heading = false) }
         }
-        Spacer(Modifier.height(10.dp))
-
-        when {
-            done -> {
-                MarkdownText(brief.lead, color = TextPrimary, fontSize = 16.sp, lineHeight = 22.sp)
-                NowRows(now)
-                val body = brief.body
-                val sections = remember(brief.text) { brief.sections }
-                if (body.isNotBlank()) {
-                    WidgetExpandSection(visible = expanded) {
-                        if (sections.isNotEmpty()) {
-                            Column(modifier = Modifier.padding(top = 14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                                sections.forEach { BriefSectionBlock(it) }
-                            }
-                        } else {
-                            MarkdownText(body, modifier = Modifier.padding(top = 8.dp), fontSize = 13.sp)
-                        }
-                    }
-                    WidgetExpandFooter(
-                        expanded = expanded,
-                        onToggle = { expanded = !expanded },
-                        accentColor = BriefAccent,
-                        expandLabel = if (sections.isNotEmpty()) "Morning notes" else "Read all",
-                    )
+    }
+    if (st.done) {
+        val sections = brief.sections
+        if (sections.isNotEmpty()) {
+            sections.forEachIndexed { i, section ->
+                item(key = "section-$i") { BriefSectionRoom(section) }
+            }
+        } else if (brief.body.isNotBlank()) {
+            item(key = "body") {
+                PageRoom(BriefAccent, title = "Morning notes", icon = AppIcons.NotepadText) {
+                    MarkdownText(brief.body, fontSize = 15.sp, lineHeight = 22.sp)
                 }
-            }
-            writing -> Row(verticalAlignment = Alignment.CenterVertically) {
-                TypingDots(color = BriefAccent)
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    "${brief.by} is doing the morning round and reading your day",
-                    fontSize = 13.sp,
-                    color = TextSecondary,
-                )
-            }
-            else -> {
-                val old = brief.takeIf { !fresh && it.isDone }?.lead
-                    ?: brief.prev?.text?.lineSequence()?.firstOrNull { it.isNotBlank() }
-                val line = when {
-                    failed -> brief.error ?: "The briefing did not finish."
-                    old != null -> "Last time: $old"
-                    else -> "${brief.by} writes one each morning with the routine round."
-                }
-                MarkdownText(line, color = TextTertiary, fontSize = 13.sp)
-            }
-        }
-
-        error?.let {
-            Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(AppIcons.Warning, contentDescription = null, tint = Warning, modifier = Modifier.size(14.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(it, fontSize = 12.sp, color = TextSecondary, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
     }
 }
 
-private const val NOW_ROWS = 4
+private const val NOW_ROWS = 6
 
 /** "Right now", from the island: each thing with its icon, what it is, and when. */
 @Composable
-private fun NowRows(items: List<IslandItem>) {
+private fun NowRows(items: List<IslandItem>, heading: Boolean = true) {
     if (items.isEmpty()) return
-    Column(modifier = Modifier.padding(top = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("RIGHT NOW", fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp, color = TextTertiary)
+    Column(modifier = Modifier.padding(top = if (heading) 16.dp else 0.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         items.forEachIndexed { i, item ->
             val tone = toneColor(item)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    modifier = Modifier.size(30.dp).clip(CircleShape).background(tone.copy(alpha = 0.16f)),
+                    modifier = Modifier.size(36.dp).clip(RoundedCornerShape(16.dp)).background(tone.copy(alpha = 0.16f)),
                     contentAlignment = Alignment.Center,
                 ) {
                     // The island's own marks, moving as they do there.
                     AnimatedIslandIcon(
                         name = item.icon,
                         tint = tone,
-                        size = 15.dp,
+                        size = 17.dp,
                         urgent = item.tone == "needs" || item.tone == "live" || item.tone == "soon",
                         phase = i * 0.13f,
                         kind = item.kind,
                     )
                 }
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(item.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(item.title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (item.sub.isNotBlank()) {
-                        Text(item.sub, fontSize = 12.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(item.sub, fontSize = 13.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
                 if (item.end.isNotBlank()) {
                     Spacer(Modifier.width(8.dp))
-                    Text(item.end, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (item.tone == "live") tone else TextSecondary, maxLines = 1)
+                    Text(item.end, style = HealthDisplay, fontSize = 14.sp, color = if (item.tone == "live") tone else TextSecondary, maxLines = 1)
                 }
             }
         }
     }
 }
 
-/** One of the morning's parts: its heading in small capitals with an icon, then its points. */
+/** One of the morning's parts as a room of its own, in the colour of what it is about. */
 @Composable
-private fun BriefSectionBlock(section: DailyBrief.Section) {
+private fun BriefSectionRoom(section: DailyBrief.Section) {
     val key = section.title.lowercase(Locale.US)
-    val icon = when {
-        "server" in key || "host" in key -> AppIcons.Server
-        "today" in key || "calendar" in key || "day" in key -> AppIcons.Calendar
-        "weather" in key -> AppIcons.CloudRain
-        "head" in key || "watch" in key || "warn" in key -> AppIcons.Bell
-        "mail" in key -> AppIcons.Mail
-        else -> AppIcons.Sparkles
+    val (icon, tone) = when {
+        "server" in key || "host" in key -> AppIcons.Server to HomeTone.Servers
+        "today" in key || "calendar" in key || "day" in key -> AppIcons.Calendar to HomeTone.Calendar
+        "weather" in key -> AppIcons.CloudRain to HomeTone.Weather
+        "head" in key || "watch" in key || "warn" in key -> AppIcons.Bell to HomeTone.Mail
+        "mail" in key -> AppIcons.Mail to HomeTone.Mail
+        else -> AppIcons.Sparkles to BriefAccent
     }
-    Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = null, tint = BriefAccent, modifier = Modifier.size(13.dp))
-            Spacer(Modifier.width(6.dp))
-            Text(section.title.uppercase(Locale.getDefault()), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp, color = TextTertiary)
-        }
-        Column(modifier = Modifier.padding(top = 6.dp, start = 19.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+    PageRoom(tone, title = section.title.lowercase(Locale.getDefault()).replaceFirstChar { it.uppercase() }, icon = icon) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             section.items.forEach { line ->
-                MarkdownText(line, color = TextSecondary, fontSize = 13.sp, lineHeight = 18.sp)
+                MarkdownText(line, color = TextPrimary, fontSize = 15.sp, lineHeight = 21.sp)
             }
         }
     }
 }
-

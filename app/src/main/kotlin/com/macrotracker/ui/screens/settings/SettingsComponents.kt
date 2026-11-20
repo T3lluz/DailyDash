@@ -1,5 +1,13 @@
 package com.macrotracker.ui.screens.settings
 
+import com.macrotracker.ui.screens.home.roomSwitchColors
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import com.macrotracker.ui.screens.health.pressSink
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.home.WellFill
+import com.macrotracker.ui.screens.home.HomeTone
+import com.macrotracker.ui.screens.home.PageRoom
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -50,38 +58,26 @@ import com.macrotracker.ui.theme.AppIcons
 enum class SettingsStatusTone { PLAIN, GOOD, ATTENTION }
 
 /**
- * A titled group of [SettingsNavRow]s on one card, the rows split by hairlines that start
- * under the text so the icon tiles read as one column.
+ * A titled group of [SettingsNavRow]s: a room in [tone] with its name in the room's colour,
+ * the rows on it with no rules between them.
  */
 @Composable
 fun SettingsGroup(
     title: String,
     modifier: Modifier = Modifier,
+    tone: Color = HomeTone.Neutral,
     delayMs: Long = 50,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Column(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = title,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = TextSecondary,
-            modifier = Modifier.padding(start = 4.dp, top = 10.dp, bottom = 2.dp),
-        )
-        MacroCard(delayMs = delayMs) {
-            content()
-        }
+    PageRoom(tone = tone, modifier = modifier, title = title, flush = true) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp), content = content)
     }
 }
 
-/** The hairline between two rows of a [SettingsGroup]. */
+/** What used to be a hairline between two rows of a [SettingsGroup]: now only a little air. */
 @Composable
 fun SettingsRowDivider() {
-    HorizontalDivider(
-        color = Border,
-        thickness = 0.5.dp,
-        modifier = Modifier.padding(start = 54.dp, top = 2.dp, bottom = 2.dp),
-    )
+    Spacer(Modifier.height(2.dp))
 }
 
 /**
@@ -99,44 +95,46 @@ fun SettingsNavRow(
     statusTone: SettingsStatusTone = SettingsStatusTone.PLAIN,
 ) {
     val haptics = rememberHaptics()
+    val press = remember { MutableInteractionSource() }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .clickable {
+            .pressSink(press)
+            .clip(RoundedCornerShape(20.dp))
+            .clickable(interactionSource = press, indication = androidx.compose.material3.ripple()) {
                 haptics.click()
                 onClick()
             }
-            .padding(vertical = 10.dp, horizontal = 2.dp),
+            .padding(vertical = 10.dp, horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
-                .size(40.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(tint.copy(alpha = 0.14f)),
+                .size(44.dp)
+                .clip(RoundedCornerShape(15.dp))
+                .background(tint.copy(alpha = 0.16f)),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
+            Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(21.dp))
         }
-        Spacer(modifier = Modifier.width(12.dp))
+        Spacer(modifier = Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1)
+            Text(text = title, style = HealthDisplay, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = TextPrimary, maxLines = 1)
             Text(
                 text = summary,
-                fontSize = 12.sp,
+                fontSize = 12.5.sp,
                 color = TextSecondary,
-                lineHeight = 16.sp,
+                lineHeight = 17.sp,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 1.dp),
+                modifier = Modifier.padding(top = 2.dp),
             )
         }
         if (!status.isNullOrBlank()) {
             Spacer(modifier = Modifier.width(8.dp))
             SettingsStatus(status, statusTone)
         }
-        Spacer(modifier = Modifier.width(2.dp))
+        Spacer(modifier = Modifier.width(4.dp))
         Icon(
             imageVector = AppIcons.ChevronRight,
             contentDescription = null,
@@ -182,27 +180,27 @@ fun <T> SettingsSegmentedToggle(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(SurfaceChrome, RoundedCornerShape(12.dp))
-            .border(1.dp, Border, RoundedCornerShape(12.dp))
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+            .clip(CircleShape)
+            .background(WellFill)
+            .padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         options.forEach { (value, label) ->
             val isSelected = value == selected
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(9.dp))
-                    .background(if (isSelected) SurfaceElevated else Color.Transparent)
-                    .border(1.dp, if (isSelected) BorderStrong else Color.Transparent, RoundedCornerShape(9.dp))
+                    .clip(CircleShape)
+                    .background(if (isSelected) Color.White.copy(alpha = 0.13f) else Color.Transparent)
                     .clickable { onSelect(value) }
                     .padding(vertical = 10.dp, horizontal = 2.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
                     text = label,
-                    fontSize = 13.sp,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    style = HealthDisplay,
+                    fontSize = 13.5.sp,
+                    fontWeight = FontWeight.SemiBold,
                     color = if (isSelected) TextPrimary else TextSecondary,
                     maxLines = 1,
                 )
@@ -224,9 +222,9 @@ fun ConnectionRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(SurfaceChrome, RoundedCornerShape(10.dp))
-            .border(1.dp, Border, RoundedCornerShape(10.dp))
-            .padding(12.dp),
+            .clip(RoundedCornerShape(20.dp))
+            .background(WellFill)
+            .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
@@ -239,7 +237,8 @@ fun ConnectionRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = name,
-                fontSize = 15.sp,
+                style = HealthDisplay,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = TextPrimary,
             )
@@ -262,6 +261,7 @@ fun ConnectionRow(
             Switch(
                 checked = enabled,
                 onCheckedChange = onToggle,
+                colors = roomSwitchColors(),
             )
         }
     }
@@ -335,6 +335,7 @@ private fun MetricToggleRowContent(
         Switch(
             checked = enabled,
             onCheckedChange = onCheckedChange,
+            colors = roomSwitchColors(),
         )
     }
 }

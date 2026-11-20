@@ -1,5 +1,7 @@
 package com.macrotracker.ui.components
 
+import com.macrotracker.ui.screens.health.HealthDisplayFamily
+import com.macrotracker.ui.screens.health.HealthDisplay
 import com.macrotracker.ui.util.tookShort
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -1344,11 +1346,10 @@ private fun GroupLabel(group: CardGroup, entrance: Animatable<Float, *>) {
         else -> TextTertiary
     }
     Text(
-        group.label.uppercase(),
+        group.label, style = HealthDisplay,
         color = tint,
-        fontSize = 10.5.sp,
-        fontWeight = FontWeight.Bold,
-        letterSpacing = 0.9.sp,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.SemiBold,
         modifier = Modifier.entrance(entrance).padding(start = 10.dp, top = 2.dp, bottom = 6.dp),
     )
 }
@@ -1755,19 +1756,19 @@ private fun islandTextStyles(): IslandTextStyles {
     val base = LocalTextStyle.current
     return remember(base) {
         IslandTextStyles(
-            title = base.merge(TextStyle(fontSize = 13.5.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.1).sp)),
+            title = base.merge(TextStyle(fontFamily = HealthDisplayFamily, fontSize = 13.5.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.1).sp)),
             quietTitle = base.merge(TextStyle(fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)),
             sub = base.merge(TextStyle(fontSize = 12.sp)),
             end = base.merge(TextStyle(fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace)),
-            heroTitle = base.merge(TextStyle(fontSize = 15.sp, lineHeight = 19.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.15).sp)),
-            leadTitle = base.merge(TextStyle(fontSize = 16.sp, lineHeight = 20.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.2).sp)),
-            cellTitle = base.merge(TextStyle(fontSize = 14.5.sp, lineHeight = 18.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.15).sp)),
+            heroTitle = base.merge(TextStyle(fontFamily = HealthDisplayFamily, fontSize = 15.sp, lineHeight = 19.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.15).sp)),
+            leadTitle = base.merge(TextStyle(fontFamily = HealthDisplayFamily, fontSize = 16.sp, lineHeight = 20.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.2).sp)),
+            cellTitle = base.merge(TextStyle(fontFamily = HealthDisplayFamily, fontSize = 14.5.sp, lineHeight = 18.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.15).sp)),
             detail = base.merge(TextStyle(fontSize = 12.5.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium)),
             detailLead = base.merge(TextStyle(fontSize = 12.5.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold)),
             // Tabular figures, so a ticking value keeps its width.
-            factValue = base.merge(TextStyle(fontSize = 16.sp, lineHeight = 19.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum", letterSpacing = (-0.2).sp)),
+            factValue = base.merge(TextStyle(fontFamily = HealthDisplayFamily, fontSize = 16.sp, lineHeight = 19.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum", letterSpacing = (-0.2).sp)),
             factLabel = base.merge(TextStyle(fontSize = 10.5.sp, lineHeight = 13.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.2.sp)),
-            chip = base.merge(TextStyle(fontSize = 12.5.sp, fontWeight = FontWeight.Bold)),
+            chip = base.merge(TextStyle(fontFamily = HealthDisplayFamily, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)),
         )
     }
 }

@@ -1,5 +1,15 @@
 package com.macrotracker.ui.components
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import com.macrotracker.ui.screens.home.WellFill
+import com.macrotracker.ui.screens.health.HealthDisplay
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -52,16 +62,22 @@ fun ScreenHeader(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 title,
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold,
-                color = HeaderColor,
+                style = HealthDisplay,
+                fontWeight = FontWeight.Black,
+                fontSize = 40.sp,
+                lineHeight = 42.sp,
+                letterSpacing = (-1.2).sp,
+                color = TextPrimary,
             )
             if (subtitle != null) {
                 Text(
                     subtitle,
-                    fontSize = 16.sp,
+                    style = HealthDisplay,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 18.sp,
+                    lineHeight = 24.sp,
                     color = TextSecondary,
-                    modifier = Modifier.padding(top = 4.dp),
+                    modifier = Modifier.padding(top = 6.dp),
                 )
             }
         }
@@ -94,29 +110,31 @@ fun SubScreenHeader(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = 36.dp, bottom = 8.dp),
+            .padding(top = 12.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(
-            onClick = {
-                haptics.click()
-                onNavigateBack()
-            },
-            modifier = Modifier.size(40.dp),
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(WellFill)
+                .clickable(role = Role.Button) {
+                    haptics.click()
+                    onNavigateBack()
+                }
+                .semantics { contentDescription = "Back" },
+            contentAlignment = Alignment.Center,
         ) {
-            Icon(
-                imageVector = AppIcons.ArrowBack,
-                contentDescription = "Back",
-                tint = TextPrimary,
-            )
+            Icon(imageVector = AppIcons.ArrowBack, contentDescription = null, tint = TextPrimary, modifier = Modifier.size(20.dp))
         }
-        Spacer(modifier = Modifier.width(4.dp))
+        Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
-                fontSize = 26.sp,
-                fontWeight = FontWeight.Bold,
-                color = HeaderColor,
+                style = HealthDisplay,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Black,
+                color = TextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

@@ -173,7 +173,7 @@ private fun MdBlockView(block: MdBlock, look: MdLook, cursor: Boolean) {
                     alignment = Alignment.CenterStart,
                     modifier = Modifier
                         .heightIn(max = 280.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(16.dp))
                         .clickable(onClickLabel = "Open the picture") { openImage?.invoke(src, alt) },
                 )
             } else {
@@ -277,7 +277,7 @@ private fun TaskBox(checked: Boolean, look: MdLook) {
             .size(box)
             .clip(RoundedCornerShape(4.dp))
             .background(if (checked) ServerGood.copy(alpha = 0.18f) else Color.Transparent)
-            .border(1.dp, if (checked) ServerGood else Border, RoundedCornerShape(4.dp)),
+            .then(if (checked) Modifier.border(2.dp, ServerGood, RoundedCornerShape(4.dp)) else Modifier),
         contentAlignment = Alignment.Center,
     ) {
         if (checked) Icon(AppIcons.Check, contentDescription = "Done", tint = ServerGood, modifier = Modifier.size(box - 4.dp))
@@ -348,8 +348,7 @@ private fun MdTable(block: MdBlock.Table, look: MdLook) {
     val room = constraints.maxWidth
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(10.dp))
-            .border(1.dp, Border, RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(14.dp))
             .horizontalScroll(rememberScrollState()),
     ) {
         Layout(
@@ -463,9 +462,8 @@ private fun MdFence(block: MdBlock.Code, look: MdLook, cursor: Boolean) {
                         fontFamily = FontFamily.Monospace,
                         maxLines = 2,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
+                            .clip(RoundedCornerShape(10.dp))
                             .background(Background)
-                            .border(1.dp, Border, RoundedCornerShape(6.dp))
                             .padding(horizontal = 8.dp, vertical = 4.dp),
                     )
                 }
@@ -535,9 +533,8 @@ private fun CodeBlock(info: String, code: String, fontSize: TextUnit, cursor: Bo
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(Background)
-            .border(1.dp, Border, RoundedCornerShape(10.dp)),
     ) {
         Row(
             modifier = Modifier
@@ -565,7 +562,7 @@ private fun CodeBlock(info: String, code: String, fontSize: TextUnit, cursor: Bo
                 fontWeight = FontWeight.SemiBold,
                 color = if (copied) Primary else TextSecondary,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
+                    .clip(RoundedCornerShape(10.dp))
                     .clickable {
                         scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("Code", code))) }
                         copied = true

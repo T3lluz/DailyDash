@@ -1,5 +1,7 @@
 package com.macrotracker.ui.components
 
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.home.RoomNeutral
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.expandHorizontally
@@ -140,7 +142,7 @@ fun RingedAvatar(
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                name.trim().take(1).uppercase(),
+                name.trim().take(1).uppercase(), style = HealthDisplay,
                 fontSize = (size.value * 0.38f).sp,
                 fontWeight = FontWeight.Bold,
                 color = TextSecondary,
@@ -162,17 +164,16 @@ fun RingedAvatar(
 fun LiveTag(color: Color, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(4.dp)
     Text(
-        "LIVE",
+        "Live", style = HealthDisplay,
         fontSize = 8.sp,
         lineHeight = 10.sp,
-        fontWeight = FontWeight.Bold,
-        letterSpacing = 0.4.sp,
+        fontWeight = FontWeight.SemiBold,
         color = Color.White,
         maxLines = 1,
         modifier = modifier
             .clip(shape)
             .background(color)
-            .border(1.5.dp, Surface, shape)
+            .border(1.5.dp, com.macrotracker.ui.screens.health.LocalRoomColor.current, shape)
             .padding(horizontal = 5.dp, vertical = 1.5.dp),
     )
 }
@@ -441,7 +442,7 @@ private fun ChannelChip(
                     .padding(top = 2.dp, end = 2.dp)
                     .size(12.dp)
                     .clip(CircleShape)
-                    .background(Surface)
+                    .background(RoomNeutral)
                     .padding(2.dp)
                     .clip(CircleShape)
                     .background(markColor),
@@ -450,7 +451,7 @@ private fun ChannelChip(
         }
         FavouriteBadge(
             visible = favourite,
-            background = Surface,
+            background = com.macrotracker.ui.screens.health.LocalRoomColor.current,
             modifier = Modifier.align(Alignment.TopStart),
         )
     }

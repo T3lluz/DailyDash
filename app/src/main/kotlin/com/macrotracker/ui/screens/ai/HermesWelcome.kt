@@ -1,5 +1,13 @@
 package com.macrotracker.ui.screens.ai
 
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import com.macrotracker.ui.screens.health.pressSink
+import com.macrotracker.ui.screens.health.roomColor
+import com.macrotracker.ui.screens.home.HomeTone
+import com.macrotracker.ui.screens.health.HealthDisplay
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -58,40 +66,62 @@ private val Violet = Color(0xFFB48EAD)
 private data class Starter(val title: String, val sub: String, val icon: ImageVector, val tint: Color, val ask: String?, val goes: Int = 0)
 
 private val Starters = listOf(
-    Starter("Health check", "CPU, memory, disks, temps", AppIcons.HeartPulse, ServerGood, "Give the server a health check"),
-    Starter("Memory hogs", "What is using the most", AppIcons.Cpu, AiAccent, "What is using the most memory?"),
-    Starter("Failed services", "Units and containers", AppIcons.Siren, ServerCritical, "Any failed services or unhealthy containers?"),
-    Starter("Disk space", "What is filling the disk", AppIcons.HardDrive, ServerWarn, "What is filling up the disk?"),
-    Starter("Git", "Changes, branches, PRs", AppIcons.GitFork, Violet, null, goes = 1),
-    Starter("Files", "Browse the server", AppIcons.Folder, AiAccent, null, goes = 2),
+    Starter("Health check", "CPU, memory, disks, temps", AppIcons.HeartPulse, HomeTone.Servers, "Give the server a health check"),
+    Starter("Memory hogs", "What is using the most", AppIcons.Cpu, HomeTone.Upcoming, "What is using the most memory?"),
+    Starter("Failed services", "Units and containers", AppIcons.Siren, HomeTone.Mail, "Any failed services or unhealthy containers?"),
+    Starter("Disk space", "What is filling the disk", AppIcons.HardDrive, HomeTone.Weather, "What is filling up the disk?"),
+    Starter("Git", "Changes, branches, PRs", AppIcons.GitFork, HomeTone.GitHub, null, goes = 1),
+    Starter("Files", "Browse the server", AppIcons.Folder, HomeTone.Briefing, null, goes = 2),
 )
 
 @Composable
 internal fun HermesWelcome(onAsk: (String) -> Unit, onGit: () -> Unit, onFiles: () -> Unit, modifier: Modifier = Modifier) {
     val haptics = rememberHaptics()
-    Column(modifier.fillMaxWidth().padding(top = 18.dp, bottom = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        BotAvatar(HermesIdentity, size = 64.dp, live = false)
-        Spacer(Modifier.height(10.dp))
-        Text("What should we look at?", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
-        Text("Hermes can read the server, run commands and change files.", color = TextTertiary, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp, bottom = 18.dp))
-        Starters.chunked(2).forEach { pair ->
-            Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(modifier.fillMaxWidth().padding(top = 10.dp, bottom = 8.dp)) {
+        Row(Modifier.padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            BotAvatar(HermesIdentity, size = 56.dp, live = false)
+            Spacer(Modifier.width(14.dp))
+            Column {
+                Text("Hermes", color = AiAccent, style = HealthDisplay, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                Text("Reads the server, runs commands, changes files.", color = TextSecondary, fontSize = 13.sp, lineHeight = 17.sp)
+            }
+        }
+        Text(
+            "What should we look at?",
+            style = HealthDisplay,
+            fontWeight = FontWeight.Black,
+            fontSize = 34.sp,
+            lineHeight = 36.sp,
+            letterSpacing = (-1).sp,
+            color = TextPrimary,
+            modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 18.dp, bottom = 16.dp),
+        )
+        Starters.chunked(2).forEachIndexed { row, pair ->
+            Row(Modifier.fillMaxWidth().padding(bottom = 10.dp).height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 pair.forEach { st ->
+                    val press = remember { MutableInteractionSource() }
                     Column(
                         Modifier
                             .weight(1f)
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(TileDark)
-                            .clickable {
+                            .fillMaxHeight()
+                            .pressSink(press)
+                            .clip(RoundedCornerShape(26.dp))
+                            .background(roomColor(st.tint))
+                            .clickable(interactionSource = press, indication = androidx.compose.material3.ripple()) {
                                 haptics.click()
                                 when (st.goes) { 1 -> onGit(); 2 -> onFiles(); else -> onAsk(st.ask.orEmpty()) }
                             }
-                            .padding(14.dp),
+                            .padding(16.dp),
                     ) {
-                        Icon(st.icon, null, tint = TextSecondary, modifier = Modifier.size(22.dp))
-                        Spacer(Modifier.height(10.dp))
-                        Text(st.title, color = TextPrimary, fontSize = 14.5.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                        Text(st.sub, color = TextTertiary, fontSize = 11.5.sp, maxLines = 1)
+                        Box(
+                            Modifier.size(38.dp).clip(RoundedCornerShape(13.dp)).background(st.tint.copy(alpha = 0.18f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(st.icon, null, tint = st.tint, modifier = Modifier.size(20.dp))
+                        }
+                        Spacer(Modifier.height(14.dp))
+                        Text(st.title, color = TextPrimary, style = HealthDisplay, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, maxLines = 1)
+                        Text(st.sub, color = TextSecondary, fontSize = 12.5.sp, lineHeight = 16.sp, maxLines = 2)
                     }
                 }
             }

@@ -34,15 +34,7 @@ fun MacroTextField(
     colors: TextFieldColors? = null,
     visualTransformation: VisualTransformation = VisualTransformation.None,
 ) {
-    val defaultColors = OutlinedTextFieldDefaults.colors(
-        focusedContainerColor = Background,
-        unfocusedContainerColor = Background,
-        focusedBorderColor = Primary,
-        unfocusedBorderColor = Border,
-        focusedTextColor = TextPrimary,
-        unfocusedTextColor = TextPrimary,
-        cursorColor = Primary,
-    )
+    val defaultColors = com.macrotracker.ui.screens.home.roomFieldColors()
 
     OutlinedTextField(
         value = value,
@@ -53,7 +45,7 @@ fun MacroTextField(
             .padding(bottom = 8.dp),
         singleLine = singleLine,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-        shape = RoundedCornerShape(10.dp),
+        shape = com.macrotracker.ui.screens.home.FieldShape,
         textStyle = LocalTextStyle.current.copy(textAlign = textAlignment ?: TextAlign.Start),
         colors = colors ?: defaultColors,
         visualTransformation = visualTransformation,

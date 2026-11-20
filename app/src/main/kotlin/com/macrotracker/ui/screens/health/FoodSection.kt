@@ -147,7 +147,7 @@ fun FoodSection(
  * been burned (or what is left, until Health Connect says what was burned).
  */
 @Composable
-private fun FoodToday(summary: DailySummary, burned: Double?) {
+internal fun FoodToday(summary: DailySummary, burned: Double?) {
     val calProgress = if (summary.calorieGoal > 0) summary.totalCalories.toFloat() / summary.calorieGoal else 0f
     val protProgress = if (summary.proteinGoal > 0) summary.totalProtein.toFloat() / summary.proteinGoal else 0f
     val over = calProgress > 1.15f

@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens.onboarding
 
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.home.RoomNeutral
 import androidx.compose.animation.core.Animatable
 import com.macrotracker.ui.theme.MacroMotion
 import androidx.compose.foundation.Image
@@ -146,8 +148,9 @@ fun WelcomeScreen(onGetStarted: () -> Unit) {
         ) {
             Text(
                 text = "Welcome to DailyDash",
+                style = HealthDisplay,
                 fontSize = 28.sp,
-                fontWeight = FontWeight.ExtraBold,
+                fontWeight = FontWeight.Black,
                 color = TextPrimary,
                 textAlign = TextAlign.Center,
             )
@@ -212,15 +215,14 @@ private fun FeatureRow(feature: Feature) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Surface, RoundedCornerShape(14.dp))
-            .border(1.dp, Border, RoundedCornerShape(14.dp))
+            .background(RoomNeutral, RoundedCornerShape(14.dp))
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
                 .size(44.dp)
-                .background(Primary.copy(alpha = 0.12f), RoundedCornerShape(12.dp)),
+                .background(Primary.copy(alpha = 0.12f), RoundedCornerShape(16.dp)),
             contentAlignment = Alignment.Center,
         ) {
             Icon(

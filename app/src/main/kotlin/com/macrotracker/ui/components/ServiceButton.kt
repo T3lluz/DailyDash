@@ -31,7 +31,7 @@ fun ServiceButton(
     modifier: Modifier = Modifier,
     busy: Boolean = false,
     busyLabel: String = "Connecting…",
-    shape: Shape = RoundedCornerShape(10.dp),
+    shape: Shape = RoundedCornerShape(14.dp),
 ) {
     Button(
         onClick = onClick,

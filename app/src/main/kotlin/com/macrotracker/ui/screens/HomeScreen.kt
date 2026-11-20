@@ -1,5 +1,20 @@
 package com.macrotracker.ui.screens
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.home.HomeTilePrompt
+import com.macrotracker.ui.screens.home.HomeTone
+import com.macrotracker.ui.screens.home.LocalTileDragging
+import com.macrotracker.ui.screens.home.RoundAction
+import com.macrotracker.ui.theme.TextPrimary
+import com.macrotracker.ui.theme.TextSecondary
 import android.Manifest
 import com.macrotracker.ui.navigation.CardFocus
 import com.macrotracker.ui.util.LaunchedWhileResumed
@@ -39,7 +54,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.macrotracker.ui.components.WidgetEditor
-import com.macrotracker.ui.components.WidgetPromptCard
 import com.macrotracker.ui.components.RipplePullToRefreshBox
 import com.macrotracker.ui.components.rippleAnchor
 import com.macrotracker.ui.components.draggableWidgetItems
@@ -75,6 +89,9 @@ fun HomeScreen(
     onOpenHermes: () -> Unit = {},
     onOpenConsole: () -> Unit = {},
     onOpenMealChat: () -> Unit = {},
+    onScanLabel: () -> Unit = {},
+    onOpenFood: () -> Unit = {},
+    onOpenPage: (String) -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel(),
     youtubeViewModel: YouTubeViewModel = hiltViewModel(),
     twitchViewModel: TwitchViewModel = hiltViewModel(),
@@ -87,9 +104,6 @@ fun HomeScreen(
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val homeWidgetOrder by viewModel.homeWidgetOrder.collectAsState()
 
-    var quickFood by rememberSaveable { mutableStateOf("") }
-    var quickCalories by rememberSaveable { mutableStateOf("") }
-    var quickProtein by rememberSaveable { mutableStateOf("") }
     var isEditMode by rememberSaveable { mutableStateOf(false) }
     val haptics = rememberHaptics()
     val scope = rememberCoroutineScope()
@@ -154,7 +168,7 @@ fun HomeScreen(
     var today by remember { mutableStateOf(LocalDate.now()) }
     var greeting by remember { mutableStateOf(greetingNow()) }
     val todayFormatted = remember(today) {
-        today.format(DateTimeFormatter.ofPattern("EEEE, MMM d"))
+        today.format(DateTimeFormatter.ofPattern("EEEE d MMMM"))
     }
 
     val parsedConfigs = remember(homeWidgetOrder) {
@@ -272,8 +286,13 @@ fun HomeScreen(
             val id = focusCard ?: return@LaunchedEffect
             val index = visibleConfigs.indexOfFirst { it.id == id }
             // The header is the list's first item.
-            if (index >= 0 && !isEditMode) listState.animateScrollToItem(index + 1)
-            else if (id.isEmpty()) listState.animateScrollToItem(0)
+            if (index >= 0 && !isEditMode) {
+                listState.animateScrollToItem(index + 1)
+                // What the island pointed at has its own page now: land on the tile, then open it.
+                if (id in HomePagedTiles) onOpenPage(id)
+            } else if (id.isEmpty()) {
+                listState.animateScrollToItem(0)
+            }
             CardFocus.homeDone()
         }
         val tickersPaused by remember { derivedStateOf { listState.isScrollInProgress } }
@@ -320,6 +339,21 @@ fun HomeScreen(
             }
         }
         val hasLocationPermissionFn = remember(context) { { hasLocationPermission() } }
+        val tileActions = remember(onOpenPage, onNavigateToHealth, onOpenFood, onNavigateToServers, onOpenHermes, onOpenConsole, onOpenMealChat, onScanLabel) {
+            HomeTileActions(
+                openPage = onOpenPage,
+                openHealth = onNavigateToHealth,
+                openFood = onOpenFood,
+                openServers = onNavigateToServers,
+                openHermes = onOpenHermes,
+                openConsole = onOpenConsole,
+                openMealChat = onOpenMealChat,
+                scanLabel = onScanLabel,
+                requestLocation = onRequestLocationPermission,
+                requestCalendar = onRequestCalendarPermission,
+                hasLocation = hasLocationPermissionFn,
+            )
+        }
 
         CompositionLocalProvider(LocalTickersPaused provides tickersPaused) {
         LazyColumn(
@@ -337,19 +371,12 @@ fun HomeScreen(
         ) {
             item(key = "header") {
                 ScreenHeaderSpacer()
-                ScreenHeader(
-                    title = greeting,
-                    subtitle = todayFormatted,
+                HomeHeader(
+                    greeting = greeting,
+                    date = todayFormatted,
+                    editing = isEditMode,
+                    onEdit = { isEditMode = !isEditMode },
                     modifier = Modifier.rippleAnchor(rippleOrigin),
-                    trailing = {
-                        IconButton(onClick = { haptics.tick(); isEditMode = !isEditMode }) {
-                            Icon(
-                                if (isEditMode) AppIcons.Check else AppIcons.Edit,
-                                contentDescription = if (isEditMode) "Done" else "Edit widgets",
-                                tint = Primary,
-                            )
-                        }
-                    },
                 )
                 Spacer(modifier = Modifier.height(20.dp))
             }
@@ -367,12 +394,12 @@ fun HomeScreen(
             } else if (visibleConfigs.isEmpty()) {
                 // Every card hidden left the page blank under the greeting.
                 item(key = "empty") {
-                    WidgetPromptCard(
+                    HomeTilePrompt(
                         title = "Nothing on Home yet",
-                        message = "Pick the cards you want here: weather, calendar, F1, servers and more.",
-                        actionLabel = "Edit widgets",
+                        tone = HomeTone.Neutral,
+                        message = "Pick the tiles you want here: weather, calendar, F1, servers and more.",
+                        actionLabel = "Pick tiles",
                         actionIcon = AppIcons.Edit,
-                        accent = Primary,
                         onAction = { isEditMode = true },
                     )
                 }
@@ -381,29 +408,56 @@ fun HomeScreen(
                     state = dragState,
                     itemKey = { it.id },
                     haptics = haptics,
-                ) { _, config, _ ->
-                    HomeWidgetItem(
-                        config = config,
-                        isVisible = config.id in visibleWidgetIds,
-                        viewModel = viewModel,
-                        onNavigateToHealth = onNavigateToHealth,
-                        onNavigateToServers = onNavigateToServers,
-                        onOpenHermes = onOpenHermes,
-                        onOpenConsole = onOpenConsole,
-                        onOpenMealChat = onOpenMealChat,
-                        onRequestLocationPermission = onRequestLocationPermission,
-                        onRequestCalendarPermission = onRequestCalendarPermission,
-                        hasLocationPermission = hasLocationPermissionFn,
-                        quickFood = quickFood,
-                        onQuickFoodChange = { quickFood = it },
-                        quickCalories = quickCalories,
-                        onQuickCaloriesChange = { quickCalories = it },
-                        quickProtein = quickProtein,
-                        onQuickProteinChange = { quickProtein = it },
-                    )
+                ) { _, config, isDragging ->
+                    CompositionLocalProvider(LocalTileDragging provides { isDragging || dragState.isDragActive }) {
+                        HomeWidgetItem(
+                            config = config,
+                            isVisible = config.id in visibleWidgetIds,
+                            viewModel = viewModel,
+                            actions = tileActions,
+                        )
+                    }
                 }
             }
         }
         }
+    }
+}
+
+/** Tiles that open a page of their own; the rest lead to a tab or a screen that already exists. */
+private val HomePagedTiles = setOf("WEATHER", "CALENDAR", "BRIEFING", "MAIL", "UPCOMING", "F1", "GITHUB", "YOUTUBE", "TWITCH")
+
+/** Home's head, as the dashboard writes a page's: the greeting large in the display face, the date under it. */
+@Composable
+private fun HomeHeader(greeting: String, date: String, editing: Boolean, onEdit: () -> Unit, modifier: Modifier = Modifier) {
+    Row(modifier = modifier.fillMaxWidth().padding(start = 4.dp, end = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                greeting,
+                style = HealthDisplay,
+                fontWeight = FontWeight.Black,
+                fontSize = 38.sp,
+                lineHeight = 40.sp,
+                letterSpacing = (-1.1).sp,
+                color = TextPrimary,
+                maxLines = 1,
+            )
+            Text(
+                date,
+                style = HealthDisplay,
+                fontWeight = FontWeight.Medium,
+                fontSize = 18.sp,
+                color = TextSecondary,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+        RoundAction(
+            icon = if (editing) AppIcons.Check else AppIcons.Edit,
+            label = if (editing) "Done" else "Pick and order tiles",
+            tone = if (editing) HomeTone.Servers else HomeTone.Neutral,
+            size = 42.dp,
+            filled = editing,
+            onClick = onEdit,
+        )
     }
 }

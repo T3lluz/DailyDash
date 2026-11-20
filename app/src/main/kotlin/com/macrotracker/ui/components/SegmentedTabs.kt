@@ -79,26 +79,24 @@ fun SegmentedTabs(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(Surface)
-            .border(1.dp, Border, RoundedCornerShape(14.dp))
-            .padding(4.dp),
+            .clip(RoundedCornerShape(if (stacked) 20.dp else 50.dp))
+            .background(Color.White.copy(alpha = 0.06f))
+            .padding(3.dp),
     ) {
         Layout(
             content = {
                 // Slot 0 is the indicator; the rest are the segments.
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(11.dp))
-                        .background(accent.copy(alpha = 0.20f))
-                        .border(1.dp, accent.copy(alpha = 0.45f), RoundedCornerShape(11.dp)),
+                        .clip(RoundedCornerShape(if (stacked) 17.dp else 50.dp))
+                        .background(accent.copy(alpha = 0.28f)),
                 )
                 tabs.forEachIndexed { index, tab ->
                     val isSelected = index == selectedIndex
                     if (stacked) {
                         Column(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(11.dp))
+                                .clip(RoundedCornerShape(17.dp))
                                 .clickable { onSelect(tab.key) }
                                 .padding(vertical = 7.dp, horizontal = 2.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -124,9 +122,9 @@ fun SegmentedTabs(
                     } else {
                         Row(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(11.dp))
+                                .clip(RoundedCornerShape(50.dp))
                                 .clickable { onSelect(tab.key) }
-                                .padding(vertical = if (compact) 7.dp else 10.dp, horizontal = 8.dp),
+                                .padding(vertical = if (compact) 8.dp else 10.dp, horizontal = 8.dp),
                             horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {

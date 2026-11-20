@@ -1,5 +1,10 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.home.RoomNeutral
+import com.macrotracker.ui.screens.home.WellFill
+import com.macrotracker.ui.theme.Background
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -117,18 +122,27 @@ data class BotIdentity(
 
 /** Chat radii: square off the corner nearest the speaker, like a tail. */
 val BotBubbleShape =
-    RoundedCornerShape(topStart = 6.dp, topEnd = 18.dp, bottomEnd = 18.dp, bottomStart = 18.dp)
+    RoundedCornerShape(topStart = 8.dp, topEnd = 24.dp, bottomEnd = 24.dp, bottomStart = 24.dp)
 val UserBubbleShape =
-    RoundedCornerShape(topStart = 18.dp, topEnd = 6.dp, bottomEnd = 18.dp, bottomStart = 18.dp)
+    RoundedCornerShape(topStart = 24.dp, topEnd = 8.dp, bottomEnd = 24.dp, bottomStart = 24.dp)
 val ChatPillShape = RoundedCornerShape(999.dp)
-internal val ComposerShape = RoundedCornerShape(22.dp)
+internal val ComposerShape = RoundedCornerShape(28.dp)
 
-/** What you said: a quiet block a little lighter than the page, as T3 Code and Claude's apps set it. */
-private val UserBubbleFill = Color.White.copy(alpha = 0.09f)
+/** What you said: a room of its own, warmer than the page, the way Home's rooms carry a colour. */
+private val UserBubbleFill = lerp(Background, AiAccent, 0.15f)
 
 /** The accent-tinted bubble the Hermes chat draws a person's message in. */
-private val AccentBubbleFill = AiAccent.copy(alpha = 0.16f)
+private val AccentBubbleFill = lerp(Background, AiAccent, 0.22f)
 private val ComposerSendShape = RoundedCornerShape(999.dp)
+
+/** A room in the AI tab: the page's dark with a little of its orange in it, as Home's rooms carry their subject's colour. */
+val AiRoom: Color = lerp(Background, AiAccent, 0.10f)
+
+/** The AI tab's raised room, for the open or picked one of several. */
+val AiRoomHi: Color = lerp(Background, AiAccent, 0.18f)
+
+/** The AI tab's sheets: darker than a room, still warm. */
+val AiSheet: Color = lerp(Background, AiAccent, 0.05f)
 
 /** Pill nav = 64dp + 8dp bottom pad; keep a little air above it. */
 internal val PillNavClearance = 80.dp
@@ -334,7 +348,7 @@ fun BotAvatar(
         modifier = modifier
             .size(size)
             .clip(CircleShape)
-            .background(Surface)
+            .background(RoomNeutral)
             .border(1.5.dp, ring, CircleShape)
             .padding(size * 0.08f),
         contentAlignment = Alignment.Center,
@@ -352,7 +366,7 @@ fun BotAvatar(
                 modifier = Modifier.size(size * 0.5f),
             )
             else -> Text(
-                text = identity.name.take(1),
+                text = identity.name.take(1), style = HealthDisplay,
                 color = identity.accent,
                 fontSize = (size.value * 0.42f).sp,
                 fontWeight = FontWeight.Bold,
@@ -408,12 +422,7 @@ fun BotBubble(
             Box(
                 modifier = Modifier
                     .clip(BotBubbleShape)
-                    .background(if (isError) Error.copy(alpha = 0.10f) else Surface)
-                    .border(
-                        1.dp,
-                        if (isError) Error.copy(alpha = 0.35f) else Border,
-                        BotBubbleShape,
-                    )
+                    .background(if (isError) Error.copy(alpha = 0.14f) else AiRoom)
                     .padding(horizontal = 14.dp, vertical = 11.dp)
                     // Announce the finished reply once rather than on every token.
                     .semantics {
@@ -458,7 +467,6 @@ fun UserBubble(text: String, onLongPress: (() -> Unit)? = null, onTap: (() -> Un
                 .widthIn(max = 300.dp)
                 .clip(UserBubbleShape)
                 .background(if (accent) AccentBubbleFill else UserBubbleFill)
-                .then(if (accent) Modifier.border(1.dp, AiAccent.copy(alpha = 0.28f), UserBubbleShape) else Modifier)
                 .then(
                     if (onLongPress != null) {
                         // Held (and tapped, where a tap shows something): no ripple and no button role.
@@ -489,8 +497,7 @@ fun TypingBubble(identity: BotIdentity, label: String, onCancel: () -> Unit) {
         Row(
             modifier = Modifier
                 .clip(BotBubbleShape)
-                .background(Surface)
-                .border(1.dp, Border, BotBubbleShape)
+                .background(AiRoom)
                 .padding(horizontal = 14.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -602,8 +609,7 @@ fun SmallActionChip(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .clip(ChatPillShape)
-            .background(Surface)
-            .border(1.dp, Border, ChatPillShape)
+            .background(WellFill)
             .clickable(onClick = onClick)
             .padding(horizontal = 11.dp, vertical = 6.dp),
     ) {
@@ -628,8 +634,7 @@ fun ChatStarters(starters: List<String>, onPick: (String) -> Unit) {
                 color = TextPrimary,
                 modifier = Modifier
                     .clip(ChatPillShape)
-                    .background(Surface)
-                    .border(1.dp, Border, ChatPillShape)
+                    .background(AiRoom)
                     .clickable { onPick(starter) }
                     .padding(horizontal = 12.dp, vertical = 8.dp),
             )

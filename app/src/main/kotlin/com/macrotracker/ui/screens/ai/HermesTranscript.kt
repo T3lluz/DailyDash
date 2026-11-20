@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.screens.health.HealthDisplay
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -81,7 +83,7 @@ private val IconSlot = 24.dp
 /** An open group shows this much of its steps and scrolls the rest (T3's `WORK_GROUP_MAX_HEIGHT`). */
 private val GroupMaxHeight = 256.dp
 private val DetailMaxHeight = 240.dp
-private val RowShape = RoundedCornerShape(6.dp)
+private val RowShape = RoundedCornerShape(14.dp)
 private val Mono = FontFamily.Monospace
 
 private fun iconOf(kind: StepKind): ImageVector = when (kind) {
@@ -125,18 +127,16 @@ internal fun FoldRow(row: FeedRow.Fold, open: Boolean, onToggle: () -> Unit) {
     val label = row.ms?.let { "Worked for ${tookShort(it)}" } ?: "Worked"
     Row(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 4.dp)
-            .drawBehind {
-                drawLine(Border, Offset(0f, size.height), Offset(size.width, size.height), strokeWidth = 1.dp.toPx())
-            }
+            .padding(top = 2.dp, bottom = 8.dp)
+            .clip(CircleShape)
+            .background(if (open) AiRoomHi else AiRoom)
             .clickable(role = Role.Button, onClickLabel = if (open) "Hide the work" else "Show the work", onClick = onToggle)
-            .heightIn(min = 44.dp)
-            .padding(horizontal = 4.dp)
+            .heightIn(min = 38.dp)
+            .padding(horizontal = 14.dp)
             .semantics { stateDescription = if (open) "Expanded" else "Collapsed" },
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, color = TextSecondary, fontSize = 14.sp, fontWeight = FontWeight.Medium, style = TabularNumbers, maxLines = 1)
+        Text(label, color = TextSecondary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, style = HealthDisplay, maxLines = 1)
         Spacer(Modifier.width(8.dp))
         Chevron(open, Modifier.size(15.dp), right = true)
     }
@@ -388,7 +388,7 @@ internal fun AssistantMessage(row: FeedRow.Message, actions: AnswerActions) {
         if (actions.planMode && actions.idle && last) {
             // Plan mode wrote a plan: build it, which leaves Plan and says so to Hermes
             Row(
-                modifier = Modifier.padding(top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(TileDark).padding(start = 14.dp, end = 6.dp),
+                modifier = Modifier.padding(top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(AiRoom).padding(start = 14.dp, end = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(AppIcons.ListChecks, null, tint = AiAccent, modifier = Modifier.size(16.dp))
@@ -434,7 +434,7 @@ private fun ChangesStat(changes: List<HermesFileChange>, onOpen: () -> Unit) {
         modifier = Modifier
             .padding(top = 8.dp)
             .graphicsLayer { translationX = -6.dp.toPx() }
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(14.dp))
             .clickable(role = Role.Button, onClickLabel = "Review the changes") { haptics.tick(); onOpen() }
             .heightIn(min = 40.dp)
             .padding(horizontal = 6.dp)

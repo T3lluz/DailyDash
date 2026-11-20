@@ -150,7 +150,7 @@ class HermesLiveFeed @Inject constructor(
                 val live = remote[id]
                 if (live != null && title.isNotBlank()) tracker.progress(id, title, live, HermesFollower.FEED)
             }
-            "stats", "history", "f1", "github" -> _files.tryEmit(event.optString("ch"))
+            "stats", "history", "f1", "f1live", "github" -> _files.tryEmit(event.optString("ch"))
         }
         _events.tryEmit(event)
     }

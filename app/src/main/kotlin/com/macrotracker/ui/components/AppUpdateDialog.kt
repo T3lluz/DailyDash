@@ -1,5 +1,8 @@
 package com.macrotracker.ui.components
 
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.home.SheetColor
+import com.macrotracker.ui.screens.home.WellFill
 import androidx.compose.animation.AnimatedContent
 import com.macrotracker.data.update.prettyVersion
 import androidx.compose.foundation.background
@@ -79,7 +82,7 @@ fun AppUpdateSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = Surface,
+        containerColor = SheetColor,
     ) {
         Column(
             modifier = Modifier
@@ -101,8 +104,9 @@ fun AppUpdateSheet(
             Spacer(Modifier.height(10.dp))
             Text(
                 title(state),
+                style = HealthDisplay,
                 fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.Black,
                 color = TextPrimary,
             )
             Spacer(Modifier.height(2.dp))
@@ -129,7 +133,7 @@ fun AppUpdateSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
-                    .background(SurfaceChrome)
+                    .background(WellFill)
                     .heightIn(max = 260.dp)
                     .verticalScroll(rememberScrollState())
                     .padding(14.dp),
@@ -256,7 +260,7 @@ fun AppUpdateSheet(
                 Spacer(Modifier.height(4.dp))
                 Row(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(12.dp))
                         .clickable {
                             haptics.click()
                             runCatching { uriHandler.openUri(info.htmlUrl) }

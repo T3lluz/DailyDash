@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.theme.AiAccent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.selection.selectable
@@ -88,11 +90,11 @@ internal fun UsageCard(
     action: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    MacroCard {
+    MacroCard(tone = AiAccent) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, tint = TextSecondary, modifier = Modifier.size(16.dp))
+            Icon(icon, null, tint = AiAccent, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
-            Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+            Text(title, style = HealthDisplay, fontSize = 19.sp, color = AiAccent, maxLines = 1)
             Spacer(Modifier.weight(1f))
             note?.let { Text(it, fontSize = 11.5.sp, color = TextTertiary, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             action?.invoke()
@@ -106,14 +108,14 @@ internal fun UsageCard(
 internal fun UsageChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Text(
         label,
-        fontSize = 13.sp,
+        style = HealthDisplay,
+        fontSize = 13.5.sp,
         fontWeight = FontWeight.SemiBold,
         color = if (selected) TextPrimary else TextSecondary,
         maxLines = 1,
         modifier = Modifier
             .clip(RoundedCornerShape(50))
-            .background(if (selected) SelectedFill else Color.Transparent)
-            .border(1.dp, if (selected) Color.Transparent else Border, RoundedCornerShape(50))
+            .background(if (selected) AiAccent.copy(alpha = 0.26f) else Color.Transparent)
             .selectable(selected = selected, role = Role.Tab, onClick = onClick)
             .padding(horizontal = 13.dp, vertical = 7.dp),
     )
@@ -123,7 +125,7 @@ internal fun UsageChip(label: String, selected: Boolean, onClick: () -> Unit) {
 @Composable
 internal fun <T> MiniSwitch(options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit) {
     Row(
-        Modifier.clip(RoundedCornerShape(9.dp)).background(Color.White.copy(alpha = 0.05f)).padding(2.dp),
+        Modifier.clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.05f)).padding(2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         options.forEach { (key, label) ->
@@ -134,7 +136,7 @@ internal fun <T> MiniSwitch(options: List<Pair<T, String>>, selected: T, onSelec
                 fontWeight = FontWeight.SemiBold,
                 color = if (on) TextPrimary else TextTertiary,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(7.dp))
+                    .clip(RoundedCornerShape(14.dp))
                     .background(if (on) Color.White.copy(alpha = 0.10f) else Color.Transparent)
                     .selectable(selected = on, role = Role.Tab) { onSelect(key) }
                     .padding(horizontal = 9.dp, vertical = 5.dp),
@@ -182,7 +184,7 @@ internal fun UsageMark(name: String, size: Dp = 22.dp, modelId: String = "") {
     } else {
         Box(Modifier.size(size).clip(CircleShape).background(Color.White.copy(alpha = 0.07f)), contentAlignment = Alignment.Center) {
             Text(
-                name.firstOrNull { it.isLetterOrDigit() }?.uppercase() ?: "?",
+                name.firstOrNull { it.isLetterOrDigit() }?.uppercase() ?: "?", style = HealthDisplay,
                 fontSize = (size.value * 0.45f).sp, fontWeight = FontWeight.Bold, color = TextSecondary,
             )
         }

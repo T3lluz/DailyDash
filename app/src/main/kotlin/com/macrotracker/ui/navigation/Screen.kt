@@ -55,6 +55,11 @@ object SubScreenRoutes {
     const val USAGE = "usage"
 
 
+    /** The full page a Home tile opens (HomePageHost), by the tile's id. */
+    const val HOME_PAGE_PATTERN = "home_page/{id}"
+
+    fun homePage(id: String): String = "home_page/$id"
+
     /** The Tilesmith studio: a saved design, a starter, or a request for the AI (TilesmithStudioScreen). */
     const val TILESMITH = "tilesmith"
     const val TILESMITH_PATTERN = "tilesmith?design={design}&prompt={prompt}&starter={starter}"

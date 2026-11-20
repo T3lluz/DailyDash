@@ -1,5 +1,12 @@
 package com.macrotracker.ui.components
 
+import androidx.compose.ui.text.style.TextAlign
+import java.time.temporal.ChronoUnit
+import androidx.compose.foundation.lazy.LazyListScope
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.home.HomeTone
+import com.macrotracker.ui.screens.home.PageRoom
+import com.macrotracker.ui.viewmodel.CalendarUiState
 import android.content.ContentUris
 import com.macrotracker.ui.util.LaunchedWhileResumed
 import android.content.Context
@@ -53,7 +60,6 @@ import com.macrotracker.data.calendar.CalendarEvent
 import com.macrotracker.data.calendar.CalendarRepository
 import com.macrotracker.ui.theme.AppIcons
 import com.macrotracker.ui.theme.Border
-import com.macrotracker.ui.theme.CalendarBrand
 import com.macrotracker.ui.theme.Surface
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
@@ -98,13 +104,33 @@ private fun CalendarEvent.displayDate(): LocalDate {
 
 private val TimeFmt: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
+/** The events still ahead, soonest first; re-filtered each minute so a meeting that ends drops off. */
 @Composable
-internal fun CalendarContent(
-    events: List<CalendarEvent>,
-    lastUpdatedAt: Instant?,
-    expanded: Boolean,
-    onToggleExpanded: () -> Unit,
-) {
+internal fun rememberAheadEvents(state: CalendarUiState.Success): List<CalendarEvent> {
+    val minute by rememberMinuteClock()
+    return remember(state.events, state.upcomingEvents, minute / 60_000L) {
+        val now = LocalDateTime.now()
+        // A recurring event's instances share one id, so an instance is its id and its start.
+        (state.events + state.upcomingEvents)
+            .distinctBy { it.id to it.beginMillis }
+            .filter { it.endTime.isAfter(now) }
+            .sortedWith(agendaOrder)
+    }
+}
+
+/** "2 today, next in 40 min": the tile's and the page's one line on what is ahead. */
+@Composable
+internal fun calendarSummary(events: List<CalendarEvent>): String {
+    val now by rememberMinuteClock()
+    return remember(events, now) { summaryLine(events, now) }
+}
+
+/**
+ * What is ahead at a glance, on the tile and at the top of the page: a strip of days to
+ * pick from and the picked day's events as cards.
+ */
+@Composable
+internal fun CalendarGlance(events: List<CalendarEvent>) {
     val context = LocalContext.current
     val haptics = rememberHaptics()
     // null is "Coming up": everything ahead, across days.
@@ -116,24 +142,6 @@ internal fun CalendarContent(
     val shown = remember(events, picked) { if (picked == null) events.take(20) else byDay[picked].orEmpty() }
 
     Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(AppIcons.CalendarDays, contentDescription = null, tint = CalendarBrand, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                CardTitle("Calendar")
-                Text(
-                    summaryLine(events, now),
-                    fontSize = 12.sp,
-                    color = TextSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            LastUpdatedText(lastUpdatedAt = lastUpdatedAt, color = TextTertiary)
-            WidgetExpandChevron(expanded = expanded, onClick = onToggleExpanded, accentColor = CalendarBrand)
-        }
-
-        Spacer(Modifier.height(12.dp))
         DayStrip(
             today = today,
             byDay = byDay,
@@ -143,18 +151,14 @@ internal fun CalendarContent(
                 pickedDay = day?.toString()
             },
         )
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(12.dp))
 
         if (shown.isEmpty()) {
             Text(
                 "Nothing on ${picked?.let { dayName(it, today) } ?: "the calendar"}.",
-                fontSize = 13.sp,
-                color = TextTertiary,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color.White.copy(alpha = 0.04f))
-                    .padding(horizontal = 14.dp, vertical = 18.dp),
+                fontSize = 14.sp,
+                color = TextSecondary,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 18.dp),
             )
         } else {
             MediaCarousel(
@@ -171,23 +175,111 @@ internal fun CalendarContent(
                 EventCarouselCard(event = event, look = look, now = now)
             }
         }
+    }
+}
 
-        WidgetExpandSection(visible = expanded) {
-            Column {
-                Spacer(Modifier.height(14.dp))
-                Agenda(byDay = byDay, today = today, onOpen = { event -> haptics.click(); openEvent(context, event) })
-                WidgetExpandFooter(expanded = true, onToggle = onToggleExpanded, accentColor = CalendarBrand, collapseLabel = "Show less")
+/** The calendar page's rooms: the glance, then a room per day with every event in it. */
+internal fun LazyListScope.calendarPageRooms(events: List<CalendarEvent>, today: LocalDate, onOpen: (CalendarEvent) -> Unit) {
+    val tone = HomeTone.Calendar
+    item(key = "glance") {
+        PageRoom(tone, flush = false) { CalendarGlance(events) }
+    }
+    item(key = "month") {
+        PageRoom(tone, title = "Five weeks", icon = AppIcons.CalendarDays, meta = "Tap a day") { MonthAhead(events, today, onOpen) }
+    }
+    events.groupBy { it.displayDate() }.toSortedMap().forEach { (day, list) ->
+        item(key = "day-$day") {
+            PageRoom(
+                tone = tone,
+                title = dayName(day, today).replaceFirstChar { it.uppercase() },
+                meta = listOfNotNull(
+                    // a day named by its weekday still needs its date; one named by its date needs how far off it is
+                    if (day.isBefore(today.plusDays(7))) day.format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault())) else "in ${ChronoUnit.DAYS.between(today, day)} days",
+                    if (list.size == 1) "1 event" else "${list.size} events",
+                ).joinToString(", "),
+                flush = true,
+            ) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+                    list.forEach { event -> AgendaRow(event, onOpen) }
+                }
             }
         }
-        if (!expanded && events.size > 1) {
-            Spacer(Modifier.height(4.dp))
-            WidgetExpandFooter(
-                expanded = false,
-                onToggle = onToggleExpanded,
-                accentColor = CalendarBrand,
-                expandLabel = "Agenda · ${events.size} events",
-            )
+    }
+}
+
+/**
+ * The weeks ahead as a grid, Monday first, starting with this week: a dot per event in its
+ * calendar's colour, today ringed. A tapped day lists what is on it underneath.
+ */
+@Composable
+private fun MonthAhead(events: List<CalendarEvent>, today: LocalDate, onOpen: (CalendarEvent) -> Unit) {
+    val tone = HomeTone.Calendar
+    val haptics = rememberHaptics()
+    val byDay = remember(events) { events.groupBy { it.displayDate() } }
+    val first = remember(today) { today.minusDays((today.dayOfWeek.value - 1).toLong()) }
+    var picked by rememberSaveable { mutableStateOf<String?>(null) }
+    val shown = picked?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: byDay.keys.minOrNull() ?: today
+    Column(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
+            (0 until 7).forEach { i ->
+                Text(
+                    first.plusDays(i.toLong()).dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()),
+                    fontSize = 11.5.sp, color = TextTertiary, textAlign = TextAlign.Center, modifier = Modifier.weight(1f),
+                )
+            }
         }
+        (0 until 5).forEach { week ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                (0 until 7).forEach { i ->
+                    val day = first.plusDays((week * 7 + i).toLong())
+                    val list = byDay[day].orEmpty()
+                    val past = day.isBefore(today)
+                    val on = day == shown
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .height(46.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(
+                                when {
+                                    on -> tone.copy(alpha = 0.30f)
+                                    day == today -> Color.White.copy(alpha = 0.10f)
+                                    list.isNotEmpty() -> Color.White.copy(alpha = 0.05f)
+                                    else -> Color.Transparent
+                                },
+                            )
+                            .clickable(enabled = !past) {
+                                haptics.tick()
+                                picked = day.toString()
+                            },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                    ) {
+                        Text(
+                            "${day.dayOfMonth}",
+                            style = HealthDisplay,
+                            fontSize = 15.sp,
+                            color = when {
+                                past -> TextTertiary.copy(alpha = 0.5f)
+                                day == today -> tone
+                                list.isNotEmpty() || on -> TextPrimary
+                                else -> TextSecondary
+                            },
+                        )
+                        Row(Modifier.height(7.dp).padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            list.take(3).forEach { e -> Box(Modifier.size(5.dp).clip(CircleShape).background(eventColor(e))) }
+                        }
+                    }
+                }
+            }
+        }
+        val list = byDay[shown].orEmpty()
+        Text(
+            dayName(shown, today).replaceFirstChar { it.uppercase() } + if (list.isEmpty()) ", nothing on" else "",
+            style = HealthDisplay, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = TextSecondary,
+            modifier = Modifier.padding(top = 12.dp, bottom = 2.dp),
+        )
+        list.forEach { event -> AgendaRow(event, onOpen) }
     }
 }
 
@@ -296,28 +388,27 @@ private fun DayChip(
     muted: Boolean = false,
     wide: Boolean = false,
 ) {
-    val shape = RoundedCornerShape(12.dp)
+    val shape = RoundedCornerShape(16.dp)
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .widthIn(min = if (wide) 48.dp else 44.dp)
             .clip(shape)
-            .background(if (selected) CalendarBrand.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.04f))
-            .border(1.dp, if (selected) CalendarBrand.copy(alpha = 0.55f) else Color.Transparent, shape)
+            .background(if (selected) HomeTone.Calendar.copy(alpha = 0.26f) else Color.White.copy(alpha = 0.05f))
             .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp, vertical = 6.dp),
+            .padding(horizontal = 8.dp, vertical = 7.dp),
     ) {
         Text(
             top,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = if (selected) CalendarBrand else TextTertiary,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            color = if (selected) HomeTone.Calendar else TextTertiary,
             maxLines = 1,
         )
         Text(
             main,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
+            style = HealthDisplay,
+            fontSize = 17.sp,
             color = when {
                 selected -> TextPrimary
                 muted -> TextTertiary
@@ -337,7 +428,7 @@ private fun DayChip(
 // ── One event on the carousel ─────────────────────────────────────────────────
 
 private fun eventColor(event: CalendarEvent): Color =
-    runCatching { Color(event.calendarColor).copy(alpha = 1f) }.getOrDefault(CalendarBrand)
+    runCatching { Color(event.calendarColor).copy(alpha = 1f) }.getOrDefault(HomeTone.Calendar)
 
 @Composable
 private fun EventCarouselCard(event: CalendarEvent, look: MediaItemLook, now: Long) {
@@ -375,7 +466,7 @@ private fun EventCarouselCard(event: CalendarEvent, look: MediaItemLook, now: Lo
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    whenTag,
+                    whenTag, style = HealthDisplay,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (running) color.contentColorOn() else color,
@@ -395,7 +486,7 @@ private fun EventCarouselCard(event: CalendarEvent, look: MediaItemLook, now: Lo
             }
             Spacer(Modifier.height(6.dp))
             Text(
-                event.title,
+                event.title, style = HealthDisplay,
                 fontSize = 15.sp,
                 lineHeight = 19.sp,
                 fontWeight = FontWeight.Bold,
@@ -474,13 +565,13 @@ private fun EventCarouselCard(event: CalendarEvent, look: MediaItemLook, now: Lo
         ) {
             val day = event.displayDate()
             Text(
-                if (running && !event.isAllDay) "NOW" else day.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()).uppercase(),
+                if (running && !event.isAllDay) "NOW" else day.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()).uppercase(), style = HealthDisplay,
                 fontSize = 9.sp,
                 fontWeight = FontWeight.Bold,
                 color = color,
                 maxLines = 1,
             )
-            Text(day.dayOfMonth.toString(), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = TextPrimary, maxLines = 1)
+            Text(day.dayOfMonth.toString(), style = HealthDisplay, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = TextPrimary, maxLines = 1)
             Text(
                 if (event.isAllDay) "all day" else event.startTime.format(TimeFmt),
                 fontSize = 9.sp,
@@ -568,34 +659,7 @@ private fun Tag(
     }
 }
 
-// ── The agenda, opened ────────────────────────────────────────────────────────
-
-@Composable
-private fun Agenda(byDay: Map<LocalDate, List<CalendarEvent>>, today: LocalDate, onOpen: (CalendarEvent) -> Unit) {
-    WidgetScrollBox(maxHeight = 420.dp, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        byDay.toSortedMap().forEach { (day, events) ->
-            Row(
-                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                Text(
-                    dayName(day, today).replaceFirstChar { it.uppercase() },
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (day == today) CalendarBrand else TextPrimary,
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    day.format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault())) + " · " +
-                        if (events.size == 1) "1 event" else "${events.size} events",
-                    fontSize = 11.sp,
-                    color = TextTertiary,
-                )
-            }
-            events.forEach { event -> AgendaRow(event, onOpen) }
-        }
-    }
-}
+// ── The agenda's rows ────────────────────────────────────────────────────────
 
 @Composable
 private fun AgendaRow(event: CalendarEvent, onOpen: (CalendarEvent) -> Unit) {
@@ -603,16 +667,16 @@ private fun AgendaRow(event: CalendarEvent, onOpen: (CalendarEvent) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(16.dp))
             .clickable { onOpen(event) }
-            .padding(vertical = 6.dp, horizontal = 4.dp),
+            .padding(vertical = 9.dp, horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.width(46.dp)) {
+        Column(Modifier.width(54.dp)) {
             Text(
                 if (event.isAllDay) "All day" else event.startTime.format(TimeFmt),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
+                style = HealthDisplay,
+                fontSize = 14.sp,
                 color = TextPrimary,
             )
             if (!event.isAllDay) {
@@ -627,14 +691,14 @@ private fun AgendaRow(event: CalendarEvent, onOpen: (CalendarEvent) -> Unit) {
         )
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
-            Text(event.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(event.title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val sub = listOfNotNull(
                 event.location.takeIf { it.isNotBlank() },
                 event.meetingLink?.let(::meetingName),
                 event.calendarName.takeIf { it.isNotBlank() },
             ).joinToString(" · ")
             if (sub.isNotBlank()) {
-                Text(sub, fontSize = 11.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(sub, fontSize = 12.5.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }

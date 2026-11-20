@@ -1,5 +1,7 @@
 package com.macrotracker.ui.components
 
+import androidx.compose.foundation.shape.CircleShape
+import com.macrotracker.ui.screens.health.HealthDisplayFamily
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,7 +29,6 @@ import androidx.compose.ui.unit.sp
 import com.macrotracker.ui.theme.ServerCritical
 import com.macrotracker.ui.theme.ServerGood
 import com.macrotracker.ui.theme.ServerWarn
-import com.macrotracker.ui.theme.ServerWell
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 
@@ -58,7 +59,7 @@ fun StatValue(
         color = color,
         fontSize = fontSize,
         fontWeight = fontWeight,
-        fontFamily = FontFamily.Monospace,
+        fontFamily = HealthDisplayFamily,
         maxLines = 1,
     )
 }
@@ -66,14 +67,29 @@ fun StatValue(
 @Composable
 fun StatLabel(text: String, modifier: Modifier = Modifier, color: Color = TextSecondary) {
     Text(
-        text = text,
+        text = quietCase(text),
         modifier = modifier,
         color = color,
-        fontSize = 10.sp,
-        fontWeight = FontWeight.SemiBold,
-        letterSpacing = 0.8.sp,
+        fontSize = 12.sp,
         maxLines = 1,
     )
+}
+
+private val Acronyms = setOf("CPU", "GPU", "RAM", "SSH", "PID", "IP", "DNS", "I/O", "IO", "RX", "TX", "PSI", "UPS", "OS", "AI", "URL", "TCP", "UDP", "SSD", "HDD", "NVME", "VM")
+
+/**
+ * A label written in capitals ("FAILED SSH") as the app writes labels now: "Failed SSH".
+ * Anything already in mixed case is left as it is.
+ */
+fun quietCase(text: String): String {
+    if (text.none { it.isLetter() } || text != text.uppercase()) return text
+    return text.split(' ').mapIndexed { i, w ->
+        when {
+            w.trim('(', ')', ',', ':') in Acronyms -> w
+            i == 0 -> w.lowercase().replaceFirstChar { it.uppercase() }
+            else -> w.lowercase()
+        }
+    }.joinToString(" ")
 }
 
 /** Horizontal meter used for filesystems, swap and anything else with a ceiling. */
@@ -83,7 +99,7 @@ fun ServerMeterBar(
     modifier: Modifier = Modifier,
     height: Dp = 6.dp,
     color: Color = serverLevelColor(percent),
-    trackColor: Color = ServerWell,
+    trackColor: Color = Color.White.copy(alpha = 0.07f),
 ) {
     Box(
         modifier = modifier
@@ -128,15 +144,15 @@ fun ServerCoreBars(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxSize()
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(ServerWell),
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(Color.White.copy(alpha = 0.07f)),
                 contentAlignment = Alignment.BottomCenter,
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .fillMaxSize(fraction = (percent / 100f).coerceIn(0.02f, 1f))
-                        .clip(RoundedCornerShape(2.dp))
+                        .clip(RoundedCornerShape(3.dp))
                         .background(serverLevelColor(percent)),
                 )
             }
@@ -153,9 +169,9 @@ fun ServerStatChip(
     valueColor: Color = TextPrimary,
 ) {
     Column(modifier = modifier) {
+        StatValue(value, color = valueColor, fontSize = 17.sp)
+        Spacer(modifier = Modifier.height(1.dp))
         StatLabel(label)
-        Spacer(modifier = Modifier.height(2.dp))
-        StatValue(value, color = valueColor, fontSize = 14.sp)
     }
 }
 
@@ -169,9 +185,9 @@ fun ServerTag(
 ) {
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(color.copy(alpha = 0.14f))
-            .padding(horizontal = 7.dp, vertical = 3.dp),
+            .clip(CircleShape)
+            .background(color.copy(alpha = 0.15f))
+            .padding(horizontal = 9.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (leading != null) {
@@ -179,11 +195,10 @@ fun ServerTag(
             Spacer(modifier = Modifier.width(4.dp))
         }
         Text(
-            text = text,
+            text = quietCase(text),
             color = color,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 0.4.sp,
+            fontSize = 11.5.sp,
+            fontWeight = FontWeight.SemiBold,
             maxLines = 1,
         )
     }

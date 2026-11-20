@@ -1,5 +1,19 @@
 package com.macrotracker.ui.screens
 
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import com.macrotracker.ui.screens.server.serverLede
+import com.macrotracker.ui.screens.health.RoomLoading
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.home.TonePill
+import com.macrotracker.ui.screens.home.PageRoom
+import com.macrotracker.ui.screens.home.PageTab
+import com.macrotracker.ui.screens.home.GlassRound
+import com.macrotracker.ui.screens.home.HomePage
+import com.macrotracker.ui.theme.ServerCpu
+import com.macrotracker.ui.screens.health.HealthDisplayFamily
+import com.macrotracker.ui.screens.home.HomeTone
+import com.macrotracker.ui.screens.home.WellFill
 import androidx.compose.foundation.background
 import com.macrotracker.ui.util.LaunchedWhileResumed
 import com.macrotracker.ui.util.rememberIsResumed
@@ -75,6 +89,7 @@ import com.macrotracker.ui.screens.server.MemoryCard
 import com.macrotracker.ui.screens.server.NetworkCard
 import com.macrotracker.ui.screens.server.ProcessesCard
 import com.macrotracker.ui.screens.server.SectionHeader
+import com.macrotracker.ui.screens.server.ServerRoom
 import com.macrotracker.ui.screens.server.SensorsCard
 import com.macrotracker.ui.screens.server.ServerActivityCard
 import com.macrotracker.ui.screens.server.ServerHeroCard
@@ -92,7 +107,6 @@ import com.macrotracker.ui.theme.ServerCritical
 import com.macrotracker.ui.theme.ServerGood
 import com.macrotracker.ui.theme.ServerMemory
 import com.macrotracker.ui.theme.ServerWarn
-import com.macrotracker.ui.theme.ServerWell
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.theme.TextTertiary
@@ -144,217 +158,170 @@ fun ServerScreen(
     val activeId = selectedId?.takeIf { id -> profiles.any { it.id == id } } ?: profiles.firstOrNull()?.id
     val runtime = activeId?.let { runtimes[it] }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Background),
-    ) {
-        SubScreenHeader(
-            title = "Servers",
-            subtitle = runtime?.profile?.displayTarget,
-            onNavigateBack = onNavigateBack,
-            modifier = Modifier.padding(horizontal = 16.dp),
-            trailing = {
-                onOpenConsole?.let { open ->
-                    IconButton(onClick = { haptics.tick(); open() }, modifier = Modifier.size(40.dp)) {
-                        Icon(AppIcons.SquareTerminal, contentDescription = "Console", tint = TextSecondary, modifier = Modifier.size(21.dp))
-                    }
-                }
-                if (profiles.isNotEmpty()) {
-                    IconButton(
-                        onClick = {
-                            haptics.tick()
-                            editing = !editing
-                        },
-                        modifier = Modifier.size(40.dp),
-                    ) {
-                        Icon(
-                            if (editing) AppIcons.Check else AppIcons.Edit,
-                            contentDescription = if (editing) "Done" else "Edit sections",
-                            tint = if (editing) Primary else TextSecondary,
-                            modifier = Modifier.size(21.dp),
-                        )
-                    }
-                }
-                IconButton(
-                    onClick = {
-                        haptics.tick()
-                        onNavigateToSettings()
-                    },
-                    modifier = Modifier.size(40.dp),
-                ) {
-                    Icon(
-                        AppIcons.Settings,
-                        contentDescription = "Server settings",
-                        tint = TextSecondary,
-                        modifier = Modifier.size(22.dp),
-                    )
-                }
-            },
-        )
-
-        if (profiles.isEmpty()) {
-            ServerEmptyState(onNavigateToSettings)
-            return@Column
+    if (profiles.isEmpty() || runtime == null) {
+        HomePage(title = "Servers", tone = HomeTone.Servers, onBack = onNavigateBack, lede = "No servers yet.") {
+            item(key = "empty") { ServerEmptyState(onNavigateToSettings) }
         }
+        return
+    }
 
-        if (profiles.size > 1) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+    // Every room gets the same affordance: bundle this section's live readings
+    // and open a Sysop thread on them.
+    val ask: (ServerAiSection) -> (() -> Unit)? = { section ->
+        onAskAi?.let { open ->
+            {
+                haptics.click()
+                viewModel.askAiAbout(runtime.profile.id, section)?.let(open)
+            }
+        }
+    }
+
+    val link = dashboardLink?.takeIf { it.belongsTo(runtime.hostProfile?.hostname) }
+
+    // Only what this server can fill: advisories when there are some, the dashboard's
+    // sections when it runs the dashboard. A hidden or empty section keeps its place.
+    val available = remember(runtime, link) {
+        buildSet {
+            add(SECTION_OVERVIEW)
+            if (runtime.advisories.isNotEmpty() || link?.alerts?.isNotEmpty() == true) add(SECTION_ADVISORIES)
+            if (link != null && (link.activity.nowPlaying != null || link.activity.downloads.isNotEmpty())) add(SECTION_ACTIVITY)
+            add(SECTION_HISTORY)
+            if (link != null && link.services.isNotEmpty()) add(SECTION_SERVICES)
+            addAll(listOf(SECTION_COMPUTE, SECTION_MEMORY, SECTION_NETWORK, SECTION_STORAGE, SECTION_SENSORS))
+            addAll(listOf(SECTION_PROCESSES, SECTION_CONTAINERS, SECTION_SYSTEM, SECTION_UPDATES))
+            if (runtime.snapshot?.sessions?.isNotEmpty() == true) add(SECTION_SESSIONS)
+        }
+    }
+    val shown = remember(sections, available) { sections.filter { it.isVisible && it.id in available } }
+    // The page's four sides, each holding its sections in the order the pencil gave them.
+    val pages = remember(shown) { ServerPages.map { (_, ids) -> shown.filter { it.id in ids } } }
+
+    HomePage(
+        title = runtime.profile.label.ifBlank { "Server" },
+        tone = HomeTone.Servers,
+        onBack = onNavigateBack,
+        lede = serverLede(runtime, link),
+        tabs = ServerPages.map { it.first },
+        actions = { haze ->
+            onOpenConsole?.let { open ->
+                GlassRound(AppIcons.SquareTerminal, "Console", haze) {
+                    haptics.tick()
+                    open()
+                }
+            }
+            GlassRound(
+                if (editing) AppIcons.Check else AppIcons.Edit,
+                if (editing) "Done" else "Edit sections",
+                haze,
+                tint = if (editing) HomeTone.Servers else TextPrimary,
             ) {
-                profiles.forEach { profile ->
-                    val isActive = profile.id == activeId
-                    val health = runtimes[profile.id]
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(if (isActive) Primary.copy(alpha = 0.18f) else ServerWell)
-                            .clickable {
-                                haptics.tick()
-                                selectedId = profile.id
-                            }
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        StatusDot(health)
-                        Spacer(modifier = Modifier.width(7.dp))
-                        Text(
-                            text = profile.label,
-                            color = if (isActive) TextPrimary else TextSecondary,
-                            fontSize = 13.sp,
-                            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
-                            maxLines = 1,
-                        )
+                haptics.tick()
+                editing = !editing
+            }
+            GlassRound(AppIcons.Settings, "Server settings", haze) {
+                haptics.tick()
+                onNavigateToSettings()
+            }
+        },
+    ) { page ->
+        if (profiles.size > 1) {
+            item(key = "servers") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    profiles.forEach { profile ->
+                        val isActive = profile.id == activeId
+                        Row(
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(if (isActive) HomeTone.Servers.copy(alpha = 0.24f) else WellFill)
+                                .clickable {
+                                    haptics.tick()
+                                    selectedId = profile.id
+                                }
+                                .padding(horizontal = 14.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            StatusDot(runtimes[profile.id])
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = profile.label,
+                                style = HealthDisplay,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isActive) TextPrimary else TextSecondary,
+                                fontSize = 14.sp,
+                                maxLines = 1,
+                            )
+                        }
                     }
                 }
             }
         }
-
-        if (runtime == null) {
-            ServerEmptyState(onNavigateToSettings)
-            return@Column
+        if (editing) {
+            item(key = "editor") {
+                WidgetEditor(
+                    configs = sections,
+                    onConfigsChanged = { viewModel.updateSectionOrder(encodeWidgetConfig(it)) },
+                    onClose = { editing = false },
+                    toneOf = { HomeTone.Servers },
+                )
+                Text(
+                    "Advisories, Happening now, Services and Logged in only show when there is something in them.",
+                    color = TextTertiary,
+                    fontSize = 12.5.sp,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
+                )
+            }
+            return@HomePage
         }
-
-        // Every card gets the same affordance: bundle this section's live readings
-        // and open a Sysop thread on them.
-        val ask: (ServerAiSection) -> (() -> Unit)? = { section ->
-            onAskAi?.let { open ->
-                {
-                    haptics.click()
-                    viewModel.askAiAbout(runtime.profile.id, section)?.let(open)
-                }
+        val mine = pages.getOrNull(page).orEmpty()
+        items(mine, key = { it.id }, contentType = { it.id }) { section ->
+            when (section.id) {
+                SECTION_OVERVIEW -> ServerHeroCard(runtime, link, ask(ServerAiSection.OVERVIEW))
+                SECTION_ADVISORIES -> ServerAdvisoriesCard(
+                    runtime = runtime,
+                    link = link,
+                    onTrustHostKey = { viewModel.trustNewHostKey(runtime.profile.id) },
+                    onAskAi = ask(ServerAiSection.ADVISORIES),
+                    onAskAiAbout = onAskAi?.let { open ->
+                        { advisory ->
+                            haptics.click()
+                            viewModel.askAiAboutAdvisory(runtime.profile.id, advisory)?.let(open)
+                        }
+                    },
+                )
+                SECTION_ACTIVITY -> link?.let { ServerActivityCard(it) }
+                SECTION_HISTORY -> ServerHistoryCard(runtime, link)
+                SECTION_SERVICES -> link?.let { ServicesWallCard(it, ask(ServerAiSection.OVERVIEW)) }
+                SECTION_COMPUTE -> ComputeCard(runtime, ask(ServerAiSection.COMPUTE))
+                SECTION_MEMORY -> MemoryCard(runtime, ask(ServerAiSection.MEMORY))
+                SECTION_NETWORK -> NetworkCard(runtime, ask(ServerAiSection.NETWORK))
+                SECTION_STORAGE -> StorageCard(runtime, ask(ServerAiSection.STORAGE))
+                SECTION_SENSORS -> SensorsCard(runtime, ask(ServerAiSection.THERMAL))
+                SECTION_PROCESSES -> ProcessesCard(runtime, ask(ServerAiSection.PROCESSES))
+                SECTION_CONTAINERS -> ContainersCard(runtime, ask(ServerAiSection.DOCKER), link)
+                SECTION_SYSTEM -> SystemCard(runtime, ask(ServerAiSection.SERVICES))
+                SECTION_UPDATES -> ServerUpdatesCard(
+                    runtime = runtime,
+                    onRefresh = { viewModel.refreshNews(runtime.profile.id) },
+                    onAskAi = ask(ServerAiSection.UPDATES),
+                )
+                SECTION_SESSIONS -> ServerSessionsCard(runtime, ask(ServerAiSection.SESSIONS))
             }
         }
-
-        val link = dashboardLink?.takeIf { it.belongsTo(runtime.hostProfile?.hostname) }
-
-        // Only what this server can fill: advisories when there are some, the dashboard's
-        // sections when it runs the dashboard. A hidden or empty section keeps its place.
-        val available = remember(runtime, link) {
-            buildSet {
-                add(SECTION_OVERVIEW)
-                if (runtime.advisories.isNotEmpty() || link?.alerts?.isNotEmpty() == true) add(SECTION_ADVISORIES)
-                if (link != null && (link.activity.nowPlaying != null || link.activity.downloads.isNotEmpty())) add(SECTION_ACTIVITY)
-                add(SECTION_HISTORY)
-                if (link != null && link.services.isNotEmpty()) add(SECTION_SERVICES)
-                addAll(listOf(SECTION_COMPUTE, SECTION_MEMORY, SECTION_NETWORK, SECTION_STORAGE, SECTION_SENSORS))
-                addAll(listOf(SECTION_PROCESSES, SECTION_CONTAINERS, SECTION_SYSTEM, SECTION_UPDATES))
-                if (runtime.snapshot?.sessions?.isNotEmpty() == true) add(SECTION_SESSIONS)
-            }
-        }
-        val shown = remember(sections, available) { sections.filter { it.isVisible && it.id in available } }
-        val listState = rememberLazyListState()
-        val dragState = rememberDraggableWidgetListState(
-            items = shown,
-            lazyListState = listState,
-            itemKey = { it.id },
-            onReorder = { reordered -> viewModel.updateSectionOrder(encodeWidgetConfig(mergeReordered(sections, reordered))) },
-            haptics = haptics,
-        )
-
-        LazyColumn(
-            state = listState,
-            userScrollEnabled = !dragState.isDragActive,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(
-                bottom = 24.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
-            ),
-        ) {
-            if (editing) {
-                item(key = "editor") {
-                    WidgetEditor(
-                        configs = sections,
-                        onConfigsChanged = { viewModel.updateSectionOrder(encodeWidgetConfig(it)) },
-                        onClose = { editing = false },
-                    )
+        if (mine.isEmpty()) {
+            item(key = "all-hidden") {
+                PageRoom(HomeTone.Neutral) {
                     Text(
-                        "Advisories, Happening now, Services and Logged in only show when there is something in them.",
-                        color = TextTertiary,
-                        fontSize = 11.sp,
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
+                        if (shown.isEmpty()) "Every section is switched off." else "Nothing on this side is switched on.",
+                        color = TextSecondary,
+                        fontSize = 14.sp,
                     )
-                }
-                return@LazyColumn
-            }
-            draggableWidgetItems(
-                state = dragState,
-                itemKey = { it.id },
-                haptics = haptics,
-            ) { _, section, _ ->
-                when (section.id) {
-                    SECTION_OVERVIEW -> ServerHeroCard(runtime, link, ask(ServerAiSection.OVERVIEW))
-                    SECTION_ADVISORIES -> ServerAdvisoriesCard(
-                        runtime = runtime,
-                        link = link,
-                        onTrustHostKey = { viewModel.trustNewHostKey(runtime.profile.id) },
-                        onAskAi = ask(ServerAiSection.ADVISORIES),
-                        onAskAiAbout = onAskAi?.let { open ->
-                            { advisory ->
-                                haptics.click()
-                                viewModel.askAiAboutAdvisory(runtime.profile.id, advisory)?.let(open)
-                            }
-                        },
-                    )
-                    SECTION_ACTIVITY -> link?.let { ServerActivityCard(it) }
-                    SECTION_HISTORY -> ServerHistoryCard(runtime, link)
-                    SECTION_SERVICES -> link?.let { ServicesWallCard(it, ask(ServerAiSection.OVERVIEW)) }
-                    SECTION_COMPUTE -> ComputeCard(runtime, ask(ServerAiSection.COMPUTE))
-                    SECTION_MEMORY -> MemoryCard(runtime, ask(ServerAiSection.MEMORY))
-                    SECTION_NETWORK -> NetworkCard(runtime, ask(ServerAiSection.NETWORK))
-                    SECTION_STORAGE -> StorageCard(runtime, ask(ServerAiSection.STORAGE))
-                    SECTION_SENSORS -> SensorsCard(runtime, ask(ServerAiSection.THERMAL))
-                    SECTION_PROCESSES -> ProcessesCard(runtime, ask(ServerAiSection.PROCESSES))
-                    SECTION_CONTAINERS -> ContainersCard(runtime, ask(ServerAiSection.DOCKER))
-                    SECTION_SYSTEM -> SystemCard(runtime, ask(ServerAiSection.SERVICES))
-                    SECTION_UPDATES -> ServerUpdatesCard(
-                        runtime = runtime,
-                        onRefresh = { viewModel.refreshNews(runtime.profile.id) },
-                        onAskAi = ask(ServerAiSection.UPDATES),
-                    )
-                    SECTION_SESSIONS -> ServerSessionsCard(runtime, ask(ServerAiSection.SESSIONS))
-                }
-            }
-            if (shown.isEmpty()) {
-                item(key = "all-hidden") {
-                    Column(modifier = Modifier.padding(vertical = 24.dp)) {
-                        Text(
-                            "Every section is switched off. Tap the pencil to bring some back.",
-                            color = TextSecondary,
-                            fontSize = 13.sp,
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        MacroButton(
-                            text = "Edit sections",
-                            onClick = { editing = true },
-                            variant = ButtonVariant.SECONDARY,
-                        )
-                    }
+                    TonePill("Edit sections", HomeTone.Servers, Modifier.padding(top = 12.dp), icon = AppIcons.Edit) { editing = true }
                 }
             }
         }
@@ -396,49 +363,24 @@ private val ServerSections = listOf(
     Triple(SECTION_SESSIONS, "Logged in", AppIcons.Account),
 )
 
-/**
- * Puts a drag's new order back into the full list. Sections that were hidden, or had
- * nothing to show, keep their own slots instead of all piling up at the end.
- */
-private fun mergeReordered(all: List<WidgetConfig>, reordered: List<WidgetConfig>): List<WidgetConfig> {
-    val moved = reordered.map { it.id }.toSet()
-    val next = reordered.iterator()
-    return all.map { if (it.id in moved && next.hasNext()) next.next() else it }
-}
+/** The page's sides in the dock, and which sections stand on each. */
+private val ServerPages = listOf(
+    PageTab("Now", AppIcons.Activity) to setOf(SECTION_OVERVIEW, SECTION_ADVISORIES, SECTION_ACTIVITY, SECTION_HISTORY),
+    PageTab("Machine", AppIcons.Cpu) to setOf(SECTION_COMPUTE, SECTION_MEMORY, SECTION_NETWORK, SECTION_STORAGE, SECTION_SENSORS),
+    PageTab("Apps", AppIcons.Blocks) to setOf(SECTION_SERVICES, SECTION_CONTAINERS, SECTION_PROCESSES),
+    PageTab("System", AppIcons.Settings) to setOf(SECTION_SYSTEM, SECTION_UPDATES, SECTION_SESSIONS),
+)
 
 @Composable
 private fun ServerEmptyState(onNavigateToSettings: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 24.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Icon(
-            AppIcons.Server,
-            contentDescription = null,
-            tint = TextTertiary,
-            modifier = Modifier.size(56.dp),
-        )
-        Spacer(modifier = Modifier.height(16.dp))
+    PageRoom(HomeTone.Servers) {
         Text(
-            "No servers yet",
-            color = TextPrimary,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            "Add an SSH host and DailyDash reads live stats straight from /proc — " +
-                "no agent to install on the server.",
+            "Add an SSH host and DailyDash reads live stats straight from /proc. There is nothing to install on the server.",
             color = TextSecondary,
-            fontSize = 14.sp,
-            lineHeight = 20.sp,
-            modifier = Modifier.fillMaxWidth(),
+            fontSize = 15.sp,
+            lineHeight = 21.sp,
         )
-        Spacer(modifier = Modifier.height(14.dp))
-        MacroButton(text = "Add a server", onClick = onNavigateToSettings)
+        TonePill("Add a server", HomeTone.Servers, Modifier.padding(top = 14.dp), icon = AppIcons.Server, primary = true, onClick = onNavigateToSettings)
     }
 }
 
@@ -452,10 +394,7 @@ private fun ServerAdvisoriesCard(
 ) {
     val critical = runtime.advisories.count { it.severity == AdvisorySeverity.CRITICAL }
     val appAlerts = link?.alerts.orEmpty()
-    MacroCard(
-        delayMs = 60,
-        borderColor = if (critical > 0) ServerCritical.copy(alpha = 0.45f) else Border,
-    ) {
+    ServerRoom(if (critical > 0) ServerCritical else ServerWarn) {
         SectionHeader(
             title = "Advisories",
             icon = AppIcons.Warning,
@@ -466,16 +405,13 @@ private fun ServerAdvisoriesCard(
         runtime.advisories.forEachIndexed { index, advisory ->
             AdvisoryRow(advisory, onAskAi = onAskAiAbout?.let { handler -> { handler(advisory) } })
             if (index < runtime.advisories.lastIndex) {
-                HorizontalDivider(
-                    color = Border.copy(alpha = 0.3f),
-                    modifier = Modifier.padding(vertical = 8.dp),
-                )
+                Spacer(Modifier.height(12.dp))
             }
         }
         if (link != null && appAlerts.isNotEmpty()) {
             // What the apps themselves report, via the dashboard's collector.
             if (runtime.advisories.isNotEmpty()) {
-                HorizontalDivider(color = Border.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 8.dp))
+                Spacer(Modifier.height(12.dp))
             }
             DashboardAlertRows(link)
         }
@@ -483,16 +419,11 @@ private fun ServerAdvisoriesCard(
             ?.reason is ServerError.HostKeyChanged
         if (hostKeyChanged) {
             Spacer(modifier = Modifier.height(6.dp))
-            MacroButton(
-                text = "Trust the new host key",
-                onClick = onTrustHostKey,
-                variant = ButtonVariant.DANGER,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            TonePill("Trust the new host key", ServerCritical, icon = AppIcons.Warning, primary = true, onClick = onTrustHostKey)
             Text(
                 text = "Only do this if you rebuilt or reinstalled the server yourself.",
                 color = TextSecondary,
-                fontSize = 11.sp,
+                fontSize = 12.5.sp,
                 modifier = Modifier.padding(top = 6.dp),
             )
         }
@@ -525,12 +456,12 @@ private fun AdvisoryRow(advisory: ServerAdvisory, onAskAi: (() -> Unit)? = null)
             Text(
                 text = advisory.detail,
                 color = TextSecondary,
-                fontSize = 11.sp,
-                lineHeight = 15.sp,
+                fontSize = 12.5.sp,
+                lineHeight = 18.sp,
             )
         }
         Spacer(modifier = Modifier.width(8.dp))
-        ServerTag(advisory.category.name.take(4), color)
+        ServerTag(advisory.category.name.lowercase().replaceFirstChar { it.uppercase() }, color)
         if (onAskAi != null) {
             Spacer(modifier = Modifier.width(6.dp))
             AskAiButton(accent = color, onClick = onAskAi)
@@ -546,7 +477,7 @@ private fun ServerUpdatesCard(
 ) {
     val news = runtime.news
     val haptics = rememberHaptics()
-    MacroCard(delayMs = 190) {
+    ServerRoom(ServerWarn) {
         SectionHeader(
             title = "Updates & news",
             icon = AppIcons.Download,
@@ -556,8 +487,8 @@ private fun ServerUpdatesCard(
         )
         if (news == null) {
             // First check still running: a placeholder shaped like the card, as elsewhere.
-            ContentSkeleton(lines = 2, accent = Border)
-            return@MacroCard
+            RoomLoading(ServerWarn, bars = 3)
+            return@ServerRoom
         }
         Row(modifier = Modifier.fillMaxWidth()) {
             ServerStatChip(
@@ -591,8 +522,8 @@ private fun ServerUpdatesCard(
             Text(
                 text = news.updatablePackages.take(14).joinToString(", "),
                 color = TextSecondary,
-                fontSize = 11.sp,
-                lineHeight = 15.sp,
+                fontSize = 12.5.sp,
+                lineHeight = 18.sp,
                 fontFamily = FontFamily.Monospace,
             )
         }
@@ -607,22 +538,10 @@ private fun ServerUpdatesCard(
             Text(
                 text = "Checked ${relativeSeconds(news.fetchedAtMs)} ago",
                 color = TextTertiary,
-                fontSize = 10.sp,
+                fontSize = 11.5.sp,
                 modifier = Modifier.weight(1f),
             )
-            Text(
-                text = "Re-check now",
-                color = Primary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable {
-                        haptics.click()
-                        onRefresh()
-                    }
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-            )
+            TonePill("Check again", ServerWarn, icon = AppIcons.Refresh) { onRefresh() }
         }
     }
 }
@@ -630,7 +549,7 @@ private fun ServerUpdatesCard(
 @Composable
 private fun ServerSessionsCard(runtime: ServerRuntime, onAskAi: (() -> Unit)? = null) {
     val sessions = runtime.snapshot?.sessions.orEmpty()
-    MacroCard(delayMs = 200) {
+    ServerRoom(ServerMemory) {
         SectionHeader(
             title = "Logged in",
             icon = AppIcons.Account,
@@ -646,7 +565,7 @@ private fun ServerSessionsCard(runtime: ServerRuntime, onAskAi: (() -> Unit)? = 
                 Text(
                     text = session.user,
                     color = TextPrimary,
-                    fontSize = 12.sp,
+                    fontSize = 13.sp,
                     fontFamily = FontFamily.Monospace,
                     modifier = Modifier.width(92.dp),
                     maxLines = 1,
@@ -654,7 +573,7 @@ private fun ServerSessionsCard(runtime: ServerRuntime, onAskAi: (() -> Unit)? = 
                 Text(
                     text = session.tty,
                     color = TextSecondary,
-                    fontSize = 11.sp,
+                    fontSize = 12.5.sp,
                     fontFamily = FontFamily.Monospace,
                     modifier = Modifier.width(72.dp),
                     maxLines = 1,
@@ -662,7 +581,7 @@ private fun ServerSessionsCard(runtime: ServerRuntime, onAskAi: (() -> Unit)? = 
                 Text(
                     text = session.from.ifBlank { session.since },
                     color = TextSecondary,
-                    fontSize = 11.sp,
+                    fontSize = 12.5.sp,
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

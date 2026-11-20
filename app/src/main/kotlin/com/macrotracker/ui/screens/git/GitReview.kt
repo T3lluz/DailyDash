@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens.git
 
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.ai.AiRoom
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -131,16 +133,14 @@ fun ReviewScreen(
                 Modifier
                     .fillMaxWidth()
                     .background(Background)
-                    .padding(top = 36.dp, bottom = 10.dp),
+                    .padding(top = 12.dp, bottom = 10.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { haptics.tick(); onBack() }) {
-                        Icon(AppIcons.ArrowBack, "Back", tint = TextPrimary, modifier = Modifier.size(22.dp))
-                    }
+                    Box(Modifier.padding(start = 12.dp, end = 10.dp)) { com.macrotracker.ui.screens.ai.HeaderRound(AppIcons.ArrowBack, "Back") { haptics.tick(); onBack() } }
                     Column(Modifier.weight(1f)) {
                         Text(
                             file?.path?.substringAfterLast('/') ?: title,
-                            color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold, fontFamily = Mono,
+                            color = TextPrimary, style = HealthDisplay, fontSize = 16.sp, fontFamily = Mono,
                             maxLines = 1, overflow = TextOverflow.Ellipsis,
                         )
                         Text(
@@ -256,7 +256,7 @@ fun ReviewScreen(
                     ) {
                         Icon(AppIcons.Send, null, tint = com.macrotracker.ui.theme.OnAccent, modifier = Modifier.size(15.dp))
                         Spacer(Modifier.width(7.dp))
-                        Text("Send to Hermes", color = com.macrotracker.ui.theme.OnAccent, fontSize = 13.5.sp, fontWeight = FontWeight.Bold)
+                        Text("Send to Hermes", style = HealthDisplay, color = com.macrotracker.ui.theme.OnAccent, fontSize = 13.5.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -287,8 +287,8 @@ internal fun StatusBadge(letter: Char, modifier: Modifier = Modifier) {
         '?' -> TextSecondary to "U"
         else -> ServerWarn to "M"
     }
-    Box(modifier.size(20.dp).clip(RoundedCornerShape(6.dp)).background(color.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
-        Text(label, color = color, fontSize = 10.5.sp, fontWeight = FontWeight.Bold, fontFamily = Mono)
+    Box(modifier.size(20.dp).clip(RoundedCornerShape(14.dp)).background(color.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
+        Text(label, style = HealthDisplay, color = color, fontSize = 10.5.sp, fontWeight = FontWeight.Bold, fontFamily = Mono)
     }
 }
 
@@ -299,7 +299,7 @@ private fun HunkHeader(header: String) {
         Modifier
             .fillMaxWidth()
             .padding(top = 6.dp)
-            .background(TileDark)
+            .background(AiRoom)
             .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -334,7 +334,7 @@ private fun DiffRow(line: DiffLine, marked: Boolean, onTap: () -> Unit) {
         Spacer(Modifier.width(4.dp))
         Text(if (line.old > 0) "${line.old}" else "", color = TextTertiary, fontSize = 10.5.sp, fontFamily = Mono, lineHeight = 19.sp, modifier = Modifier.width(34.dp).padding(end = 5.dp), maxLines = 1, textAlign = androidx.compose.ui.text.style.TextAlign.End)
         Text(if (line.new > 0) "${line.new}" else "", color = TextTertiary, fontSize = 10.5.sp, fontFamily = Mono, lineHeight = 19.sp, modifier = Modifier.width(34.dp).padding(end = 5.dp), maxLines = 1, textAlign = androidx.compose.ui.text.style.TextAlign.End)
-        Text(sign, color = signColor, fontSize = 12.sp, fontFamily = Mono, lineHeight = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(14.dp))
+        Text(sign, style = HealthDisplay, color = signColor, fontSize = 12.sp, fontFamily = Mono, lineHeight = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(14.dp))
         Text(
             line.text.ifEmpty { " " },
             color = if (line.kind == DiffLine.Kind.NOTE) TextTertiary else TextPrimary,
@@ -351,12 +351,12 @@ private fun CommentBubble(c: ReviewComment, onRemove: () -> Unit) {
         Modifier
             .fillMaxWidth()
             .padding(start = 56.dp, end = 12.dp, top = 4.dp, bottom = 6.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(TileDark)
+            .clip(RoundedCornerShape(16.dp))
+            .background(AiRoom)
             .combinedClickable(onClick = {}, onLongClick = onRemove, onLongClickLabel = "Remove this note"),
     ) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 9.dp)) {
-            Text("Note for Hermes", color = TextTertiary, fontSize = 10.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
+            Text("Note for Hermes", style = HealthDisplay, color = TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             Text(c.text, color = TextPrimary, fontSize = 13.5.sp, lineHeight = 19.sp)
             Text("Hold to remove", color = TextTertiary, fontSize = 10.sp, modifier = Modifier.padding(top = 3.dp))
         }
@@ -380,8 +380,8 @@ private fun CommentWriter(onAdd: (String) -> Unit, onCancel: () -> Unit) {
             .fillMaxWidth()
             .bringIntoViewRequester(bring)
             .padding(start = 56.dp, end = 12.dp, top = 6.dp, bottom = 8.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(TileDark)
+            .clip(RoundedCornerShape(18.dp))
+            .background(AiRoom)
             .padding(12.dp),
     ) {
         BasicTextField(
@@ -400,7 +400,7 @@ private fun CommentWriter(onAdd: (String) -> Unit, onCancel: () -> Unit) {
             Text("Cancel", color = TextSecondary, fontSize = 13.sp, modifier = Modifier.clip(RoundedCornerShape(50)).clickable(onClick = onCancel).padding(horizontal = 12.dp, vertical = 7.dp))
             Spacer(Modifier.width(6.dp))
             Text(
-                "Add note",
+                "Add note", style = HealthDisplay,
                 color = if (text.isBlank()) TextTertiary else com.macrotracker.ui.theme.OnAccent,
                 fontSize = 13.sp, fontWeight = FontWeight.Bold,
                 modifier = Modifier

@@ -1,5 +1,10 @@
 package com.macrotracker.ui.screens.tilesmith
 
+import com.macrotracker.ui.screens.home.pageRise
+import com.macrotracker.ui.screens.health.roomColor
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.home.SheetColor
+import com.macrotracker.ui.screens.home.RoomNeutral
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -353,10 +358,10 @@ fun TilesmithStudioScreen(
 
     if (showWidgets) {
         val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        ModalBottomSheet(onDismissRequest = { showWidgets = false }, sheetState = sheet, containerColor = Background) {
+        ModalBottomSheet(onDismissRequest = { showWidgets = false }, sheetState = sheet, containerColor = androidx.compose.ui.graphics.lerp(Background, TilesmithAccent, 0.06f)) {
             Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Your widgets", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary, modifier = Modifier.weight(1f))
+                    Text("Your widgets", style = HealthDisplay, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary, modifier = Modifier.weight(1f))
                     Row(
                         Modifier
                             .clip(RoundedCornerShape(50))
@@ -367,7 +372,7 @@ fun TilesmithStudioScreen(
                     ) {
                         Icon(AppIcons.Add, null, tint = OnAccent, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("New", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = OnAccent)
+                        Text("New", style = HealthDisplay, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = OnAccent)
                     }
                 }
                 Text("Tap one to open it, hold it to duplicate or delete.", fontSize = 12.sp, color = TextSecondary, modifier = Modifier.padding(top = 2.dp, bottom = 12.dp))
@@ -400,7 +405,7 @@ fun TilesmithStudioScreen(
                     TextButton(onClick = { managing = null }) { Text("Cancel", color = TextSecondary) }
                 }
             },
-            containerColor = Surface,
+            containerColor = SheetColor,
         )
     }
 
@@ -442,8 +447,8 @@ fun TilesmithStudioScreen(
                         fontFamily = FontFamily.Monospace,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(SurfaceElevated)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(Color.White.copy(alpha = 0.09f))
                             .padding(10.dp),
                     )
                 }
@@ -452,7 +457,7 @@ fun TilesmithStudioScreen(
                 TextButton(onClick = { haptics.confirm(); viewModel.approve(ask); confirm = null }) { Text("Allow", color = TilesmithAccent) }
             },
             dismissButton = { TextButton(onClick = { confirm = null }) { Text("Not now", color = TextSecondary) } },
-            containerColor = Surface,
+            containerColor = SheetColor,
         )
     }
 
@@ -470,14 +475,14 @@ fun TilesmithStudioScreen(
                     cursorBrush = SolidColor(TilesmithAccent),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(SurfaceElevated)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.White.copy(alpha = 0.09f))
                         .padding(12.dp),
                 )
             },
             confirmButton = { TextButton(onClick = { viewModel.rename(name); renaming = false }) { Text("Save", color = TilesmithAccent) } },
             dismissButton = { TextButton(onClick = { renaming = false }) { Text("Cancel", color = TextSecondary) } },
-            containerColor = Surface,
+            containerColor = SheetColor,
         )
     }
 }
@@ -507,12 +512,12 @@ private fun StudioTopBar(
             Column(
                 Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(16.dp))
                     .clickable(enabled = onRename != null) { onRename?.invoke() }
                     .padding(horizontal = 6.dp, vertical = 4.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(title, fontSize = 19.sp, fontWeight = FontWeight.Bold, color = HeaderColor, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    Text(title, style = HealthDisplay, fontSize = 20.sp, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     if (onRename != null) {
                         Spacer(Modifier.width(5.dp))
                         Icon(AppIcons.Edit, contentDescription = "Rename", tint = TextTertiary, modifier = Modifier.size(13.dp))
@@ -544,14 +549,15 @@ private fun StudioTopBar(
                             added -> "Added"
                             else -> "Add"
                         },
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
+                        style = HealthDisplay,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
                         color = if (added) Success else OnAccent,
                     )
                 }
             }
         }
-        HorizontalDivider(color = Border.copy(alpha = 0.6f))
+        Spacer(Modifier.height(8.dp))
     }
 }
 
@@ -561,6 +567,7 @@ private fun BarButton(icon: ImageVector, label: String, tint: Color, onClick: ()
         Modifier
             .size(42.dp)
             .clip(CircleShape)
+            .background(roomColor(TilesmithAccent))
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -594,16 +601,16 @@ private fun EmptyStudio(
         Modifier
             .fillMaxWidth()
             .padding(top = 14.dp)
+            .pageRise()
             .clip(RoundedCornerShape(28.dp))
-            .background(Brush.linearGradient(listOf(TilesmithAccent.copy(alpha = 0.22f), TilesmithAccent.copy(alpha = 0.05f))))
-            .border(1.dp, Border, RoundedCornerShape(28.dp))
+            .background(roomColor(TilesmithAccent))
             .padding(18.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             MorphingShape(HeroShapes, TilesmithAccent, Modifier.size(44.dp))
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text("What should it show?", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                Text("What should it show?", style = HealthDisplay, fontWeight = FontWeight.Black, fontSize = 24.sp, color = TextPrimary)
                 Text(
                     if (aiReady) "Describe it below, or attach a picture of a widget you like."
                     else "Pick a starter, or choose an AI below to describe your own.",
@@ -634,11 +641,11 @@ private fun EmptyStudio(
                     Row(
                         Modifier
                             .weight(1f)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(Surface)
-                            .border(1.dp, Border, RoundedCornerShape(16.dp))
+                            .pageRise()
+                            .clip(RoundedCornerShape(22.dp))
+                            .background(RoomNeutral)
                             .clickable { onStarter(s.id) }
-                            .padding(10.dp),
+                            .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         ShapeGlyph(
@@ -648,7 +655,7 @@ private fun EmptyStudio(
                         )
                         Spacer(Modifier.width(9.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(s.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(s.title, style = HealthDisplay, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(s.prompt, fontSize = 11.sp, color = TextTertiary, maxLines = 2, lineHeight = 14.sp, overflow = TextOverflow.Ellipsis)
                         }
                     }
@@ -677,8 +684,8 @@ private fun DesignGrid(designs: List<TileDesign>, current: String?, onOpen: (Til
                         Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(18.dp))
-                            .background(if (on) TilesmithAccent.copy(alpha = 0.12f) else Surface)
-                            .border(if (on) 1.5.dp else 1.dp, if (on) TilesmithAccent else Border, RoundedCornerShape(18.dp))
+                            .background(if (on) TilesmithAccent.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.07f))
+                            .then(if (on) Modifier.border(2.dp, TilesmithAccent, RoundedCornerShape(18.dp)) else Modifier)
                             .combinedClickable(onClick = { onOpen(d) }, onLongClick = { onManage(d) })
                             .padding(10.dp),
                     ) {
@@ -728,7 +735,6 @@ private fun Stage(state: StudioState, dark: Boolean, compact: Boolean, onToggleD
             .height(height)
             .clip(shape)
             .background(Brush.linearGradient(listOf(top, bottom)))
-            .border(1.dp, Border, shape),
     ) {
         if (design != null) {
             TilePreview(
@@ -908,7 +914,7 @@ private fun ChatLine(line: StudioLine) {
                 modifier = Modifier
                     .widthIn(max = 300.dp)
                     .clip(RoundedCornerShape(4.dp, 18.dp, 18.dp, 18.dp))
-                    .background(Surface)
+                    .background(RoomNeutral)
                     .padding(horizontal = 14.dp, vertical = 10.dp),
             )
         }
@@ -983,8 +989,7 @@ private fun BlocksPane(design: TileDesign, onEdit: (Int) -> Unit) {
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(18.dp))
-                .background(Surface)
-                .border(1.dp, Border, RoundedCornerShape(18.dp)),
+                .background(RoomNeutral)
         ) {
             design.blocks.forEachIndexed { i, b ->
                 if (i > 0) HorizontalDivider(color = Border, modifier = Modifier.padding(start = 56.dp))
@@ -995,7 +1000,7 @@ private fun BlocksPane(design: TileDesign, onEdit: (Int) -> Unit) {
                         .padding(horizontal = 14.dp, vertical = 11.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box(Modifier.size(30.dp).clip(RoundedCornerShape(9.dp)).background(TilesmithAccent.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(30.dp).clip(RoundedCornerShape(12.dp)).background(TilesmithAccent.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
                         Icon(blockIcon(b.type), null, tint = TilesmithAccent, modifier = Modifier.size(16.dp))
                     }
                     Spacer(Modifier.width(12.dp))
@@ -1043,7 +1048,7 @@ private fun BlockEditor(
             if (label.trim() != block.label.orEmpty()) onChange { it.copy(label = label.trim().take(40).ifBlank { null }) }
             onDismiss()
         },
-        containerColor = Surface,
+        containerColor = SheetColor,
         title = { Text(blockTitle(block)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
@@ -1059,7 +1064,7 @@ private fun BlockEditor(
                         if (label.isEmpty()) Text(source?.label ?: "No label", color = TextTertiary, fontSize = 15.sp)
                         inner()
                     },
-                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(SurfaceElevated).padding(12.dp),
+                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.09f)).padding(12.dp),
                 )
                 EditorTitle("Shows as")
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1197,12 +1202,11 @@ private fun LookPane(
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(18.dp))
-                .background(Surface)
-                .border(1.dp, Border, RoundedCornerShape(18.dp))
+                .background(RoomNeutral)
                 .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(Modifier.size(32.dp).clip(RoundedCornerShape(10.dp)).background(TilesmithAccent.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(32.dp).clip(RoundedCornerShape(14.dp)).background(TilesmithAccent.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
                 Icon(AppIcons.Sparkles, null, tint = TilesmithAccent, modifier = Modifier.size(17.dp))
             }
             Spacer(Modifier.width(12.dp))
@@ -1235,12 +1239,10 @@ private fun LookPane(
 @Composable
 private fun SectionTitle(text: String) {
     Text(
-        text = text.uppercase(),
-        fontSize = 11.sp,
-        fontWeight = FontWeight.Bold,
-        color = TextSecondary,
-        letterSpacing = 0.8.sp,
-        modifier = Modifier.padding(start = 4.dp, top = 20.dp, bottom = 9.dp),
+        text = text, style = HealthDisplay,
+        fontSize = 19.sp,
+        color = TextPrimary,
+        modifier = Modifier.padding(start = 6.dp, top = 22.dp, bottom = 10.dp),
     )
 }
 
@@ -1280,8 +1282,7 @@ private fun SuggestionChip(text: String, onClick: () -> Unit) {
     Row(
         Modifier
             .clip(RoundedCornerShape(50))
-            .background(TilesmithAccent.copy(alpha = 0.12f))
-            .border(1.dp, TilesmithAccent.copy(alpha = 0.45f), RoundedCornerShape(50))
+            .background(TilesmithAccent.copy(alpha = 0.16f))
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1294,7 +1295,7 @@ private fun SuggestionChip(text: String, onClick: () -> Unit) {
 
 @Composable
 private fun Chip(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(12.dp)
+    val shape = RoundedCornerShape(16.dp)
     Text(
         label,
         fontSize = 13.sp,
@@ -1303,8 +1304,8 @@ private fun Chip(label: String, selected: Boolean, modifier: Modifier = Modifier
         textAlign = TextAlign.Center,
         modifier = modifier
             .clip(shape)
-            .background(if (selected) TilesmithAccent else Surface)
-            .border(1.dp, if (selected) TilesmithAccent else Border, shape)
+            .background(if (selected) TilesmithAccent else Color.White.copy(alpha = 0.07f))
+            .then(if (selected) Modifier.border(2.dp, TilesmithAccent, shape) else Modifier)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 9.dp),
     )
@@ -1317,8 +1318,8 @@ private fun SizeChip(size: TileSize, selected: Boolean, onClick: () -> Unit) {
     Column(
         Modifier
             .clip(shape)
-            .background(if (selected) TilesmithAccent.copy(alpha = 0.16f) else Surface)
-            .border(if (selected) 1.5.dp else 1.dp, if (selected) TilesmithAccent else Border, shape)
+            .background(if (selected) TilesmithAccent.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.07f))
+            .then(if (selected) Modifier.border(2.dp, TilesmithAccent, shape) else Modifier)
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 9.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1356,13 +1357,13 @@ private fun SurfaceChip(surface: TileSurface, palette: TilePalette, dark: Boolea
     Column(
         modifier
             .clip(shape)
-            .background(Surface)
-            .border(if (selected) 1.5.dp else 1.dp, if (selected) TilesmithAccent else Border, shape)
+            .background(RoomNeutral)
+            .then(if (selected) Modifier.border(2.dp, TilesmithAccent, shape) else Modifier)
             .clickable(onClick = onClick)
             .padding(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(Modifier.fillMaxWidth().height(26.dp).clip(RoundedCornerShape(9.dp)).background(color))
+        Box(Modifier.fillMaxWidth().height(26.dp).clip(RoundedCornerShape(12.dp)).background(color))
         Spacer(Modifier.height(5.dp))
         Text(surface.label, fontSize = 12.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, color = if (selected) TextPrimary else TextSecondary)
     }
@@ -1375,8 +1376,8 @@ private fun ShapeChip(shape: TileShape, selected: Boolean, onClick: () -> Unit) 
         Modifier
             .size(52.dp)
             .clip(box)
-            .background(if (selected) TilesmithAccent.copy(alpha = 0.16f) else Surface)
-            .border(if (selected) 1.5.dp else 1.dp, if (selected) TilesmithAccent else Border, box)
+            .background(if (selected) TilesmithAccent.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.07f))
+            .then(if (selected) Modifier.border(2.dp, TilesmithAccent, box) else Modifier)
             .clickable(onClick = onClick)
             .padding(9.dp),
     ) {
@@ -1411,7 +1412,7 @@ private fun Composer(
         state.attachment?.let { a ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box {
-                    Image(a.thumb.asImageBitmap(), contentDescription = "Picture to build from", contentScale = ContentScale.Crop, modifier = Modifier.size(52.dp).clip(RoundedCornerShape(12.dp)))
+                    Image(a.thumb.asImageBitmap(), contentDescription = "Picture to build from", contentScale = ContentScale.Crop, modifier = Modifier.size(52.dp).clip(RoundedCornerShape(16.dp)))
                     Box(
                         Modifier
                             .align(Alignment.TopEnd)
@@ -1440,8 +1441,8 @@ private fun Composer(
             Modifier
                 .fillMaxWidth()
                 .clip(composerShape)
-                .background(Surface)
-                .border(1.dp, if (state.busy) TilesmithAccent.copy(alpha = 0.5f) else Border, composerShape)
+                .background(RoomNeutral)
+                .then(if (state.busy) Modifier.border(2.dp, TilesmithAccent.copy(alpha = 0.5f), composerShape) else Modifier)
                 .padding(6.dp),
         ) {
             if (aiReady) {

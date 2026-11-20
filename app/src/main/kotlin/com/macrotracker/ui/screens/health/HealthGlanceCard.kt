@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens.health
 
+import com.macrotracker.ui.screens.home.HomeTile
+import com.macrotracker.ui.screens.home.HomeTone
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.Arrangement
@@ -142,18 +144,15 @@ fun HealthGlanceCard(
         }
     }
 
-    MacroCard(modifier = Modifier.trackOnScreen(onScreen)) {
-        CardHeader(
-            title = "Body stats",
-            icon = AppIcons.HeartPulse,
-            accent = HealthHeartRate,
-            subtitle = "Today",
-        ) {
-            LastUpdatedText(lastUpdatedAt = lastUpdatedAt)
-            HubHeaderAction(AppIcons.ChevronRight, "Open Health", onOpen)
-        }
-
-        Spacer(modifier = Modifier.height(18.dp))
+    HomeTile(
+        title = "Health",
+        tone = HomeTone.Body,
+        icon = AppIcons.HeartPulse,
+        meta = "Today",
+        onOpen = onOpen,
+        modifier = Modifier.trackOnScreen(onScreen),
+    ) {
+        Spacer(modifier = Modifier.height(4.dp))
         Row(
             modifier = Modifier
                 .fillMaxWidth()

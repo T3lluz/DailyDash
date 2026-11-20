@@ -1,5 +1,10 @@
 package com.macrotracker.ui.screens.settings
 
+import com.macrotracker.ui.screens.home.SheetColor
+import com.macrotracker.ui.screens.home.roomSwitchColors
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.home.WellFill
+import com.macrotracker.ui.screens.home.SubPage
 import android.Manifest
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -128,21 +133,7 @@ fun ServersSettingsScreen(
         notificationsGranted = viewModel.hasNotificationPermission()
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Background)
-            .imePadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp)
-            .subScreenBottomPadding(),
-    ) {
-        SubScreenHeader(
-            title = "Servers",
-            subtitle = "SSH monitoring for your own machines",
-            onNavigateBack = onNavigateBack,
-        )
-        Spacer(modifier = Modifier.height(12.dp))
+    SubPage(title = "Servers", lede = "SSH monitoring for your own machines", onBack = onNavigateBack) {
 
         // ── Server list ──────────────────────────────────────────────────
         MacroCard(delayMs = 40) {
@@ -154,7 +145,7 @@ fun ServersSettingsScreen(
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .clickable {
                             haptics.click()
                             onOpenConsole()
@@ -168,7 +159,7 @@ fun ServersSettingsScreen(
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(14.dp))
                             .clickable {
                                 haptics.click()
                                 onOpenDashboard()
@@ -289,7 +280,7 @@ fun ServersSettingsScreen(
 
             WidgetExpandSection(visible = settings.enabled && notificationsGranted) {
                 Column {
-                    HorizontalDivider(color = Border.copy(alpha = 0.35f), modifier = Modifier.padding(vertical = 6.dp))
+                    Spacer(Modifier.height(8.dp))
                     ToggleRow(
                         title = "Critical",
                         subtitle = "Unreachable hosts, failed units, disks about to fill",
@@ -374,7 +365,7 @@ fun ServersSettingsScreen(
                                         (settings.liveNotificationServerId == null && profile == profiles.first())
                                     Box(
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(8.dp))
+                                            .clip(RoundedCornerShape(14.dp))
                                             .background(if (selected) Primary.copy(alpha = 0.2f) else ServerWell)
                                             .clickable {
                                                 haptics.tick()
@@ -425,7 +416,7 @@ fun ServersSettingsScreen(
                         viewModel.setBackgroundPollSeconds((settings.backgroundPollSeconds + 5).coerceAtMost(300))
                     },
                 )
-                HorizontalDivider(color = Border.copy(alpha = 0.35f), modifier = Modifier.padding(vertical = 10.dp))
+                Spacer(Modifier.height(8.dp))
                 ThresholdRow("CPU", settings.thresholds.cpuPercent, "%") { delta ->
                     viewModel.updateThresholds { it.copy(cpuPercent = clampPercent(it.cpuPercent + delta)) }
                 }
@@ -469,7 +460,7 @@ private fun ServerListRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(Background)
             .clickable(onClick = onEdit)
             .padding(12.dp),
@@ -503,7 +494,7 @@ private fun ServerListRow(
         Spacer(modifier = Modifier.width(8.dp))
         ServerTag(statusText, statusColor)
         Spacer(modifier = Modifier.width(6.dp))
-        Switch(checked = profile.enabled, onCheckedChange = onToggle)
+        Switch(checked = profile.enabled, onCheckedChange = onToggle, colors = roomSwitchColors())
     }
 }
 
@@ -671,7 +662,7 @@ private fun ServerEditorCard(
             is ServerTestUiState.Success -> Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(14.dp))
                     .background(ServerGood.copy(alpha = 0.12f))
                     .padding(10.dp),
             ) {
@@ -711,7 +702,7 @@ private fun ServerEditorCard(
                 lineHeight = 16.sp,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(14.dp))
                     .background(ServerCritical.copy(alpha = 0.1f))
                     .padding(10.dp),
             )
@@ -766,7 +757,7 @@ private fun ServerEditorCard(
     if (confirmDelete && onDelete != null) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            containerColor = Surface,
+            containerColor = SheetColor,
             title = { Text("Delete ${existing?.label ?: "this server"}?", color = TextPrimary) },
             text = {
                 Text(
@@ -813,7 +804,7 @@ private fun ToggleRow(
             Text(title, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
             Text(subtitle, color = TextSecondary, fontSize = 11.sp, lineHeight = 15.sp)
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(checked = checked, onCheckedChange = onCheckedChange, colors = roomSwitchColors())
     }
 }
 
@@ -834,7 +825,7 @@ private fun StepperRow(
         Text(label, color = TextPrimary, fontSize = 13.sp, modifier = Modifier.weight(1f))
         StepperButton("−") { haptics.tick(); onDecrease() }
         Text(
-            text = value,
+            text = value, style = HealthDisplay,
             color = TextPrimary,
             fontSize = 13.sp,
             fontFamily = FontFamily.Monospace,
@@ -851,12 +842,12 @@ private fun StepperButton(symbol: String, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .size(30.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(ServerWell)
+            .clip(RoundedCornerShape(14.dp))
+            .background(WellFill)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(symbol, color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Text(symbol, color = TextPrimary, style = HealthDisplay, fontSize = 16.sp)
     }
 }
 

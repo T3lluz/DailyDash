@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens.settings
 
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.home.SubPage
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -125,15 +127,7 @@ fun PermissionsSettingsScreen(
     val grantedCount = rows.count { it.granted } + (if (healthOk) 1 else 0) + GoogleScope.entries.count { google.granted(it) }
     val total = rows.size + 1 + GoogleScope.entries.size
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(Background)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp)
-            .padding(bottom = 32.dp),
-    ) {
-        SubScreenHeader(title = "Permissions", subtitle = "$grantedCount of $total allowed", onNavigateBack = onNavigateBack)
+    SubPage(title = "Permissions", lede = "$grantedCount of $total allowed.", onBack = onNavigateBack) {
 
         MacroCard {
             Text("What DailyDash can use", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
@@ -161,7 +155,7 @@ fun PermissionsSettingsScreen(
                 Icon(if (canAsk) AppIcons.ShieldCheck else AppIcons.CheckCircle, null, tint = if (canAsk) OnAccent else Success, modifier = Modifier.size(19.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    if (canAsk) "Allow everything Android asks for" else "Every Android permission is allowed",
+                    if (canAsk) "Allow everything Android asks for" else "Every Android permission is allowed", style = HealthDisplay,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (canAsk) OnAccent else Success,
@@ -189,7 +183,7 @@ fun PermissionsSettingsScreen(
                 }
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    "Reconnect",
+                    "Reconnect", style = HealthDisplay,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     color = OnAccent,
@@ -253,7 +247,7 @@ fun PermissionsSettingsScreen(
                     Modifier.fillMaxWidth().padding(vertical = 8.dp, horizontal = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(Warning.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(40.dp).clip(RoundedCornerShape(18.dp)).background(Warning.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
                         Icon(AppIcons.Bell, null, tint = Warning, modifier = Modifier.size(20.dp))
                     }
                     Spacer(Modifier.width(12.dp))
@@ -379,12 +373,12 @@ private fun PermissionRow(icon: ImageVector, tint: Color, title: String, detail:
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(18.dp))
             .clickable(onClick = onClick)
             .padding(vertical = 10.dp, horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(tint.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(40.dp).clip(RoundedCornerShape(18.dp)).background(tint.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
             Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
         }
         Spacer(Modifier.width(12.dp))
@@ -404,7 +398,7 @@ private fun PermissionRow(icon: ImageVector, tint: Color, title: String, detail:
             }
         } else {
             Text(
-                action,
+                action, style = HealthDisplay,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = OnAccent,

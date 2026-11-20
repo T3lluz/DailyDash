@@ -1,5 +1,13 @@
 package com.macrotracker.ui.components
 
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.background
+import androidx.compose.runtime.CompositionLocalProvider
+import com.macrotracker.ui.screens.home.pageRise
+import com.macrotracker.ui.screens.home.HomeTone
+import com.macrotracker.ui.screens.health.LocalRoomColor
+import com.macrotracker.ui.screens.health.roomColor
+import com.macrotracker.ui.screens.health.HealthDisplay
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Column
@@ -31,9 +39,9 @@ import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.util.LocalTickersPaused
 import kotlinx.coroutines.delay
 
-val MacroCardShape = RoundedCornerShape(16.dp)
+val MacroCardShape = RoundedCornerShape(28.dp)
 
-/** Title every Home / Health card starts with — same size as [WidgetPlaceholderCard] so nothing jumps on load. */
+/** The title of a plain card (settings): the display face, in the card's colour when it has one. */
 @Composable
 fun CardTitle(
     text: String,
@@ -43,64 +51,38 @@ fun CardTitle(
     Text(
         text,
         modifier = modifier,
-        fontSize = 18.sp,
-        fontWeight = FontWeight.Bold,
+        style = HealthDisplay,
+        fontSize = 19.sp,
         color = color,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
     )
 }
 
+/**
+ * A room for anything that is not a Home tile or a page's room (Settings and its pages):
+ * the same flat dark tint of a colour with 28 dp corners and no edge. [borderColor] is
+ * kept for callers that marked a card by its edge; it now tints the room instead.
+ */
 @Composable
 fun MacroCard(
     modifier: Modifier = Modifier,
     delayMs: Long = 0,
     borderColor: Color = Border,
+    tone: Color = if (borderColor == Border) HomeTone.Neutral else borderColor.copy(alpha = 1f),
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    // Track whether this card has already animated in. Persists across recompositions
-    // so navigating away and back does not re-trigger the entrance fade.
-    var hasAnimated by rememberSaveable { mutableStateOf(false) }
-
-    // Starts fully shown once the card has faded in, so coming back never fades it again.
-    // A card with no entrance delay starts shown: at 0 it was blank for a frame, which a
-    // state swap (loading → loaded) showed as a flicker.
-    val alpha = remember { Animatable(if (hasAnimated || delayMs <= 0L) 1f else 0f) }
-    // Only the entrance cares whether a list is scrolling. Once it has run, not reading
-    // the local keeps every card from recomposing each time a scroll starts or stops.
-    val scrollIdle = hasAnimated || !LocalTickersPaused.current
-
-    LaunchedEffect(Unit) {
-        if (!hasAnimated) {
-            if (scrollIdle && delayMs > 0) delay(delayMs)
-            if (scrollIdle && delayMs > 0) {
-                alpha.animateTo(1f, animationSpec = MacroMotion.fadeTween())
-            } else {
-                alpha.snapTo(1f)
-            }
-            hasAnimated = true
-        }
-    }
-
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp)
-            // Read in the draw phase, so the fade redraws the card instead of
-            // recomposing it every frame.
-            .graphicsLayer { this.alpha = if (hasAnimated) 1f else alpha.value },
-        shape = MacroCardShape,
-        colors = CardDefaults.cardColors(containerColor = Surface),
-        border = BorderStroke(1.dp, borderColor),
-        // elevation = 0 avoids a shadow RenderNode pass on every frame —
-        // visual depth is provided by the border + background contrast.
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-    ) {
+    val fill = roomColor(tone)
+    CompositionLocalProvider(LocalRoomColor provides fill) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = modifier
+                .fillMaxWidth()
+                .pageRise()
+                .padding(vertical = 7.dp)
+                .clip(MacroCardShape)
+                .background(fill)
+                .padding(18.dp),
             content = content,
         )
     }
 }
-
-

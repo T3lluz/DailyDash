@@ -1,5 +1,12 @@
 package com.macrotracker.ui.components
 
+import androidx.compose.ui.graphics.Color
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.home.HomeTone
+import com.macrotracker.ui.screens.home.PageRoom
+import com.macrotracker.ui.screens.home.TonePill
+import com.macrotracker.ui.theme.OnAccent
+import com.macrotracker.ui.theme.TextTertiary
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -92,78 +99,61 @@ fun encodeWidgetConfig(configs: List<WidgetConfig>): String {
     return configs.joinToString(",") { "${it.id}:${it.isVisible}" }
 }
 
+/**
+ * Which tiles show and in what order: a room of rows, each with its grip, its subject's
+ * icon in its colour, and a switch.
+ */
 @Composable
 fun WidgetEditor(
     configs: List<WidgetConfig>,
     onConfigsChanged: (List<WidgetConfig>) -> Unit,
     onClose: () -> Unit,
+    toneOf: (String) -> Color = { HomeTone.of(it) },
 ) {
     val haptics = rememberHaptics()
 
-    MacroCard(delayMs = 0) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                "Edit layout",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary,
-            )
-            IconButton(onClick = { haptics.tick(); onClose() }) {
-                Icon(AppIcons.Check, contentDescription = "Done", tint = Primary)
-            }
-        }
-        Text(
-            "Toggle visibility · drag the grip to reorder.",
-            fontSize = 14.sp,
-            color = TextSecondary,
-            modifier = Modifier.padding(bottom = 16.dp),
-        )
-
+    PageRoom(tone = HomeTone.Neutral, title = "Layout", meta = "Switch on, drag the grip to order", flush = true) {
         DraggableWidgetColumn(
             items = configs,
             onReorder = onConfigsChanged,
             itemKey = { it.id },
             handleOnly = true,
-            itemSpacing = 8.dp,
+            itemSpacing = 2.dp,
+            modifier = Modifier.padding(horizontal = 8.dp),
         ) { index, config, isDragging, dragHandleModifier ->
+            val tone = toneOf(config.id)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        if (isDragging) Primary.copy(alpha = 0.12f) else Background,
-                    )
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(if (isDragging) tone.copy(alpha = 0.16f) else Color.Transparent)
+                    .padding(horizontal = 10.dp, vertical = 9.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
                     imageVector = AppIcons.GripHorizontal,
                     contentDescription = "Drag to reorder",
-                    tint = if (isDragging) Primary else TextSecondary,
+                    tint = if (isDragging) tone else TextTertiary,
                     modifier = Modifier
-                        .size(28.dp)
+                        .size(26.dp)
                         .then(dragHandleModifier),
                 )
 
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(10.dp))
 
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(Primary.copy(alpha = 0.1f)),
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(13.dp))
+                        .background(tone.copy(alpha = if (config.isVisible) 0.18f else 0.07f)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    // Decorative: the label beside it already names the card.
+                    // Decorative: the label beside it already names the tile.
                     Icon(
                         imageVector = config.icon,
                         contentDescription = null,
-                        tint = Primary,
-                        modifier = Modifier.size(20.dp),
+                        tint = if (config.isVisible) tone else TextTertiary,
+                        modifier = Modifier.size(19.dp),
                     )
                 }
 
@@ -171,9 +161,10 @@ fun WidgetEditor(
 
                 Text(
                     text = config.label,
+                    style = HealthDisplay,
+                    fontWeight = FontWeight.SemiBold,
                     fontSize = 16.sp,
-                    color = TextPrimary,
-                    fontWeight = FontWeight.Medium,
+                    color = if (config.isVisible) TextPrimary else TextSecondary,
                     modifier = Modifier.weight(1f),
                 )
 
@@ -186,15 +177,17 @@ fun WidgetEditor(
                         if (isChecked) haptics.toggleOn() else haptics.toggleOff()
                     },
                     colors = SwitchDefaults.colors(
-                        checkedThumbColor = Background,
-                        checkedTrackColor = Primary,
-                        uncheckedThumbColor = TextSecondary,
-                        uncheckedTrackColor = Background,
+                        checkedThumbColor = OnAccent,
+                        checkedTrackColor = tone,
+                        uncheckedThumbColor = TextTertiary,
+                        uncheckedTrackColor = Color.White.copy(alpha = 0.10f),
+                        uncheckedBorderColor = Color.Transparent,
                     ),
-                    modifier = Modifier.height(24.dp),
                 )
             }
         }
-        Spacer(modifier = Modifier.height(8.dp))
+        Box(Modifier.fillMaxWidth().padding(start = 18.dp, top = 12.dp)) {
+            TonePill("Done", HomeTone.Neutral, icon = AppIcons.Check, onClick = onClose)
+        }
     }
 }

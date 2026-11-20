@@ -38,6 +38,36 @@ class DashboardLinkTest {
     }
 
     @Test
+    fun `reads the rooms dashboard's app list, keyed by what the collector probes`() {
+        val json = JSONObject(
+            """
+            {"rows":[{"name":"House","apps":[
+              {"name":"crafty","label":"Crafty","desc":"Minecraft","icon":"crafty-controller.svg","brand":"#2d9cdb","container":"crafty","probe":"crafty"},
+              {"name":"qbit","label":"qBittorrent","desc":"Downloads","icon":"qbittorrent.svg","brand":"#3b8ae0","container":"qbittorrent","probe":"qbit"},
+              {"name":"Cinema Info","label":"Cinema Info","icon":"cinema-info.svg","container":null,"probe":null}]}]}
+            """.trimIndent(),
+        )
+        val parsed = DashboardLinkRepository.parseServices(json)
+        assertEquals(listOf("crafty", "qbit", "cinema-info"), parsed.keys.toList())
+        assertEquals("icons/crafty-controller.svg", parsed.getValue("crafty").icon)
+        assertEquals("qbittorrent", parsed.getValue("qbit").container)
+        assertNull(parsed.getValue("cinema-info").container)
+    }
+
+    @Test
+    fun `a container takes the icon of the app it belongs to`() {
+        val link = DashboardLink(
+            baseUrl = "https://d", hostname = "t3lluz", generatedAtSec = 0, services = emptyList(), history = null,
+            activity = DashboardActivity(null, emptyList()), alerts = emptyList(),
+            containerIcons = mapOf("immich" to "a.svg", "immich-server" to "b.svg", "sonarr" to "s.svg"),
+        )
+        assertEquals("b.svg", link.iconForContainer("immich-server"))
+        assertEquals("a.svg", link.iconForContainer("immich-redis"))
+        assertEquals("s.svg", link.iconForContainer("Sonarr"))
+        assertNull(link.iconForContainer("cloudflared"))
+    }
+
+    @Test
     fun `folds a day of five-minute checks into half-hour bars`() {
         val samples = JSONArray((0 until 288).map { i -> if (i in 270..275) 0.0 else 1.0 })
         val bars = DashboardLinkRepository.foldBars(samples)

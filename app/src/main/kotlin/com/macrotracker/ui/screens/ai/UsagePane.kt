@@ -1,5 +1,6 @@
 package com.macrotracker.ui.screens.ai
 
+import androidx.compose.foundation.background
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.foundation.clickable
@@ -194,9 +195,9 @@ fun UsagePane(
                 UsageCard("Hermes chats", AppIcons.Chat, note = u!!.hermesTurns7d.takeIf { it > 0 }?.let { "$it answer${if (it == 1) "" else "s"} this week" }) {
                     if (u.chats.isEmpty()) Text("No readings yet.", fontSize = 13.sp, color = TextSecondary)
                     u.chats.forEachIndexed { i, c ->
-                        if (i > 0) Hairline()
+                        if (i > 0) Spacer(Modifier.height(6.dp))
                         Row(
-                            Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
                                 .clickable { haptics.tick(); viewModel.openChat(c.id); onOpenChat() }
                                 .padding(vertical = 9.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -294,9 +295,17 @@ fun UsageButton(usage: UsageSnapshot?, onClick: () -> Unit, modifier: Modifier =
         focus != null && top != null -> "Usage. ${focus.label}: ${Math.round(top.usedPercent ?: 0.0)}% of the ${top.label.lowercase()} limit used"
         else -> "Usage"
     }
-    IconButton(onClick = { haptics.tick(); onClick() }, modifier = modifier.semantics { contentDescription = said }) {
+    Box(
+        modifier = modifier
+            .size(42.dp)
+            .clip(CircleShape)
+            .background(AiRoom)
+            .clickable { haptics.tick(); onClick() }
+            .semantics { contentDescription = said },
+        contentAlignment = Alignment.Center,
+    ) {
         if (focus != null) UsageMeter(top?.usedPercent, size = 19.dp)
-        else Icon(AppIcons.ChartColumn, null, tint = TextSecondary, modifier = Modifier.size(20.dp))
+        else Icon(AppIcons.ChartColumn, null, tint = TextPrimary, modifier = Modifier.size(19.dp))
     }
 }
 
@@ -351,7 +360,7 @@ internal fun ComposerUsageMeter(
     }
     if (open) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        ModalBottomSheet(onDismissRequest = { open = false }, sheetState = sheetState, containerColor = Surface) {
+        ModalBottomSheet(onDismissRequest = { open = false }, sheetState = sheetState, containerColor = AiSheet) {
             UsageSheetBody(
                 usage = usage,
                 provider = provider,
@@ -402,7 +411,7 @@ private fun UsageSheetBody(
                     ).joinToString(" · "),
                     fontSize = 11.5.sp, color = TextTertiary,
                 )
-                Spacer(Modifier.height(14.dp)); Hairline(); Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(14.dp))
             }
             if (u == null) {
                 Text(
@@ -414,7 +423,7 @@ private fun UsageSheetBody(
                 val mine = u.limit(provider)
                 val ordered = listOfNotNull(mine) + u.limits.filter { it.id != provider }
                 ordered.forEachIndexed { i, l ->
-                    if (i > 0) { Spacer(Modifier.height(12.dp)); Hairline(); Spacer(Modifier.height(12.dp)) }
+                    if (i > 0) { Spacer(Modifier.height(12.dp)) }
                     ProviderLimitBlock(
                         l, openWindows,
                         onToggle = { k -> openWindows = if (k in openWindows) openWindows - k else openWindows + k },
@@ -427,7 +436,7 @@ private fun UsageSheetBody(
             modifier = Modifier
                 .padding(horizontal = 12.dp, vertical = 10.dp)
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(16.dp))
                 .clickable(onClick = onOpenUsage)
                 .padding(horizontal = 8.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,

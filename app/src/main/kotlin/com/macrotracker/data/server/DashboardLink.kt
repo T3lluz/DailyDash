@@ -40,8 +40,21 @@ data class DashboardLink(
     val history: DashboardHistory?,
     val activity: DashboardActivity,
     val alerts: List<DashboardAlert>,
+    /** Each app's icon by the container it runs in, from `_services.json`. */
+    val containerIcons: Map<String, String> = emptyMap(),
 ) {
     val servicesUp: Int get() = services.count { it.up == true }
+
+    /**
+     * The icon of the app a container belongs to: its own entry, or one whose name the
+     * container's starts with ("immich-redis" is Immich's).
+     */
+    fun iconForContainer(name: String): String? {
+        val n = name.lowercase()
+        containerIcons[n]?.let { return it }
+        return containerIcons.entries.filter { (k, _) -> n.startsWith("$k-") || n.startsWith("${k}_") }
+            .maxByOrNull { it.key.length }?.value
+    }
 
     /** True for the server whose SSH `hostname` is the collector's own. */
     fun belongsTo(sshHostname: String?): Boolean {
@@ -175,9 +188,16 @@ class DashboardLinkRepository @Inject constructor(
                 }
                 val page = async {
                     if (now - tilesAtMs >= TILES_TTL_MS) {
-                        runCatching { parseTiles(get(url)) }
-                            .onSuccess { tiles = it; tilesAtMs = now }
-                            .onFailure { Log.d(TAG, "tiles unavailable: ${it.message}") }
+                        // The rooms dashboard lists its apps in `_services.json`; the older page
+                        // drew them as tiles in its markup. Either, with the list winning.
+                        val listed = runCatching { parseServices(JSONObject(get("$url/_services.json"))) }
+                            .onFailure { Log.d(TAG, "services unavailable: ${it.message}") }
+                            .getOrNull()
+                        val drawn = runCatching { parseTiles(get(url)) }.getOrNull()
+                        if (listed != null || drawn != null) {
+                            tiles = drawn.orEmpty() + listed.orEmpty()
+                            tilesAtMs = now
+                        }
                     }
                 }
                 stats.await()
@@ -214,7 +234,36 @@ class DashboardLinkRepository @Inject constructor(
             val description: String?,
             val icon: String?,
             val brand: String?,
+            val container: String? = null,
         )
+
+        /**
+         * `_services.json`: groups of apps, each with its label, one line, icon, brand and the
+         * container it runs in. Keyed by the name the collector probes it under, which is
+         * what the history's uptime is keyed by.
+         */
+        internal fun parseServices(json: JSONObject): Map<String, ServiceTile> {
+            val out = LinkedHashMap<String, ServiceTile>()
+            val groups = json.optJSONArray("rows") ?: return out
+            for (g in 0 until groups.length()) {
+                val apps = groups.optJSONObject(g)?.optJSONArray("apps") ?: continue
+                for (i in 0 until apps.length()) {
+                    val a = apps.optJSONObject(i) ?: continue
+                    val key = a.optString("probe").takeIf { it.isNotBlank() && it != "null" }
+                        ?: a.optString("name").lowercase().replace(' ', '-')
+                    if (key.isBlank()) continue
+                    out[key] = ServiceTile(
+                        name = key,
+                        title = a.optString("label").ifBlank { key.replaceFirstChar { it.uppercase() } },
+                        description = a.optString("desc").takeIf { it.isNotBlank() && it != "null" },
+                        icon = a.optString("icon").takeIf { it.isNotBlank() && it != "null" }?.let { if ('/' in it) it else "icons/$it" },
+                        brand = a.optString("brand").takeIf { it.startsWith("#") },
+                        container = a.optString("container").takeIf { it.isNotBlank() && it != "null" },
+                    )
+                }
+            }
+            return out
+        }
 
         /**
          * The service tiles are generated markup (`tiles.py`), one `div.tile` per service
@@ -285,6 +334,10 @@ class DashboardLinkRepository @Inject constructor(
                     }.orEmpty(),
                 ),
                 alerts = alerts(stats),
+                containerIcons = tiles.values.mapNotNull { t ->
+                    val icon = t.icon ?: return@mapNotNull null
+                    (t.container ?: t.name).lowercase() to resolve(base, icon)
+                }.toMap(),
             )
         }
 

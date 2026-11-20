@@ -1,5 +1,17 @@
 package com.macrotracker.ui.components
 
+import com.macrotracker.ui.screens.home.RoomNeutral
+import com.macrotracker.ui.screens.home.pageStickyAnchor
+import androidx.compose.foundation.layout.fillMaxSize
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.health.RoomLoading
+import com.macrotracker.ui.screens.home.HomePage
+import com.macrotracker.ui.screens.home.HomeTile
+import com.macrotracker.ui.screens.home.HomeTileLoading
+import com.macrotracker.ui.screens.home.HomeTilePrompt
+import com.macrotracker.ui.screens.home.HomeTone
+import com.macrotracker.ui.screens.home.PageRoom
+import com.macrotracker.ui.screens.home.TonePill
 import coil.compose.SubcomposeAsyncImage
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.border
@@ -14,7 +26,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -137,8 +148,8 @@ import com.macrotracker.ui.util.rememberClockFormatter
  * Which calendars show follows the web's switches (Settings → Calendars there).
  */
 
-private val UpcomingAccent = Primary
-private val CardShape = RoundedCornerShape(14.dp)
+private val UpcomingAccent = HomeTone.Upcoming
+private val CardShape = RoundedCornerShape(24.dp)
 private val WhenStripHeight = 30.dp
 private val WhenGap = 6.dp
 private val ItemSpacing = 8.dp
@@ -166,10 +177,15 @@ private val TimeText = Color(0xFFD1D1D1)
 private val CalendarNameText = Color(0xFFCFCFCF)
 private val DescText = Color(0xFFBDBDBD)
 
+/**
+ * Coming up as a Home tile: the timeline's strip, opened on today. A tap opens the page,
+ * which adds the source filter, the jumps, and every entry by day.
+ */
 @Composable
 fun UpcomingCard(
     viewModel: UpcomingViewModel = hiltViewModel(),
     isVisible: Boolean = true,
+    onOpen: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsState()
     val calendars by viewModel.calendars.collectAsState()
@@ -185,62 +201,217 @@ fun UpcomingCard(
 
     val stateKey: (UpcomingUiState) -> Any = { if (it is UpcomingUiState.Idle) UpcomingUiState.Loading::class else it::class }
     WidgetStateSwitch(targetState = state, contentKey = stateKey, label = "upcoming") { s ->
-    when (s) {
-        is UpcomingUiState.Success -> UpcomingContent(
-            feed = s.feed,
-            calendars = calendars,
-            error = s.error,
-        )
-        is UpcomingUiState.Error -> MacroCard(borderColor = UpcomingAccent.copy(alpha = 0.16f)) {
-            UpcomingHeader(subtitle = "From your dashboard server", tools = {})
-            Spacer(Modifier.height(12.dp))
-            HubErrorState(
+        when (s) {
+            is UpcomingUiState.Success -> {
+                val shown = remember(s.feed.events, calendars) { s.feed.events.filter(calendars::shows) }
+                HomeTile(
+                    title = "Coming up",
+                    tone = UpcomingAccent,
+                    icon = AppIcons.TvPlay,
+                    meta = if (shown.isEmpty()) null else "${shown.size} ahead",
+                    onOpen = if (shown.isEmpty()) null else onOpen,
+                ) {
+                    UpcomingStrip(events = shown, error = s.error, stremioError = s.feed.stremioError, tools = false)
+                }
+            }
+            is UpcomingUiState.Error -> HomeTilePrompt(
+                title = "Coming up",
+                tone = UpcomingAccent,
+                icon = AppIcons.TvPlay,
                 message = s.message,
-                accent = UpcomingAccent,
-                onRetry = { viewModel.load(forceRefresh = true) },
+                actionLabel = "Retry",
+                actionIcon = AppIcons.Refresh,
+                onAction = { viewModel.load(forceRefresh = true) },
             )
+            UpcomingUiState.Idle, UpcomingUiState.Loading -> HomeTileLoading("Coming up", UpcomingAccent, icon = AppIcons.TvPlay)
         }
-        UpcomingUiState.Idle, UpcomingUiState.Loading -> WidgetPlaceholderCard(
-            title = "Coming up",
-            icon = AppIcons.TvPlay,
-            accent = UpcomingAccent,
-            lines = 0,
-            tiles = 3,
-        )
-    }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** The Coming up page: the strip with its filter and jumps, then every entry in a room per day. */
 @Composable
-private fun UpcomingContent(
-    feed: UpcomingFeed,
-    calendars: DashboardCalendars,
-    error: String?,
-) {
-    val context = LocalContext.current
+fun UpcomingPage(viewModel: UpcomingViewModel, onBack: () -> Unit) {
+    val state by viewModel.state.collectAsState()
+    val calendars by viewModel.calendars.collectAsState()
     val zone = remember { ZoneId.systemDefault() }
     val today = LocalDate.now(zone)
     val clock = rememberClockFormatter()
-    val shown = remember(feed.events, calendars) { feed.events.filter(calendars::shows) }
+    val uriHandler = LocalUriHandler.current
+    val haptics = rememberHaptics()
+    LaunchedWhileResumed(Unit) {
+        while (true) {
+            viewModel.load()
+            delay(5 * 60 * 1000L)
+        }
+    }
+    val feed = (state as? UpcomingUiState.Success)?.feed
+    val shown = remember(feed?.events, calendars) { feed?.events.orEmpty().filter(calendars::shows) }
     val sources = remember(shown) { upcomingSources(shown) }
-    // One source at a time (Calendar, Sonarr, Stremio, ...), or all of them; a source that
-    // has gone from the feed since it was picked lets the strip go back to all.
+    // One source at a time (Calendar, Sonarr, Stremio, ...), or all of them.
     var picked by rememberSaveable { mutableStateOf<String?>(null) }
     val source = picked?.takeIf { id -> sources.any { it.id == id } }
     val events = remember(shown, source) { if (source == null) shown else shown.filter { sourceOf(it) == source } }
+    val byDay = remember(events, zone) { events.sortedBy { it.at }.groupBy { it.at.atZone(zone).toLocalDate() }.toSortedMap() }
+    val lede = when {
+        feed == null -> null
+        events.isEmpty() -> "Nothing on the calendar."
+        else -> "${events.size} ${if (events.size == 1) "entry" else "entries"}, ${rangeLabel(byDay.firstKey(), byDay.lastKey())}."
+    }
+
+    HomePage(
+        title = "Coming up",
+        tone = UpcomingAccent,
+        onBack = onBack,
+        lede = lede,
+        sticky = {
+            if (sources.size > 1) {
+                SourceFilter(
+                    sources = sources,
+                    selected = source,
+                    total = shown.size,
+                    onSelect = { id ->
+                        haptics.tick()
+                        picked = if (id == source) null else id
+                    },
+                )
+            }
+        },
+    ) {
+        when (val s = state) {
+            is UpcomingUiState.Success -> {
+                item(key = "strip") {
+                    PageRoom(UpcomingAccent) {
+                        if (sources.size > 1) {
+                            SourceFilter(
+                                sources = sources,
+                                selected = source,
+                                total = shown.size,
+                                onSelect = { id ->
+                                    haptics.tick()
+                                    picked = if (id == source) null else id
+                                },
+                                modifier = Modifier.pageStickyAnchor().padding(bottom = 14.dp),
+                            )
+                        }
+                        UpcomingStrip(events = events, error = s.error, stremioError = s.feed.stremioError, tools = true, sourceKey = source)
+                    }
+                }
+                byDay.forEach { (day, list) ->
+                    // what has aired stays on the strip; the list is what is still ahead
+                    if (day.isBefore(today)) return@forEach
+                    item(key = "day-$day") {
+                        PageRoom(
+                            tone = UpcomingAccent,
+                            title = relativeDay(day, today) ?: day.format(DateTimeFormatter.ofPattern("EEEE", Locale.getDefault())),
+                            meta = day.format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault())),
+                            flush = true,
+                        ) {
+                            Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+                                list.forEach { event ->
+                                    UpcomingRow(event, zone, clock) {
+                                        event.href?.let { href ->
+                                            haptics.click()
+                                            runCatching { uriHandler.openUri(href) }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            is UpcomingUiState.Error -> item(key = "error") {
+                PageRoom(UpcomingAccent) {
+                    Text(s.message, fontSize = 14.sp, color = TextSecondary)
+                    TonePill("Retry", UpcomingAccent, Modifier.padding(top = 12.dp), icon = AppIcons.Refresh) { viewModel.load(forceRefresh = true) }
+                }
+            }
+            else -> item(key = "loading") { PageRoom(UpcomingAccent) { RoomLoading(UpcomingAccent, bars = 5) } }
+        }
+    }
+}
+
+/** One entry in the page's list: when, its artwork or its source's colour, what it is. */
+@Composable
+private fun UpcomingRow(event: UpcomingEvent, zone: ZoneId, clock: DateTimeFormatter, onClick: () -> Unit) {
+    val brand = SERVICE_BRAND[sourceOf(event)] ?: parseHex(event.brand) ?: TextTertiary
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(enabled = event.href != null, onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            if (event.calendar?.allDay == true) "All day" else event.at.atZone(zone).format(clock),
+            style = HealthDisplay,
+            fontSize = 14.sp,
+            color = TextPrimary,
+            maxLines = 1,
+            modifier = Modifier.width(62.dp),
+        )
+        Box(
+            modifier = Modifier.size(width = 44.dp, height = 44.dp).clip(RoundedCornerShape(16.dp)).background(brand.copy(alpha = 0.16f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            when {
+                event.artUrl != null -> AsyncImage(
+                    model = event.artUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                event.trackPath != null -> CircuitMap(event.trackPath, Modifier.fillMaxSize().padding(7.dp))
+                else -> Icon(
+                    CALENDAR_KIND_ICON[event.calendar?.kind] ?: if (event.isCalendar) AppIcons.CalendarDays else AppIcons.TvPlay,
+                    contentDescription = null,
+                    tint = brand,
+                    modifier = Modifier.size(19.dp),
+                )
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(event.title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val sub = listOfNotNull(
+                event.code.takeIf { it.isNotBlank() },
+                event.extra.takeIf { it.isNotBlank() },
+                event.calendar?.calendarName?.takeIf { it.isNotBlank() },
+                event.note?.takeIf { it.isNotBlank() && !event.isCalendar },
+            ).joinToString(", ")
+            if (sub.isNotBlank()) {
+                Text(sub, fontSize = 13.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
+
+/**
+ * The timeline's strip: one card per entry in time order, opened on today. With [tools]
+ * it gets the page's jumps (Today, two weeks either way) over it.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun UpcomingStrip(
+    events: List<UpcomingEvent>,
+    error: String?,
+    stremioError: String?,
+    tools: Boolean,
+    sourceKey: String? = null,
+) {
+    val zone = remember { ZoneId.systemDefault() }
+    val today = LocalDate.now(zone)
+    val clock = rememberClockFormatter()
+    val source = sourceKey
     val slots = remember(events, today) { buildSlots(events, today, zone) }
 
-    MacroCard(borderColor = UpcomingAccent.copy(alpha = 0.16f)) {
+    Column(Modifier.fillMaxWidth()) {
         if (slots.isEmpty()) {
-            UpcomingHeader(subtitle = "Nothing on the calendar", tools = {})
+            Text("Nothing on the calendar.", fontSize = 14.sp, color = TextSecondary)
             error?.let { UpcomingNotice(it) }
-            return@MacroCard
+            return@Column
         }
-
-        val entries = events.size
-        val span = rangeLabel(slots.first().day, slots.last().day)
-        val subtitle = "$entries ${if (entries == 1) "entry" else "entries"} · $span"
 
         var focusId by rememberSaveable { mutableStateOf<String?>(null) }
         val initial = remember { defaultIndex(slots, focusId, today, Instant.now()) }
@@ -291,9 +462,8 @@ private fun UpcomingContent(
         }
 
         val current = carouselState.currentItem.coerceIn(0, slots.lastIndex)
-        UpcomingHeader(
-            subtitle = subtitle,
-            tools = {
+        if (tools) {
+            Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 val todayIndex = todayIndex(slots, today)
                 val onToday = todayIndex >= 0 && current == todayIndex
                 TodayChip(
@@ -303,6 +473,7 @@ private fun UpcomingContent(
                         travelTo(if (todayIndex >= 0) todayIndex else defaultIndex(slots, null, today, Instant.now()))
                     },
                 )
+                Spacer(Modifier.weight(1f))
                 NavArrow(
                     icon = AppIcons.ChevronLeft,
                     description = "Back two weeks",
@@ -315,23 +486,11 @@ private fun UpcomingContent(
                     enabled = current < slots.lastIndex,
                     onClick = { haptics.tick(); travelTo(jumpDays(slots, current, FORTNIGHT_DAYS)) },
                 )
-            },
-        )
-        error?.let { UpcomingNotice(it) }
-        feed.stremioError?.let { UpcomingNotice("Stremio: $it") }
-        if (sources.size > 1) {
-            SourceFilter(
-                sources = sources,
-                selected = source,
-                total = shown.size,
-                onSelect = { id ->
-                    haptics.tick()
-                    picked = if (id == source) null else id
-                },
-                modifier = Modifier.padding(top = 12.dp),
-            )
+            }
         }
-        Spacer(Modifier.height(12.dp))
+        error?.let { UpcomingNotice(it) }
+        stremioError?.let { UpcomingNotice("Stremio: $it") }
+        if (error != null || stremioError != null) Spacer(Modifier.height(10.dp))
 
         val uriHandler = LocalUriHandler.current
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
@@ -392,22 +551,6 @@ private fun UpcomingContent(
 // ── Header ──────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun UpcomingHeader(
-    subtitle: String,
-    tools: @Composable () -> Unit,
-) {
-    // No spinner for a background reload: the page's pull ripple already says it ran.
-    CardHeader(
-        title = "Coming up",
-        icon = AppIcons.TvPlay,
-        accent = UpcomingAccent,
-        subtitle = subtitle,
-    ) {
-        tools()
-    }
-}
-
-@Composable
 private fun UpcomingNotice(text: String) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
@@ -424,9 +567,9 @@ private fun TodayChip(enabled: Boolean, onClick: () -> Unit) {
     val color = if (enabled) UpcomingAccent else TextTertiary
     Box(
         modifier = Modifier
-            .heightIn(min = 28.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(color.copy(alpha = if (enabled) 0.12f else 0.06f))
+            .heightIn(min = 32.dp)
+            .clip(CircleShape)
+            .background(color.copy(alpha = if (enabled) 0.16f else 0.06f))
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 5.dp),
         contentAlignment = Alignment.Center,
@@ -521,10 +664,9 @@ private fun SourceChip(label: String, count: Int, color: Color?, iconUrl: String
     Row(
         modifier = Modifier
             .clip(shape)
-            .background(if (selected) Color.White.copy(alpha = 0.10f) else Color.Transparent)
-            .border(1.dp, if (selected) Color.Transparent else Border, shape)
+            .background(if (selected) UpcomingAccent.copy(alpha = 0.26f) else Color.White.copy(alpha = 0.06f))
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = 12.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         when {
@@ -544,7 +686,7 @@ private fun SourceChip(label: String, count: Int, color: Color?, iconUrl: String
         }
         Text(label, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = if (selected) TextPrimary else TextSecondary)
         Spacer(Modifier.width(6.dp))
-        Text(count.toString(), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextTertiary)
+        Text(count.toString(), style = HealthDisplay, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextTertiary)
     }
 }
 
@@ -582,8 +724,6 @@ private fun CarouselItemScope.TimelineItem(
 ) {
     val info = carouselItemDrawInfo
     val density = LocalDensity.current
-    val radiusPx = with(density) { 14.dp.toPx() }
-    val hairlinePx = with(density) { 1.dp.toPx() }
     val shape = rememberMaskShape(CardShape)
     val description = remember(slot) { slotDescription(slot, today, zone, clock) }
 
@@ -595,34 +735,8 @@ private fun CarouselItemScope.TimelineItem(
                 .fillMaxWidth()
                 .weight(1f)
                 .clip(shape)
-                .background(Surface)
-                .clickable(onClick = onClick)
-                .drawWithContent {
-                    drawContent()
-                    val p = info.openness()
-                    val r = info.maskRect.intersect(Rect(Offset.Zero, size))
-                    if (r.width <= 0f) return@drawWithContent
-                    val rest = slot is TimelineSlot.Rest
-                    val color = when {
-                        rest -> lerp(Border, UpcomingAccent.copy(alpha = 0.55f), p)
-                        else -> lerp(Border, UpcomingAccent.copy(alpha = 0.45f), p)
-                    }
-                    val inset = hairlinePx / 2
-                    drawRoundRect(
-                        color = color,
-                        topLeft = Offset(r.left + inset, r.top + inset),
-                        size = Size(r.width - hairlinePx, r.height - hairlinePx),
-                        cornerRadius = CornerRadius(radiusPx),
-                        style = Stroke(
-                            width = hairlinePx,
-                            pathEffect = if (rest && p < 0.5f) {
-                                PathEffect.dashPathEffect(floatArrayOf(hairlinePx * 5, hairlinePx * 4))
-                            } else {
-                                null
-                            },
-                        ),
-                    )
-                },
+                .background(RoomNeutral)
+                .clickable(onClick = onClick),
         ) {
             when (slot) {
                 is TimelineSlot.Event -> {
@@ -820,7 +934,7 @@ private fun EventPoster(event: UpcomingEvent, past: Boolean, info: CarouselItemD
                     .background(Color.Black.copy(alpha = 0.35f))
                     .padding(horizontal = 6.dp, vertical = 1.dp),
             ) {
-                Text(tag, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TimeText, letterSpacing = 0.4.sp)
+                Text(tag, style = HealthDisplay, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TimeText)
             }
         }
 
@@ -1074,7 +1188,7 @@ private fun CalendarTop(
                         Icon(it, contentDescription = null, tint = Color.White, modifier = Modifier.size(11.dp))
                         Spacer(Modifier.width(4.dp))
                     }
-                    Text(tag, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White, letterSpacing = 0.3.sp)
+                    Text(tag, style = HealthDisplay, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                 }
             }
         }
@@ -1091,7 +1205,7 @@ private fun CalendarChip(
 ) {
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(if (onClick != null) brand.copy(alpha = 0.28f) else Color.Black.copy(alpha = 0.3f))
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(start = 6.dp, end = 8.dp, top = 3.dp, bottom = 3.dp),
@@ -1159,7 +1273,7 @@ private fun RestPoster(hint: String, info: CarouselItemDrawInfo) {
                 verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
                 Text(
-                    "Nothing new today",
+                    "Nothing new today", style = HealthDisplay,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary,

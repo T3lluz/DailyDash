@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens.onboarding
 
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.home.RoomNeutral
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -178,8 +180,9 @@ fun PermissionsScreen(onContinue: () -> Unit) {
         ) {
             Text(
                 text = "Permissions",
+                style = HealthDisplay,
                 fontSize = 32.sp,
-                fontWeight = FontWeight.ExtraBold,
+                fontWeight = FontWeight.Black,
                 color = TextPrimary,
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -245,7 +248,7 @@ private fun PermissionRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(Surface, RoundedCornerShape(14.dp))
+            .background(RoomNeutral, RoundedCornerShape(14.dp))
             .border(
                 width = 1.dp,
                 color = if (granted) Success.copy(alpha = 0.5f) else Border,
@@ -260,7 +263,7 @@ private fun PermissionRow(
                 .size(44.dp)
                 .background(
                     color = if (granted) Success.copy(alpha = 0.12f) else Primary.copy(alpha = 0.12f),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(16.dp),
                 ),
             contentAlignment = Alignment.Center,
         ) {

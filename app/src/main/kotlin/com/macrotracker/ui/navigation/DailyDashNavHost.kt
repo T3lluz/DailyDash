@@ -1,5 +1,6 @@
 package com.macrotracker.ui.navigation
 
+import com.macrotracker.ui.screens.home.HomePageHost
 import com.macrotracker.ui.screens.health.MealEstimateSheet
 import com.macrotracker.ui.screens.health.ScanLabelSheet
 import androidx.compose.ui.unit.dp
@@ -51,6 +52,7 @@ private val SubScreens = setOf(
     SubScreenRoutes.USAGE,
     SubScreenRoutes.CONSOLE,
     SubScreenRoutes.GIT,
+    SubScreenRoutes.HOME_PAGE_PATTERN,
     OnboardingRoutes.PERMISSIONS,
     OnboardingRoutes.TUTORIAL,
     SettingsRoutes.CONNECTIONS,
@@ -162,6 +164,33 @@ fun DailyDashNavHost(
                 onOpenHermes = { navController.navigateToTab(Screen.AI.route) },
                 onOpenConsole = { navController.navigateToSubScreen(SubScreenRoutes.CONSOLE) },
                 onOpenMealChat = { foodSheet = "meal" },
+                onScanLabel = { foodSheet = "scan" },
+                onOpenFood = {
+                    CardFocus.health("FOOD")
+                    navController.navigateToTab(Screen.Health.route)
+                },
+                onOpenPage = { id -> navController.navigateToSubScreen(SubScreenRoutes.homePage(id)) },
+            )
+        }
+
+        // A Home tile's own page. It reads Home's view-models, so it opens on what the
+        // tile already showed.
+        composable(
+            route = SubScreenRoutes.HOME_PAGE_PATTERN,
+            arguments = listOf(navArgument("id") { defaultValue = "" }),
+            enterTransition = { MacroMotion.subScreenEnter },
+            exitTransition = { MacroMotion.subScreenExit },
+            popEnterTransition = { MacroMotion.subScreenPopEnter },
+            popExitTransition = { MacroMotion.subScreenPopExit },
+        ) { entry ->
+            val home = androidx.compose.runtime.remember(entry) {
+                runCatching { navController.getBackStackEntry(Screen.Home.route) }.getOrDefault(entry)
+            }
+            HomePageHost(
+                id = entry.arguments?.getString("id").orEmpty(),
+                owner = home,
+                onBack = { navController.popSubScreen(entry) },
+                onOpenHermes = { navController.navigateToTab(Screen.AI.route) },
             )
         }
 

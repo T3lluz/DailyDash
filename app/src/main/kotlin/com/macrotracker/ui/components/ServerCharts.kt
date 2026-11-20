@@ -1,5 +1,7 @@
 package com.macrotracker.ui.components
 
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.health.HealthDisplayFamily
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -51,7 +53,6 @@ import com.macrotracker.ui.theme.MacroMotion
 import com.macrotracker.ui.theme.ServerCritical
 import com.macrotracker.ui.theme.ServerGood
 import com.macrotracker.ui.theme.ServerWarn
-import com.macrotracker.ui.theme.ServerWell
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.theme.TextTertiary
@@ -59,7 +60,7 @@ import com.macrotracker.ui.util.LocalTickersPaused
 import kotlin.math.max
 import kotlin.math.roundToInt
 
-private val DialTrack = Color(0xFF2C2C2C)
+private val DialTrack = Color.White.copy(alpha = 0.09f)
 // Drawn marks, not text: a faded foreground is fine here.
 private val DialNotch = TextPrimary.copy(alpha = 0.48f)
 private val GridLine = TextPrimary.copy(alpha = 0.06f)
@@ -103,7 +104,7 @@ fun ServerDial(
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(modifier = Modifier.size(size), contentAlignment = Alignment.Center) {
             Canvas(modifier = Modifier.fillMaxSize()) {
-                val stroke = this.size.minDimension * 0.085f
+                val stroke = this.size.minDimension * 0.11f
                 val notchRadius = this.size.minDimension / 2f - stroke * 0.2f
                 val ringInset = stroke * 1.3f
                 val arcSize = Size(this.size.width - ringInset * 2, this.size.height - ringInset * 2)
@@ -143,27 +144,26 @@ fun ServerDial(
                 }
             }
             Text(
-                text = value,
+                text = value, style = HealthDisplay,
                 color = if (percent == null) TextSecondary else TextPrimary,
                 fontSize = valueSize,
                 fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
+                fontFamily = HealthDisplayFamily,
                 maxLines = 1,
             )
         }
         Text(
-            label,
+            quietCase(label),
             color = TextSecondary,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 0.6.sp,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
             maxLines = 1,
         )
         if (caption != null) {
             Text(
                 caption,
                 color = TextTertiary,
-                fontSize = 9.5.sp,
+                fontSize = 10.5.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -189,8 +189,8 @@ fun MirroredAreaChart(
         modifier = modifier
             .fillMaxWidth()
             .height(height)
-            .clip(RoundedCornerShape(8.dp))
-            .background(ServerWell),
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.White.copy(alpha = 0.07f)),
     ) {
         Canvas(modifier = Modifier.fillMaxSize().padding(horizontal = 3.dp, vertical = 3.dp)) {
             val mid = size.height / 2f
@@ -257,7 +257,7 @@ fun ServerHistoryChart(
 ) {
     var scrub by remember(series) { mutableStateOf<Int?>(null) }
     val measurer = rememberTextMeasurer()
-    val labelStyle = remember { TextStyle(color = TextTertiary, fontSize = 9.sp, fontFamily = FontFamily.Monospace) }
+    val labelStyle = remember { TextStyle(color = TextTertiary, fontSize = 9.sp, fontFamily = HealthDisplayFamily) }
     val n = series.values.size
 
     Column(modifier = modifier.fillMaxWidth()) {
@@ -273,24 +273,24 @@ fun ServerHistoryChart(
                     timeLabel(series.times[index]),
                     color = TextTertiary,
                     fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = HealthDisplayFamily,
                 )
                 val v = series.values[index]
                 Text(
-                    if (v.isNaN()) "no sample" else series.format(v),
+                    if (v.isNaN()) "no sample" else series.format(v), style = HealthDisplay,
                     color = if (v.isNaN()) TextTertiary else series.color,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = HealthDisplayFamily,
                 )
                 series.mirrored?.getOrNull(index)?.let { m ->
                     if (!m.isNaN()) {
                         Text(
-                            (series.mirroredFormat ?: series.format)(m),
+                            (series.mirroredFormat ?: series.format)(m), style = HealthDisplay,
                             color = series.mirroredColor,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
+                            fontFamily = HealthDisplayFamily,
                         )
                     }
                 }
@@ -301,8 +301,8 @@ fun ServerHistoryChart(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(height)
-                .clip(RoundedCornerShape(8.dp))
-                .background(ServerWell)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color.White.copy(alpha = 0.07f))
                 .pointerInput(series) {
                     detectTapGestures(onPress = { at ->
                         scrub = indexAt(at.x, size.width.toFloat(), n)
@@ -430,7 +430,7 @@ fun StackedMeter(
                 .fillMaxWidth()
                 .height(height)
                 .clip(RoundedCornerShape(height / 2))
-                .background(ServerWell),
+                .background(Color.White.copy(alpha = 0.07f)),
         ) {
             if (total <= 0f) return@Canvas
             var x = 0f
@@ -456,7 +456,7 @@ fun StackedMeter(
                                 color = TextPrimary,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                fontFamily = FontFamily.Monospace,
+                                fontFamily = HealthDisplayFamily,
                                 maxLines = 1,
                             )
                         }
@@ -478,7 +478,7 @@ fun UptimeBars(
     height: Dp = 14.dp,
     gap: Dp = 1.5.dp,
     /** The stub for a half hour with no data; it must differ from what the bars sit on. */
-    emptyColor: Color = ServerWell,
+    emptyColor: Color = Color.White.copy(alpha = 0.07f),
 ) {
     Canvas(modifier = modifier.fillMaxWidth().height(height)) {
         if (bars.isEmpty()) return@Canvas

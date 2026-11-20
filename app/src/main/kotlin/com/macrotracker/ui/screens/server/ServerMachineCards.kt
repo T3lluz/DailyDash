@@ -1,5 +1,16 @@
 package com.macrotracker.ui.screens.server
 
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.health.LocalRoomColor
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.offset
+import com.macrotracker.ui.components.ServerCoreBars
+import com.macrotracker.ui.components.primaryDisk
+import com.macrotracker.ui.screens.home.RoomStat
+import com.macrotracker.ui.screens.home.RoomNumber
+import com.macrotracker.ui.screens.health.HealthDisplayFamily
+import com.macrotracker.ui.screens.home.HomeTone
+import com.macrotracker.ui.screens.home.WellFill
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -64,7 +75,6 @@ import com.macrotracker.ui.theme.ServerNetRx
 import com.macrotracker.ui.theme.ServerNetTx
 import com.macrotracker.ui.theme.ServerThermal
 import com.macrotracker.ui.theme.ServerWarn
-import com.macrotracker.ui.theme.ServerWell
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextSecondary
 import com.macrotracker.ui.theme.TextTertiary
@@ -85,7 +95,7 @@ internal fun ComputeCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
     val s = runtime.snapshot ?: return
     val cpu = s.cpu
     val cores = runtime.hostProfile?.cpuCores?.takeIf { it > 0 } ?: cpu?.perCore?.size?.takeIf { it > 0 }
-    MacroCard(delayMs = 80) {
+    ServerRoom(ServerCpu) {
         SectionHeader(
             title = "Compute",
             icon = AppIcons.Cpu,
@@ -94,8 +104,17 @@ internal fun ComputeCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
             onAskAi = onAskAi,
         )
         if (cpu == null) {
-            Text("The first CPU reading needs two samples; one more tick.", color = TextSecondary, fontSize = 12.sp)
+            Text("The first CPU reading needs two samples; one more tick.", color = TextSecondary, fontSize = 13.sp)
         } else {
+            Row(verticalAlignment = Alignment.Bottom) {
+                RoomNumber("${cpu.totalPercent.roundToInt()}", unit = "%", size = 46, color = serverLevelText(cpu.totalPercent))
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f).padding(bottom = 4.dp)) {
+                    if (cpu.perCore.size > 1) ServerCoreBars(cores = cpu.perCore, height = 34.dp)
+                    if (cores != null) Text("$cores cores", color = TextSecondary, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
+            Spacer(Modifier.height(16.dp))
             StatLabel("WHERE THE TIME WENT")
             Spacer(Modifier.height(6.dp))
             val idle = (100f - cpu.userPercent - cpu.systemPercent - cpu.ioWaitPercent - cpu.stealPercent).coerceAtLeast(0f)
@@ -119,8 +138,8 @@ internal fun ComputeCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
                     Text(
                         "%.2f per core".format(load.one / cores),
                         color = serverLevelColor(load.one / cores * 50f),
-                        fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.5.sp,
+                        fontFamily = HealthDisplayFamily,
                     )
                 }
             }
@@ -128,7 +147,7 @@ internal fun ComputeCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("1 min" to load.one, "5 min" to load.five, "15 min" to load.fifteen).forEach { (label, v) ->
                     Column(Modifier.weight(1f)) {
-                        Text(label, color = TextTertiary, fontSize = 10.sp)
+                        Text(label, color = TextTertiary, fontSize = 11.5.sp)
                         StatValue("%.2f".format(v), fontSize = 14.sp)
                         Spacer(Modifier.height(4.dp))
                         // One core's worth of load is half the bar; two per core fills it.
@@ -170,7 +189,7 @@ internal fun ComputeCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
 @Composable
 internal fun MemoryCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
     val mem = runtime.snapshot?.memory ?: return
-    MacroCard(delayMs = 100) {
+    ServerRoom(ServerMemory) {
         SectionHeader(
             title = "Memory",
             icon = AppIcons.ChartPie,
@@ -178,6 +197,12 @@ internal fun MemoryCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
             trailing = "${formatKb(mem.usedKb)} of ${formatKb(mem.totalKb)}",
             onAskAi = onAskAi,
         )
+        Row(verticalAlignment = Alignment.Bottom) {
+            RoomNumber("${mem.usedPercent.roundToInt()}", unit = "%", size = 46, color = serverLevelText(mem.usedPercent))
+            Spacer(Modifier.weight(1f))
+            Text("${formatKb(mem.availableKb)} available", color = TextSecondary, fontSize = 13.sp, modifier = Modifier.padding(bottom = 6.dp))
+        }
+        Spacer(Modifier.height(12.dp))
         StackedMeter(
             parts = listOf(
                 StackPart("Processes", mem.appsKb.toFloat(), ServerMemory, formatKb(mem.appsKb)),
@@ -202,7 +227,7 @@ internal fun MemoryCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
         if (mem.swapTotalKb > 0) {
             Spacer(Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("swap", color = TextTertiary, fontSize = 10.sp, modifier = Modifier.width(36.dp))
+                Text("swap", color = TextTertiary, fontSize = 11.5.sp, modifier = Modifier.width(36.dp))
                 ServerMeterBar(
                     percent = mem.swapUsedPercent,
                     height = 5.dp,
@@ -213,8 +238,8 @@ internal fun MemoryCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
                 Text(
                     "${formatKb(mem.swapUsedKb)} of ${formatKb(mem.swapTotalKb)}",
                     color = TextSecondary,
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.5.sp,
+                    fontFamily = HealthDisplayFamily,
                 )
             }
         }
@@ -228,7 +253,7 @@ internal fun MemoryCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
 internal fun NetworkCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
     val net = runtime.snapshot?.network
     val ports = runtime.detail?.listening.orEmpty()
-    MacroCard(delayMs = 120) {
+    ServerRoom(ServerNetRx) {
         SectionHeader(
             title = "Network",
             icon = AppIcons.SwapVertical,
@@ -243,16 +268,16 @@ internal fun NetworkCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
             belowColor = ServerNetTx,
             height = 60.dp,
         )
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(12.dp))
         Row(modifier = Modifier.fillMaxWidth()) {
-            ServerStatChip("DOWN", net?.let { formatRate(it.rxBytesPerSec) } ?: "—", Modifier.weight(1f), valueColor = ServerNetRx)
-            ServerStatChip("UP", net?.let { formatRate(it.txBytesPerSec) } ?: "—", Modifier.weight(1f), valueColor = ServerNetTx)
+            RoomStat(net?.let { formatRate(it.rxBytesPerSec) } ?: "–", "Down", Modifier.weight(1f), tone = ServerNetRx, size = 26)
+            RoomStat(net?.let { formatRate(it.txBytesPerSec) } ?: "–", "Up", Modifier.weight(1f), tone = ServerNetTx, size = 26)
         }
         net?.let {
             Text(
                 "${formatBytes(it.rxTotalBytes)} in · ${formatBytes(it.txTotalBytes)} out since boot",
                 color = TextTertiary,
-                fontSize = 10.sp,
+                fontSize = 11.5.sp,
                 modifier = Modifier.padding(top = 4.dp),
             )
         }
@@ -262,14 +287,14 @@ internal fun NetworkCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
                 Text(
                     iface.name,
                     color = TextSecondary,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
+                    fontSize = 12.5.sp,
+                    fontFamily = HealthDisplayFamily,
                     modifier = Modifier.width(96.dp),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                StatValue("↓ ${formatRate(iface.rxBytesPerSec)}", color = ServerNetRx, fontSize = 11.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                StatValue("↑ ${formatRate(iface.txBytesPerSec)}", color = ServerNetTx, fontSize = 11.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                StatValue("↓ ${formatRate(iface.rxBytesPerSec)}", color = ServerNetRx, fontSize = 12.5.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                StatValue("↑ ${formatRate(iface.txBytesPerSec)}", color = ServerNetTx, fontSize = 12.5.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
             }
         }
         val reachable = ports.filter { it.scope != PortScope.LOOPBACK }
@@ -284,7 +309,7 @@ internal fun NetworkCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
                         ports.count { it.scope == PortScope.LOOPBACK }.takeIf { it > 0 }?.let { "$it on loopback" },
                     ).joinToString(" · "),
                     color = TextTertiary,
-                    fontSize = 10.sp,
+                    fontSize = 11.5.sp,
                 )
             }
             Spacer(Modifier.height(6.dp))
@@ -294,11 +319,11 @@ internal fun NetworkCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
                     Text(
                         p.port.toString(),
                         color = TextPrimary,
-                        fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.5.sp,
+                        fontFamily = HealthDisplayFamily,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(5.dp))
+                            .clip(RoundedCornerShape(14.dp))
                             .background(tint.copy(alpha = 0.13f))
                             .padding(horizontal = 6.dp, vertical = 3.dp),
                     )
@@ -315,7 +340,7 @@ internal fun StorageCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
     val s = runtime.snapshot ?: return
     val disks = s.disks
     if (disks.isEmpty() && s.diskIo == null) return
-    MacroCard(delayMs = 140) {
+    ServerRoom(ServerDisk) {
         SectionHeader(
             title = "Storage",
             icon = AppIcons.HardDrive,
@@ -323,11 +348,19 @@ internal fun StorageCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
             trailing = "${disks.size} mounts",
             onAskAi = onAskAi,
         )
+        primaryDisk(disks)?.let { main ->
+            Row(verticalAlignment = Alignment.Bottom) {
+                RoomNumber("${main.usedPercent.roundToInt()}", unit = "%", size = 46, color = serverLevelText(main.usedPercent))
+                Spacer(Modifier.weight(1f))
+                Text("${formatKb(main.availableKb)} free on ${main.mountPoint}", color = TextSecondary, fontSize = 13.sp, maxLines = 1, modifier = Modifier.padding(bottom = 6.dp))
+            }
+            Spacer(Modifier.height(14.dp))
+        }
         s.diskIo?.let { io ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.width(96.dp)) {
-                    StatValue("R ${formatRate(io.readBytesPerSec)}", color = ServerDisk, fontSize = 11.sp)
-                    StatValue("W ${formatRate(io.writeBytesPerSec)}", color = ServerMemory, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                    StatValue("R ${formatRate(io.readBytesPerSec)}", color = ServerDisk, fontSize = 12.5.sp)
+                    StatValue("W ${formatRate(io.writeBytesPerSec)}", color = ServerMemory, fontSize = 12.5.sp, fontWeight = FontWeight.Medium)
                 }
                 MirroredAreaChart(
                     above = runtime.diskReadHistory.map { it.toFloat() },
@@ -341,7 +374,7 @@ internal fun StorageCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
             Text(
                 "${formatBytes(io.readTotalBytes)} read · ${formatBytes(io.writeTotalBytes)} written since boot",
                 color = TextTertiary,
-                fontSize = 10.sp,
+                fontSize = 11.5.sp,
                 modifier = Modifier.padding(top = 4.dp, bottom = 12.dp),
             )
         }
@@ -351,7 +384,7 @@ internal fun StorageCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
                 Text(
                     text = disk.mountPoint,
                     color = TextPrimary,
-                    fontSize = 12.sp,
+                    fontSize = 13.sp,
                     fontFamily = FontFamily.Monospace,
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
@@ -366,7 +399,7 @@ internal fun StorageCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
             Text(
                 text = "${formatKb(disk.usedKb)} of ${formatKb(disk.totalKb)} · ${formatKb(disk.availableKb)} free · ${disk.filesystem}",
                 color = TextTertiary,
-                fontSize = 10.sp,
+                fontSize = 11.5.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -386,14 +419,25 @@ internal fun StorageCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
 internal fun SensorsCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
     val s = runtime.snapshot ?: return
     if (s.temperatures.isEmpty() && s.battery == null) return
-    MacroCard(delayMs = 150) {
+    ServerRoom(ServerThermal) {
         SectionHeader(
             title = if (s.battery != null) "Sensors & power" else "Sensors",
             icon = AppIcons.Flame,
             accent = ServerThermal,
-            trailing = s.temperatures.firstOrNull()?.let { "hottest ${it.celsius.roundToInt()}°C" },
+            trailing = s.temperatures.firstOrNull()?.label,
             onAskAi = onAskAi,
         )
+        s.temperatures.firstOrNull()?.let { hot ->
+            RoomNumber(
+                "${hot.celsius.roundToInt()}", unit = "°C", size = 46,
+                color = when {
+                    hot.celsius >= 80f -> ServerCritical
+                    hot.celsius >= 65f -> ServerWarn
+                    else -> TextPrimary
+                },
+            )
+            Spacer(Modifier.height(14.dp))
+        }
         s.temperatures.take(8).forEachIndexed { i, reading ->
             if (i > 0) Spacer(Modifier.height(9.dp))
             val color = when {
@@ -407,19 +451,19 @@ internal fun SensorsCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
                 Text(
                     reading.label,
                     color = TextSecondary,
-                    fontSize = 12.sp,
+                    fontSize = 13.sp,
                     modifier = Modifier.width(78.dp),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 ServerMeterBar(percent = reading.celsius, height = 5.dp, color = color, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(10.dp))
-                StatValue("${reading.celsius.roundToInt()}°C", color = color, fontSize = 12.sp, modifier = Modifier.width(44.dp))
+                StatValue("${reading.celsius.roundToInt()}°C", color = color, fontSize = 13.sp, modifier = Modifier.width(44.dp))
             }
         }
         s.battery?.let { b ->
             if (s.temperatures.isNotEmpty()) {
-                HorizontalDivider(color = Border.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 12.dp))
+                Spacer(Modifier.height(16.dp))
             }
             val color = when {
                 b.discharging && b.percent <= 20 -> ServerCritical
@@ -429,10 +473,10 @@ internal fun SensorsCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(AppIcons.Bolt, contentDescription = null, tint = color, modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Battery", color = TextSecondary, fontSize = 12.sp, modifier = Modifier.width(78.dp))
+                Text("Battery", color = TextSecondary, fontSize = 13.sp, modifier = Modifier.width(78.dp))
                 ServerMeterBar(percent = b.percent.toFloat(), height = 5.dp, color = color, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(10.dp))
-                StatValue("${b.percent}%", color = color, fontSize = 12.sp, modifier = Modifier.width(44.dp))
+                StatValue("${b.percent}%", color = color, fontSize = 13.sp, modifier = Modifier.width(44.dp))
             }
             Spacer(Modifier.height(10.dp))
             Row(modifier = Modifier.fillMaxWidth()) {
@@ -478,7 +522,7 @@ internal fun ProcessesCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
     val byMemory = runtime.detail?.memoryProcesses.orEmpty()
     var mode by rememberSaveable { mutableIntStateOf(0) }
     val showing = if (mode == 1 && byMemory.isNotEmpty()) byMemory else byCpu
-    MacroCard(delayMs = 160) {
+    ServerRoom(ServerCpu) {
         SectionHeader(title = "Top processes", icon = AppIcons.Terminal, accent = ServerCpu, onAskAi = onAskAi)
         if (byMemory.isNotEmpty()) {
             MiniToggle(listOf("By CPU", "By memory"), mode, ServerCpu) {
@@ -491,9 +535,9 @@ internal fun ProcessesCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
             Text(
                 "No process list. This server's ps does not support the portable output format.",
                 color = TextSecondary,
-                fontSize = 11.sp,
+                fontSize = 12.5.sp,
             )
-            return@MacroCard
+            return@ServerRoom
         }
         val hasRss = showing.any { it.rssKb != null }
         Row(modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
@@ -512,21 +556,21 @@ private fun ProcessRow(process: ProcessInfo, hasRss: Boolean) {
         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        StatValue(process.pid.toString(), color = TextTertiary, fontSize = 11.sp, fontWeight = FontWeight.Normal, modifier = Modifier.width(56.dp))
+        StatValue(process.pid.toString(), color = TextTertiary, fontSize = 12.5.sp, fontWeight = FontWeight.Normal, modifier = Modifier.width(56.dp))
         Text(
             process.command,
             color = TextPrimary,
-            fontSize = 11.sp,
+            fontSize = 12.5.sp,
             fontFamily = FontFamily.Monospace,
             modifier = Modifier.weight(1f),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        StatValue("${process.cpuPercent.roundToInt()}%", color = serverLevelColor(process.cpuPercent), fontSize = 11.sp, modifier = Modifier.width(42.dp))
+        StatValue("${process.cpuPercent.roundToInt()}%", color = serverLevelColor(process.cpuPercent), fontSize = 12.5.sp, modifier = Modifier.width(42.dp))
         StatValue(
             if (hasRss) process.rssKb?.let(::formatKb) ?: "—" else "${process.memPercent.roundToInt()}%",
             color = TextSecondary,
-            fontSize = 11.sp,
+            fontSize = 12.5.sp,
             fontWeight = FontWeight.Normal,
             modifier = Modifier.width(if (hasRss) 62.dp else 42.dp),
         )
@@ -543,7 +587,7 @@ private const val CONTAINERS_FOLDED = 8
  * absolute bars is a column of empty tracks. Stopped and unhealthy ones sort first.
  */
 @Composable
-internal fun ContainersCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
+internal fun ContainersCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?, link: com.macrotracker.data.server.DashboardLink? = null) {
     val containers = runtime.snapshot?.containers.orEmpty()
     if (containers.isEmpty()) return
     val haptics = rememberHaptics()
@@ -558,7 +602,7 @@ internal fun ContainersCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
         )
     }
     val peak = stats.values.maxOfOrNull { it.cpuPercent }?.coerceAtLeast(0.1f) ?: 1f
-    MacroCard(delayMs = 170) {
+    ServerRoom(ServerDisk) {
         SectionHeader(
             title = "Containers",
             icon = AppIcons.Blocks,
@@ -571,25 +615,34 @@ internal fun ContainersCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
         val shown = if (showAll) sorted else sorted.take(CONTAINERS_FOLDED)
         shown.forEach { container ->
             val usage = stats[container.name]
-            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(
-                            when {
-                                container.isUnhealthy -> ServerWarn
-                                container.isRunning -> ServerGood
-                                else -> ServerCritical
-                            },
-                        ),
-                )
-                Spacer(modifier = Modifier.width(8.dp))
+            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                // the app's icon, with its state as a dot on the corner
+                Box {
+                    AppIcon(containerIconCandidates(container.name, link?.iconForContainer(container.name)), container.name, 30.dp)
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .offset(x = 2.dp, y = 2.dp)
+                            .size(10.dp)
+                            .clip(CircleShape)
+                            .background(LocalRoomColor.current)
+                            .padding(2.dp)
+                            .clip(CircleShape)
+                            .background(
+                                when {
+                                    container.isUnhealthy -> ServerWarn
+                                    container.isRunning -> ServerGood
+                                    else -> ServerCritical
+                                },
+                            ),
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         container.name,
                         color = TextPrimary,
-                        fontSize = 12.sp,
+                        fontSize = 13.sp,
                         fontFamily = FontFamily.Monospace,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -597,7 +650,7 @@ internal fun ContainersCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
                     Text(
                         container.status,
                         color = if (container.isRunning) TextTertiary else ServerCritical,
-                        fontSize = 10.sp,
+                        fontSize = 11.5.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -608,11 +661,11 @@ internal fun ContainersCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             StatValue(
                                 if (usage.cpuPercent < 1f) "%.1f%%".format(usage.cpuPercent) else "${usage.cpuPercent.roundToInt()}%",
-                                fontSize = 11.sp,
+                                fontSize = 12.5.sp,
                                 color = TextPrimary,
                             )
                             Spacer(Modifier.width(6.dp))
-                            Text(usage.memoryUsage.replace("iB", ""), color = TextTertiary, fontSize = 10.sp, fontFamily = FontFamily.Monospace, maxLines = 1)
+                            Text(usage.memoryUsage.replace("iB", ""), color = TextTertiary, fontSize = 11.5.sp, fontFamily = HealthDisplayFamily, maxLines = 1)
                         }
                         Spacer(Modifier.height(3.dp))
                         ServerMeterBar(
@@ -629,10 +682,10 @@ internal fun ContainersCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
             Text(
                 if (showAll) "Show fewer" else "Show all ${containers.size}",
                 color = ServerBrand,
-                fontSize = 12.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(16.dp))
                     .clickable {
                         haptics.tick()
                         showAll = !showAll
@@ -642,7 +695,7 @@ internal fun ContainersCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
         }
         if (stats.isEmpty()) {
             Spacer(Modifier.height(4.dp))
-            Text("Usage appears after the next 30-second sample.", color = TextTertiary, fontSize = 10.sp)
+            Text("Usage appears after the next 30-second sample.", color = TextTertiary, fontSize = 11.5.sp)
         }
     }
 }
@@ -656,7 +709,7 @@ internal fun SystemCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
     val state = snapshot.systemState
     val detail = runtime.detail
     if (units.isEmpty() && state == null && detail?.journalErrors == null) return
-    MacroCard(delayMs = 180) {
+    ServerRoom(if (units.isEmpty()) ServerGood else ServerCritical) {
         SectionHeader(
             title = "System",
             icon = AppIcons.Settings,
@@ -677,23 +730,23 @@ internal fun SystemCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
                     if (units.isEmpty()) "no failed units" else "${units.size} failed",
                 ).joinToString(" · "),
                 color = TextSecondary,
-                fontSize = 12.sp,
+                fontSize = 13.sp,
             )
         }
         units.forEach { unit ->
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f).padding(start = 14.dp)) {
-                    Text(unit.name, color = TextPrimary, fontSize = 12.sp, fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(unit.name, color = TextPrimary, fontSize = 13.sp, fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (unit.description.isNotBlank()) {
-                        Text(unit.description, color = TextSecondary, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(unit.description, color = TextSecondary, fontSize = 11.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
                 ServerTag(unit.sub.uppercase(), ServerCritical)
             }
         }
         detail?.journalErrors?.let { errors ->
-            HorizontalDivider(color = Border.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 12.dp))
+            Spacer(Modifier.height(16.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(AppIcons.NotepadText, contentDescription = null, tint = if (errors > 0) ServerWarn else ServerGood, modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(8.dp))
@@ -704,7 +757,7 @@ internal fun SystemCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
                         else -> "$errors errors in the journal in the last hour"
                     },
                     color = if (errors > 0) TextPrimary else TextSecondary,
-                    fontSize = 12.sp,
+                    fontSize = 13.sp,
                 )
             }
             if (errors > 0 && detail.journalTail.isNotEmpty()) {
@@ -712,8 +765,8 @@ internal fun SystemCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(ServerWell)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(WellFill)
                         .padding(horizontal = 10.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
@@ -721,7 +774,7 @@ internal fun SystemCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
                         Text(
                             line,
                             color = TextSecondary,
-                            fontSize = 10.sp,
+                            fontSize = 11.5.sp,
                             lineHeight = 13.sp,
                             fontFamily = FontFamily.Monospace,
                             maxLines = 2,
@@ -732,4 +785,11 @@ internal fun SystemCard(runtime: ServerRuntime, onAskAi: (() -> Unit)?) {
             }
         }
     }
+}
+
+/** A big figure stays white until its reading runs warm, then takes the status colour. */
+private fun serverLevelText(percent: Float): Color = when {
+    percent >= 85f -> ServerCritical
+    percent >= 60f -> ServerWarn
+    else -> TextPrimary
 }

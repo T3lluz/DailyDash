@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.screens.home.RoomNeutral
+import com.macrotracker.ui.screens.health.HealthDisplay
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -282,8 +284,7 @@ internal fun HermesThreadRail(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            // a cool wash at the top that settles into the panel's own grey
-            .background(Surface),
+            .background(AiSheet),
     ) {
     Column(modifier = Modifier.fillMaxSize().padding(top = 18.dp)) {
         Row(modifier = Modifier.padding(start = 18.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -292,17 +293,17 @@ internal fun HermesThreadRail(
             Box(contentAlignment = Alignment.Center) {
                 BotAvatar(HermesIdentity, size = 38.dp, live = workingNow > 0)
                 Box(
-                    Modifier.align(Alignment.BottomEnd).size(13.dp).clip(CircleShape).background(Surface).padding(2.dp).clip(CircleShape)
+                    Modifier.align(Alignment.BottomEnd).size(13.dp).clip(CircleShape).background(AiSheet).padding(2.dp).clip(CircleShape)
                         .background(if (status?.ready == true) ServerGood else ServerWarn),
                 )
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Hermes", color = TextPrimary, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
+                    Text("Hermes", color = TextPrimary, style = HealthDisplay, fontSize = 19.sp)
                     status?.version?.let {
                         Spacer(Modifier.width(7.dp))
-                        Text("v$it", color = TextTertiary, fontSize = 10.5.sp, modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = 0.07f)).padding(horizontal = 6.dp, vertical = 1.dp))
+                        Text("v$it", color = TextTertiary, fontSize = 10.5.sp, modifier = Modifier.clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.07f)).padding(horizontal = 6.dp, vertical = 1.dp))
                     }
                 }
                 val needs = threads.count { it.waiting > 0 || it.pending > 0 }
@@ -326,9 +327,9 @@ internal fun HermesThreadRail(
                         .semantics { contentDescription = "List options" },
                     contentAlignment = Alignment.Center,
                 ) { Icon(AppIcons.SwapVertical, null, tint = TextSecondary, modifier = Modifier.size(19.dp)) }
-                DropdownMenu(expanded = options, onDismissRequest = { options = false }, modifier = Modifier.background(Surface)) {
+                DropdownMenu(expanded = options, onDismissRequest = { options = false }, modifier = Modifier.background(RoomNeutral)) {
                     MenuRow(if (groupByDay) "Group by day  ✓" else "Group by day", AppIcons.CalendarDays) { onGroupByDay(!groupByDay) }
-                    HorizontalDivider(color = Border)
+                    Spacer(Modifier.height(8.dp))
                     RailHeading("Settle after")
                     listOf(0 to "Never", 3 to "3 days", 7 to "A week", 14 to "2 weeks", 30 to "A month").forEach { (days, label) ->
                         MenuRow(if (days == autoSettleDays) "$label  ✓" else label, AppIcons.CheckCircle) { options = false; onAutoSettle(days) }
@@ -371,7 +372,7 @@ internal fun HermesThreadRail(
                     Row(
                         modifier = Modifier
                             .clip(RoundedCornerShape(50))
-                            .background(if (on) Color.White.copy(alpha = 0.14f) else TileDark)
+                            .background(if (on) Color.White.copy(alpha = 0.14f) else AiRoom)
                             .clickable { haptics.tick(); filter = f }
                             .padding(horizontal = 11.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -430,7 +431,7 @@ internal fun HermesThreadRail(
                             color = TextTertiary, fontSize = 12.sp,
                             modifier = Modifier
                                 .padding(horizontal = 8.dp)
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(16.dp))
                                 .clickable { onReorder(emptyList()) }
                                 .padding(horizontal = 12.dp, vertical = 8.dp),
                         )
@@ -458,7 +459,7 @@ internal fun HermesThreadRail(
         // The shelves, at the foot as T3 Code keeps them: what is asleep and what is settled, a tap away and not at the end of a long list.
         if (query.isBlank() && (sleeping.isNotEmpty() || put.isNotEmpty())) {
             Column(Modifier.fillMaxWidth().padding(top = 4.dp)) {
-                HorizontalDivider(color = Border)
+                Spacer(Modifier.height(8.dp))
                 Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Shelf.entries.forEach { sh ->
                         val list = if (sh == Shelf.SNOOZED) sleeping else put
@@ -467,8 +468,8 @@ internal fun HermesThreadRail(
                         Row(
                             modifier = Modifier
                                 .weight(1f)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(if (open) Color(0xFF2B2B2B) else TileDark)
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(if (open) AiRoomHi else AiRoom)
                                 .clickable { haptics.tick(); shelf = if (open) null else sh }
                                 .padding(horizontal = 12.dp, vertical = 11.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -502,7 +503,7 @@ internal fun HermesThreadRail(
             }
         }
         // the usual places, where T3 Code's sidebar keeps its own; the nav pill floats over the foot
-        HorizontalDivider(color = Border)
+        Spacer(Modifier.height(8.dp))
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -585,7 +586,7 @@ private fun FoldRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label
         modifier = Modifier
             .padding(horizontal = 8.dp, vertical = 6.dp)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -654,7 +655,7 @@ private fun ThreadRow(
             else -> listOf(SwipeAction("Settle", AppIcons.CheckCircle) { onToggleArchive() }, SwipeAction("Snooze", AppIcons.BellOff) { onSnooze() })
         }
     }
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(18.dp)
     SwipeActionsRow(
         key = thread.id,
         openKey = openKey,
@@ -664,7 +665,7 @@ private fun ThreadRow(
     ) { isOpen, closeActions ->
         Box(Modifier.clip(shape)) {
             val tone = state?.tone
-            val fill = if (selected) Color(0xFF2B2B2B) else TileDark
+            val fill = if (selected) AiRoomHi else TileDark
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -713,7 +714,7 @@ private fun ThreadRow(
                                 state.tone, 12.sp, Modifier.padding(top = 2.dp),
                             )
                         } else {
-                            Text(state.label, color = state.tone, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.padding(top = 2.dp))
+                            Text(state.label, style = HealthDisplay, color = state.tone, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.padding(top = 2.dp))
                         }
                     }
                     val line = when {
@@ -732,7 +733,7 @@ private fun ThreadRow(
                     }
                     if (!draft.isNullOrBlank()) {
                         Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("Draft", color = AiAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                            Text("Draft", style = HealthDisplay, color = AiAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                             Text("  ${draft.replace('\n', ' ')}", color = TextTertiary, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
@@ -740,7 +741,7 @@ private fun ThreadRow(
                     RowChips(model?.label, modeTag, thread.tokens, thread.contextFraction, Modifier.padding(top = 7.dp))
                 }
             }
-            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }, modifier = Modifier.background(Surface)) {
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }, modifier = Modifier.background(RoomNeutral)) {
                 MenuRow("Rename", AppIcons.Edit) { menuOpen = false; onRename() }
                 if (!thread.isStaff) {
                     MenuRow(if (thread.pinned) "Unpin" else "Pin", AppIcons.Star) { menuOpen = false; onTogglePin() }
@@ -824,8 +825,8 @@ private fun FooterButton(icon: androidx.compose.ui.graphics.vector.ImageVector, 
     val haptics = rememberHaptics()
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(TileDark)
+            .clip(RoundedCornerShape(18.dp))
+            .background(AiRoom)
             .clickable { haptics.tick(); onClick() }
             .padding(vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -882,7 +883,7 @@ private fun StateDisc(brand: String, state: RailState?, size: androidx.compose.u
         ModelLogo(brand, size)
         if (state != null) {
             Box(
-                Modifier.align(Alignment.BottomEnd).size(14.dp).clip(CircleShape).background(TileDark).padding(2.5.dp).clip(CircleShape).background(state.tone),
+                Modifier.align(Alignment.BottomEnd).size(14.dp).clip(CircleShape).background(AiRoom).padding(2.5.dp).clip(CircleShape).background(state.tone),
             )
         }
     }
@@ -905,7 +906,7 @@ private fun Tag(text: String, color: Color, modifier: Modifier = Modifier, accen
     Text(
         text, color = color, fontSize = 10.5.sp, fontWeight = if (accent) FontWeight.Bold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis,
         modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(Color.White.copy(alpha = 0.07f))
             .padding(horizontal = 7.dp, vertical = 2.dp),
     )
@@ -915,7 +916,7 @@ private fun Tag(text: String, color: Color, modifier: Modifier = Modifier, accen
 @Composable
 private fun RailSection(label: String, count: Int, accent: Color = TextTertiary) {
     Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 18.dp, top = 16.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label.uppercase(), color = TextTertiary, fontSize = 10.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+        Text(label, style = HealthDisplay, color = TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
         Text("  $count", color = TextTertiary.copy(alpha = 0.7f), fontSize = 10.5.sp)
     }
 }
@@ -928,8 +929,8 @@ private fun DraftRow(text: String, selected: Boolean, modifier: Modifier = Modif
         modifier = modifier
             .padding(horizontal = 8.dp)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(if (selected) Color(0xFF2B2B2B) else TileDark)
+            .clip(RoundedCornerShape(18.dp))
+            .background(if (selected) AiRoomHi else AiRoom)
             .clickable { haptics.tick(); onClick() }
             .padding(horizontal = 12.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -941,7 +942,7 @@ private fun DraftRow(text: String, selected: Boolean, modifier: Modifier = Modif
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("New chat", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                Text("Draft", color = AiAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text("Draft", style = HealthDisplay, color = AiAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
             Text(text.replace('\n', ' '), color = TextSecondary, fontSize = 12.5.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
         }

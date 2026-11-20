@@ -115,8 +115,7 @@ fun PeekAvatar(
             .graphicsLayer { alpha = look.peekAlpha() }
             .size(size)
             .clip(androidx.compose.foundation.shape.CircleShape)
-            .background(ring.copy(alpha = 0.35f))
-            .border(1.5.dp, ring, androidx.compose.foundation.shape.CircleShape),
+            .background(ring.copy(alpha = 0.35f)),
         contentAlignment = androidx.compose.ui.Alignment.Center,
     ) {
         androidx.compose.material3.Text(
@@ -140,7 +139,7 @@ fun PeekAvatar(
 fun Modifier.followVisible(look: MediaItemLook, inset: Float = 0f): Modifier =
     graphicsLayer { translationX = look.visibleLeft() + inset }
 
-val MediaCarouselShape = RoundedCornerShape(12.dp)
+val MediaCarouselShape = RoundedCornerShape(24.dp)
 
 private val ItemSpacing = 8.dp
 

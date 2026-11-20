@@ -1,5 +1,8 @@
 package com.macrotracker.ui.screens.server
 
+import com.macrotracker.ui.screens.health.HealthDisplayFamily
+import com.macrotracker.ui.screens.home.HomeTone
+import com.macrotracker.ui.screens.home.WellFill
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -41,7 +44,6 @@ import com.macrotracker.ui.theme.ServerMemory
 import com.macrotracker.ui.theme.ServerNetRx
 import com.macrotracker.ui.theme.ServerNetTx
 import com.macrotracker.ui.theme.ServerThermal
-import com.macrotracker.ui.theme.ServerWell
 import com.macrotracker.ui.theme.TextPrimary
 import com.macrotracker.ui.theme.TextTertiary
 import com.macrotracker.ui.util.rememberHaptics
@@ -85,15 +87,15 @@ internal fun ServerHistoryCard(runtime: ServerRuntime, link: DashboardLink?) {
     val metrics = HistoryMetric.entries.filter { m -> series?.has(m) == true }
     val metric = metrics.firstOrNull { it.name == metricName } ?: metrics.firstOrNull() ?: HistoryMetric.CPU
 
-    MacroCard(delayMs = 70) {
+    ServerRoom(ServerCpu) {
         SectionHeader(
             title = "History",
             icon = AppIcons.ChartLine,
-            accent = Primary,
+            accent = ServerCpu,
             trailing = range.caption.takeIf { ranges.size > 1 } ?: "last 10 minutes",
         )
         if (ranges.size > 1) {
-            PillRow(ranges.map { it.label }, ranges.indexOf(range), Primary) {
+            PillRow(ranges.map { it.label }, ranges.indexOf(range), ServerCpu) {
                 haptics.tick()
                 rangeName = ranges[it].name
             }
@@ -109,7 +111,7 @@ internal fun ServerHistoryCard(runtime: ServerRuntime, link: DashboardLink?) {
             Text(
                 "Collecting samples. The chart fills in as the server answers.",
                 color = TextTertiary,
-                fontSize = 12.sp,
+                fontSize = 13.sp,
                 modifier = Modifier.padding(vertical = 24.dp),
             )
         } else {
@@ -145,11 +147,11 @@ private fun PillRow(
             Text(
                 label,
                 color = if (on) TextPrimary else TextTertiary,
-                fontSize = 12.sp,
+                fontSize = 13.sp,
                 fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(if (on) accent.copy(alpha = 0.18f) else ServerWell)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(if (on) accent.copy(alpha = 0.18f) else WellFill)
                     .clickable { onSelect(i) }
                     .padding(horizontal = 11.dp, vertical = 6.dp),
             )

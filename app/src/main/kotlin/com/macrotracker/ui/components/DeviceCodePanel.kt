@@ -1,5 +1,6 @@
 package com.macrotracker.ui.components
 
+import com.macrotracker.ui.screens.health.HealthDisplay
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -64,7 +65,7 @@ fun DeviceCodePanel(
     onOpenActivation: () -> Unit,
     onCancelLogin: () -> Unit,
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(12.dp),
+    shape: Shape = RoundedCornerShape(20.dp),
     formatCode: (String) -> String = { it },
 ) {
     val haptics = rememberHaptics()
@@ -95,7 +96,6 @@ fun DeviceCodePanel(
             .fillMaxWidth()
             .clip(shape)
             .background(accent.copy(alpha = 0.08f))
-            .border(1.dp, accent.copy(alpha = 0.35f), shape)
             .padding(14.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -111,11 +111,10 @@ fun DeviceCodePanel(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(
-                code?.let(formatCode) ?: "····",
+                code?.let(formatCode) ?: "····", style = HealthDisplay,
                 fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.SemiBold,
                 color = TextPrimary,
-                letterSpacing = 1.5.sp,
                 fontFamily = FontFamily.Monospace,
             )
             Icon(
@@ -152,11 +151,11 @@ fun DeviceCodePanel(
                 Spacer(modifier = Modifier.width(6.dp))
                 Text("Open $service", fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            OutlinedButton(
+            Button(
                 onClick = { haptics.tick(); onCancelLogin() },
                 modifier = buttonModifier,
+                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.08f), contentColor = TextSecondary),
                 shape = shape,
-                border = BorderStroke(1.dp, Border),
                 contentPadding = padding,
             ) {
                 Text("Cancel", color = TextSecondary, fontSize = 13.sp, maxLines = 1)

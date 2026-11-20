@@ -132,7 +132,7 @@ val WeatherRain = Color(0xFF6CB6FF)
  * in `data/server/ServerLiveGraphics.kt`. Keep the two in step.
  */
 val ServerBrand = Color(0xFF88C0D0)
-val ServerCpu = Primary
+val ServerCpu = Color(0xFF5AB4F5)
 val ServerMemory = Color(0xFFA78BFA)
 val ServerDisk = Color(0xFF22D3EE)
 val ServerNetRx = Color(0xFF34D399)

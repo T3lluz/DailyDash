@@ -1,5 +1,6 @@
 package com.macrotracker.ui.components
 
+import com.macrotracker.ui.screens.health.HealthDisplay
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.indication
@@ -41,7 +42,7 @@ fun StatusCopy(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(Background)
             .padding(14.dp),
     ) {
@@ -69,12 +70,12 @@ fun StatusCopy(
                     ),
             ) {
                 Text(
-                    actionLabel,
+                    actionLabel, style = HealthDisplay,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     color = Primary,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(14.dp))
                         .background(Primary.copy(alpha = 0.12f))
                         .indication(interactionSource, ripple())
                         .padding(horizontal = 12.dp, vertical = 8.dp),

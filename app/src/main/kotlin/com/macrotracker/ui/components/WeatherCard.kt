@@ -58,6 +58,11 @@ import com.macrotracker.data.remote.WeatherMath
 import com.macrotracker.ui.util.rememberClock24
 import com.macrotracker.ui.viewmodel.WeatherUiState
 import com.macrotracker.ui.theme.AppIcons
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.home.HomeTile
+import com.macrotracker.ui.screens.home.HomeTileLoading
+import com.macrotracker.ui.screens.home.HomeTilePrompt
+import com.macrotracker.ui.screens.home.HomeTone
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 
@@ -67,16 +72,6 @@ private fun parseTimeOfDay(symbolCode: String): TimeOfDay = when {
     symbolCode.contains("_night") -> TimeOfDay.NIGHT
     symbolCode.contains("_polartwilight") -> TimeOfDay.TWILIGHT
     else -> TimeOfDay.DAY
-}
-
-/** Cursor-dark card with a faint glow of the condition's accent in the leading corner. */
-private fun weatherGradient(symbolCode: String): Brush {
-    val glow = weatherAccentColor(symbolCode)
-    return Brush.linearGradient(
-        0f to glow.copy(alpha = 0.16f).compositeOver(Surface),
-        0.6f to Surface,
-        1f to Surface,
-    )
 }
 
 private fun weatherAccentColor(symbolCode: String): Color {
@@ -135,8 +130,6 @@ private fun weatherAccentColor(symbolCode: String): Color {
     }
 }
 
-private val LocationAccent = Primary
-
 // Stable discriminant so AnimatedContent only transitions between loading/success/error —
 // not on every internal field change within a Success state.
 private enum class WeatherStateKey { LOADING, SUCCESS, PERMISSION, ERROR }
@@ -147,6 +140,10 @@ private fun WeatherUiState.toKey() = when (this) {
     is WeatherUiState.Error             -> WeatherStateKey.ERROR
 }
 
+/**
+ * The weather as a Home tile: the temperature big, the sky beside it, one line of facts,
+ * what the sky is about to do, and five hours ahead. A tap opens [WeatherPageBody]'s page.
+ */
 @Composable
 fun WeatherCard(
     state: WeatherUiState,
@@ -155,242 +152,145 @@ fun WeatherCard(
     tempUnit: TempUnit = TempUnit.CELSIUS,
     windUnit: WindUnit = WindUnit.MS,
     onRequestPreciseLocation: () -> Unit = {},
+    onOpen: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
-    val haptics = rememberHaptics()
-
-    // Snapshot the current state so that inner composables always read the
-    // latest value without triggering AnimatedContent re-targeting.
     WidgetStateSwitch(
         targetState = state.toKey(),
         label = "weatherContent",
         modifier = modifier,
     ) { stateKey ->
-        // Re-read the live state inside each branch — this is safe because
-        // `state` is a parameter captured by the lambda and the branch only
-        // renders when the key matches.
         val currentState = state
         when (stateKey) {
-            WeatherStateKey.LOADING -> {
-                // Same header and reserved height as every other card while it loads.
-                WidgetPlaceholderCard(
-                    title = "Weather",
-                    icon = AppIcons.Cloud,
-                    accent = WeatherBrand,
-                    lines = 4,
-                )
-            }
+            WeatherStateKey.LOADING -> HomeTileLoading("Weather", HomeTone.Weather, icon = AppIcons.Cloud, bars = 4)
 
             WeatherStateKey.SUCCESS -> {
                 val successState = currentState as? WeatherUiState.Success
                 if (successState != null) {
-                val weather = successState.weather
-                val gradient = remember(weather.symbolCode) { weatherGradient(weather.symbolCode) }
-                val accent = remember(weather.symbolCode) { weatherAccentColor(weather.symbolCode) }
-
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 6.dp),
-                    shape = MacroCardShape,
-                    colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-                    border = BorderStroke(1.dp, Border),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(gradient),
+                    val weather = successState.weather
+                    val clock24 = rememberClock24()
+                    HomeTile(
+                        title = "Weather",
+                        tone = HomeTone.Weather,
+                        icon = AppIcons.Cloud,
+                        meta = weather.locationName.takeIf { it.isNotBlank() },
+                        onOpen = onOpen,
                     ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                        ) {
-                            // Header row — title left, actions right
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                // Left: title + location stacked, timestamp below
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        CardTitle("Weather")
-                                        if (weather.locationName.isNotBlank()) {
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Icon(
-                                                if (successState.isPrecise) AppIcons.MapPin else AppIcons.MapPinOff,
-                                                contentDescription = null,
-                                                tint = if (successState.isPrecise) accent else TextTertiary,
-                                                modifier = Modifier.size(14.dp),
-                                            )
-                                            Spacer(modifier = Modifier.width(2.dp))
-                                            Text(
-                                                weather.locationName,
-                                                fontSize = 12.sp,
-                                                color = TextSecondary,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                            )
-                                        }
-                                    }
-                                    LastUpdatedText(lastUpdatedAt = successState.lastUpdatedAt)
-                                }
-                                // Right: refresh + chevron
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(0.dp),
-                                ) {
-                                    IconButton(onClick = { haptics.tick(); onRetry() }, modifier = Modifier.size(36.dp)) {
-                                        Icon(AppIcons.Refresh, contentDescription = "Refresh", tint = TextSecondary, modifier = Modifier.size(18.dp))
-                                    }
-                                    WidgetExpandChevron(
-                                        expanded = expanded,
-                                        onClick = {
-                                            val wasExpanded = expanded
-                                            expanded = !expanded
-                                            if (!wasExpanded) haptics.toggleOn() else haptics.toggleOff()
-                                        },
-                                        accentColor = TextPrimary,
-                                    )
-                                }
-                            }
-
-                            // Approximate location nudge banner
-                            if (!successState.isPrecise) {
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .clickable { onRequestPreciseLocation() }
-                                        .background(Color.White.copy(alpha = 0.12f))
-                                        .padding(horizontal = 10.dp, vertical = 8.dp),
-                                ) {
-                                    Icon(AppIcons.MapPinOff, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(14.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        "Approximate location — tap to enable precise location",
-                                        fontSize = 12.sp,
-                                        color = TextSecondary,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                }
-                            }
-
-                            if (successState.warnings.isNotEmpty()) {
-                                Spacer(modifier = Modifier.height(10.dp))
-                                WeatherWarnings(successState.warnings)
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            // Now: the number, big; the sky beside it; then what goes with it, in one line.
-                            val clock24 = rememberClock24()
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        WeatherUnits.formatTemp(weather.temperature, tempUnit),
-                                        fontSize = 54.sp,
-                                        lineHeight = 58.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = (-1.5).sp,
-                                        color = TextPrimary,
-                                        maxLines = 1,
-                                    )
-                                    Text(
-                                        weather.description,
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = TextPrimary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                    val todayRange = weather.dailyForecasts.firstOrNull { it.isToday }
-                                    val facts = listOfNotNull(
-                                        weather.feelsLike?.let { "Feels ${WeatherUnits.formatTempValue(it, tempUnit)}" },
-                                        todayRange?.let {
-                                            "H ${WeatherUnits.formatTempValue(it.maxTemp, tempUnit)}  L ${WeatherUnits.formatTempValue(it.minTemp, tempUnit)}"
-                                        },
-                                        WeatherUnits.formatWind(weather.windSpeed, windUnit) +
-                                            (weather.windDirection?.let { " ${WeatherMath.compass(it)}" } ?: ""),
-                                    )
-                                    Text(
-                                        facts.joinToString("  ·  "),
-                                        fontSize = 12.5.sp,
-                                        color = TextSecondary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.padding(top = 3.dp),
-                                    )
-                                }
-                                Spacer(Modifier.width(12.dp))
-                                Icon(
-                                    painter = painterResource(weather.iconRes),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(92.dp),
-                                    tint = Color.Unspecified,
-                                )
-                            }
-                            Spacer(Modifier.height(12.dp))
-                            WeatherHeadline(remember(weather) { weatherHeadline(weather, clock24) })
-                            GroundLine(weather, tempUnit, clock24, Modifier.padding(top = 6.dp))
-
-                            WidgetExpandSection(visible = expanded) {
-                                WeatherExpandedForecast(
-                                    successState = successState,
-                                    weather = weather,
-                                    accent = accent,
-                                    tempUnit = tempUnit,
-                                    windUnit = windUnit,
-                                    onCollapse = { expanded = false },
-                                )
-                            }
-                            // Folds away as the forecast opens, instead of vanishing.
-                            WidgetExpandSection(visible = !expanded) {
-                                Column {
-                                    Spacer(Modifier.height(12.dp))
-                                    MiniHours(weather.hourlyForecasts, tempUnit, clock24)
-                                    WidgetExpandFooter(
-                                        expanded = false,
-                                        onToggle = { expanded = true },
-                                        accentColor = TextPrimary,
-                                        expandLabel = "Forecast",
-                                    )
-                                }
-                            }
-                        }
+                        WeatherNow(successState, tempUnit, windUnit, onRequestPreciseLocation)
+                        Spacer(Modifier.height(12.dp))
+                        WeatherHeadline(remember(weather) { weatherHeadline(weather, clock24) })
+                        GroundLine(weather, tempUnit, clock24, Modifier.padding(top = 6.dp))
+                        Spacer(Modifier.height(12.dp))
+                        MiniHours(weather.hourlyForecasts, tempUnit, clock24)
                     }
                 }
-                }
             }
 
-            WeatherStateKey.PERMISSION -> {
-                WidgetPromptCard(
-                    title = "Weather",
-                    message = "Allow location access to see weather",
-                    actionLabel = "Enable",
-                    actionIcon = AppIcons.MapPin,
-                    accent = LocationAccent,
-                    onAction = onRequestPermission,
-                )
-            }
+            WeatherStateKey.PERMISSION -> HomeTilePrompt(
+                title = "Weather",
+                tone = HomeTone.Weather,
+                icon = AppIcons.Cloud,
+                message = "Allow location to see the weather where you are.",
+                actionLabel = "Allow",
+                actionIcon = AppIcons.MapPin,
+                onAction = onRequestPermission,
+            )
 
-            WeatherStateKey.ERROR -> {
-                val errorState = currentState as? WeatherUiState.Error
-                WidgetPromptCard(
-                    title = "Weather",
-                    message = errorState?.message ?: "Couldn't load the forecast",
-                    actionLabel = "Retry",
-                    actionIcon = AppIcons.Refresh,
-                    accent = Primary,
-                    onAction = onRetry,
-                )
-            }
+            WeatherStateKey.ERROR -> HomeTilePrompt(
+                title = "Weather",
+                tone = HomeTone.Weather,
+                icon = AppIcons.Cloud,
+                message = (currentState as? WeatherUiState.Error)?.message ?: "Couldn't load the forecast.",
+                actionLabel = "Retry",
+                actionIcon = AppIcons.Refresh,
+                onAction = onRetry,
+            )
         }
     }
 }
+
+/** Right now, on the tile and at the top of the page: warnings, the number, the sky, the facts. */
+@Composable
+internal fun WeatherNow(
+    state: WeatherUiState.Success,
+    tempUnit: TempUnit,
+    windUnit: WindUnit,
+    onRequestPreciseLocation: () -> Unit,
+    big: Boolean = false,
+) {
+    val weather = state.weather
+    if (!state.isPrecise) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 10.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .clickable { onRequestPreciseLocation() }
+                .background(Color.White.copy(alpha = 0.08f))
+                .padding(horizontal = 12.dp, vertical = 9.dp),
+        ) {
+            Icon(AppIcons.MapPinOff, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(14.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Approximate location. Tap for precise.", fontSize = 12.5.sp, color = TextSecondary, modifier = Modifier.weight(1f))
+        }
+    }
+    if (state.warnings.isNotEmpty()) {
+        WeatherWarnings(state.warnings)
+        Spacer(modifier = Modifier.height(12.dp))
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                WeatherUnits.formatTemp(weather.temperature, tempUnit),
+                style = HealthDisplay,
+                fontWeight = FontWeight.Black,
+                fontSize = if (big) 76.sp else 60.sp,
+                lineHeight = if (big) 78.sp else 62.sp,
+                letterSpacing = (-2).sp,
+                color = TextPrimary,
+                maxLines = 1,
+            )
+            Text(
+                weather.description,
+                style = HealthDisplay,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 17.sp,
+                color = TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val todayRange = weather.dailyForecasts.firstOrNull { it.isToday }
+            val facts = listOfNotNull(
+                weather.feelsLike?.let { "Feels ${WeatherUnits.formatTempValue(it, tempUnit)}" },
+                todayRange?.let {
+                    "H ${WeatherUnits.formatTempValue(it.maxTemp, tempUnit)}  L ${WeatherUnits.formatTempValue(it.minTemp, tempUnit)}"
+                },
+                WeatherUnits.formatWind(weather.windSpeed, windUnit) +
+                    (weather.windDirection?.let { " ${WeatherMath.compass(it)}" } ?: ""),
+            )
+            Text(
+                facts.joinToString("   "),
+                fontSize = 13.sp,
+                color = TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Icon(
+            painter = painterResource(weather.iconRes),
+            contentDescription = null,
+            modifier = Modifier.size(if (big) 116.dp else 96.dp),
+            tint = Color.Unspecified,
+        )
+    }
+}
+
+/** The colour the page takes from the sky right now. */
+internal fun weatherSkyAccent(symbolCode: String): Color = weatherAccentColor(symbolCode)
+
 
 /**
  * MET warnings in force here, worst first, as the dashboard shows them above its
@@ -413,9 +313,8 @@ private fun WeatherWarnings(warnings: List<WeatherWarning>) {
                 verticalAlignment = Alignment.Top,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(tone.copy(alpha = 0.14f))
-                    .border(1.dp, tone.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(tone.copy(alpha = 0.16f))
                     .clickable { haptics.click(); runCatching { uriHandler.openUri(w.url) } }
                     .padding(horizontal = 10.dp, vertical = 8.dp),
             ) {

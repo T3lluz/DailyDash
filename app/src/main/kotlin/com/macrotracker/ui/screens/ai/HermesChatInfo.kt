@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.home.WellFill
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -125,7 +127,7 @@ internal fun ChatInfoSheet(
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val activity = chatActivity(items)
     val brand = ModelBrands.brandOf(model?.family ?: thread.model, model?.group.orEmpty())
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = Surface) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = AiSheet) {
         Column(
             Modifier
                 .navigationBarsPadding()
@@ -134,7 +136,7 @@ internal fun ChatInfoSheet(
         ) {
             // who and what: the chat, and the model it runs on
             Column(Modifier.padding(horizontal = 20.dp)) {
-                Text(thread.title, color = TextPrimary, fontSize = 19.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(thread.title, color = TextPrimary, style = HealthDisplay, fontSize = 19.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 if (forkedFrom != null) {
                     Row(Modifier.padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(AppIcons.GitFork, null, tint = TextTertiary, modifier = Modifier.size(12.dp))
@@ -231,7 +233,7 @@ internal fun ChatInfoSheet(
             }
 
             Spacer(Modifier.height(10.dp))
-            HorizontalDivider(color = Border)
+            Spacer(Modifier.height(8.dp))
             SectionLabel("This chat")
             Action(AppIcons.Edit, "Rename", onClick = { onDismiss(); onRename() })
             Action(AppIcons.Search, "Find in chat", onClick = { onDismiss(); onFind() })
@@ -264,8 +266,9 @@ internal fun ChatInfoSheet(
 @Composable
 private fun SectionLabel(label: String) {
     Text(
-        label.uppercase(),
-        color = TextTertiary, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp,
+        label,
+        style = HealthDisplay,
+        color = TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
         modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 4.dp),
     )
 }
@@ -274,8 +277,8 @@ private fun SectionLabel(label: String) {
 private fun Stat(label: String, value: String, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(SurfaceChrome)
+            .clip(RoundedCornerShape(16.dp))
+            .background(WellFill)
             .padding(horizontal = 12.dp, vertical = 9.dp),
     ) {
         Text(value, color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)

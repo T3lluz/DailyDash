@@ -1,5 +1,9 @@
 package com.macrotracker.ui.screens
 
+import androidx.compose.runtime.CompositionLocalProvider
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.health.roomColor
+import com.macrotracker.ui.screens.home.HomeTone
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -112,6 +116,9 @@ fun SettingsScreen(
 
     val connectedCount = listOf(healthConnected, weatherConnected, calendarConnected).count { it }
 
+    // the rooms rise into place, one after another, each time the tab opens
+    val entrance = remember { com.macrotracker.ui.screens.home.PageEntrance() }
+    CompositionLocalProvider(com.macrotracker.ui.screens.home.LocalPageEntrance provides entrance) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -135,7 +142,7 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(4.dp))
         }
 
-        SettingsGroup(title = "Connected", delayMs = 40) {
+        SettingsGroup(title = "Connected", tone = HomeTone.Weather, delayMs = 40) {
             SettingsNavRow(
                 icon = AppIcons.Link,
                 tint = HealthConnectBrand,
@@ -204,7 +211,7 @@ fun SettingsScreen(
             )
         }
 
-        SettingsGroup(title = "You", delayMs = 70) {
+        SettingsGroup(title = "You", tone = HomeTone.Food, delayMs = 70) {
             SettingsNavRow(
                 icon = AppIcons.Flame,
                 tint = NutritionCalories,
@@ -215,7 +222,7 @@ fun SettingsScreen(
             )
         }
 
-        SettingsGroup(title = "Home screen", delayMs = 100) {
+        SettingsGroup(title = "Home screen", tone = HomeTone.Upcoming, delayMs = 100) {
             val context = LocalContext.current
             // "New" until Tilesmith has been opened once; checked again on every return here.
             var tilesmithSeen by remember { mutableStateOf(TilesmithStore.seen(context)) }
@@ -231,7 +238,7 @@ fun SettingsScreen(
             )
         }
 
-        SettingsGroup(title = "App", delayMs = 130) {
+        SettingsGroup(title = "App", tone = HomeTone.Neutral, delayMs = 130) {
             SettingsNavRow(
                 icon = AppIcons.Info,
                 tint = TextSecondary,
@@ -247,6 +254,7 @@ fun SettingsScreen(
             )
         }
     }
+    }
 }
 
 /** A downloaded or waiting update, above everything else: one tap opens it. */
@@ -258,20 +266,19 @@ private fun UpdateBanner(state: AppUpdateUiState, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(Primary.chipFill())
-            .border(1.dp, Primary.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(28.dp))
+            .background(roomColor(Primary))
             .clickable {
                 haptics.click()
                 onClick()
             }
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = 18.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(11.dp))
+                .size(44.dp)
+                .clip(RoundedCornerShape(15.dp))
                 .background(Primary.copy(alpha = 0.22f)),
             contentAlignment = Alignment.Center,
         ) {
@@ -281,7 +288,8 @@ private fun UpdateBanner(state: AppUpdateUiState, onClick: () -> Unit) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 if (version != null) "DailyDash $version is ready" else "An update is ready",
-                fontSize = 14.sp,
+                style = HealthDisplay,
+                fontSize = 17.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = TextPrimary,
             )

@@ -1,5 +1,12 @@
 package com.macrotracker.ui.screens.git
 
+import com.macrotracker.ui.screens.home.FieldShape
+import com.macrotracker.ui.screens.home.roomFieldColors
+import com.macrotracker.ui.screens.home.RoomNeutral
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.ai.AiSheet
+import com.macrotracker.ui.screens.ai.AiRoom
+import com.macrotracker.ui.screens.ai.AiRoomHi
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -178,7 +185,7 @@ fun GitScreen(
                     .navigationBarsPadding()
                     .padding(bottom = 18.dp, start = 18.dp, end = 18.dp)
                     .clip(RoundedCornerShape(50))
-                    .background(Color(0xFF2B2B2B))
+                    .background(AiRoomHi)
                     .padding(horizontal = 16.dp, vertical = 11.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -211,12 +218,10 @@ private fun GitMain(
     }
     Column(Modifier.fillMaxSize()) {
         // header
-        Row(Modifier.fillMaxWidth().padding(top = 36.dp, bottom = 4.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { haptics.tick(); onBack() }) {
-                Icon(AppIcons.ArrowBack, "Back", tint = TextPrimary, modifier = Modifier.size(22.dp))
-            }
+        Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.padding(start = 12.dp, end = 10.dp)) { com.macrotracker.ui.screens.ai.HeaderRound(AppIcons.ArrowBack, "Back") { haptics.tick(); onBack() } }
             Column(Modifier.weight(1f)) {
-                Text("Git", color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+                Text("Git", color = TextPrimary, style = HealthDisplay, fontSize = 22.sp)
                 Text(
                     ui.repos.firstOrNull { it.path == ui.repo }?.let { "${it.name} · on the server" } ?: "Repos on the server",
                     color = TextTertiary, fontSize = 12.sp,
@@ -272,7 +277,7 @@ private fun RepoStrip(repos: List<GitRepo>, selected: String?, onSelect: (String
             Row(
                 Modifier
                     .clip(RoundedCornerShape(50))
-                    .background(if (on) Color.White.copy(alpha = 0.14f) else TileDark)
+                    .background(if (on) Color.White.copy(alpha = 0.14f) else AiRoom)
                     .clickable { onSelect(r.path) }
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -299,7 +304,7 @@ private fun BranchHero(st: GitStatus, busy: String?, vm: GitViewModel) {
             .padding(horizontal = 14.dp, vertical = 6.dp)
             .fillMaxWidth()
             .clip(Card)
-            .background(TileDark)
+            .background(AiRoom)
             .animateContentSize()
             .padding(16.dp),
     ) {
@@ -307,14 +312,14 @@ private fun BranchHero(st: GitStatus, busy: String?, vm: GitViewModel) {
             Icon(AppIcons.GitFork, null, tint = TextSecondary, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(st.branch.ifBlank { "detached" }, color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold, fontFamily = Mono, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(st.branch.ifBlank { "detached" }, color = TextPrimary, style = HealthDisplay, fontSize = 18.sp, fontFamily = Mono, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(st.upstream.ifBlank { "no remote branch yet" }, color = TextTertiary, fontSize = 11.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Box {
                 IconButton(onClick = { haptics.tick(); more = true }, modifier = Modifier.size(36.dp)) {
                     Icon(AppIcons.Settings, "More", tint = TextSecondary, modifier = Modifier.size(18.dp))
                 }
-                DropdownMenu(expanded = more, onDismissRequest = { more = false }, modifier = Modifier.background(Surface)) {
+                DropdownMenu(expanded = more, onDismissRequest = { more = false }, modifier = Modifier.background(RoomNeutral)) {
                     GitMenuRow("Stash changes", AppIcons.Archive) { more = false; vm.stash(false) }
                     GitMenuRow(if (st.stashes > 0) "Restore last stash (${st.stashes})" else "Restore last stash", AppIcons.Undo) { more = false; vm.stash(true) }
                 }
@@ -369,7 +374,7 @@ private fun SyncButton(label: String, icon: ImageVector, running: Boolean, accen
     val haptics = rememberHaptics()
     Row(
         modifier
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(18.dp))
             .background(if (accent) AiAccent else Color.White.copy(alpha = 0.08f))
             .clickable(enabled = enabled) { haptics.click(); onClick() }
             .padding(vertical = 11.dp),
@@ -395,7 +400,7 @@ private fun TabBar(tab: GitTab, st: GitStatus, onTab: (GitTab) -> Unit) {
             Row(
                 Modifier
                     .clip(RoundedCornerShape(50))
-                    .background(if (on) TextPrimary else TileDark)
+                    .background(if (on) TextPrimary else AiRoom)
                     .clickable { haptics.tick(); onTab(t) }
                     .padding(horizontal = 14.dp, vertical = 9.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -406,7 +411,7 @@ private fun TabBar(tab: GitTab, st: GitStatus, onTab: (GitTab) -> Unit) {
                 if (t == GitTab.CHANGES && st.files.isNotEmpty()) {
                     Spacer(Modifier.width(7.dp))
                     Text(
-                        "${st.files.size}", color = if (on) Background else TextSecondary, fontSize = 11.5.sp, fontWeight = FontWeight.Bold,
+                        "${st.files.size}", style = HealthDisplay, color = if (on) Background else TextSecondary, fontSize = 11.5.sp, fontWeight = FontWeight.Bold,
                         modifier = Modifier.clip(RoundedCornerShape(50)).background(if (on) Background.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.08f)).padding(horizontal = 7.dp, vertical = 1.dp),
                     )
                 }
@@ -435,7 +440,7 @@ private fun ChangesTab(st: GitStatus, busy: String?, vm: GitViewModel, stack: Mu
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(AppIcons.Check, null, tint = TextTertiary, modifier = Modifier.size(34.dp))
                     Spacer(Modifier.height(14.dp))
-                    Text("Nothing to commit", color = TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                    Text("Nothing to commit", color = TextPrimary, style = HealthDisplay, fontSize = 17.sp)
                     Text("The working tree matches ${st.branch}.", color = TextTertiary, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
                 }
             }
@@ -445,7 +450,7 @@ private fun ChangesTab(st: GitStatus, busy: String?, vm: GitViewModel, stack: Mu
                     if (rows.isEmpty()) return
                     item(key = "s-$title") {
                         Row(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 6.dp, start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(title.uppercase(), color = TextTertiary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
+                            Text(title, style = HealthDisplay, color = TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                             Text("  ${rows.size}", color = TextTertiary, fontSize = 11.sp)
                             Spacer(Modifier.weight(1f))
                             Text(
@@ -473,7 +478,7 @@ private fun ChangesTab(st: GitStatus, busy: String?, vm: GitViewModel, stack: Mu
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .background(TileDark)
+                    .background(AiRoom)
                     .navigationBarsPadding()
                     .imePadding()
                     .padding(horizontal = 14.dp, vertical = 12.dp),
@@ -486,7 +491,7 @@ private fun ChangesTab(st: GitStatus, busy: String?, vm: GitViewModel, stack: Mu
                     maxLines = 4,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(RoundedCornerShape(18.dp))
                         .background(Background)
                         .padding(horizontal = 14.dp, vertical = 12.dp),
                     decorationBox = { inner ->
@@ -500,7 +505,7 @@ private fun ChangesTab(st: GitStatus, busy: String?, vm: GitViewModel, stack: Mu
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(RoundedCornerShape(18.dp))
                         .background(if (can) AiAccent else Color.White.copy(alpha = 0.07f))
                         .clickable(enabled = can) {
                             haptics.confirm()
@@ -514,7 +519,7 @@ private fun ChangesTab(st: GitStatus, busy: String?, vm: GitViewModel, stack: Mu
                     if (busy == "Committing") LoadingSpinner(color = OnAccent, size = 15.dp) else Icon(AppIcons.Check, null, tint = if (can) OnAccent else TextTertiary, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        if (nothingStaged) "Commit all ${st.files.size}" else "Commit ${staged.size} staged",
+                        if (nothingStaged) "Commit all ${st.files.size}" else "Commit ${staged.size} staged", style = HealthDisplay,
                         color = if (can) OnAccent else TextTertiary, fontSize = 14.5.sp, fontWeight = FontWeight.Bold,
                     )
                 }
@@ -524,7 +529,7 @@ private fun ChangesTab(st: GitStatus, busy: String?, vm: GitViewModel, stack: Mu
     discarding?.let { f ->
         AlertDialog(
             onDismissRequest = { discarding = null },
-            containerColor = Surface,
+            containerColor = AiSheet,
             title = { Text("Discard changes?", color = TextPrimary) },
             text = { Text("${f.path} goes back to how the last commit has it${if (f.untracked) ", and the new file is deleted" else ""}. This cannot be undone.", color = TextSecondary, fontSize = 14.sp, lineHeight = 20.sp) },
             confirmButton = { TextButton(onClick = { haptics.reject(); vm.discard(f.path, f.untracked); discarding = null }) { Text("Discard", color = ServerCritical) } },
@@ -540,8 +545,8 @@ private fun FileRow(f: GitFile, stagedSide: Boolean, onOpen: () -> Unit, onToggl
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(TileDark)
+            .clip(RoundedCornerShape(18.dp))
+            .background(AiRoom)
             .combinedClickable(onClick = onOpen, onLongClick = { menu = true })
             .padding(start = 12.dp, top = 9.dp, bottom = 9.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -559,7 +564,7 @@ private fun FileRow(f: GitFile, stagedSide: Boolean, onOpen: () -> Unit, onToggl
             Icon(if (stagedSide) AppIcons.Close else AppIcons.AddCircle, if (stagedSide) "Unstage" else "Stage", tint = if (stagedSide) TextSecondary else AiAccent, modifier = Modifier.size(20.dp))
         }
         Box {
-            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, modifier = Modifier.background(Surface)) {
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, modifier = Modifier.background(RoomNeutral)) {
                 GitMenuRow(if (stagedSide) "Unstage" else "Stage", AppIcons.AddCircle) { menu = false; onToggle() }
                 GitMenuRow("Discard changes", AppIcons.Delete) { menu = false; onDiscard() }
             }
@@ -582,7 +587,7 @@ private fun HistoryTab(vm: GitViewModel, stack: MutableList<GitPage>) {
 
 @Composable
 private fun CommitRow(c: GitCommit, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick).padding(vertical = 10.dp, horizontal = 4.dp)) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).clickable(onClick = onClick).padding(vertical = 10.dp, horizontal = 4.dp)) {
         // a rail with a node, as a graph draws it
         Box(Modifier.width(22.dp).height(46.dp), contentAlignment = Alignment.TopCenter) {
             Box(Modifier.padding(top = 6.dp).size(8.dp).clip(CircleShape).background(if (c.refs.any { it.startsWith("HEAD") }) AiAccent else TextTertiary))
@@ -651,7 +656,7 @@ private fun BranchesTab(st: GitStatus, busy: String?, vm: GitViewModel, stack: M
     switching?.let { br ->
         AlertDialog(
             onDismissRequest = { switching = null },
-            containerColor = Surface,
+            containerColor = AiSheet,
             title = { Text("Switch to ${br.name}?", color = TextPrimary) },
             text = { Text(if (st.files.isEmpty()) "Your working tree is clean." else "${st.files.size} changed files come with you, or git refuses if they would be overwritten.", color = TextSecondary, fontSize = 14.sp, lineHeight = 20.sp) },
             confirmButton = { TextButton(onClick = { haptics.click(); vm.checkout(br.name); switching = null }) { Text("Switch", color = AiAccent) } },
@@ -662,20 +667,20 @@ private fun BranchesTab(st: GitStatus, busy: String?, vm: GitViewModel, stack: M
 
 @Composable
 private fun SectionLabel(text: String) =
-    Text(text.uppercase(), color = TextTertiary, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp, modifier = Modifier.padding(start = 4.dp, top = 12.dp, bottom = 2.dp))
+    Text(text, style = HealthDisplay, color = TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 4.dp, top = 12.dp, bottom = 2.dp))
 
 @Composable
 private fun ActionCard(title: String, sub: String, icon: ImageVector, tint: Color, modifier: Modifier, onClick: () -> Unit) {
     Column(
         modifier
             .clip(Card)
-            .background(TileDark)
+            .background(AiRoom)
             .clickable(onClick = onClick)
             .padding(14.dp),
     ) {
         Icon(icon, null, tint = TextSecondary, modifier = Modifier.size(22.dp))
         Spacer(Modifier.height(10.dp))
-        Text(title, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text(title, style = HealthDisplay, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         Text(sub, color = TextTertiary, fontSize = 11.5.sp, maxLines = 1)
     }
 }
@@ -685,8 +690,8 @@ private fun BranchRow(b: GitBranch, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(if (b.current) Color(0xFF2B2B2B) else TileDark)
+            .clip(RoundedCornerShape(18.dp))
+            .background(if (b.current) AiRoomHi else AiRoom)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -708,14 +713,13 @@ internal fun NameDialog(title: String, hint: String, action: String, onDismiss: 
     var text by remember { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Surface,
+        containerColor = AiSheet,
         title = { Text(title, color = TextPrimary) },
         text = {
             OutlinedTextField(
                 value = text, onValueChange = { text = it.filter { c -> !c.isWhitespace() }.take(100) }, singleLine = true,
                 label = { Text(hint, color = TextTertiary) },
-                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AiAccent, unfocusedBorderColor = Border, focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary, cursorColor = AiAccent),
-            )
+                colors = roomFieldColors(), shape = FieldShape)
         },
         confirmButton = { TextButton(onClick = { onDone(text) }, enabled = text.isNotBlank()) { Text(action, color = if (text.isNotBlank()) AiAccent else TextTertiary) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = TextSecondary) } },
@@ -746,7 +750,7 @@ private fun PrsTab(st: GitStatus, vm: GitViewModel, stack: MutableList<GitPage>)
                 ) {
                     Icon(AppIcons.AddCircle, null, tint = OnAccent, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(5.dp))
-                    Text("Open PR", color = OnAccent, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
+                    Text("Open PR", style = HealthDisplay, color = OnAccent, fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -769,7 +773,7 @@ internal fun prTone(p: GitPr): Pair<String, Color> = when {
 @Composable
 private fun PrCard(p: GitPr, onClick: () -> Unit) {
     val (label, tone) = prTone(p)
-    Column(Modifier.fillMaxWidth().clip(Card).background(TileDark).clickable(onClick = onClick).padding(14.dp)) {
+    Column(Modifier.fillMaxWidth().clip(Card).background(AiRoom).clickable(onClick = onClick).padding(14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Pill(label, tone, true)
             Spacer(Modifier.width(8.dp))

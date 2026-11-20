@@ -57,7 +57,7 @@ fun LoadingSpinner(
 fun SkeletonBlock(
     modifier: Modifier = Modifier,
     color: Color = Border.copy(alpha = 0.45f),
-    shape: RoundedCornerShape = RoundedCornerShape(6.dp),
+    shape: RoundedCornerShape = RoundedCornerShape(10.dp),
 ) {
     Box(modifier = modifier.clip(shape).background(color))
 }
@@ -77,7 +77,7 @@ fun ContentSkeleton(
     tileAspect: Float? = null,
     accent: Color = Border,
     surface: Color = Surface,
-    tileShape: RoundedCornerShape = RoundedCornerShape(10.dp),
+    tileShape: RoundedCornerShape = RoundedCornerShape(14.dp),
 ) {
     val lineColor = accent.copy(alpha = 0.40f)
     val dimColor = accent.copy(alpha = 0.22f)
@@ -128,7 +128,7 @@ fun HeroListSkeleton(
     modifier: Modifier = Modifier,
     accent: Color = Border,
     surface: Color = Surface,
-    shape: RoundedCornerShape = RoundedCornerShape(10.dp),
+    shape: RoundedCornerShape = RoundedCornerShape(14.dp),
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(

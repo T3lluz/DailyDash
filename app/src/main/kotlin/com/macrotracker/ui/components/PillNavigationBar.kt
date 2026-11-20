@@ -72,8 +72,83 @@ fun PillNavigationBar(
     showSettingsUpdateBadge: Boolean = false,
     hazeState: HazeState? = null,
 ) {
-    val haptics = rememberHaptics()
     val selectedIndex = items.indexOfFirst { it.route == currentRoute }.coerceAtLeast(0)
+    ChromeTabBar(
+        count = items.size,
+        selectedIndex = selectedIndex,
+        hazeState = hazeState,
+        onSelect = { onItemClick(items[it]) },
+    ) { index, selection, play ->
+        val screen = items[index]
+        Box(contentAlignment = Alignment.TopEnd) {
+            // The label under the icon already names the tab for TalkBack.
+            NavTabIcon(
+                screen = screen,
+                tint = { androidx.compose.ui.graphics.lerp(TextSecondary, TextPrimary, selection().coerceIn(0f, 1f)) },
+                play = play,
+            )
+            androidx.compose.animation.AnimatedVisibility(
+                visible = showSettingsUpdateBadge && screen is Screen.Settings,
+                enter = scaleIn(MacroMotion.bouncySpring()) + fadeIn(),
+                exit = scaleOut() + fadeOut(),
+                modifier = Modifier.offset(x = 7.dp, y = (-5).dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(15.dp)
+                        .shadow(3.dp, CircleShape)
+                        .clip(CircleShape)
+                        .background(Error)
+                        .border(
+                            BorderStroke(1.5.dp, GlassTint),
+                            CircleShape,
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = AppIcons.Download,
+                        contentDescription = "Update available",
+                        tint = OnAccent,
+                        modifier = Modifier.size(9.dp),
+                    )
+                }
+            }
+        }
+        ChromeTabLabel(screen.label, selection)
+    }
+}
+
+/** A tab's name under its icon, brightening as the tab is picked. */
+@Composable
+fun ChromeTabLabel(text: String, selection: () -> Float) {
+    Text(
+        text = text,
+        color = androidx.compose.ui.graphics.lerp(TextSecondary, TextPrimary, selection().coerceIn(0f, 1f)),
+        fontSize = 10.sp,
+        fontWeight = FontWeight.SemiBold,
+        maxLines = 1,
+        softWrap = false,
+        modifier = Modifier.padding(top = 2.dp),
+    )
+}
+
+/**
+ * The app's one tab bar: a glass pill with a raised key under the picked tab that stretches
+ * between tabs as it moves, each tab dipping under a finger. The main navbar and every
+ * page's dock are this bar, so they look and move alike. [item] draws a tab's icon and
+ * label; `selection` is how picked it is (0 to 1, read while drawing) and `play` counts
+ * arrivals, for an icon that acts out its tab.
+ */
+@Composable
+fun ChromeTabBar(
+    count: Int,
+    selectedIndex: Int,
+    hazeState: HazeState?,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    item: @Composable ColumnScope.(index: Int, selection: () -> Float, play: Int) -> Unit,
+) {
+    val haptics = rememberHaptics()
     val reduced = rememberReducedMotion()
 
     // The bubble's two ends, in tabs. The end it travels towards leads on a stiff spring
@@ -94,7 +169,7 @@ fun PillNavigationBar(
     }
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(start = ChromeSideInset, end = ChromeSideInset, bottom = 8.dp)
             .height(NavPillHeight),
@@ -112,15 +187,15 @@ fun PillNavigationBar(
                 // sit concentric in the pill's.
                 .padding(horizontal = 4.dp),
         ) {
-            if (items.isNotEmpty()) {
-                SelectionBubble(count = items.size, left = { left.value }, right = { right.value }, hazeState = hazeState)
+            if (count > 0) {
+                SelectionBubble(count = count, left = { left.value }, right = { right.value }, hazeState = hazeState)
             }
 
             Row(
                 modifier = Modifier.fillMaxSize(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                items.forEachIndexed { index, screen ->
+                for (index in 0 until count) {
                     val isSelected = index == selectedIndex
                     // Kept as a State: the icon reads it while drawing, the label in composition.
                     val selection = animateFloatAsState(
@@ -149,7 +224,7 @@ fun PillNavigationBar(
                             ) {
                                 haptics.tick()
                                 if (isSelected) play++
-                                onItemClick(screen)
+                                onSelect(index)
                             },
                         contentAlignment = Alignment.Center,
                     ) {
@@ -161,52 +236,7 @@ fun PillNavigationBar(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center,
                         ) {
-                            Box(contentAlignment = Alignment.TopEnd) {
-                                // The label under the icon already names the tab for TalkBack.
-                                NavTabIcon(
-                                    screen = screen,
-                                    tint = { androidx.compose.ui.graphics.lerp(TextSecondary, TextPrimary, selection.value.coerceIn(0f, 1f)) },
-                                    play = play,
-                                )
-                                androidx.compose.animation.AnimatedVisibility(
-                                    visible = showSettingsUpdateBadge && screen is Screen.Settings,
-                                    enter = scaleIn(MacroMotion.bouncySpring()) + fadeIn(),
-                                    exit = scaleOut() + fadeOut(),
-                                    modifier = Modifier.offset(x = 7.dp, y = (-5).dp),
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(15.dp)
-                                            .shadow(3.dp, CircleShape)
-                                            .clip(CircleShape)
-                                            .background(Error)
-                                            .border(
-                                                BorderStroke(1.5.dp, GlassTint),
-                                                CircleShape,
-                                            ),
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        Icon(
-                                            imageVector = AppIcons.Download,
-                                            contentDescription = "Update available",
-                                            tint = OnAccent,
-                                            modifier = Modifier.size(9.dp),
-                                        )
-                                    }
-                                }
-                            }
-
-                            Text(
-                                text = screen.label,
-                                color = androidx.compose.ui.graphics.lerp(
-                                    TextSecondary,
-                                    TextPrimary,
-                                    selection.value.coerceIn(0f, 1f),
-                                ),
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.padding(top = 2.dp),
-                            )
+                            item(index, { selection.value }, play)
                         }
                     }
                 }

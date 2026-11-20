@@ -1,5 +1,6 @@
 package com.macrotracker.ui.components
 
+import com.macrotracker.ui.screens.health.HealthDisplay
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -117,20 +118,18 @@ fun WidgetExpandBar(
                         label = "bar_label",
                     ) { isExpanded ->
                         Text(
-                            text = if (isExpanded) collapseLabel else expandLabel,
-                            fontSize = 11.sp,
+                            text = if (isExpanded) collapseLabel else expandLabel, style = HealthDisplay,
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = accentColor.copy(alpha = if (isExpanded) 0.75f else 0.65f),
-                            letterSpacing = 0.3.sp,
                         )
                     }
                 } else {
                     Text(
-                        text = if (expanded) collapseLabel else expandLabel,
-                        fontSize = 11.sp,
+                        text = if (expanded) collapseLabel else expandLabel, style = HealthDisplay,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = accentColor.copy(alpha = if (expanded) 0.75f else 0.65f),
-                        letterSpacing = 0.3.sp,
                     )
                 }
                 Icon(

@@ -1,5 +1,6 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.screens.home.RoomNeutral
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -155,7 +156,7 @@ fun SysopChatPane(
                         DropdownMenu(
                             expanded = threadMenuOpen,
                             onDismissRequest = { threadMenuOpen = false },
-                            modifier = Modifier.background(Surface),
+                            modifier = Modifier.background(RoomNeutral),
                         ) {
                             DropdownMenuItem(
                                 text = { Text("New chat", color = TextPrimary, fontSize = 14.sp) },

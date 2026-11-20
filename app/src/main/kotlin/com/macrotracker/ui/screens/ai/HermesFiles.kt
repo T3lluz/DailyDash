@@ -1,5 +1,6 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.screens.home.WellFill
 import android.graphics.BitmapFactory
 import android.util.Base64
 import androidx.compose.foundation.Image
@@ -111,7 +112,7 @@ internal fun ServerFilesSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheet,
-        containerColor = Surface,
+        containerColor = AiSheet,
         modifier = Modifier.fillMaxHeight(),
     ) {
         Column(Modifier.fillMaxSize().navigationBarsPadding()) {
@@ -119,12 +120,12 @@ internal fun ServerFilesSheet(
                 modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(
-                    onClick = {
+                Box(Modifier.padding(start = 8.dp, end = 8.dp)) {
+                    HeaderRound(AppIcons.ArrowBack, "Back") {
                         haptics.tick()
                         if (trail.size > 1) trail.removeAt(trail.lastIndex) else onDismiss()
-                    },
-                ) { Icon(AppIcons.ArrowBack, "Back", tint = TextSecondary, modifier = Modifier.size(20.dp)) }
+                    }
+                }
                 Column(Modifier.weight(1f)) {
                     Text(
                         name,
@@ -149,7 +150,7 @@ internal fun ServerFilesSheet(
                     }
                 }
             }
-            HorizontalDivider(color = Border)
+            Spacer(Modifier.height(8.dp))
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when (shown) {
                     null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingSpinner(color = AiAccent) }
@@ -268,7 +269,7 @@ private fun FileImage(image: HermesPreview.Image) {
     Box(Modifier.fillMaxSize().padding(12.dp), contentAlignment = Alignment.Center) {
         Image(
             bitmap = bitmap, contentDescription = image.name, contentScale = ContentScale.Fit,
-            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(SurfaceChrome),
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(WellFill),
         )
     }
 }

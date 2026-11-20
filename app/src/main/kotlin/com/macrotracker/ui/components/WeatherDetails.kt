@@ -1,5 +1,6 @@
 package com.macrotracker.ui.components
 
+import com.macrotracker.ui.screens.health.HealthDisplay
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -93,7 +94,7 @@ import kotlin.math.roundToInt
  * one icon set, and every time in the phone's own clock.
  */
 
-private val TileShape = RoundedCornerShape(14.dp)
+private val TileShape = RoundedCornerShape(18.dp)
 private val TileFill = Color.White.copy(alpha = 0.07f)
 private val Sun = Color(0xFFFFC857)
 private val Tabular = TextStyle(fontFeatureSettings = "tnum")
@@ -315,7 +316,7 @@ internal fun HourlyExplorer(
                     Text(hour.description, color = TextPrimary, fontSize = 13.5.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Column(horizontalAlignment = Alignment.End) {
-                    Text(metricValue(hour, metric, tempUnit, windUnit), color = color, fontSize = 20.sp, fontWeight = FontWeight.Bold, style = Tabular, maxLines = 1)
+                    Text(metricValue(hour, metric, tempUnit, windUnit), color = color, fontSize = 24.sp, style = HealthDisplay, maxLines = 1)
                     Text(metricNote(hour, metric, tempUnit, windUnit), color = TextSecondary, fontSize = 11.sp, style = Tabular, maxLines = 1)
                 }
             }
@@ -545,7 +546,7 @@ private fun DayStat(icon: ImageVector, label: String, value: String, modifier: M
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, null, tint = TextTertiary, modifier = Modifier.size(11.dp))
             Spacer(Modifier.width(4.dp))
-            Text(label.uppercase(), color = TextTertiary, fontSize = 9.5.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.6.sp, maxLines = 1)
+            Text(label, color = TextSecondary, fontSize = 11.sp, maxLines = 1)
         }
         Text(value, color = tint, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, style = Tabular, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
     }
@@ -772,10 +773,10 @@ private fun Tile(icon: ImageVector, label: String, value: String, modifier: Modi
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, null, tint = TextTertiary, modifier = Modifier.size(13.dp))
             Spacer(Modifier.width(6.dp))
-            Text(label.uppercase(), color = TextTertiary, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.8.sp, maxLines = 1)
+            Text(label, color = TextSecondary, fontSize = 12.5.sp, maxLines = 1)
         }
         Text(
-            value, color = TextPrimary, fontSize = if (value.length > 9) 17.sp else 22.sp, fontWeight = FontWeight.Bold, style = Tabular,
+            value, color = TextPrimary, fontSize = if (value.length > 9) 18.sp else 24.sp, style = HealthDisplay,
             maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp),
         )
         if (picture != null) {
@@ -914,11 +915,11 @@ internal fun ConditionsGrid(weather: WeatherInfo, tempUnit: TempUnit, windUnit: 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(AppIcons.Wind, null, tint = TextTertiary, modifier = Modifier.size(13.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("WIND", color = TextTertiary, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.8.sp)
+                Text("Wind", color = TextSecondary, fontSize = 12.5.sp)
             }
             Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(WeatherUnits.formatWind(weather.windSpeed, windUnit), color = TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold, style = Tabular, maxLines = 1)
+                    Text(WeatherUnits.formatWind(weather.windSpeed, windUnit), color = TextPrimary, fontSize = 24.sp, style = HealthDisplay, maxLines = 1)
                     weather.windDirection?.let { Text("from ${WeatherMath.compass(it)}", color = TextSecondary, fontSize = 12.sp) }
                 }
                 weather.windDirection?.let { WindDial(it, accent) }
@@ -1011,7 +1012,7 @@ internal fun ConditionsGrid(weather: WeatherInfo, tempUnit: TempUnit, windUnit: 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(AppIcons.Sunset, null, tint = TextTertiary, modifier = Modifier.size(13.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("SUN", color = TextTertiary, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.8.sp)
+                    Text("Sun", color = TextSecondary, fontSize = 12.5.sp)
                 }
                 Spacer(Modifier.height(6.dp))
                 SunArc(rise, set, remember { LocalTime.now() })
@@ -1031,13 +1032,13 @@ internal fun ConditionsGrid(weather: WeatherInfo, tempUnit: TempUnit, windUnit: 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(AppIcons.Moon, null, tint = TextTertiary, modifier = Modifier.size(13.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("MOON", color = TextTertiary, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.8.sp)
+                    Text("Moon", color = TextSecondary, fontSize = 12.5.sp)
                 }
                 Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     MoonDisc(phase)
                     Spacer(Modifier.width(10.dp))
                     Column {
-                        Text(WeatherMath.moonName(phase), color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(WeatherMath.moonName(phase), style = HealthDisplay, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text("${(WeatherMath.moonLit(phase) * 100).roundToInt()}% lit", color = TextSecondary, fontSize = 12.sp, style = Tabular)
                     }
                 }

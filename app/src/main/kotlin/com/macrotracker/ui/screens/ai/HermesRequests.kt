@@ -1,5 +1,6 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.screens.health.HealthDisplay
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -80,16 +81,17 @@ import dev.chrisbanes.haze.HazeState
  * line where it was asked.
  */
 
-private val CardShape = RoundedCornerShape(22.dp)
-private val OptionShape = RoundedCornerShape(16.dp)
-private val ButtonShape = RoundedCornerShape(14.dp)
+private val CardShape = RoundedCornerShape(28.dp)
+private val OptionShape = RoundedCornerShape(20.dp)
+private val ButtonShape = RoundedCornerShape(18.dp)
 
 /** The small capitals over a card: what kind of thing is waiting. */
 @Composable
 private fun Eyebrow(text: String, modifier: Modifier = Modifier) {
     Text(
-        text.uppercase(),
-        color = TextSecondary, fontSize = 10.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp, maxLines = 1,
+        text,
+        style = HealthDisplay,
+        color = TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
         modifier = modifier,
     )
 }
@@ -261,7 +263,7 @@ internal fun PendingQuestionCard(
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Eyebrow(if (questions.size > 1) "Input needed · ${page + 1} of ${questions.size}" else "Input needed")
-                Text(if (questions.size > 1) "Hermes has ${questions.size} questions" else "Hermes has a question", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text(if (questions.size > 1) "Hermes has ${questions.size} questions" else "Hermes has a question", color = TextPrimary, style = HealthDisplay, fontSize = 18.sp)
             }
             CollapseButton(onCollapse)
         }
@@ -272,15 +274,13 @@ internal fun PendingQuestionCard(
             MarkdownText(markdown = question.question, color = TextPrimary, fontSize = 15.sp, lineHeight = 21.sp, linkColor = AiAccent, breaks = true)
             question.choices.forEach { choice ->
                 val on = picked[page] == choice && typed[page].isBlank()
-                val edge by animateColorAsState(if (on) AiAccent else Border, MacroMotion.colorTween(), label = "optionEdge")
-                val fill by animateColorAsState(if (on) AiAccent.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.04f), MacroMotion.colorTween(), label = "optionFill")
+                val fill by animateColorAsState(if (on) AiAccent.copy(alpha = 0.26f) else Color.White.copy(alpha = 0.06f), MacroMotion.colorTween(), label = "optionFill")
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 48.dp)
                         .clip(OptionShape)
                         .background(fill)
-                        .border(1.dp, edge, OptionShape)
                         .clickable(enabled = enabled, role = Role.RadioButton) {
                             haptics.tick()
                             picked[page] = choice
@@ -311,8 +311,7 @@ internal fun PendingQuestionCard(
                     .fillMaxWidth()
                     .heightIn(min = 48.dp)
                     .clip(OptionShape)
-                    .background(Color.White.copy(alpha = 0.04f))
-                    .border(1.dp, if (typed[page].isNotBlank()) AiAccent else Border, OptionShape)
+                    .background(if (typed[page].isNotBlank()) AiAccent.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.06f))
                     .padding(horizontal = 14.dp, vertical = 13.dp),
                 decorationBox = { inner ->
                     if (typed[page].isEmpty()) Text("Or type a custom answer", color = TextTertiary, fontSize = 14.5.sp)
@@ -362,7 +361,7 @@ internal fun PendingApprovalCard(
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Eyebrow(if (waiting.size > 1) "Approval needed · ${page + 1} of ${waiting.size}" else "Approval needed")
-                Text(cmd.what?.trim()?.takeIf { it.isNotEmpty() } ?: "Run a command", color = TextPrimary, fontSize = 18.sp, lineHeight = 23.sp, fontWeight = FontWeight.Bold)
+                Text(cmd.what?.trim()?.takeIf { it.isNotEmpty() } ?: "Run a command", style = HealthDisplay, color = TextPrimary, fontSize = 18.sp, lineHeight = 23.sp, fontWeight = FontWeight.Bold)
             }
             CollapseButton(onCollapse)
         }
@@ -374,7 +373,7 @@ internal fun PendingApprovalCard(
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(16.dp))
                     .background(Color.Black.copy(alpha = 0.35f))
                     .horizontalScroll(rememberScrollState())
                     .padding(horizontal = 12.dp, vertical = 10.dp),

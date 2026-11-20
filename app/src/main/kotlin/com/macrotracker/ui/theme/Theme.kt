@@ -1,5 +1,6 @@
 package com.macrotracker.ui.theme
 
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.LocalOverscrollFactory
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
@@ -15,6 +16,18 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.macrotracker.data.links.AppLinks
+
+/**
+ * Rounder than Material's own, as the rooms are: menus (extra small) and chips read these,
+ * so a dropdown is a soft card rather than a square sheet.
+ */
+private val AppShapes = androidx.compose.material3.Shapes(
+    extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(18.dp),
+    small = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+    medium = androidx.compose.foundation.shape.RoundedCornerShape(22.dp),
+    large = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+    extraLarge = androidx.compose.foundation.shape.RoundedCornerShape(32.dp),
+)
 
 /**
  * Every role is set explicitly: Material's defaults are purple-tinted, and
@@ -46,7 +59,7 @@ private val DarkColorScheme = darkColorScheme(
     surfaceContainerLowest = MapWell,
     surfaceContainerLow = Color(0xFF1B1B1B),
     surfaceContainer = Surface,
-    surfaceContainerHigh = Color(0xFF232323),
+    surfaceContainerHigh = Color(0xFF242424),
     surfaceContainerHighest = SurfaceElevated,
     inverseSurface = TextPrimary,
     inverseOnSurface = Background,
@@ -59,23 +72,27 @@ private val DarkColorScheme = darkColorScheme(
     scrim = Color.Black,
 )
 
-private val AppTypography = Typography(
+private val BaseTypography = Typography(
     headlineLarge = TextStyle(
+        fontFamily = com.macrotracker.ui.screens.health.HealthDisplayFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 32.sp,
         color = TextPrimary,
     ),
     headlineMedium = TextStyle(
+        fontFamily = com.macrotracker.ui.screens.health.HealthDisplayFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 24.sp,
         color = TextPrimary,
     ),
     titleLarge = TextStyle(
+        fontFamily = com.macrotracker.ui.screens.health.HealthDisplayFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 20.sp,
         color = TextPrimary,
     ),
     titleMedium = TextStyle(
+        fontFamily = com.macrotracker.ui.screens.health.HealthDisplayFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 18.sp,
         color = TextPrimary,
@@ -99,6 +116,21 @@ private val AppTypography = Typography(
     ),
 )
 
+/** Dialog titles and Material's own labels in the display face, as every room's title is. */
+private val AppTypography = BaseTypography.copy(
+    headlineSmall = TextStyle(
+        fontFamily = com.macrotracker.ui.screens.health.HealthDisplayFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 22.sp,
+        color = TextPrimary,
+    ),
+    labelLarge = TextStyle(
+        fontFamily = com.macrotracker.ui.screens.health.HealthDisplayFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 15.sp,
+    ),
+)
+
 @Composable
 fun DailyDashTheme(content: @Composable () -> Unit) {
     val context = LocalContext.current
@@ -115,6 +147,7 @@ fun DailyDashTheme(content: @Composable () -> Unit) {
         MaterialTheme(
             colorScheme = DarkColorScheme,
             typography = AppTypography,
+            shapes = AppShapes,
             content = content,
         )
     }

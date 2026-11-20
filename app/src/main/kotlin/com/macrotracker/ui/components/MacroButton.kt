@@ -1,5 +1,8 @@
 package com.macrotracker.ui.components
 
+import com.macrotracker.ui.screens.health.HealthDisplay
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
@@ -27,7 +30,6 @@ import com.macrotracker.ui.theme.OnAccent
 import com.macrotracker.ui.theme.Primary
 import com.macrotracker.ui.theme.PrimaryVariant
 import com.macrotracker.ui.theme.BorderStrong
-import com.macrotracker.ui.theme.Error
 import com.macrotracker.ui.theme.SurfaceElevated
 import com.macrotracker.ui.theme.TextTertiary
 import com.macrotracker.ui.theme.chipFill
@@ -56,8 +58,8 @@ fun MacroButton(
 
     val (baseBg, contentColor, borderColor) = when (variant) {
         ButtonVariant.PRIMARY -> Triple(Primary, OnAccent, Primary)
-        ButtonVariant.SECONDARY -> Triple(SurfaceElevated, TextPrimary, BorderStrong)
-        ButtonVariant.DANGER -> Triple(Error.chipFill(), Error, Error.copy(alpha = 0.5f))
+        ButtonVariant.SECONDARY -> Triple(Color.White.copy(alpha = 0.08f), TextPrimary, Color.Transparent)
+        ButtonVariant.DANGER -> Triple(Error.copy(alpha = 0.18f), Error, Color.Transparent)
     }
 
     val bgColor by animateColorAsState(
@@ -81,18 +83,19 @@ fun MacroButton(
             .fillMaxWidth()
             .padding(vertical = 6.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale },
-        shape = RoundedCornerShape(12.dp),
+        shape = CircleShape,
         colors = ButtonDefaults.buttonColors(
             containerColor = bgColor,
             contentColor = contentColor,
-            disabledContainerColor = SurfaceElevated,
+            disabledContainerColor = Color.White.copy(alpha = 0.06f),
             disabledContentColor = TextTertiary,
         ),
-        border = BorderStroke(1.dp, if (enabled) borderColor else Border),
+        border = null,
     ) {
         // One line, always: buttons share rows, and a wrapped label makes its button taller than its neighbour.
         Text(
             text = text,
+            style = HealthDisplay,
             fontSize = 16.sp,
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,

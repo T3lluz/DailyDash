@@ -222,6 +222,10 @@ fun MainScreen(
             else -> if (where.startsWith(SubScreenRoutes.TILESMITH)) {
                 val design = where.substringAfter(':', "").ifBlank { null }
                 navController.navigateToSubScreen(SubScreenRoutes.tilesmith(designId = design))
+            } else if (where.startsWith("page:")) {
+                // A Home tile's own page ("page:F1", "page:WEATHER"), over Home so Back lands there.
+                navController.navigateToTabRoot(Screen.Home.route)
+                navController.navigateToSubScreen(SubScreenRoutes.homePage(where.substringAfter(':').uppercase()))
             }
         }
         onOpenRequestHandled()

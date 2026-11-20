@@ -1,5 +1,16 @@
 package com.macrotracker.ui.components
 
+import com.macrotracker.ui.screens.home.pageStickyAnchor
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.key
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.health.RoomLoading
+import com.macrotracker.ui.screens.home.GlassRound
+import com.macrotracker.ui.screens.home.HomePage
+import com.macrotracker.ui.screens.home.HomeTile
+import com.macrotracker.ui.screens.home.HomeTone
+import com.macrotracker.ui.screens.home.PageRoom
+import com.macrotracker.ui.screens.home.PageTab
 import com.macrotracker.ui.util.openUrl
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -105,10 +116,11 @@ private val GhMerged = Color(0xFFA371F7)
 private val GhClosed = Color(0xFFF85149)
 private val GhDraft = Color(0xFF8B949E)
 private val GhReview = Color(0xFFE3B341)
-private val GhSurface = Surface
-private val GhHairline = Border
-private val GhChip = SurfaceElevated
-private val Sharp = RoundedCornerShape(6.dp)
+private val GhSurface = Color.White.copy(alpha = 0.06f)
+private val GhTone = HomeTone.GitHub
+private val GhHairline = Color.White.copy(alpha = 0.07f)
+private val GhChip = Color.White.copy(alpha = 0.09f)
+private val Sharp = RoundedCornerShape(20.dp)
 private val Pill = RoundedCornerShape(20.dp)
 
 private enum class GhTab(val label: String) {
@@ -193,11 +205,110 @@ private fun githubHub(
 private enum class IssueFilter(val label: String) { ALL("All"), ASSIGNED("Assigned") }
 private enum class PrFilter(val label: String) { ALL("All"), MINE("Mine"), REVIEW("Review") }
 
+private fun ghHeaderLine(hub: GhHub?, state: GitHubUiState): String? = when {
+    hub != null -> buildString {
+        append(hub.selectedRepo?.name ?: "@${hub.login}")
+        val issues = hub.openIssues
+        val prs = hub.openPrs
+        if (prs > 0) append(", $prs PR${if (prs != 1) "s" else ""}")
+        if (issues > 0) append(", $issues issue${if (issues != 1) "s" else ""}")
+    }
+    state is GitHubUiState.NeedsAuth -> "Not connected"
+    else -> null
+}
+
+@Composable
+private fun GhLogo(avatarUrl: String?, login: String?) {
+    if (avatarUrl != null) {
+        GhAvatar(avatarUrl, login.orEmpty(), size = 20.dp)
+    } else {
+        Icon(
+            painter = painterResource(R.drawable.ic_github_logo),
+            contentDescription = "GitHub",
+            tint = TextPrimary,
+            modifier = Modifier.size(18.dp),
+        )
+    }
+}
+
+/**
+ * GitHub as a Home tile: the repo in focus, three numbers, the year with the snake, and
+ * what moved last. A tap opens the page: issues, pull requests, the inbox, activity, repos.
+ */
 @Composable
 fun GitHubCard(
     viewModel: GitHubViewModel = hiltViewModel(),
     isVisible: Boolean = true,
+    onOpen: () -> Unit = {},
 ) {
+    val haptics = rememberHaptics()
+    val state by viewModel.state.collectAsState()
+    val authState by viewModel.authState.collectAsState()
+    val focusRepo by viewModel.focusRepo.collectAsState()
+    val repoFocusState by viewModel.repoFocus.collectAsState()
+
+    LaunchedEffect(Unit) {
+        if (state is GitHubUiState.Idle) viewModel.loadDashboard()
+    }
+
+    val data = (state as? GitHubUiState.Success)?.data
+    val hub = remember(data, focusRepo, repoFocusState) {
+        data?.let { githubHub(it, focusRepo, repoFocusState) }
+    }
+    HomeTile(
+        title = "GitHub",
+        tone = GhTone,
+        logo = { GhLogo(data?.user?.avatarUrl, data?.user?.login) },
+        meta = ghHeaderLine(hub, state),
+        onOpen = onOpen,
+    ) {
+        if (!isVisible) {
+            GhLoading()
+            return@HomeTile
+        }
+        when (val s = state) {
+            GitHubUiState.Loading, GitHubUiState.Idle -> GhLoading()
+            GitHubUiState.NeedsAuth -> {
+                if (authState.isAwaitingBrowser) {
+                    DeviceCodePanel(
+                        service = "GitHub",
+                        userCode = authState.deviceLogin?.userCode,
+                        activationHint = "Approve DailyDash at github.com/login/device",
+                        accent = GhTone,
+                        codeSurface = GhSurface,
+                        shape = Sharp,
+                        onOpenActivation = { viewModel.openActivation() },
+                        onCancelLogin = { viewModel.cancelBrowserLogin() },
+                    )
+                } else {
+                    ConnectPrompt {
+                        haptics.toggleOn()
+                        viewModel.connectGitHub()
+                    }
+                }
+            }
+            is GitHubUiState.Error -> HubErrorState(
+                message = s.message,
+                accent = GhTone,
+                onRetry = { viewModel.loadDashboard(forceRefresh = true) },
+            )
+            is GitHubUiState.Success -> {
+                if (hub == null) {
+                    GhLoading()
+                } else {
+                    GitHubCollapsedGlance(hub = hub, haptics = haptics, onSelectRepo = { viewModel.selectRepo(it) })
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The GitHub page. Overview is the year, the numbers and what moved last, with the account
+ * at its foot; the dock's other tabs are each list in full.
+ */
+@Composable
+fun GitHubPage(viewModel: GitHubViewModel, onBack: () -> Unit) {
     val haptics = rememberHaptics()
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
@@ -205,366 +316,175 @@ fun GitHubCard(
     val focusRepo by viewModel.focusRepo.collectAsState()
     val repoFocusState by viewModel.repoFocus.collectAsState()
 
-    var expanded by rememberSaveable { mutableStateOf(false) }
-    var selectedTabName by rememberSaveable { mutableStateOf(GhTab.ISSUES.name) }
-    val selectedTab = GhTab.entries.find { it.name == selectedTabName } ?: GhTab.ISSUES
-
     LaunchedEffect(Unit) {
         if (state is GitHubUiState.Idle) viewModel.loadDashboard()
     }
-
-    val success = state as? GitHubUiState.Success
-    val data = success?.data
+    val data = (state as? GitHubUiState.Success)?.data
     val hub = remember(data, focusRepo, repoFocusState) {
         data?.let { githubHub(it, focusRepo, repoFocusState) }
     }
-    val headerSub = when {
-        hub != null -> {
-            buildString {
-                if (hub.selectedRepo != null) {
-                    append(hub.selectedRepo.name)
-                } else {
-                    append("@${hub.login}")
+    val tabs = if (hub == null) {
+        emptyList()
+    } else {
+        listOf(
+            PageTab("Overview", AppIcons.Dashboard),
+            PageTab("Issues", AppIcons.ListChecks),
+            PageTab("PRs", AppIcons.GitFork),
+            PageTab("Inbox", AppIcons.Inbox),
+            PageTab("Activity", AppIcons.Activity),
+            PageTab("Repos", AppIcons.Folder),
+        )
+    }
+    // Keyed by whether there is an account, so a sign-in lands on a fresh pager with its tabs.
+    key(hub != null) {
+        HomePage(
+            title = "GitHub",
+            tone = GhTone,
+            onBack = onBack,
+            lede = ghHeaderLine(hub, state)?.let { "$it." },
+            tabs = tabs,
+            sticky = {
+                if (hub != null) {
+                    RepoPicker(
+                        repos = hub.repos,
+                        selectedFullName = hub.selectedFullName,
+                        onSelect = { haptics.tick(); viewModel.selectRepo(it) },
+                    )
                 }
-                val issues = hub.openIssues
-                val prs = hub.openPrs
-                if (issues > 0 || prs > 0) {
-                    append(" · ")
-                    if (prs > 0) append("$prs PR${if (prs != 1) "s" else ""}")
-                    if (issues > 0 && prs > 0) append(" · ")
-                    if (issues > 0) append("$issues issue${if (issues != 1) "s" else ""}")
+            },
+            actions = { haze ->
+                if (state !is GitHubUiState.NeedsAuth) {
+                    GlassRound(AppIcons.Refresh, "Refresh", haze) {
+                        haptics.tick()
+                        viewModel.loadDashboard(forceRefresh = true)
+                    }
+                }
+                GlassRound(AppIcons.ExternalLink, "Open GitHub", haze) {
+                    context.openUrl(hub?.selectedRepo?.htmlUrl ?: data?.user?.htmlUrl ?: "https://github.com")
+                }
+            },
+        ) { page ->
+            if (hub == null) {
+                item(key = "state") {
+                    PageRoom(GhTone) {
+                        when (val s = state) {
+                            is GitHubUiState.Error -> HubErrorState(
+                                message = s.message,
+                                accent = GhTone,
+                                onRetry = { viewModel.loadDashboard(forceRefresh = true) },
+                            )
+                            GitHubUiState.NeedsAuth -> AccountTab(
+                                snapshot = null,
+                                authState = authState,
+                                onConnect = { viewModel.connectGitHub() },
+                                onDisconnect = { viewModel.disconnect() },
+                                onCancelLogin = { viewModel.cancelBrowserLogin() },
+                                onOpenActivation = { viewModel.openActivation() },
+                                haptics = haptics,
+                            )
+                            else -> RoomLoading(GhTone, bars = 5)
+                        }
+                    }
+                }
+                return@HomePage
+            }
+            item(key = "repo") {
+                Box(Modifier.pageStickyAnchor().padding(horizontal = 2.dp, vertical = 4.dp)) {
+                    RepoPicker(
+                        repos = hub.repos,
+                        selectedFullName = hub.selectedFullName,
+                        onSelect = { haptics.tick(); viewModel.selectRepo(it) },
+                    )
                 }
             }
-        }
-        state is GitHubUiState.NeedsAuth -> "Connect your account"
-        else -> "Your issues, PRs & activity"
-    }
-
-    MacroCard(borderColor = GhAccent.copy(alpha = 0.16f)) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            HubCardHeader(
-                title = "GitHub",
-                subtitle = headerSub,
-                accent = GhAccent,
-                expanded = expanded,
-                onToggleExpanded = {
-                    expanded = !expanded
-                    if (expanded) {
-                        haptics.toggleOn()
-                        if (state is GitHubUiState.NeedsAuth) {
-                            selectedTabName = GhTab.ACCOUNT.name
+            when (page) {
+                0 -> {
+                    item(key = "stats") {
+                        val stats = remember(hub) { collapsedStats(hub) }
+                        PageRoom(GhTone) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                stats.forEach { stat ->
+                                    GlanceStat(
+                                        value = stat.value,
+                                        label = stat.label,
+                                        color = stat.color,
+                                        icon = stat.icon,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                }
+                            }
                         }
-                    } else {
-                        haptics.toggleOff()
                     }
-                },
-                lastUpdatedAt = success?.lastUpdatedAt,
-                onRefresh = if (state is GitHubUiState.NeedsAuth) null else {
-                    { viewModel.loadDashboard(forceRefresh = true) }
-                },
-                logo = {
-                    if (data?.user?.avatarUrl != null) {
-                        GhAvatar(data.user.avatarUrl, data.user.login, size = 22.dp)
-                    } else {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_github_logo),
-                            contentDescription = "GitHub",
-                            tint = TextPrimary,
-                            modifier = Modifier.size(22.dp),
-                        )
+                    hub.contributions?.let { year ->
+                        item(key = "year") {
+                            PageRoom(GhOpen, title = "This year", icon = AppIcons.Activity) { ContributionYear(year) }
+                        }
                     }
-                },
-                actions = {
-                    HubHeaderAction(
-                        icon = AppIcons.ExternalLink,
-                        contentDescription = "Open GitHub",
-                        tint = TextTertiary,
-                        onClick = {
-                            val url = hub?.selectedRepo?.htmlUrl ?: data?.user?.htmlUrl ?: "https://github.com"
-                            context.openUrl(url)
-                        },
-                    )
-                },
-            )
-
-            if (isVisible) {
-                // The glance folds away while the hub unfolds, as on YouTube and Twitch, so the
-                // card eases between heights instead of jumping.
-                WidgetExpandSection(visible = !expanded) {
-                    Column {
-                            Spacer(Modifier.height(12.dp))
-                            when (state) {
-                                GitHubUiState.Loading, GitHubUiState.Idle -> GhLoading()
-                                GitHubUiState.NeedsAuth -> {
-                                    if (authState.isAwaitingBrowser) {
-                                        DeviceCodePanel(
-                                            service = "GitHub",
-                                            userCode = authState.deviceLogin?.userCode,
-                                            activationHint = "Approve DailyDash at github.com/login/device",
-                                            accent = GhAccent,
-                                            codeSurface = GhSurface,
-                                            shape = Sharp,
-                                            onOpenActivation = { viewModel.openActivation() },
-                                            onCancelLogin = { viewModel.cancelBrowserLogin() },
-                                        )
-                                    } else {
-                                        ConnectPrompt {
-                                            expanded = true
-                                            selectedTabName = GhTab.ACCOUNT.name
-                                            haptics.toggleOn()
-                                            viewModel.connectGitHub()
+                    item(key = "pulse") {
+                        val pulse = remember(hub) { collapsedPulse(hub) }
+                        if (pulse.isNotEmpty()) {
+                            PageRoom(GhTone, title = "Lately", icon = AppIcons.History, flush = true) {
+                                Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp)) {
+                                    pulse.forEach { item ->
+                                        PulseLine(item) {
+                                            haptics.tick()
+                                            item.url?.let { context.openUrl(it) } ?: item.selectRepo?.let { viewModel.selectRepo(it) }
                                         }
                                     }
                                 }
-                                is GitHubUiState.Error -> HubErrorState(
-                                    message = (state as GitHubUiState.Error).message,
-                                    accent = GhAccent,
-                                    onRetry = { viewModel.loadDashboard(forceRefresh = true) },
-                                )
-                                is GitHubUiState.Success -> {
-                                    val currentHub = hub
-                                    if (currentHub == null) {
-                                        GhLoading()
-                                    } else {
-                                        GitHubCollapsedGlance(
-                                            hub = currentHub,
-                                            haptics = haptics,
-                                            onSelectRepo = { viewModel.selectRepo(it) },
-                                        )
-                                    }
-                                }
                             }
-                            WidgetExpandFooter(
-                                expanded = false,
-                                onToggle = {
-                                    expanded = true
-                                    if (state is GitHubUiState.NeedsAuth) {
-                                        selectedTabName = GhTab.ACCOUNT.name
-                                    }
-                                },
-                                accentColor = GhAccent,
-                                expandLabel = if (state is GitHubUiState.NeedsAuth) "Connect" else "Open hub",
+                        }
+                    }
+                    item(key = "account") {
+                        PageRoom(HomeTone.Neutral, title = "Account", icon = AppIcons.Account) {
+                            AccountTab(
+                                snapshot = data,
+                                authState = authState,
+                                onConnect = { viewModel.connectGitHub() },
+                                onDisconnect = { viewModel.disconnect() },
+                                onCancelLogin = { viewModel.cancelBrowserLogin() },
+                                onOpenActivation = { viewModel.openActivation() },
+                                haptics = haptics,
+                                showYear = false,
                             )
-                
+                        }
                     }
                 }
-
-                WidgetExpandSection(visible = expanded && isVisible) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Spacer(Modifier.height(14.dp))
-                        val openIss = hub?.openIssues ?: 0
-                        val openPrs = hub?.openPrs ?: 0
-                        val unread = hub?.unread ?: 0
-
-                        if (hub != null) {
-                            RepoPicker(
-                                repos = hub.repos,
-                                selectedFullName = hub.selectedFullName,
-                                onSelect = { haptics.tick(); viewModel.selectRepo(it) },
-                            )
-                            Spacer(Modifier.height(12.dp))
-                        }
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        ) {
-                            GhTab.entries.forEach { tab ->
-                                val badge = when (tab) {
-                                    GhTab.ISSUES -> openIss.takeIf { it > 0 }?.toString()
-                                    GhTab.PRS -> openPrs.takeIf { it > 0 }?.toString()
-                                    GhTab.INBOX -> unread.takeIf { it > 0 }?.toString()
-                                    else -> null
-                                }
-                                val badgeColor = when (tab) {
-                                    GhTab.ISSUES -> GhOpen
-                                    GhTab.PRS -> GhMerged
-                                    GhTab.INBOX -> GhReview
-                                    GhTab.ACTIVITY -> GhReview
-                                    else -> GhAccent
-                                }
-                                GhTabChip(
-                                    label = tab.label,
-                                    badge = badge,
-                                    badgeColor = badgeColor,
-                                    active = selectedTab == tab,
-                                    onClick = {
-                                        haptics.tick()
-                                        selectedTabName = tab.name
-                                    },
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-                        HorizontalDivider(color = GhHairline, thickness = 0.5.dp)
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        WidgetStateSwitch(
-                            targetState = when (state) {
-                                GitHubUiState.Idle, GitHubUiState.Loading -> 0
-                                is GitHubUiState.Error -> 1
-                                GitHubUiState.NeedsAuth -> 2
-                                is GitHubUiState.Success -> 3
+                else -> item(key = "list-$page") {
+                    CompositionLocalProvider(LocalFullPage provides true) {
+                        PageRoom(
+                            when (page) {
+                                1 -> GhOpen
+                                2 -> GhMerged
+                                3 -> GhReview
+                                else -> GhTone
                             },
-                            label = "ghState",
-                        ) { phase ->
-                            when (phase) {
-                                0 -> GhLoading()
-                                1 -> HubErrorState(
-                                    message = (state as? GitHubUiState.Error)?.message
-                                        ?: "Couldn’t load GitHub data",
-                                    accent = GhAccent,
-                                    onRetry = { viewModel.loadDashboard(forceRefresh = true) },
-                                )
-                                2 -> AccountTab(
-                                    snapshot = null,
-                                    authState = authState,
-                                    onConnect = { viewModel.connectGitHub() },
-                                    onDisconnect = { viewModel.disconnect() },
-                                    onCancelLogin = { viewModel.cancelBrowserLogin() },
-                                    onOpenActivation = { viewModel.openActivation() },
+                        ) {
+                            when (page) {
+                                1 -> IssuesTab(issues = hub.issues, focusedRepo = hub.selectedRepo?.name, haptics = haptics)
+                                2 -> PullsTab(pulls = hub.pulls, focusedRepo = hub.selectedRepo?.name, haptics = haptics)
+                                3 -> InboxTab(
+                                    notifications = hub.notifications,
+                                    needReconnect = hub.notificationsNeedReconnect,
                                     haptics = haptics,
                                 )
-                                else -> {
-                                    val currentHub = hub
-                                    if (currentHub == null) {
-                                        GhLoading()
-                                    } else {
-                                        AnimatedContent(
-                                            targetState = selectedTab,
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clipToBounds(),
-                                            transitionSpec = {
-                                                MacroMotion.inCardTabSwitch(
-                                                    toRight = targetState.ordinal > initialState.ordinal,
-                                                )
-                                            },
-                                            label = "ghTab",
-                                        ) { tab ->
-                                            when (tab) {
-                                                GhTab.ISSUES -> IssuesTab(
-                                                    issues = currentHub.issues,
-                                                    focusedRepo = currentHub.selectedRepo?.name,
-                                                    haptics = haptics,
-                                                )
-                                                GhTab.PRS -> PullsTab(
-                                                    pulls = currentHub.pulls,
-                                                    focusedRepo = currentHub.selectedRepo?.name,
-                                                    haptics = haptics,
-                                                )
-                                                GhTab.INBOX -> InboxTab(
-                                                    notifications = currentHub.notifications,
-                                                    needReconnect = currentHub.notificationsNeedReconnect,
-                                                    haptics = haptics,
-                                                )
-                                                GhTab.ACTIVITY -> ActivityTab(currentHub.activity, haptics)
-                                                GhTab.REPOS -> ReposTab(
-                                                    repos = currentHub.repos,
-                                                    selectedFullName = currentHub.selectedFullName,
-                                                    focus = currentHub.focus,
-                                                    focusLoading = repoFocusState is GitHubRepoFocusUiState.Loading,
-                                                    focusError = (repoFocusState as? GitHubRepoFocusUiState.Error)?.message,
-                                                    onRetryFocus = { viewModel.loadRepoFocus(currentHub.selectedFullName, forceRefresh = true) },
-                                                    onSelectRepo = { viewModel.selectRepo(it) },
-                                                    haptics = haptics,
-                                                )
-                                                GhTab.ACCOUNT -> AccountTab(
-                                                    snapshot = data,
-                                                    authState = authState,
-                                                    onConnect = { viewModel.connectGitHub() },
-                                                    onDisconnect = { viewModel.disconnect() },
-                                                    onCancelLogin = { viewModel.cancelBrowserLogin() },
-                                                    onOpenActivation = { viewModel.openActivation() },
-                                                    haptics = haptics,
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
+                                4 -> ActivityTab(hub.activity, haptics)
+                                else -> ReposTab(
+                                    repos = hub.repos,
+                                    selectedFullName = hub.selectedFullName,
+                                    focus = hub.focus,
+                                    focusLoading = repoFocusState is GitHubRepoFocusUiState.Loading,
+                                    focusError = (repoFocusState as? GitHubRepoFocusUiState.Error)?.message,
+                                    onRetryFocus = { viewModel.loadRepoFocus(hub.selectedFullName, forceRefresh = true) },
+                                    onSelectRepo = { viewModel.selectRepo(it) },
+                                    haptics = haptics,
+                                )
                             }
                         }
-
-                        WidgetExpandFooter(
-                            expanded = true,
-                            onToggle = { expanded = false },
-                            accentColor = GhAccent,
-                            collapseLabel = "Show less",
-                        )
                     }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun GhTabChip(
-    label: String,
-    badge: String?,
-    badgeColor: Color,
-    active: Boolean,
-    onClick: () -> Unit,
-) {
-    val fg by animateColorAsState(
-        if (active) TextPrimary else TextTertiary,
-        MacroMotion.colorTween(160),
-        label = "ghTabFg",
-    )
-    val underline by animateColorAsState(
-        if (active) GhAccent else Color.Transparent,
-        MacroMotion.colorTween(160),
-        label = "ghTabLine",
-    )
-    val underlineW by animateDpAsState(
-        if (active) 18.dp else 0.dp,
-        MacroMotion.pressSpring(),
-        label = "ghTabW",
-    )
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .clip(Sharp)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Text(
-                label,
-                color = fg,
-                fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
-                fontSize = 13.sp,
-            )
-            if (badge != null) {
-                Box(
-                    modifier = Modifier
-                        .clip(Pill)
-                        .background(badgeColor.copy(alpha = if (active) 0.22f else 0.12f))
-                        .padding(horizontal = 6.dp, vertical = 1.dp),
-                ) {
-                    Text(
-                        badge,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = badgeColor,
-                    )
-                }
-            }
-        }
-        Spacer(modifier = Modifier.height(5.dp))
-        Box(
-            modifier = Modifier
-                .width(underlineW)
-                .height(2.dp)
-                .clip(RoundedCornerShape(1.dp))
-                .background(underline),
-        )
     }
 }
 
@@ -766,7 +686,7 @@ private fun collapsedPulse(hub: GhHub): List<GhPulse> {
                 at = pr.updatedAt,
                 url = pr.htmlUrl,
                 avatarUrl = pr.userAvatarUrl,
-                tag = "REVIEW",
+                tag = "Review",
                 tagColor = GhReview,
             ),
         )
@@ -793,7 +713,7 @@ private fun collapsedPulse(hub: GhHub): List<GhPulse> {
                 at = issue.updatedAt,
                 url = issue.htmlUrl,
                 avatarUrl = issue.userAvatarUrl,
-                tag = if (issue.assignedToMe) "ASSIGNED" else null,
+                tag = if (issue.assignedToMe) "Assigned" else null,
                 tagColor = GhAccent,
             ),
         )
@@ -827,7 +747,7 @@ private fun collapsedPulse(hub: GhHub): List<GhPulse> {
                 at = commit.committedAt,
                 url = commit.htmlUrl,
                 avatarUrl = commit.authorAvatarUrl,
-                tag = "COMMIT",
+                tag = "Commit",
                 tagColor = GhAccent,
             ),
         )
@@ -894,7 +814,7 @@ private fun GlanceStat(
         modifier = modifier
             .clip(Sharp)
             .background(GhSurface)
-            .padding(horizontal = 6.dp, vertical = 8.dp),
+            .padding(horizontal = 6.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
@@ -910,8 +830,8 @@ private fun GlanceStat(
             )
             Text(
                 value,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
+                fontSize = 19.sp,
+                style = HealthDisplay,
                 color = color,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -919,8 +839,7 @@ private fun GlanceStat(
         }
         Text(
             label,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.SemiBold,
+            fontSize = 11.5.sp,
             color = TextSecondary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -991,17 +910,14 @@ private fun ContributionYear(contributions: GitHubContributions) {
     var picked by remember { mutableStateOf<Pair<String, Int>?>(null) }
     val streak = remember(contributions) { contributionStreakLine(contributions) }
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(Sharp)
-            .background(GhSurface)
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(
             contributionSummary(contributions),
-            fontSize = 13.sp,
+            style = HealthDisplay,
             fontWeight = FontWeight.SemiBold,
+            fontSize = 16.sp,
             color = TextPrimary,
         )
         GitHubContributionGraph(
@@ -1085,10 +1001,9 @@ private fun PulseLine(item: GhPulse, onClick: () -> Unit) {
 @Composable
 private fun SectionLabel(text: String) {
     Text(
-        text,
-        fontSize = 10.sp,
-        fontWeight = FontWeight.Bold,
-        letterSpacing = 0.7.sp,
+        text, style = HealthDisplay,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.SemiBold,
         color = TextSecondary,
     )
 }
@@ -1370,8 +1285,7 @@ private fun RepoPicker(
         modifier = Modifier
             .fillMaxWidth()
             .clip(Sharp)
-            .background(GhSurface)
-            .border(0.5.dp, GhHairline.copy(alpha = 0.8f), Sharp),
+            .background(GhSurface),
     ) {
         Row(
             modifier = Modifier
@@ -1540,7 +1454,7 @@ private fun RepoDetail(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    repo.fullName,
+                    repo.fullName, style = HealthDisplay,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary,
@@ -1605,7 +1519,7 @@ private fun RepoDetail(
         }
 
         if (commits.isNotEmpty()) {
-            SectionLabel("COMMITS")
+            SectionLabel("Commits")
             WidgetScrollBox(
                 maxHeight = 200.dp,
                 verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -1620,7 +1534,7 @@ private fun RepoDetail(
         }
 
         if (runs.isNotEmpty()) {
-            SectionLabel("ACTIONS")
+            SectionLabel("Actions")
             WidgetScrollBox(
                 maxHeight = 200.dp,
                 verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -1768,6 +1682,7 @@ private fun AccountTab(
     onCancelLogin: () -> Unit,
     onOpenActivation: () -> Unit,
     haptics: HapticHelper,
+    showYear: Boolean = true,
 ) {
     val connected = authState.isConnected || snapshot != null
 
@@ -1781,7 +1696,7 @@ private fun AccountTab(
                 GhAvatar(snapshot.user.avatarUrl, snapshot.user.login, size = 40.dp)
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        snapshot.user.name?.takeIf { it.isNotBlank() } ?: snapshot.user.login,
+                        snapshot.user.name?.takeIf { it.isNotBlank() } ?: snapshot.user.login, style = HealthDisplay,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary,
@@ -1792,7 +1707,7 @@ private fun AccountTab(
             snapshot.user.bio?.takeIf { it.isNotBlank() }?.let {
                 Text(it, fontSize = 13.sp, color = TextSecondary)
             }
-            snapshot.contributions?.let { ContributionYear(it) }
+            if (showYear) snapshot.contributions?.let { ContributionYear(it) }
             if (snapshot.notificationsNeedReconnect) {
                 Text(
                     "Disconnect and connect again to enable inbox notifications.",
@@ -1916,7 +1831,7 @@ private fun IssueRow(issue: GitHubIssue, onClick: () -> Unit) {
         ) {
             StatusDot(key)
             Text(
-                "#${issue.number}",
+                "#${issue.number}", style = HealthDisplay,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextSecondary,
@@ -1938,7 +1853,7 @@ private fun IssueRow(issue: GitHubIssue, onClick: () -> Unit) {
             modifier = Modifier.fillMaxWidth(),
         ) {
             RepoTag(issue.repoFullName)
-            if (issue.assignedToMe) StatusTag("ASSIGNED", GhAccent)
+            if (issue.assignedToMe) StatusTag("Assigned", GhAccent)
             Spacer(Modifier.weight(1f))
             issue.labels.take(2).forEach { LabelChip(it) }
             if (issue.comments > 0) {
@@ -1970,7 +1885,7 @@ private fun PullRow(pr: GitHubPullRequest, onClick: () -> Unit) {
         ) {
             StatusDot(key)
             Text(
-                "#${pr.number}",
+                "#${pr.number}", style = HealthDisplay,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextSecondary,
@@ -2218,10 +2133,9 @@ private fun LabelChip(label: GitHubLabel) {
 @Composable
 private fun StatusTag(text: String, color: Color) {
     Text(
-        text.uppercase(),
-        fontSize = 9.sp,
-        fontWeight = FontWeight.Bold,
-        letterSpacing = 0.4.sp,
+        text, style = HealthDisplay,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.SemiBold,
         color = color,
         modifier = Modifier
             .clip(Pill)
@@ -2263,7 +2177,7 @@ private fun GhAvatar(url: String?, name: String, size: Dp = 22.dp) {
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                name.take(1).uppercase(),
+                name.take(1).uppercase(), style = HealthDisplay,
                 fontSize = (size.value * 0.42f).sp,
                 fontWeight = FontWeight.Bold,
                 color = TextSecondary,

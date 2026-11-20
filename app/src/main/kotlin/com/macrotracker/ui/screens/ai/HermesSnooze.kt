@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.screens.home.FieldShape
+import com.macrotracker.ui.screens.home.roomFieldColors
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -97,7 +99,7 @@ internal fun SnoozeDialog(title: String, onPick: (Long) -> Unit, onDismiss: () -
     val units = listOf("minutes" to 60_000L, "hours" to 3_600_000L, "days" to 86_400_000L)
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Surface,
+        containerColor = AiSheet,
         title = { Text(title, color = TextPrimary, maxLines = 2) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -105,7 +107,7 @@ internal fun SnoozeDialog(title: String, onPick: (Long) -> Unit, onDismiss: () -
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(14.dp))
                             .clickable { onPick(p.untilMs) }
                             .padding(horizontal = 8.dp, vertical = 11.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -120,7 +122,7 @@ internal fun SnoozeDialog(title: String, onPick: (Long) -> Unit, onDismiss: () -
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(14.dp))
                             .clickable { custom = true }
                             .padding(horizontal = 8.dp, vertical = 11.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -137,15 +139,8 @@ internal fun SnoozeDialog(title: String, onPick: (Long) -> Unit, onDismiss: () -
                         singleLine = true,
                         label = { Text("For how long", color = TextTertiary) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = AiAccent,
-                            unfocusedBorderColor = Border,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary,
-                            cursorColor = AiAccent,
-                        ),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                        colors = roomFieldColors(),
+                        modifier = Modifier.fillMaxWidth(), shape = FieldShape)
                     Spacer(Modifier.height(6.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         units.forEachIndexed { i, (name, _) ->

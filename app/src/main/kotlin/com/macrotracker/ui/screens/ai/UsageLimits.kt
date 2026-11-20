@@ -1,5 +1,9 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.theme.AiAccent
+import androidx.compose.foundation.background
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.home.WellFill
 import androidx.compose.runtime.getValue
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -114,7 +118,7 @@ internal fun UsageMeter(used: Double?, modifier: Modifier = Modifier, size: Dp =
 /** A provider's plan: its windows, what it says about money, and its own warning. */
 @Composable
 internal fun ProviderLimitCard(limit: ProviderLimit, open: Set<String>, onToggle: (String) -> Unit) {
-    MacroCard {
+    MacroCard(tone = AiAccent) {
         ProviderLimitBlock(limit, open, onToggle)
     }
 }
@@ -130,19 +134,19 @@ internal fun ProviderLimitBlock(
     Row(verticalAlignment = Alignment.CenterVertically) {
         UsageMark(limit.label, 24.dp)
         Spacer(Modifier.width(9.dp))
-        Text(limit.label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+        Text(limit.label, style = com.macrotracker.ui.screens.health.HealthDisplay, fontSize = 19.sp, color = TextPrimary)
         val plan = limit.plan.removePrefix(limit.label).trim()
         if (plan.isNotBlank()) {
             Spacer(Modifier.width(8.dp))
             Text(
                 plan, fontSize = 11.5.sp, color = TextSecondary, maxLines = 1,
-                modifier = Modifier.border(1.dp, Border, RoundedCornerShape(50)).padding(horizontal = 8.dp, vertical = 1.dp),
+                modifier = Modifier.clip(RoundedCornerShape(50)).background(WellFill).padding(horizontal = 8.dp, vertical = 1.dp),
             )
         }
         Spacer(Modifier.weight(1f))
         limit.manageUrl?.let { url ->
             Row(
-                Modifier.clip(RoundedCornerShape(8.dp)).clickable { context.openUrl(url) }.padding(horizontal = 6.dp, vertical = 4.dp),
+                Modifier.clip(RoundedCornerShape(16.dp)).clickable { context.openUrl(url) }.padding(horizontal = 6.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text("Manage", fontSize = 12.5.sp, fontWeight = FontWeight.Medium, color = Primary)
@@ -214,7 +218,7 @@ internal fun LimitRow(window: LimitWindow, now: Instant, open: Boolean = false, 
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(14.dp))
             .then(if (onToggle != null) Modifier.clickable(onClick = onToggle) else Modifier)
             .semantics { contentDescription = "${w.label}: $head used. $resetLine. $paceWords" }
             .padding(vertical = if (compact) 4.dp else 6.dp),
@@ -286,7 +290,7 @@ private fun Detail(label: String, value: String) {
 @Composable
 private fun SpendBlock(sp: ProviderSpend) {
     Spacer(Modifier.height(10.dp))
-    Hairline()
+    Spacer(Modifier.height(8.dp))
     Spacer(Modifier.height(10.dp))
     @Composable
     fun line(label: String, value: String, strong: Boolean = false) {
@@ -329,9 +333,9 @@ internal fun Last24Card(u: UsageSnapshot) {
         Spacer(Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.Bottom) {
             Text("Today", fontSize = 13.sp, color = TextSecondary, maxLines = 1, modifier = Modifier.weight(1f))
-            Text(formatTokens(today.tokens), fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary, maxLines = 1, softWrap = false, style = TabularNumbers)
+            Text(formatTokens(today.tokens), style = HealthDisplay, fontSize = 15.sp, color = TextPrimary, maxLines = 1, softWrap = false)
             Text(" tokens   ", fontSize = 12.sp, color = TextTertiary, maxLines = 1, softWrap = false)
-            Text(formatUsd(today.cost), fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary, maxLines = 1, softWrap = false, style = TabularNumbers)
+            Text(formatUsd(today.cost), style = HealthDisplay, fontSize = 15.sp, color = TextPrimary, maxLines = 1, softWrap = false)
         }
         val top = u.views["24h"]?.agents.orEmpty().take(3)
         if (top.isNotEmpty()) {

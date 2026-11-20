@@ -68,8 +68,8 @@ com.macrotracker/
                               or SERVICE, and hands its turns to the service (`handOffFeed`) when the app
                               goes to the background. Duty and staff threads are skipped, as the web skips
                               them. It also re-emits `events` (the chat pane uses it instead of its own
-                              connection) and `files` (stats/history/f1 changed; the server dashboard and
-                              Coming up refresh off it)
+                              connection) and `files` (stats/history/f1/f1live changed; the server dashboard,
+                              Coming up and the F1 page refresh off it)
     server/                ← server monitor: SSH probes (SshClient/ServerProbe), ServerMonitorService +
                               ServerNotifier, encrypted ServerStore, ServerAdvisories.
                               ServerProbe has three lanes: the fast script (every poll: /proc, df, hwmon
@@ -182,7 +182,8 @@ com.macrotracker/
                               0–100 box exactly as the dashboard's `f1_path()` does, cached per circuit for good
                               and attached to each `RaceScheduleEntry.outline`. A cancelled load must never be
                               cached (it used to cache a season with no circuits); a cache hit fills in any
-                              circuits it is missing
+                              circuits it is missing. F1Hub.kt + F1HubRepository: the F1 page's one model, from
+                              the dashboard's `_f1.json`, `_f1final.json` and `_f1live.json` (see Formula 1)
     youtube/               ← YouTubeRepository via RSS feeds + optional Google OAuth subscription
                               import (AuthorizationClient / youtube.readonly); tracked channels in SharedPrefs
     twitch/                ← TwitchRepository via Helix + Device Code OAuth (Custom Tabs →
@@ -405,8 +406,13 @@ com.macrotracker/
                              changes, squash-merge, open a PR). A diff opens `ReviewScreen` (`GitDiff` parses it; a tap on a line writes a note; the
                              notes go to a new Hermes chat with file and line, `GitViewModel.reviewPrompt`). All of it is the bridge's `gitapi.py`
                              (`/_api/ai/git/*`, `gh` for pull requests; only repos found under ~/projects, ~/docker and ~ are accepted).
-                             Look: flat tiles darker than the page (`TileDark`), no outlines, no accent bars down a card's side, no gradients or glow;
-                             colour only in a small status dot or word and on the one primary button. Keep it that way.
+                             Look (since the 2.0 rooms pass, the owner asked for the AI tab to match Home and Health): the tab is rooms
+                             in its own orange (ChatKit.kt: `AiRoom` for a card, a chat row, a step's detail, git's cards; `AiRoomHi` for the
+                             open or picked one; `AiSheet` for the chat panel and every sheet). What you said is a warm room of its own, the
+                             header is round buttons (`HeaderRound`) with the chat's name in the display face, "Worked for…" and the day are
+                             pills, the empty chat leads with "What should we look at?" set large over starter rooms in Home's tones, send is
+                             filled orange when it can go. No outlines, no rules between rows, no capitals-and-letterspacing labels, no
+                             gradients. Git's screens use `HeaderRound` for back too.
                              The bridge side lives in `bridge.py` on twolluz (`thread_fork`, `thread_retitle`, `fork_context`). Not ported, since
                              the bridge has no equivalent: git and pull requests, worktrees, review screens, subagents.
                              + ConsoleScreen.kt: the dashboard server's shell, drawn natively (no WebView). The
@@ -418,11 +424,20 @@ com.macrotracker/
                              keyboard and scrolls back. A key row adds esc, tab, a sticky ctrl, arrows and paste. Reached from the AI tab's menu, Home's
                              Servers card, the Servers screen and settings, Usage, and the launcher shortcuts
                              (res/xml/shortcuts.xml: Console, Usage, Hermes; MainActivity `EXTRA_OPEN`)
-                             + server/ (the server screen's cards: hero, history, services wall as tiles,
+                             + server/ (the server page's rooms: hero, history, services wall as tiles,
                              activity, compute, memory, network, storage, sensors, processes, containers,
-                             system). Sections reorder and toggle like Home (pencil in the header;
-                             `serverSectionOrder`); a section with nothing to show keeps its slot
+                             system). `ServerScreen` is a `HomePage` in the servers' green with a dock of four
+                             (`ServerPages`: Now, Machine, Apps, System), each holding its sections in the saved
+                             order. A section is a `ServerRoom` (a `PageRoom` in the colour of what it measures)
+                             led by `SectionHeader`; the hero draws CPU, memory and disk as rings inside one
+                             another with the hottest sensor in the middle (`ServerRings`), and the machine rooms
+                             lead with one big figure. The pencil in the bar opens the editor (order and
+                             visibility, `serverSectionOrder`); rooms are not dragged on the page. Labels are
+                             written in sentence case (`quietCase`), numbers in `HealthDisplayFamily`; only
+                             commands, units, paths and logs stay monospace. No borders, no dividers
                              + health/ (the Health tab: body clock and rooms, see Health tab) + settings/ (category sub-screens)
+                             + home/ (Home's tiles, the page shell and the simpler pages, see Home: tiles and pages)
+                             + f1/ (the F1 page and live timing, see Formula 1)
     viewmodel/             ← one @HiltViewModel per screen; UI state as sealed classes via StateFlow;
                               includes OnboardingViewModel (manages onboardingCompleted + splashShown flags);
                               DashboardViewModel (per-metric Health Connect StateFlows with today/yesterday
@@ -433,39 +448,45 @@ com.macrotracker/
                               via hiltViewModel());
                               GitHubViewModel (account dashboard — consumed by GitHubCard via
                               hiltViewModel());
-                              F1UiState.kt / GitHubUiState.kt (dedicated files for sealed UI state)
+                              F1UiState.kt / GitHubUiState.kt (dedicated files for sealed UI state);
+                              F1HubViewModel (the dashboard's F1 season and live timing; `follow()` runs only
+                              while the tile or the page is on screen)
     navigation/            ← Screen.kt (sealed class, 4 bottom-nav tabs) + OnboardingRoutes / SettingsRoutes /
                              SubScreenRoutes (const routes) + DailyDashNavHost.kt + NavigationActions.kt
                              (`navigateToTab`, `popSubScreen`, `subScreen` destination builder)
-    components/            ← shared Composables (MacroCard, PillNavigationBar, DraggableWidgetColumn,
+    components/            ← shared Composables (MacroCard for settings and the server screens, PillNavigationBar, DraggableWidgetColumn,
                               WidgetEditor, WidgetExpandBar, PillButton, …). What Hermes is doing
                               (HermesActivityViewModel's `navActivity`) is the island's second line; the
                               navbar is a plain pill whose selected tab is a raised key that stretches
                               between tabs as it moves (`SelectionBubble`, two springs, drawn in the draw
-                              phase). Its icons act out their tab once on arrival or a tap on the current tab
+                              phase). That bar is `ChromeTabBar` (PillNavigationBar.kt), and every page's dock is the
+                              same bar with the page's tabs in it (`PageDock` in home/HomePage.kt), so a page reads
+                              like a tab screen: never draw a second kind of tab bar. Its icons act out their tab once on arrival or a tap on the current tab
                               (NavTabIcon.kt: the house squashes and its door swings up, the heart beats while
                               its line draws the pulse, the sparkle spins a quarter, the gear turns two teeth),
                               drawn with the island's `GlyphPen`, ending where they began. NavActivityTab.kt holds `NavActivity` and its tones. WorkingScanner.kt is
                               opencode's Knight Rider scanner (KnightRiderTest pins it to opencode's
                               frames). ScreenHeader.kt: tab
                               `ScreenHeader`, pushed-screen `SubScreenHeader`, `TabContentBottomPadding`,
-                              `Modifier.subScreenBottomPadding()`. HomeWidgetShell.kt: card chrome shared by
-                              every Home/Health card — `CardHeader`, `HubCardHeader` + `HubHeaderAction`,
-                              `HubErrorState` (message + Retry), `WidgetPromptCard`, `ChannelSheetHeader`,
-                              expand/scroll-box helpers. MarkdownParser.kt + MarkdownText.kt: the web's
+                              `Modifier.subScreenBottomPadding()`. HomeWidgetShell.kt: what the cards share
+                              under Home's tiles: `HubErrorState` (message + Retry), `HubHeaderAction`,
+                              `ChannelSheetHeader`, `WidgetStateSwitch`, and `WidgetScrollBox`, which lays out
+                              whole inside a page (`LocalFullPage`). The tiles and pages themselves are
+                              ui/screens/home (see Home: tiles and pages). MarkdownParser.kt + MarkdownText.kt: the web's
                               `hermes-markdown.js` rules (GFM tables, nested/task lists, callouts, `run`/`search`
                               fences, diffs); `breaks`/`streaming` for chat. MarkdownParserTest pins it.
                               The weather card (WeatherCard.kt, WeatherForecast.kt, WeatherDetails.kt), after Pixel
                               Weather, Carrot and (Not Boring) Weather: the temperature big, the sky beside it, one
                               line of facts (feels, high and low, wind and where from), then a headline that says
                               what the sky is about to do (`weatherHeadline`: MET's radar nowcast when it has one,
-                              else the first wet hour) and five hours three apart (`MiniHours`). Opened: the radar's
+                              else the first wet hour) and five hours three apart (`MiniHours`). On its page: the radar's
                               next ninety minutes as bars when rain is on it (`RainNowcast`), the next 24 hours as
                               one chart with chips for what it draws and a finger along it to read an hour
                               (`HourlyExplorer`), what to wear (`WearRow`), every reading as a tile with its own
                               small picture (`ConditionsGrid`: feels like, wind on a compass, rain, humidity and dew
-                              point, UV on its scale, pressure, cloud, the sun's arc). The order opened is hours,
-                              what to wear (two short lines; a tap says why), the days, then the tiles. A day is a
+                              point, UV on its scale, pressure, cloud, the sun's arc). The page's order is now
+                              (with what to wear: two short lines; a tap says why), the radar, the hours, the
+                              days, then the tiles. A day is a
                               row (day and date, its sky in a word, rain and chance, the range bar) that opens to
                               `DayDetail`: its figures in a row, then the whole day as one chart, temperature as a
                               line with its high and low written on it and rain as bars along the foot, a finger
@@ -492,42 +513,21 @@ com.macrotracker/
                               radar every fifteen minutes for the card's last position and notifies "Rain in about
                               25 min" when a shower that lasts is ten to sixty minutes off, once in three hours,
                               never while the app is in front (`WeatherMath.rainAlert`; Settings → Connections →
-                              Weather → Rain alerts). CalendarStrip.kt: the calendar card (summary line, a day
-                              strip to the last busy day within `CalendarRepository.WINDOW_DAYS`, events in
-                              MediaCarousel, agenda). A peek never shows a badge or words: it shows who
-                              (`PeekAvatar`, the creator's picture) or when (the calendar's date column), faded
-                              with `peekAlpha`; badges and words come in with `textAlpha`. MediaCarousel.kt: the M3 multi-browse carousel the
-                              collapsed YouTube and Twitch cards use (`MediaItemLook` read in draw/layer blocks
-                              only; tap a peek to bring it in). F1CircuitMap.kt: the dashboard's four-pass circuit
+                              Weather → Rain alerts).
+                              CalendarStrip.kt: the calendar's glance (`CalendarGlance`: a day strip to the last
+                              busy day within `CalendarRepository.WINDOW_DAYS`, the picked day's events in
+                              MediaCarousel) and the page's room per day. A peek never shows a badge or words: it
+                              shows who (`PeekAvatar`, the creator's picture) or when (the calendar's date column),
+                              faded with `peekAlpha`; badges and words come in with `textAlpha`. MediaCarousel.kt:
+                              the M3 multi-browse carousel the YouTube and Twitch tiles use (`MediaItemLook` read
+                              in draw/layer blocks only; tap a peek to bring it in). F1CircuitMap.kt: the dashboard's four-pass circuit
                               (kerb, bed, marque line, car) that paints its lap on screen, with a
                               `CircuitMapWeight` per place and `CircuitMotion` STILL / PAINT_ONCE / BACKDROP
-                              (replays, and keeps a dim car lapping). F1Card.kt: the F1 hub, in one look of its
-                              own, collapsed and opened alike (the owner asked for bold and sleek, after Box Box
-                              Club; don't bring hairlines, edged wells or the old tall layouts back): filled
-                              blocks with no edges and no rules between rows (`f1Well`, `f1Hero`, `BlockFill`);
-                              names, places and headers in the heavy leaning display face (`RaceDisplay`); round
-                              team-ringed faces; logo tiles that fall back to `F1Format.teamCode`; and every
-                              circuit drawn the same way (`CircuitMapWeight.BOLD` with `CircuitMotion.FILL`: a
-                              bold white track that the marque's line fills, clears and fills again; no car).
-                              Collapsed it is one glance of about half a screen: `NextRaceBlocks` (`RaceHero`, a
-                              filled panel with the race's name, the weekend's dates and a boxed clock,
-                              `RaceClock`: days, hours and minutes far out; hours, minutes and seconds inside a
-                              day; minutes and seconds in the accent in the last hour; "LIVE" while a session
-                              runs; beside it the circuit, whole, in the panel's far half, `CircuitBackdrop`: a
-                              blurred copy glows under it and the sharp track fades where it would run under
-                              the words; then `WeekendRow`, the sessions as blocks, the next one filled in the
-                              accent, one that is on in green); the top three as team-tinted tiles
-                              (`StandingTile`: place, face, code, points, the last five finishes as `FormDots`,
-                              the gap); then who can still win it (`F1Season.titleLine`) and the last podium on
-                              one quiet line. The header says the round. Opened, it is one pane of a fixed
-                              height (never more than half the screen; the pane scrolls, a tab's `HubList`
-                              does not) with its five tabs under it, where a thumb reaches them (`HubTabs`); a
-                              sideways swipe on the pane turns the page. Drivers: the leader's panel, the title
-                              line, the standings with form per driver, then the points of the top six round by
-                              round (`PointsProgress`, a teammate dashed). Schedule: the next race exactly as
-                              the glance shows it (`NextRaceBlocks`), the circuit's facts, then the calendar as
-                              blocks (`CalendarRow`, with who won each run round) that open to the circuit, its
-                              facts and the weekend (`RaceWeekendDetail`). Times follow the phone's 12/24-hour setting (`rememberClock24`). GitHubContributionGraph.kt: the year with
+                              (replays, and keeps a dim car lapping).
+                              The F1 tile is ui/screens/f1/F1Tile.kt (see Formula 1).
+                              Every circuit is drawn the same way (`CircuitMapWeight.BOLD` with
+                              `CircuitMotion.FILL`: a bold white track that the marque's line fills, clears and
+                              fills again; no car). Times follow the phone's 12/24-hour setting (`rememberClock24`). GitHubContributionGraph.kt: the year with
                               the snake. ServerCharts.kt / ServerVitals.kt: 270° dials with an average notch,
                               mirrored area charts, the scrubbable history chart, stacked meters, uptime bars,
                               fact chips. DeviceCodePanel.kt: GitHub/Twitch device-code
@@ -648,7 +648,9 @@ fun loadDataThrottled() {
 ### Navigation
 `DailyDashNavHost` owns all routes. The **`SplashOverlay` is a full-window Compose overlay** placed above the `Scaffold` in `MainScreen` — it is **not a nav destination** and lives in `OnboardingViewModel.splashShown`. The rest of the onboarding flow (`WelcomeScreen`, `PermissionsScreen`, `TutorialScreen`) **are** nav destinations via `OnboardingRoutes.WELCOME/PERMISSIONS/TUTORIAL`. Transitions are defined exclusively in `MacroMotion` (`ui/theme/Animation.kt`); do not hardcode tween/spring values elsewhere.
 
-Sub-screens (`SubScreenRoutes.HELP/WIDGETS` and the `SettingsRoutes` categories, including the `servers` dashboard) are registered with the `subScreen(route) { … }` builder from `NavigationActions.kt`, which applies the `MacroMotion.subScreenEnter/Exit/PopEnter/PopExit` transitions. Parent screens push them imperatively (e.g. `SettingsScreen` → `help`). Every sub-screen uses `SubScreenHeader` and closes with `navController.popSubScreen(entry)` so a double-tapped back arrow can't pop the tab underneath.
+Sub-screens (`SubScreenRoutes.HELP/WIDGETS` and the `SettingsRoutes` categories, including the `servers` dashboard) are registered with the `subScreen(route) { … }` builder from `NavigationActions.kt`, which applies the `MacroMotion.subScreenEnter/Exit/PopEnter/PopExit` transitions. Parent screens push them imperatively (e.g. `SettingsScreen` → `help`). **The look everywhere, not only on Home** (the owner asked for every panel in the app to match, Nov 2026). Shared pieces in home/HomeLook.kt: `RoomNeutral` (a card standing on the page by itself), `WellFill` (a block inside a room), `SheetColor` (a bottom sheet; YouTube, Twitch, Tilesmith and the AI tab tint theirs with their own colour), `roomFieldColors()` with `FieldShape` (every text field: a fill that brightens with focus, never an outline), `roomSwitchColors()`. The theme sets Material's shapes rounder (`AppShapes`: menus 18 dp, dialogs 32 dp) and dialog titles and button labels in the display face (`AppTypography`). Bold text is set in `HealthDisplay`; small labels are sentence case with no letter spacing (`quietCase` turns an old capitals label into one). Outlines are gone except a picked item's ring (`Modifier.border(2.dp, tone, shape)` only while selected), driver and avatar rings, and Markdown's task boxes. `HubHeaderAction` and sheet headers use round buttons; Git and the Hermes file browser use `HeaderRound`. A room that opens a page sinks a little under a finger (`PageRoom(onOpen = …)`, as `HomeTile` does), rooms rise in on a page's or the Settings tab's first screen (`pageRise`, `LocalPageEntrance`), and every tappable thing ticks.
+
+Settings and its pages, and Widgets, are `SubPage`s (home/HomePage.kt): Home's page head (the title large in the display face, one sentence, the title pill on scroll) and glass bar over one scrolling column. Their cards are `MacroCard`, now a room (28 dp, a tint of `tone`, no edge; a `borderColor` an old caller passes tints it instead), groups are `SettingsGroup` rooms in a tone with no rules between rows, switches take `roomSwitchColors()`, `MacroButton` is a pill with no border, and Material's menus are rounded through the theme's `AppShapes`. Screens that need a fixed header (Console, Usage) keep `SubScreenHeader`, which has the same round back button. Every sub-screen closes with `navController.popSubScreen(entry)` so a double-tapped back arrow can't pop the tab underneath.
 
 **Tab switches must go through `navigateToTab(route)`** (pop to the start destination with `saveState`, `launchSingleTop`, `restoreState`). Never `navigate()` a tab route on top of another tab or a sub-screen — that tab's saved stack then ends in the other tab and the nav pill stops responding. (The one exception is finishing onboarding, which replaces the onboarding stack with Home.) The server dashboard → AI hand-off uses `navigateToTab(Screen.AI.withSeed(id), restoreState = false)` so the seed args beat the AI tab's saved state.
 
@@ -672,18 +674,48 @@ The F1 countdown's digits roll over (`RollingText`, components/RollingText.kt): 
 slides up out of its own clipped box as the new one rises in from below, as a countdown ticks on iOS. Specs
 in `MacroMotion.CountdownRoll`; the digit style uses tabular figures so nothing shifts.
 
-### Home Screen Widgets (draggable)
-Widget order and visibility are persisted as a single colon-and-comma encoded string in SharedPrefs:
+### Home: tiles and pages
+Home is the dashboard's rooms on a phone (2.0 beta; the owner asked for Home to work as the "new caddy" does and to share the Health tab's look). Every card is a **tile**: a room in its subject's colour (`HomeTile`, ui/screens/home/HomeLook.kt: a flat dark tint with 28 dp corners and no edge, the title in the display face in the subject's tone, one quiet line beside it, a chevron). A tile is the glance and **nothing unfolds on Home any more**: a tap anywhere on a tile opens the subject's own **page**, a pushed screen (`SubScreenRoutes.homePage(id)`, `HomePageHost` in home/HomePages.kt). Don't bring `WidgetExpandBar`, `WidgetExpandFooter`, `HubCardHeader` or a fixed-height pane back onto Home.
+
+Tiles still drag: hold one and move it (`draggableWidgetItems`), or use the pencil (`WidgetEditor`, a room of rows in each tile's tone). Order and visibility are one string in SharedPrefs:
 ```
 "WEATHER:true,CALENDAR:true,BRIEFING:true,MAIL:true,UPCOMING:true,BODY_STATS:true,FOOD:true,F1:true,GITHUB:true,YOUTUBE:true,TWITCH:true"
 ```
-`DraggableWidgetColumn` + `WidgetEditor` read/write this via `SettingsRepository`. **`GITHUB`** is the home GitHub hub (`GitHubCard`): account-wide issues, PRs, activity, and repos for the connected GitHub user (not a single project). Connect with Device Code OAuth on the Account tab (`repo` + `read:user`).
+A hold that lifts a tile and lets go without moving it ends in a click, so `HomeTile` reads `LocalTileDragging` and ignores it. A card missing from a saved order (one added in an update) is slotted in after the card that precedes it by default (`parseWidgetConfig`); layouts from before 2.0 carry `PROGRESS`/`QUICK_ADD`, mapped onto `FOOD`.
 
-**`YOUTUBE`** and **`TWITCH`** collapsed show their videos / live streams in `MediaCarousel`; opened, both are the same shape: the newest video / biggest stream as a hero card, the rest in a `WidgetScrollBox` under it (YouTube lists every video; each row is built as it scrolls in, `LoadWhenSeen`). Both filter by channel with `ChannelAvatarRow` (components/ChannelAvatarRow.kt), the same row collapsed and opened: round pictures, a picked one keeps its ring while the rest fade back; tapping it again clears the filter (no caption under the row). The row leads with a search button and, once anything is starred, a star (`ChannelFinderState`, components/ChannelFinder.kt, one per card so the glance and the open hub share it): the search opens a field over the row that narrows the pictures and the feed (YouTube by channel or title, Twitch by channel, title or game), the star keeps only favourites. A long press on a picture stars it; starred channels lead the row with a star badge. Favourites are `SettingsRepository.youtubeFavourites` / `twitchFavourites` (ids), through each view-model's `favourites` / `toggleFavourite`. The Channels tabs list favourites first with a star toggle per row, and a find field once there are more than six. Twitch rings live channels in scarlet `#eb0400` with a LIVE tag on the ring's lower edge, as Twitch does; YouTube orders channels by latest upload and dots anyone who posted today. A filter or tab change swaps the body with `MacroMotion.hubBodySwap` / `inCardTabSwitch`, and the collapsed glance folds away while the hub unfolds, so the card eases between heights.
+**The kit** (home/HomeLook.kt). `HomeTone` holds one colour per subject (the dashboard's own: weather sky, calendar orange, briefing sun, mail coral, coming up violet, F1 red, GitHub teal, servers green, YouTube red, Twitch purple, health and food as on the Health tab). `HomeTileLoading` and `HomeTilePrompt` are a tile still being read and one that needs a permission or an account. `PageRoom` is a room inside a page; `TonePill` (tinted, or filled when it is the one thing to do), `RoundAction`, `SegRow` (the dashboard's segmented control) and `RoomLabel` are the controls. Blocks set into a room are a white wash with no edge (`WellFill`); numbers and titles are `HealthDisplay`. No borders, no hairlines between rows, no capitals-and-letterspacing labels.
 
-**`UPCOMING`** is Coming up (`UpcomingCard`): source chips over the strip (All, then Calendar, Sonarr, Radarr, Stremio, F1, each with the dashboard's own icon and a count; one at a time), then a Material 3 `HorizontalCenteredHeroCarousel` with `singleAdvanceFlingBehavior`, one card per entry in time order. Items are masked, not resized, so anything that grows or fades with a card reads `carouselItemDrawInfo` inside `graphicsLayer`/draw blocks (`openness()`, `followMask()`) and never in composition. Programmatic moves use `MacroMotion.carouselTravel`.
+**A page** (`HomePage`, home/HomePage.kt). A large title in the display face with one sentence under it leads a `LazyColumn` of rooms. The back button and the page's own actions float over it as glass (`GlassRound`, `GlassPill`, `chromeGlass` on the page's own haze state), and the title joins them in a glass pill once it has scrolled away. A subject with several sides passes `tabs` and gets a **dock** where the navbar sits on a tab screen: a glass bar with a tile in the page's colour that slides to the open tab; a tap or a sideways swipe turns the page (a `HorizontalPager`, one list per tab). Inside a page `LocalFullPage` is true, which makes `WidgetScrollBox` lay its content out whole so the page does the scrolling. A page reads the view-model its tile reads: `HomePageHost` hands every page Home's own back-stack entry as the owner, so nothing is fetched twice and a page opens on what the tile showed.
 
-A card missing from a saved order (one added in an update) is slotted in after the card that precedes it by default (`parseWidgetConfig`), not appended. Home's **`FOOD`** is "Food" (totals, bars, and a `FoodLogForm` that unfolds with Log food); saved layouts from before 2.0 carry `PROGRESS`/`QUICK_ADD`, which `parseWidgetConfig` maps onto `FOOD`. Home's **`BODY_STATS`** is `HealthGlanceCard` (health/HealthGlanceCard.kt): gradient `ActivityRings` (steps, sleep, calories burned against the person's goals) with their readouts in each ring's colour (`RingReadouts`), then one chart with a sentence over it (`GlanceChart`): Steps (the pace chart and `paceLine`), Heart (`HeartDayChart`: today's heart rate in quarter hours from `heartRateCurve`, pinned by HeartRateDayTest, over the resting line) and Sleep (`SleepStagesStrip`, last night's stages). It moves on to the next every `MacroMotion.GlanceCycle.INTERVAL_MS` while on screen and the app is in front, until a chip is tapped, and opens on Sleep before 11:00. Every chart is drawn at one height and each sentence keeps to a line, so the card never changes size on Home. Readings follow as a line of text.
+The shell's small manners, which every page gets for free. Rooms on the first screen rise into place one after another when a page opens (`Modifier.pageRise`, on `PageRoom` and the head; anything composed later just stands there). The head thins out and lags as it is scrolled off, and the title lands in the bar on a spring from below; a tap on that pill, or on the dock's open tab, scrolls back to the top. A page's own controls stay in reach: it marks the copy in its content with `Modifier.pageStickyAnchor()` and hands the same composable to `HomePage(sticky = …)`, which pins it on glass under the bar once the inline copy is behind it (YouTube's and Twitch's channel row, Mail's tabs, Coming up's sources, GitHub's repo picker). `PageRoom(onOpen = …)` makes a whole room a button with a chevron. Carousel cards are 24 dp with no outline (`MediaCarouselShape`, Coming up's `CardShape`).
+
+**Icons.** Every app on the server page has its own: the dashboard's `_services.json` lists each app's icon, brand and container (`DashboardLinkRepository.parseServices`; the older page's tile markup is still read, the list wins). A container takes its app's icon (`DashboardLink.iconForContainer`), else the public dashboard-icons set by its name and parts (`containerIconCandidates`: "-db" is Postgres, "-tunnel" Cloudflare); `AppIcon` tries each in turn and shows the first letter until one loads. Driver faces on the F1 page fall back to the app's own OpenF1 headshots behind the dashboard's cut-outs (`F1HubFallback.withFaces`).
+
+**What each tile opens.**
+- `WEATHER` → `WeatherPage`: the place as the title and what the sky is about to do as the sentence, then rooms in the order a day is planned by (`weatherPageRooms`: now with warnings and what to wear, the radar's rain, the next 24 hours, the days, every reading).
+- `CALENDAR` → `CalendarPage`: the day strip and the picked day's cards (`CalendarGlance`, the tile's own body), five weeks as a grid with a dot per event (`MonthAhead`; a tapped day lists what is on it), then a room per day.
+- `BRIEFING` → `BriefPage`: the lead with Ask and Write it again, Right now, then each of the morning's parts as a room in the colour of what it is about.
+- `MAIL` → `MailPage`: the tabs as a `SegRow`, every mail of the open one with its actions. The tile shows the first three that need you.
+- `UPCOMING` → `UpcomingPage`: the source filter, the strip with its Today and two-week jumps, then every entry still ahead in a room per day. The tile is the strip alone (`UpcomingStrip`: a Material 3 `HorizontalCenteredHeroCarousel` with `singleAdvanceFlingBehavior`; items are masked, not resized, so anything that grows or fades with a card reads `carouselItemDrawInfo` inside `graphicsLayer`/draw blocks and never in composition).
+- `YOUTUBE`, `TWITCH` → `YoutubePage`, `TwitchPage`: a dock of two (Feed or Live, and Channels). The tiles show the channel faces and a `MediaCarousel`. Both filter by channel with `ChannelAvatarRow`; the row leads with a search button and, once anything is starred, a star (`ChannelFinderState`, one per surface); a long press on a face stars it. Favourites are `SettingsRepository.youtubeFavourites` / `twitchFavourites`. Twitch rings live channels in scarlet `#eb0400`.
+- `GITHUB` → `GitHubPage`: a dock of six (Overview with the year, the numbers, what moved last and the account; Issues; PRs; Inbox; Activity; Repos), the repo picker at the head of each.
+- `F1` → `F1Page` (see Formula 1 below).
+- `SERVERS` opens the server dashboard that already existed; `BODY_STATS` ("Health": `HealthGlanceCard`, rings, readouts and one cycling chart) opens the Health tab; `FOOD` (the day's two rings via Health's `FoodToday`, then Log a meal, the AI card and the label scanner) opens the Health tab at Food.
+
+An island tap about a card still scrolls Home to its tile (`CardFocus`), and then opens the tile's page when it has one. `MainActivity.EXTRA_OPEN` `page:<ID>` opens a page from outside (`tools/preview.sh open page:F1`).
+
+### Formula 1
+The F1 page (ui/screens/f1) draws one model, `F1Hub` (data/f1/F1Hub.kt). `F1HubRepository` reads it from the dashboard when the phone can reach it: `_f1.json` (stats.py, enriched by f1_live.py: both tables, every session's result this weekend and the last, tyre strategies, the season round by round, driver cut-outs under `art/` and team badges under `icons/f1-teams/`), `_f1final.json` (a session's classification the moment it ends, shown as provisional until the official one arrives) and `_f1live.json` (live timing, written about once a second around a session; never kept on disk). Off the tailnet `F1HubFallback.from` builds the same model from the app's own sources (OpenF1, Jolpica), so the page draws the same way with less on it. `F1HubParser` drops a "provisional" result that was kept before its session started or holds no times: the collector has written both. F1HubTest pins the parsing, the phases and the sums.
+
+`F1HubViewModel.follow()` keeps both fresh for as long as its caller is on screen (the tile's `F1LiveGlance`, the page): around a session the tower every two seconds, sooner when `HermesLiveFeed.files` says `f1live` changed, and the results every minute; when a session is seen to end the results are read again at once, and `f1` on the feed reloads the season. `F1Live.phase()` is the dashboard's own rule for what counts as live (a fresh file), about to start (45 minutes) or just finished (three hours).
+
+The page (`F1Page`): a **Live** tab leads the dock around a session (`f1LiveRooms`: the session clock set large with the track's status and the weather; the tower, where a tapped car opens to its three sectors in timing colours, its best lap, speed trap, stops and stints; the circuit in the feed's own frame, in the flag's colour, with the cars on it when the feed has positions; race control; in a race the lap chart and the stints; team radio clips that play in place). **Weekend** is the next race (`F1Hero`: the round, the place in the race cut, the page's sentence, then the circuit with the clock to whatever runs next and every session in the phone's time with who topped it), results one session at a time (`ResultsRoom`: a podium for a race or sprint, the three qualifying parts, practice by best lap), and the tyre strategies. **Drivers**: the leader, points by round, standings whose rows open to wins, podiums, best finish and form. **Teams**: a room per team in its colour with its badge and both drivers. **Season**: wins per driver, then every round with its podium; a round opens to its circuit, facts and sessions.
+
+**Pages inside the page** (f1/F1Detail.kt). Nothing unfolds in place: a tap opens a full page pushed over the tabs. `F1Page` keeps them as a stack of `F1Dest` keys (`LocalF1Open` pushes, back pops, the tabs keep their scroll underneath). A **driver** (`F1Dest.Driver`, from any row, face or podium step): the car's number huge behind the name, the season in sums (`F1HubMath.season`: wins, podiums, poles, best and average finish, races in the points), the title state with the neighbours in the table, the season as a bar per round to tap (`RaceByRace`), a head to head with the teammate (`F1HubMath.duel`), points by round against the teammate, and every session of this weekend and the last with the race's own fastest lap and stints. A **team** (`F1Dest.Team`): the same for both cars, with one-twos, double points finishes and the haul per round. A **session** (`F1Dest.Session`, from any session row or a results room's pill): practice as the three quickest, the whole classification with each gap as a bar, team pace (`F1HubMath.teamPace`) and laps run; qualifying as pole, each part on its own with who went out, and teammates set against each other; a race or sprint as the result, movers, every car's fastest lap, team points, who did not finish and the strategies; a session still to run is its clock. A **round** (`F1Dest.Round`, from the season list, the hero's circuit or a tapped bar): the circuit, the podium and pole, the sessions, and for an older round the finishing order and the table after it from the history (`HubHistory.classification`, `standingsAfter`). The parser gives the last weekend its sessions from the calendar, since `_f1.json` writes it without them.
+
+**The tile** (f1/F1Tile.kt, `F1Tile`) draws the same `F1Hub` as the page: what is on track (`F1LiveGlance`), the place in the race cut beside its circuit with the clock to whatever runs next, the sessions as blocks (the next one filled, the ones already run showing who topped them), the top three in their teams' tints and the title line.
+
+Its look (f1/F1Look.kt): Home's rooms tinted red, headlines in `F1Display`, a race cut of the same Google Sans Flex (leaned with `slnt`, narrow, heavy, `ROND` 0); timing figures in `F1Figure`. `DriverFace` (a ringed face that tries each candidate URL, then the code), `TeamBadge` (SVG from the dashboard, else the code), `TyreDot`, `StintBar`, `FormRow`. Purple is the session's best and green a personal best, as on every timing screen.
 
 ### Health tab
 The Health tab has its own look and is **one page in one order**: the owner asked for it to be alive and unlike the rest of the app, and to drop the reordering and hiding of sections (2.0 beta). There is no layout setting, no pencil and no drag; `HealthScreen` is a LazyColumn of five fixed items (`SectionOrder`: `DAILY_HEALTH`, `SLEEP`, `VITALS`, `ACTIVITIES`, `FOOD`, the names an island tap scrolls to; the owner asked for Body & Vitals above Activity). Don't bring the grey bordered cards, the "At a glance" tile grid or list rows with hairlines back.
@@ -702,7 +734,7 @@ The Health tab has its own look and is **one page in one order**: the owner aske
 
 **Activity** (`ActivitySection`, `ActivityTrends`). One range control in the header, D · W · M · 3M · Y (`ActivityRange`; rolling, ending today, never a calendar week): D is today's steps against a usual day (`StepPaceChart`, with the day's distance, energy and floors under it), the others chart steps, active energy, distance or floors by the day, or by the week over three months and 52 weeks (`rangeBars`, `rangeSummary`, ActivityRangeTest), from one year of daily totals (`HealthViewModel.activityDays`, `readHistoryStatsBetween(enrich = false)`: the last 91 days first so the short ranges draw at once, then the rest a quarter at a time). The big number is the range's daily average against the stretch before it, or the bar under a finger. Under the chart, the **bests** of that year (`ActivityBests`, `healthBests`: most steps, calories, distance and floors in a day, lowest resting heart rate, longest run at the step goal), one set in the last week named in its colour. Health Connect hands an app only a month back from its first grant unless it holds `READ_HEALTH_DATA_HISTORY`, so a grant from before the app asked for it gets one line at the top of the room (`HistoryAsk`, from `HealthConnectRepository.NEW_PERMISSIONS` via `missingNewPermissions`; Allow opens Health Connect's sheet, the cross puts it away for good). Add a later permission to `NEW_PERMISSIONS` so an existing grant is asked for it too. Then the workouts synced through Health Connect, every one a folded row, newest first (the owner asked for the latest to fold like the rest), opening to its numbers three to a row in the colour of what they measure, its heart rate (hold to read) and time in zones (`WorkoutZones`); with none this month or last, the latest from the last six months (`ACTIVITY_FALLBACK_DAYS`, `olderOnly`), and with none at all Open Health Connect, never a permission request.
 
-**Food** (`FoodSection`, health/FoodSection.kt; its pieces are health/FoodKit.kt: `FoodField`, `FoodNumberTile`, `FoodPrimaryButton`, `FoodGhostButton`, `FoodRoundButton`, `FoodChip`, all flat tints with no edge). One line to start logging from, "Log a meal", with two round buttons beside it for the AI card and the label scanner. Open, the composer (`FoodComposer`) is what it was, calories and protein as two tiles with the number set large and steps to tap under each (+50 +100 +250, +5 +10 +25), what was logged lately to log again in one tap (`MacroRepository.getRecentFoods`), and one button that says "Logged" for a moment when it has. Once something is logged today: two rings (calories outside, protein inside) with their numbers and the day's balance, and the day's meals as rows (`FoodRows`). Then 7, 14 or 30 days of calories or protein against the goal (`RangeBarChart`) with a picked day's meals under it; with nothing logged in the range, one line. Don't bring `MacroTextField`, `MacroButton`, `FoodLogForm` or `WidgetExpandFooter` back into this room (Home's Food card still uses them).
+**Food** (`FoodSection`, health/FoodSection.kt; its pieces are health/FoodKit.kt: `FoodField`, `FoodNumberTile`, `FoodPrimaryButton`, `FoodGhostButton`, `FoodRoundButton`, `FoodChip`, all flat tints with no edge). One line to start logging from, "Log a meal", with two round buttons beside it for the AI card and the label scanner. Open, the composer (`FoodComposer`) is what it was, calories and protein as two tiles with the number set large and steps to tap under each (+50 +100 +250, +5 +10 +25), what was logged lately to log again in one tap (`MacroRepository.getRecentFoods`), and one button that says "Logged" for a moment when it has. Once something is logged today: two rings (calories outside, protein inside) with their numbers and the day's balance, and the day's meals as rows (`FoodRows`). Then 7, 14 or 30 days of calories or protein against the goal (`RangeBarChart`) with a picked day's meals under it; with nothing logged in the range, one line. Don't bring `MacroTextField`, `MacroButton`, `FoodLogForm` or `WidgetExpandFooter` back into this room.
 
 **The two cards.** Estimating a meal and scanning a label are not screens: each is a `FoodSheet` (the room's green-tinted dark, round at the top, 92% of the screen, a header in the display face) that `DailyDashNavHost` shows over whatever tab asked (`foodSheet`), from Home as well as Health. `MealEstimateSheet` (on `AiViewModel`, whose messages it reads as cards, newest first): three ways in besides typing (a photo, the gallery, the label scanner) and quick bites while it is empty, then each answer as a card with calories and protein set large, how sure it is, a portion to pick, Adjust and one button to log it; the line to type on is at the foot with `AiPill` in the header. `ScanLabelSheet` (on `CameraScanViewModel`, reset each time it opens): the camera in a rounded window with a frame's four corners (`PreviewView` in COMPATIBLE mode, a TextureView, so it clips to the corners; the camera is unbound as soon as the card moves on), the shot to check, the wait while the AI reads it, then what it read with an amount to step or type, units as chips, the totals rolling to their new value, and "Fix what it read" for the label's own numbers.
 
@@ -795,7 +827,7 @@ Briefly tell the user:
 | Health Connect | SDK | Read-only; lazy client; gracefully returns null if SDK unavailable |
 | GitHub (home card) | OkHttp (`GitHubRepository` + `GitHubAuthClient`) | Device Code OAuth (Custom Tabs → github.com/login/device); REST `/user`, search issues/PRs `involves:@me`, `/user/repos`, `/users/{login}/events`; GraphQL `contributionsCollection`; scopes `repo read:user` |
 | F1 circuits | OkHttp (`F1CircuitRepository`) | raw.githubusercontent.com/bacinger/f1-circuits: `f1-locations.json` (30-day cache) + one GeoJSON per circuit (kept for good) |
-| t3lluz dashboard | OkHttp (`UpcomingRepository`, `DashboardLinkRepository`, `HermesClient`) | Tailnet-only static JSON (`_stats.json`, `_history.json`, `_f1.json`, tiles in `index.html`) and the bridge under `/_api/ai/*` for Hermes |
+| t3lluz dashboard | OkHttp (`UpcomingRepository`, `DashboardLinkRepository`, `F1HubRepository`, `HermesClient`) | Tailnet-only static JSON (`_stats.json`, `_history.json`, `_f1.json`, `_f1final.json`, `_f1live.json`, tiles in `index.html`) and the bridge under `/_api/ai/*` for Hermes |
 | GitHub Releases | OkHttp (`AppUpdateRepository`) | In-app APK updates + changelog |
 
 ### Background work, lifecycle and shared helpers (2.0)
@@ -825,7 +857,7 @@ off the main thread; `toDecimalOrNull()` (util/Numbers.kt) for typed numbers ("2
 `readAtMost(limit)` (util/Streams.kt) for picked files. UI: `WidgetStateSwitch(state, contentKey = { it::class })`
 fades between a card's kinds of state; `FoodLogForm` / `FoodLogList` are the one food entry form and list (`onAskAi` adds Estimate with AI beside Add);
 `ServiceButton` is a hub's Connect / Add channels button (the caller gives the haptic); `HeroListSkeleton`
-is an opened media hub's first load; `WidgetPromptCard`'s action is a `PillButton`. Repositories restore their
+is an opened media hub's first load; `WidgetPromptCard` is a tile with one line and one `TonePill`. Repositories restore their
 disk caches off the main thread (`restored = scope.async { restoreDiskCache() }`, awaited by the calls that
 need it). The baseline profile ships as `.dm` files the updater installs beside the APK; an install that fails
 with one is retried at once without it.
@@ -839,6 +871,7 @@ Strong skipping is the Compose compiler default on Kotlin 2.x, so there is no fl
 - `di/AppModule.kt` — understand what is injected and how
 - `data/local/Entities.kt` — the two Room entities (only calories + protein tracked)
 - `ui/navigation/Screen.kt` + `DailyDashNavHost.kt` — full route map
+- `ui/screens/home/HomeLook.kt` + `HomePage.kt` — Home's tiles and the page a tile opens
 - `ui/theme/Animation.kt` (`MacroMotion`) — all animation specs
 - `ui/viewmodel/DashboardViewModel.kt` — per-metric Health Connect states (today/yesterday) consumed by `HealthScreen`
 - `ui/components/BodyStats.kt` — `HealthMetricUiState` data class

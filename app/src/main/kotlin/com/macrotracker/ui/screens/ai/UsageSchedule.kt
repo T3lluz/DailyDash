@@ -1,5 +1,9 @@
 package com.macrotracker.ui.screens.ai
 
+import com.macrotracker.ui.screens.home.FieldShape
+import com.macrotracker.ui.screens.home.roomFieldColors
+import androidx.compose.foundation.layout.height
+import com.macrotracker.ui.screens.health.HealthDisplay
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -76,12 +80,12 @@ internal fun LazyListScope.usageSchedule(
         UsageCard("Scheduled asks", AppIcons.CalendarPlus, action = {
             Text(
                 "New", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Primary,
-                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { haptics.tick(); onNew() }.padding(horizontal = 10.dp, vertical = 6.dp),
+                modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable { haptics.tick(); onNew() }.padding(horizontal = 10.dp, vertical = 6.dp),
             )
         }) {
             if (jobs.isEmpty()) Text("No scheduled asks.", fontSize = 13.sp, color = TextSecondary)
             jobs.forEachIndexed { i, j ->
-                if (i > 0) Hairline()
+                if (i > 0) Spacer(Modifier.height(6.dp))
                 AskRow(
                     j,
                     onRun = { onRun(j) }, onToggle = { onToggle(j) }, onEdit = { onEdit(j) }, onDelete = { onDelete(j) },
@@ -94,7 +98,7 @@ internal fun LazyListScope.usageSchedule(
     if (fixed.isNotEmpty()) item(key = "fixed") {
         UsageCard("Runs by itself", AppIcons.History) {
             fixed.forEachIndexed { i, f ->
-                if (i > 0) Hairline()
+                if (i > 0) Spacer(Modifier.height(6.dp))
                 Row(Modifier.fillMaxWidth().padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         when (f.icon) { "sparkles" -> AppIcons.Sparkles; "timer" -> AppIcons.Clock; else -> AppIcons.Bot },
@@ -160,17 +164,14 @@ private fun SmallAction(icon: ImageVector, label: String, onClick: () -> Unit, t
 internal fun AskSheet(initial: ScheduledAsk, onDismiss: () -> Unit, onSave: (ScheduledAsk) -> Unit) {
     var ask by remember(initial) { mutableStateOf(initial) }
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val colors = OutlinedTextFieldDefaults.colors(
-        focusedBorderColor = Primary, unfocusedBorderColor = Border,
-        focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary, cursorColor = Primary,
-    )
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = Surface) {
+    val colors = roomFieldColors()
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = AiSheet) {
         Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(if (initial.id.isBlank()) "Schedule an ask" else "Edit the ask", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Text(if (initial.id.isBlank()) "Schedule an ask" else "Edit the ask", style = HealthDisplay, fontSize = 18.sp, color = TextPrimary)
             OutlinedTextField(ask.title, { ask = ask.copy(title = it) }, label = { Text("Name (optional)") }, singleLine = true,
-                colors = colors, modifier = Modifier.fillMaxWidth())
+                colors = colors, modifier = Modifier.fillMaxWidth(), shape = FieldShape)
             OutlinedTextField(ask.prompt, { ask = ask.copy(prompt = it) }, label = { Text("What should Hermes do?") }, minLines = 3,
-                colors = colors, modifier = Modifier.fillMaxWidth())
+                colors = colors, modifier = Modifier.fillMaxWidth(), shape = FieldShape)
             Text("When", fontSize = 12.sp, color = TextTertiary)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 ScheduleKind.entries.forEach { k -> UsageChip(k.label, ask.kind == k) { ask = ask.copy(kind = k) } }
@@ -179,12 +180,10 @@ internal fun AskSheet(initial: ScheduledAsk, onDismiss: () -> Unit, onSave: (Sch
                 ScheduleKind.HOURLY -> OutlinedTextField(
                     ask.every.toString(), { v -> ask = ask.copy(every = v.filter(Char::isDigit).toIntOrNull()?.coerceIn(1, 24) ?: 1) },
                     label = { Text("Every how many hours") }, singleLine = true, colors = colors,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth(),
-                )
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth(), shape = FieldShape)
                 else -> OutlinedTextField(
                     ask.at, { v -> ask = ask.copy(at = v.take(5)) }, label = { Text("At (HH:mm, Oslo)") }, singleLine = true,
-                    colors = colors, modifier = Modifier.fillMaxWidth(),
-                )
+                    colors = colors, modifier = Modifier.fillMaxWidth(), shape = FieldShape)
             }
             if (ask.kind == ScheduleKind.WEEKLY) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -193,7 +192,7 @@ internal fun AskSheet(initial: ScheduledAsk, onDismiss: () -> Unit, onSave: (Sch
             }
             if (ask.kind == ScheduleKind.ONCE) {
                 OutlinedTextField(ask.date, { ask = ask.copy(date = it.take(10)) }, label = { Text("On (yyyy-mm-dd)") }, singleLine = true,
-                    colors = colors, modifier = Modifier.fillMaxWidth())
+                    colors = colors, modifier = Modifier.fillMaxWidth(), shape = FieldShape)
             }
             Text("May", fontSize = 12.sp, color = TextTertiary)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -206,7 +205,7 @@ internal fun AskSheet(initial: ScheduledAsk, onDismiss: () -> Unit, onSave: (Sch
                 color = if (valid) Color(0xFF141414) else TextTertiary,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(16.dp))
                     .background(if (valid) TextPrimary else Color.White.copy(alpha = 0.06f))
                     .clickable(enabled = valid) { onSave(ask) }
                     .padding(vertical = 13.dp),

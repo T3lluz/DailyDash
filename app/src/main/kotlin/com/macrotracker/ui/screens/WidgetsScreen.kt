@@ -1,5 +1,9 @@
 package com.macrotracker.ui.screens
 
+import com.macrotracker.ui.screens.home.roomSwitchColors
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.home.WellFill
+import com.macrotracker.ui.screens.home.SubPage
 import com.macrotracker.ui.theme.OnAccent
 import com.macrotracker.ui.theme.contentColorOn
 import android.appwidget.AppWidgetManager
@@ -132,22 +136,15 @@ fun WidgetsScreen(
 
     val placedTotal = placedCounts.values.sum()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Background),
+    SubPage(
+        title = "Widgets",
+        lede = when {
+            placedTotal == 1 -> "1 on your home screen."
+            placedTotal > 1 -> "$placedTotal on your home screen."
+            else -> "Make your own, or add a ready-made one."
+        },
+        onBack = onNavigateBack,
     ) {
-        SubScreenHeader(
-            title = "Widgets & Tilesmith",
-            subtitle = when {
-                placedTotal == 1 -> "1 on your home screen"
-                placedTotal > 1 -> "$placedTotal on your home screen"
-                else -> "Make your own, or add a ready-made one"
-            },
-            onNavigateBack = onNavigateBack,
-            modifier = Modifier.padding(horizontal = 16.dp),
-        )
-
         // ── Info banner if pin not supported ─────────────────────────────
         AnimatedVisibility(
             visible = !pinSupported,
@@ -157,9 +154,8 @@ fun WidgetsScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Surface.copy(alpha = 0.5f))
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(WellFill)
                     .padding(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
@@ -179,23 +175,14 @@ fun WidgetsScreen(
             }
         }
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
-                .padding(top = 12.dp)
-                .padding(bottom = 24.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             TilesmithHero(onOpen = onOpenTilesmith)
             Text(
-                text = "READY-MADE",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextSecondary,
-                letterSpacing = 0.8.sp,
-                modifier = Modifier.padding(start = 4.dp, top = 8.dp),
+                text = "Ready-made",
+                style = HealthDisplay,
+                fontSize = 19.sp,
+                color = TextPrimary,
+                modifier = Modifier.padding(start = 6.dp, top = 8.dp),
             )
             AiLinesCard(
                 specs = specs.filter { it.key in WidgetAi.WIDGETS },
@@ -235,8 +222,8 @@ private fun SwapHint() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(Surface.copy(alpha = 0.5f))
+            .clip(RoundedCornerShape(18.dp))
+            .background(WellFill)
             .padding(horizontal = 14.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -287,7 +274,7 @@ private fun AiLinesCard(
                 Box(Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(spec.accent))
                 Spacer(Modifier.width(10.dp))
                 Text(spec.title, fontSize = 13.5.sp, color = TextPrimary, modifier = Modifier.weight(1f))
-                Switch(checked = enabled[spec.key] == true, enabled = available, onCheckedChange = { onToggle(spec.key, it) })
+                Switch(checked = enabled[spec.key] == true, enabled = available, onCheckedChange = { onToggle(spec.key, it) }, colors = roomSwitchColors())
             }
         }
     }
@@ -345,7 +332,7 @@ private fun WidgetCard(
                         .padding(8.dp)
                         .background(
                             Success.copy(alpha = 0.9f),
-                            RoundedCornerShape(6.dp),
+                            RoundedCornerShape(10.dp),
                         )
                         .padding(horizontal = 8.dp, vertical = 4.dp),
                 ) {
@@ -358,7 +345,7 @@ private fun WidgetCard(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = if (instanceCount > 1) "Active × $instanceCount" else "Active",
+                            text = if (instanceCount > 1) "Active × $instanceCount" else "Active", style = HealthDisplay,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = OnAccent,
@@ -389,7 +376,7 @@ private fun WidgetCard(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
-                text = spec.title,
+                text = spec.title, style = HealthDisplay,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary,
@@ -400,12 +387,7 @@ private fun WidgetCard(
                 modifier = Modifier
                     .background(
                         accentColor.copy(alpha = 0.13f),
-                        RoundedCornerShape(6.dp),
-                    )
-                    .border(
-                        1.dp,
-                        accentColor.copy(alpha = 0.35f),
-                        RoundedCornerShape(6.dp),
+                        RoundedCornerShape(10.dp),
                     )
                     .padding(horizontal = 7.dp, vertical = 3.dp),
             ) {
@@ -445,7 +427,7 @@ private fun WidgetCard(
             Button(
                 onClick = onAddToHomeScreen,
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(10.dp),
+                shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (showPlaced) Success.copy(alpha = 0.15f)
                                      else accentColor,
@@ -482,12 +464,7 @@ private fun WidgetCard(
                     .fillMaxWidth()
                     .background(
                         accentColor.copy(alpha = 0.08f),
-                        RoundedCornerShape(10.dp),
-                    )
-                    .border(
-                        1.dp,
-                        accentColor.copy(alpha = 0.25f),
-                        RoundedCornerShape(10.dp),
+                        RoundedCornerShape(14.dp),
                     )
                     .padding(horizontal = 12.dp, vertical = 10.dp),
             ) {
@@ -555,13 +532,12 @@ private fun LiveWidgetPreview(spec: DashWidgetSpec, cells: Pair<Int, Int>, modif
                 contentScale = ContentScale.Fit,
                 modifier = Modifier
                     .fillMaxSize()
-                    .clip(RoundedCornerShape(10.dp))
-                    .border(1.dp, Border.copy(alpha = 0.4f), RoundedCornerShape(10.dp)),
+                    .clip(RoundedCornerShape(14.dp))
             )
             // Still rendering: hold the widget's shape instead of an empty gap.
             else -> SkeletonBlock(
                 modifier = Modifier.fillMaxSize(),
-                shape = RoundedCornerShape(10.dp),
+                shape = RoundedCornerShape(14.dp),
             )
         }
     }

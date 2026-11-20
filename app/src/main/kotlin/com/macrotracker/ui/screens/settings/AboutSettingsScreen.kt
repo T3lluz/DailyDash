@@ -1,5 +1,8 @@
 package com.macrotracker.ui.screens.settings
 
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.home.WellFill
+import com.macrotracker.ui.screens.home.SubPage
 import com.macrotracker.ui.util.LoadWhenSeen
 import com.macrotracker.ui.util.findActivity
 import com.macrotracker.data.update.prettyVersion
@@ -83,21 +86,7 @@ fun AboutSettingsScreen(
         appUpdateViewModel.loadReleaseNotes()
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Background)
-            .imePadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp)
-            .subScreenBottomPadding(),
-    ) {
-        SubScreenHeader(
-            title = "About",
-            subtitle = "Version, updates, release notes and the intro",
-            onNavigateBack = onNavigateBack,
-        )
-        Spacer(modifier = Modifier.height(12.dp))
+    SubPage(title = "About", lede = "Version, updates, release notes and the intro", onBack = onNavigateBack) {
 
         MacroCard(delayMs = 50) {
             CardHeader(
@@ -187,7 +176,7 @@ fun AboutSettingsScreen(
             )
 
             Spacer(modifier = Modifier.height(14.dp))
-            HorizontalDivider(color = Border.copy(alpha = 0.6f))
+            Spacer(Modifier.height(8.dp))
             Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = "Release notes",
@@ -285,8 +274,7 @@ private fun ReleaseNotesDropdown(
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(Background)
-            .border(1.dp, Border.copy(alpha = 0.55f), shape),
+            .background(WellFill)
     ) {
         Row(
             modifier = Modifier
@@ -301,7 +289,7 @@ private fun ReleaseNotesDropdown(
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = prettyVersion(release.versionName),
+                        text = prettyVersion(release.versionName), style = HealthDisplay,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (release.isNewerThanInstalled) Primary else TextPrimary,
@@ -314,7 +302,7 @@ private fun ReleaseNotesDropdown(
                             fontWeight = FontWeight.SemiBold,
                             color = Success,
                             modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
+                                .clip(RoundedCornerShape(10.dp))
                                 .background(Success.copy(alpha = 0.15f))
                                 .padding(horizontal = 6.dp, vertical = 2.dp),
                         )
@@ -326,7 +314,7 @@ private fun ReleaseNotesDropdown(
                             fontWeight = FontWeight.SemiBold,
                             color = Primary,
                             modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
+                                .clip(RoundedCornerShape(10.dp))
                                 .background(Primary.copy(alpha = 0.15f))
                                 .padding(horizontal = 6.dp, vertical = 2.dp),
                         )
@@ -360,10 +348,7 @@ private fun ReleaseNotesDropdown(
                     .fillMaxWidth()
                     .padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
             ) {
-                HorizontalDivider(
-                    color = Border.copy(alpha = 0.45f),
-                    modifier = Modifier.padding(bottom = 12.dp),
-                )
+                Spacer(Modifier.height(8.dp))
                 MarkdownText(
                     markdown = release.releaseNotes.ifBlank { "No release notes." },
                     color = TextSecondary,
@@ -374,7 +359,7 @@ private fun ReleaseNotesDropdown(
                     Spacer(modifier = Modifier.height(10.dp))
                     Row(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(RoundedCornerShape(14.dp))
                             .clickable {
                                 haptics.click()
                                 runCatching { uriHandler.openUri(release.htmlUrl) }

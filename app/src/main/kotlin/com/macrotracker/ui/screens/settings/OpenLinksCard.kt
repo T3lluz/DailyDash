@@ -56,7 +56,7 @@ fun OpenLinksCard() {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(14.dp))
                     .clickable {
                         haptics.tick()
                         OpenWithActivity.choose(context, kind)

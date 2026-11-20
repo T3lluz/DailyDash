@@ -1,5 +1,10 @@
 package com.macrotracker.ui.screens.tilesmith
 
+import com.macrotracker.ui.screens.home.WellFill
+import com.macrotracker.ui.screens.health.HealthDisplay
+import androidx.compose.ui.graphics.Color
+import com.macrotracker.ui.screens.home.SheetColor
+import com.macrotracker.ui.screens.home.RoomNeutral
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -84,13 +89,13 @@ fun TilesmithHero(
     var prompt by rememberSaveable { mutableStateOf("") }
     var deleting by remember { mutableStateOf<TileDesign?>(null) }
 
-    MacroCard {
+    MacroCard(tone = TilesmithAccent) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier
                     .size(54.dp)
                     .clip(RoundedCornerShape(18.dp))
-                    .background(Brush.linearGradient(listOf(TilesmithAccent.copy(alpha = 0.32f), TilesmithAccent.copy(alpha = 0.08f)))),
+                    .background(TilesmithAccent.copy(alpha = 0.18f)),
                 contentAlignment = Alignment.Center,
             ) {
                 MorphingShape(HeroShapes, TilesmithAccent, Modifier.size(38.dp))
@@ -98,18 +103,19 @@ fun TilesmithHero(
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Tilesmith", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text("Tilesmith", style = HealthDisplay, fontSize = 22.sp, color = TilesmithAccent)
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        "NEW",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
+                        "New",
+                        style = HealthDisplay,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
                         color = OnAccent,
-                        modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(TilesmithAccent).padding(horizontal = 6.dp, vertical = 2.dp),
+                        modifier = Modifier.clip(CircleShape).background(TilesmithAccent).padding(horizontal = 8.dp, vertical = 2.dp),
                     )
                 }
                 Text(
-                    "Describe a widget and AI builds it in Material 3 Expressive. Comment to change it.",
+                    "Describe a widget and AI builds it. Say what to change and it does.",
                     fontSize = 13.sp,
                     color = TextSecondary,
                     lineHeight = 18.sp,
@@ -130,8 +136,7 @@ fun TilesmithHero(
             Modifier
                 .fillMaxWidth()
                 .clip(shape)
-                .background(SurfaceElevated)
-                .border(1.dp, Border, shape)
+                .background(WellFill)
                 .padding(start = 16.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -160,7 +165,7 @@ fun TilesmithHero(
                 Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .background(if (canGo) TilesmithAccent else Border)
+                    .background(if (canGo) TilesmithAccent else Color.White.copy(alpha = 0.08f))
                     .clickable(enabled = canGo) { go() },
                 contentAlignment = Alignment.Center,
             ) {
@@ -169,14 +174,13 @@ fun TilesmithHero(
         }
 
         Spacer(Modifier.height(12.dp))
-        Text("Start from", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary, modifier = Modifier.padding(start = 2.dp, bottom = 8.dp))
+        Text("Start from", style = HealthDisplay, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary, modifier = Modifier.padding(start = 2.dp, bottom = 8.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(end = 4.dp)) {
             items(TileStarters.all, key = { it.id }) { s ->
                 Row(
                     Modifier
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(Surface)
-                        .border(1.dp, Border, RoundedCornerShape(14.dp))
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(WellFill)
                         .clickable { haptics.click(); onOpen(null, null, s.id) }
                         .padding(start = 8.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -188,7 +192,7 @@ fun TilesmithHero(
                     )
                     Spacer(Modifier.width(7.dp))
                     Column {
-                        Text(s.title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1)
+                        Text(s.title, style = HealthDisplay, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1)
                         Text("${s.design.size.label} ${s.design.size.cells}", fontSize = 11.sp, color = TextTertiary, maxLines = 1)
                     }
                 }
@@ -198,7 +202,7 @@ fun TilesmithHero(
         val mine = designs.orEmpty()
         if (mine.isNotEmpty()) {
             Spacer(Modifier.height(16.dp))
-            Text("Your widgets", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary, modifier = Modifier.padding(start = 2.dp, bottom = 8.dp))
+            Text("Your widgets", style = HealthDisplay, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary, modifier = Modifier.padding(start = 2.dp, bottom = 8.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(end = 4.dp)) {
                 items(mine, key = { it.id }) { d ->
                     val placed by produceState(0, d.id, placedTick) {
@@ -207,9 +211,8 @@ fun TilesmithHero(
                     Column(
                         Modifier
                             .width(156.dp)
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(Surface)
-                            .border(1.dp, Border, RoundedCornerShape(18.dp))
+                            .clip(RoundedCornerShape(22.dp))
+                            .background(WellFill)
                             .combinedClickable(
                                 onClick = { haptics.click(); onOpen(d.id, null, null) },
                                 onLongClick = { haptics.tick(); deleting = d },
@@ -225,7 +228,7 @@ fun TilesmithHero(
                             modifier = Modifier.fillMaxWidth().height(96.dp),
                         )
                         Spacer(Modifier.height(8.dp))
-                        Text(d.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1)
+                        Text(d.name, style = HealthDisplay, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1)
                         Text(
                             if (placed > 0) "On home screen" else "${d.size.label} · not placed",
                             fontSize = 11.sp,
@@ -252,7 +255,7 @@ fun TilesmithHero(
                     TextButton(onClick = { deleting = null }) { Text("Cancel", color = TextSecondary) }
                 }
             },
-            containerColor = Surface,
+            containerColor = SheetColor,
         )
     }
 }

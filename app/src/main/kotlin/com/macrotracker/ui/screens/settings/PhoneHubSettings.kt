@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens.settings
 
+import com.macrotracker.ui.screens.home.roomSwitchColors
+import com.macrotracker.ui.screens.home.WellFill
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -96,6 +98,7 @@ fun PhoneHubSettingsCard(viewModel: PhoneHubViewModel = hiltViewModel()) {
                     haptics.tick()
                     viewModel.update { c -> c.copy(enabled = it) }
                 },
+                colors = roomSwitchColors(),
             )
         }
 
@@ -113,9 +116,8 @@ fun PhoneHubSettingsCard(viewModel: PhoneHubViewModel = hiltViewModel()) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(SurfaceChrome)
-                        .border(1.dp, Border, RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(WellFill)
                         .padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {

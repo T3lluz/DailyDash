@@ -1,5 +1,6 @@
 package com.macrotracker.ui.screens
 
+import com.macrotracker.ui.screens.home.RoomNeutral
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
@@ -144,7 +145,7 @@ fun ConsoleScreen(
                     IconButton(onClick = { haptics.tick(); viewModel.refreshSessions(); menu = true }, modifier = Modifier.size(40.dp)) {
                         Icon(AppIcons.List, "Shells and more", tint = TextSecondary, modifier = Modifier.size(20.dp))
                     }
-                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, modifier = Modifier.background(Surface)) {
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, modifier = Modifier.background(RoomNeutral)) {
                         state.sessions.forEachIndexed { i, s ->
                             MenuRow(
                                 label = "${i + 1}  ${s.cwd}${if (s.cmd.isNotBlank()) " · ${s.cmd}" else ""}${if (s.id == state.currentId) "  ✓" else ""}",
@@ -238,7 +239,7 @@ private fun ConsoleKey(label: String, on: Boolean = false, onClick: () -> Unit) 
         Modifier
             .height(38.dp)
             .widthIn(min = 42.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(if (on) AiAccent.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.07f))
             .clickable(role = Role.Button) { haptics.tick(); onClick() }
             .padding(horizontal = 10.dp),

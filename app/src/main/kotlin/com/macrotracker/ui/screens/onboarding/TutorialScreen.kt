@@ -1,5 +1,7 @@
 package com.macrotracker.ui.screens.onboarding
 
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.home.RoomNeutral
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import com.macrotracker.ui.theme.MacroMotion
@@ -73,8 +75,9 @@ private val PAGES = listOf(
         title = "Your personal dashboard",
         body = "DailyDash is more than a macro tracker — it's a customisable home screen for your daily life. Weather, calendar, sport, news and nutrition all in one glanceable view.",
         tips = listOf(
-            "Long-press and drag any home widget to reorder the layout",
-            "Tap the pencil on Home to show or hide widgets",
+            "Tap a tile to open its own page",
+            "Hold and drag a tile to reorder Home",
+            "Tap the pencil on Home to show or hide tiles",
             "Every section updates automatically throughout the day",
         ),
     ),
@@ -334,8 +337,9 @@ private fun TutorialPageContent(page: TutorialPage) {
 
         Text(
             text = page.title,
+            style = HealthDisplay,
             fontSize = 26.sp,
-            fontWeight = FontWeight.ExtraBold,
+            fontWeight = FontWeight.Black,
             color = TextPrimary,
             textAlign = TextAlign.Center,
         )
@@ -356,7 +360,7 @@ private fun TutorialPageContent(page: TutorialPage) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Surface, RoundedCornerShape(14.dp))
+                .background(RoomNeutral, RoundedCornerShape(14.dp))
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {

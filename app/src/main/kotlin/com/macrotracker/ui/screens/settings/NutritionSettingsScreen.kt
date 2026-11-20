@@ -1,5 +1,6 @@
 package com.macrotracker.ui.screens.settings
 
+import com.macrotracker.ui.screens.home.SubPage
 import androidx.compose.foundation.background
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
@@ -59,21 +60,7 @@ fun NutritionSettingsScreen(
         goalsViewModel.loadData()
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Background)
-            .imePadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp)
-            .subScreenBottomPadding(),
-    ) {
-        SubScreenHeader(
-            title = "Nutrition",
-            subtitle = "Daily calorie and protein targets",
-            onNavigateBack = onNavigateBack,
-        )
-        Spacer(modifier = Modifier.height(12.dp))
+    SubPage(title = "Nutrition", lede = "Daily calorie and protein targets", onBack = onNavigateBack) {
 
         MacroCard(delayMs = 50) {
             CardHeader(

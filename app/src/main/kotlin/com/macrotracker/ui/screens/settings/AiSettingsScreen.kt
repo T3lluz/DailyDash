@@ -1,5 +1,11 @@
 package com.macrotracker.ui.screens.settings
 
+import com.macrotracker.ui.screens.home.pageRise
+import com.macrotracker.ui.screens.home.WellFill
+import com.macrotracker.ui.screens.home.HomeTone
+import com.macrotracker.ui.screens.health.roomColor
+import com.macrotracker.ui.screens.health.HealthDisplay
+import com.macrotracker.ui.screens.home.SubPage
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
@@ -111,17 +117,7 @@ fun AiSettingsScreen(
     val haptics = rememberHaptics()
     val focus = focused ?: state.selected
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Background)
-            .imePadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp)
-            .subScreenBottomPadding(),
-    ) {
-        SubScreenHeader(title = "AI", subtitle = "Your plans, keys and models", onNavigateBack = onNavigateBack)
-        Spacer(Modifier.height(10.dp))
+    SubPage(title = "AI", lede = "Your plans, keys and models", onBack = onNavigateBack) {
 
         InUseCard(
             state = state,
@@ -157,25 +153,24 @@ fun AiSettingsScreen(
 @Composable
 private fun SectionLabel(text: String) {
     Text(
-        text.uppercase(),
-        fontSize = 11.sp,
-        fontWeight = FontWeight.Bold,
-        color = TextSecondary,
-        letterSpacing = 0.8.sp,
-        modifier = Modifier.padding(start = 4.dp, top = 22.dp, bottom = 9.dp),
+        text,
+        style = HealthDisplay,
+        fontSize = 19.sp,
+        color = TextPrimary,
+        modifier = Modifier.padding(start = 6.dp, top = 22.dp, bottom = 9.dp),
     )
 }
 
-private val CardShape = RoundedCornerShape(22.dp)
+private val CardShape = RoundedCornerShape(28.dp)
 
 @Composable
 private fun Card(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Column(
         modifier
             .fillMaxWidth()
+            .pageRise()
             .clip(CardShape)
-            .background(Surface)
-            .border(1.dp, Border, CardShape),
+            .background(roomColor(HomeTone.Neutral)),
     ) { content() }
 }
 
@@ -189,11 +184,11 @@ private fun InUseCard(state: AiUiState, onChange: () -> Unit, onTest: () -> Unit
             if (cur != null) AiProviderLogo(cur.provider, 52.dp)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text("IN USE", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextTertiary, letterSpacing = 0.8.sp)
+                Text("In use", fontSize = 12.5.sp, color = TextSecondary)
                 Text(
                     cur?.modelLabel ?: "Nothing set up",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
+                    style = HealthDisplay,
+                    fontSize = 22.sp,
                     color = TextPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -227,9 +222,8 @@ private fun TestBanner(test: AiTest, onDismiss: () -> Unit) {
         Modifier
             .padding(top = 10.dp)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(tone.copy(alpha = 0.10f))
-            .border(1.dp, tone.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(20.dp))
+            .background(tone.copy(alpha = 0.14f))
             .clickable(enabled = test != AiTest.Running, onClick = onDismiss)
             .padding(horizontal = 14.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -265,7 +259,7 @@ private fun SetupCard(
             AiProviderLogo(p, 42.dp)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(p.displayName, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                Text(p.displayName, style = HealthDisplay, fontSize = 17.sp, color = TextPrimary)
                 Text(p.tagline, fontSize = 12.5.sp, color = TextSecondary, lineHeight = 16.sp)
             }
             Spacer(Modifier.width(8.dp))
@@ -275,12 +269,12 @@ private fun SetupCard(
                 PillAction("Use", AppIcons.Check, filled = true, enabled = status.ready, onClick = { haptics.confirm(); viewModel.select(p) })
             }
         }
-        Hairline()
+        Spacer(Modifier.height(4.dp))
         when (p) {
             AiProvider.ANTHROPIC -> {
                 ClaudeAccountRow(state, viewModel)
                 if (status.access != AiAccess.ACCOUNT || state.keys[p].orEmpty().isNotBlank()) {
-                    Hairline()
+                    Spacer(Modifier.height(4.dp))
                     KeyRow(p, saved = state.keys[p].orEmpty(), optional = true, onSave = { viewModel.saveKey(p, it) })
                 }
             }
@@ -301,7 +295,7 @@ private fun SetupCard(
                     onConsole = null,
                 )
                 if (status.ready) {
-                    Hairline()
+                    Spacer(Modifier.height(4.dp))
                     Column(Modifier.padding(16.dp)) {
                         RowTitle(AppIcons.Gauge, "Model")
                         Spacer(Modifier.height(10.dp))
@@ -312,7 +306,7 @@ private fun SetupCard(
             AiProvider.GEMINI, AiProvider.OPENAI -> KeyRow(p, saved = state.keys[p].orEmpty(), optional = false, onSave = { viewModel.saveKey(p, it) })
         }
         if (p != AiProvider.HERMES) {
-            Hairline()
+            Spacer(Modifier.height(4.dp))
             ModelList(state, status, onPick = { haptics.tick(); viewModel.setModel(p, it) }, onRefresh = { viewModel.refreshModels(p, force = true) })
         }
     }
@@ -337,7 +331,7 @@ private fun InUseTag() {
 @Composable
 private fun RowTitle(icon: ImageVector, title: String, trailing: (@Composable () -> Unit)? = null) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(30.dp).clip(RoundedCornerShape(10.dp)).background(ServerBrand.copy(alpha = 0.13f)), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(30.dp).clip(RoundedCornerShape(14.dp)).background(ServerBrand.copy(alpha = 0.13f)), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = ServerBrand, modifier = Modifier.size(16.dp))
         }
         Spacer(Modifier.width(10.dp))
@@ -518,7 +512,7 @@ private fun ModelList(state: AiUiState, status: AiProviderStatus, onPick: (Strin
                     Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 8.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(18.dp))
                         .background(if (on) ServerBrand.copy(alpha = 0.10f) else Color.Transparent)
                         .clickable { onPick(m.id) }
                         .padding(horizontal = 12.dp, vertical = 10.dp),
@@ -557,9 +551,9 @@ private fun PillAction(
 ) {
     val haptics = rememberHaptics()
     val bg = when {
-        !enabled -> ServerWell
+        !enabled -> WellFill
         filled -> ServerBrand
-        else -> ServerWell
+        else -> WellFill
     }
     val fg = when {
         !enabled -> TextTertiary
@@ -571,7 +565,7 @@ private fun PillAction(
             .height(42.dp)
             .clip(RoundedCornerShape(21.dp))
             .background(bg)
-            .then(if (filled && enabled) Modifier else Modifier.border(1.dp, Border, RoundedCornerShape(21.dp)))
+
             .clickable(enabled = enabled) { haptics.tick(); onClick() }
             .padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.Center,
@@ -598,9 +592,8 @@ private fun Field(
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(SurfaceChrome)
-            .border(1.dp, if (error) Warning.copy(alpha = 0.7f) else Border, RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(18.dp))
+            .background(if (error) Warning.copy(alpha = 0.14f) else WellFill)
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
